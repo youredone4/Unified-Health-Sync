@@ -111,5 +111,53 @@ export async function registerRoutes(
     }
   });
 
+  // === DISEASE CASES ===
+  app.get(api.diseaseCases.list.path, async (req, res) => {
+    const data = await storage.getDiseaseCases();
+    res.json(data);
+  });
+
+  app.get(api.diseaseCases.get.path, async (req, res) => {
+    const diseaseCase = await storage.getDiseaseCase(Number(req.params.id));
+    if (!diseaseCase) {
+      return res.status(404).json({ message: "Disease case not found" });
+    }
+    res.json(diseaseCase);
+  });
+
+  app.put(api.diseaseCases.update.path, async (req, res) => {
+    try {
+      const input = api.diseaseCases.update.input.parse(req.body);
+      const updated = await storage.updateDiseaseCase(Number(req.params.id), input);
+      res.json(updated);
+    } catch (err) {
+      res.status(400).json({ message: "Invalid input" });
+    }
+  });
+
+  // === TB PATIENTS ===
+  app.get(api.tbPatients.list.path, async (req, res) => {
+    const data = await storage.getTBPatients();
+    res.json(data);
+  });
+
+  app.get(api.tbPatients.get.path, async (req, res) => {
+    const patient = await storage.getTBPatient(Number(req.params.id));
+    if (!patient) {
+      return res.status(404).json({ message: "TB patient not found" });
+    }
+    res.json(patient);
+  });
+
+  app.put(api.tbPatients.update.path, async (req, res) => {
+    try {
+      const input = api.tbPatients.update.input.parse(req.body);
+      const updated = await storage.updateTBPatient(Number(req.params.id), input);
+      res.json(updated);
+    } catch (err) {
+      res.status(400).json({ message: "Invalid input" });
+    }
+  });
+
   return httpServer;
 }

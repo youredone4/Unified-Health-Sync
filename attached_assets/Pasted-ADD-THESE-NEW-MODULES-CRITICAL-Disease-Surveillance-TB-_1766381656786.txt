@@ -1,0 +1,223 @@
+ADD THESE NEW MODULES (CRITICAL) — Disease Surveillance + TB DOTS
+
+────────────────────────────────────────
+SIDEBAR UPDATES (EXACT)
+────────────────────────────────────────
+Add two new modules to the sidebar (keep shallow navigation):
+
+• Disease Surveillance
+  - Alerts & Cases (Worklist) [DEFAULT]
+  - Case Registry
+  - Outbreak Map (simple)
+
+• TB DOTS
+  - TB Worklist (DOTS) [DEFAULT]
+  - TB Patient Registry
+  - TB Patient Profile
+
+Keep existing modules unchanged.
+
+────────────────────────────────────────
+DOH-ALIGNED SCOPE (SIMPLIFIED FOR BARANGAY USE)
+────────────────────────────────────────
+IMPORTANT: This is a demo system. Do NOT attempt medical diagnosis.
+All disease entries are “reported/suspected” and used for surveillance + referral tracking only.
+
+For Disease Surveillance:
+- Track common communicable conditions as reported/suspected:
+  - Diarrhea
+  - Chickenpox (Varicella)
+  - Acute Respiratory Infection (ARI) (optional)
+  - Dengue suspected (optional)
+  - Measles suspected (optional)
+Keep it simple and action-oriented.
+
+For TB DOTS:
+- Focus on adherence and follow-ups (DOT observation concept), not lab workflows.
+- Track:
+  - Patient identification + barangay
+  - Treatment phase (Intensive / Continuation)
+  - Treatment start date
+  - Next scheduled DOTS visit date
+  - Last observed dose date
+  - Missed doses count (demo)
+  - Sputum follow-up schedule (STATIC placeholders, optional)
+  - Referral status (to RHU) (yes/no)
+- Provide adherence status: On track / Due soon / Missed (Overdue)
+
+────────────────────────────────────────
+MOCK DATA UPDATES (src/data/mockData.js)
+────────────────────────────────────────
+Add:
+
+F) DiseaseCases (Communicable Disease Registry)
+Fields:
+- id
+- patientName
+- age
+- barangay
+- addressLine
+- condition (Diarrhea, Chickenpox, ARI, Dengue suspected, Measles suspected)
+- dateReported
+- status (New, Monitoring, Referred, Closed)
+- notes (short)
+- linkedPersonType (Mother/Child/Senior/None) and linkedPersonId (optional)
+This allows linking to existing profiles when applicable.
+
+G) TBPatients (DOTS)
+Fields:
+- id
+- firstName, lastName, age
+- barangay, addressLine, phone
+- tbType (Pulmonary/Extra-pulmonary) (optional)
+- treatmentPhase (Intensive/Continuation)
+- treatmentStartDate
+- lastObservedDoseDate
+- nextDotsVisitDate (STATIC for demo)
+- missedDosesCount (number)
+- medsRegimenName (e.g., “Fixed-dose combination”) (optional)
+- referralToRHU (boolean)
+- nextSputumCheckDate (STATIC optional)
+- outcomeStatus (Ongoing/Completed/Transferred/LTFU) (optional)
+Keep realistic sample entries and include a few missed/overdue cases.
+
+────────────────────────────────────────
+LOGIC UPDATES (src/lib/healthLogic.js)
+────────────────────────────────────────
+A) Disease Surveillance logic (simple, no diagnosis)
+- “Overdue” cases = status “New” older than 7 days OR not referred/closed (demo rule)
+- “Due soon” cases = New within last 7 days and needs follow-up (demo)
+- Generate barangay counts and cluster flags:
+  - Cluster flag if >= 3 cases of same condition in same barangay within last 14 days (demo)
+Use fixed TODAY = 2025-12-22.
+
+B) TB DOTS logic
+- Determine adherence status based on nextDotsVisitDate:
+  - overdue if TODAY > nextDotsVisitDate
+  - due_soon if within 7 days
+  - upcoming otherwise
+- If missedDosesCount >= 2, label “High Priority Follow-up”
+- Create notifications for:
+  - DOTS visit overdue/due soon
+  - Missed doses high priority
+  - Sputum check due soon/overdue (if field exists)
+
+C) Calendar integration
+Add events to the Overview Calendar/Agenda:
+- Disease follow-ups (for “New/Monitoring” cases) using a derived follow-up date (dateReported + 3 days) OR static followUpDate if you prefer.
+- TB DOTS visits (tbPatients.nextDotsVisitDate)
+- TB sputum checks (tbPatients.nextSputumCheckDate) if included
+
+D) Notifications integration
+Add notification types:
+- Disease Surveillance: “Case follow-up needed”, “Cluster alert”
+- TB DOTS: “DOTS visit overdue”, “High priority missed doses”, “Sputum check due”
+These must appear in Notification Drawer tabs:
+- Add tabs: “Diseases” and “TB DOTS”
+
+────────────────────────────────────────
+NEW UI PAGES (SIMPLE, LOW LITERACY)
+────────────────────────────────────────
+
+1) Disease Surveillance → Alerts & Cases (Worklist DEFAULT)
+Layout:
+- 3 counters: Overdue / Needs follow-up / Total
+- One main table (max 6 columns):
+  Patient | Barangay | Condition | Date Reported | Status | Action
+Actions:
+- View Case
+- Send SMS (Demo) (if phone exists; otherwise show “No phone on record”)
+- Mark Referred / Mark Closed (confirm modal + toast + undo)
+
+Include a small “Cluster Alerts” card:
+- “Chickenpox cluster in Bugas-bugas (3 cases/14 days)”
+Click opens filtered list.
+
+2) Disease Surveillance → Case Registry
+- Simple searchable list of all cases
+- Row opens Case Profile page (simple)
+
+3) Disease Surveillance → Outbreak Map
+- Map with barangay markers
+- Tooltip shows counts by condition (simple)
+- Toggle “Show cluster only”
+
+Case Profile (simple)
+- Patient name, age, barangay, address
+- Condition, date reported, status
+- Action taken (Referred/Monitoring/Closed)
+- Linked profile button if linkedPersonType exists (“Open Child Profile” etc.)
+
+4) TB DOTS → TB Worklist (DEFAULT)
+- Tabs: Overdue DOTS / Due Soon / All
+- Table columns:
+  Patient | Barangay | Phase | Next DOTS Visit | Missed Doses | Status | Action
+Action:
+- Send SMS (Demo)
+- Mark Dose Observed (confirm + updates lastObservedDoseDate and shifts nextDotsVisitDate by +1 day or +7 days depending on a simple rule)
+- Refer to RHU (confirm)
+- View Profile
+
+5) TB DOTS → TB Patient Registry
+- Searchable list
+- Row opens TB Profile
+
+6) TB DOTS → TB Patient Profile
+Header:
+- Name, age, barangay, address, phone
+Big “Next Action” card:
+- Next DOTS visit date + status + Send SMS
+Medication summary (static):
+- regimen name (if included)
+Adherence summary:
+- last observed dose date
+- missed doses count
+Follow-up schedule (optional):
+- next sputum check date (static)
+Actions:
+- Mark Dose Observed (confirm)
+- Adjust next visit (demo)
+- Mark outcome (Completed/Transferred/LTFU) (confirm)
+
+────────────────────────────────────────
+SMS (DEMO) — EXPAND TO INCLUDE TB & DISEASE
+────────────────────────────────────────
+- SMS preview modal must generate plain-language messages:
+  - TB DOTS: “Reminder: TB DOTS visit on DATE at Barangay Health Office…”
+  - Disease follow-up: “Follow-up needed for reported CONDITION on DATE…”
+- Log all sent/queued messages to SMS Outbox (audit)
+
+────────────────────────────────────────
+MAIN DASHBOARD CHANGE (KEEP ACTION-FOCUSED)
+────────────────────────────────────────
+In Overview Dashboard KPI cards, include only action-critical counts:
+- Overdue Tetanus Shots
+- Overdue Vaccines
+- Underweight Risk Follow-ups
+- HTN Med Pickup Overdue
+- Stock-outs impacting services
+Add ONE small “Surveillance Alerts” card:
+- “New disease cases this week” + “Cluster alerts”
+Add ONE small “TB DOTS Alerts” card:
+- “DOTS overdue” + “High priority missed doses”
+Do NOT overload with many disease metrics on main dashboard.
+
+────────────────────────────────────────
+FILES TO ADD
+────────────────────────────────────────
+Add pages:
+- src/pages/DiseaseWorklist.jsx
+- src/pages/DiseaseRegistry.jsx
+- src/pages/DiseaseCaseProfile.jsx
+- src/pages/DiseaseMap.jsx
+- src/pages/TBWorklist.jsx
+- src/pages/TBRegistry.jsx
+- src/pages/TBProfile.jsx
+
+Update:
+- Sidebar navigation
+- NotificationDrawer tabs
+- healthLogic + mockData
+- Calendar/Agenda to include TB and disease follow-ups
+
+Proceed to update/generate the full project accordingly.

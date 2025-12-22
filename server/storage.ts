@@ -1,12 +1,14 @@
 import { db } from "./db";
 import { 
-  mothers, children, seniors, inventory, healthStations, smsOutbox,
+  mothers, children, seniors, inventory, healthStations, smsOutbox, diseaseCases, tbPatients,
   type Mother, type InsertMother,
   type Child, type InsertChild,
   type Senior, type InsertSenior,
   type InventoryItem,
   type HealthStation,
-  type SmsMessage, type InsertSmsMessage
+  type SmsMessage, type InsertSmsMessage,
+  type DiseaseCase, type InsertDiseaseCase,
+  type TBPatient, type InsertTBPatient
 } from "@shared/schema";
 import { eq } from "drizzle-orm";
 
@@ -28,6 +30,14 @@ export interface IStorage {
 
   getSmsMessages(): Promise<SmsMessage[]>;
   sendSms(sms: InsertSmsMessage): Promise<SmsMessage>;
+
+  getDiseaseCases(): Promise<DiseaseCase[]>;
+  getDiseaseCase(id: number): Promise<DiseaseCase | undefined>;
+  updateDiseaseCase(id: number, updates: Partial<InsertDiseaseCase>): Promise<DiseaseCase>;
+
+  getTBPatients(): Promise<TBPatient[]>;
+  getTBPatient(id: number): Promise<TBPatient | undefined>;
+  updateTBPatient(id: number, updates: Partial<InsertTBPatient>): Promise<TBPatient>;
 
   seedData(): Promise<void>;
 }
@@ -99,6 +109,40 @@ export class DatabaseStorage implements IStorage {
   async sendSms(sms: InsertSmsMessage): Promise<SmsMessage> {
     const [created] = await db.insert(smsOutbox).values(sms).returning();
     return created;
+  }
+
+  async getDiseaseCases(): Promise<DiseaseCase[]> {
+    return await db.select().from(diseaseCases);
+  }
+
+  async getDiseaseCase(id: number): Promise<DiseaseCase | undefined> {
+    const [diseaseCase] = await db.select().from(diseaseCases).where(eq(diseaseCases.id, id));
+    return diseaseCase;
+  }
+
+  async updateDiseaseCase(id: number, updates: Partial<InsertDiseaseCase>): Promise<DiseaseCase> {
+    const [updated] = await db.update(diseaseCases)
+      .set(updates)
+      .where(eq(diseaseCases.id, id))
+      .returning();
+    return updated;
+  }
+
+  async getTBPatients(): Promise<TBPatient[]> {
+    return await db.select().from(tbPatients);
+  }
+
+  async getTBPatient(id: number): Promise<TBPatient | undefined> {
+    const [patient] = await db.select().from(tbPatients).where(eq(tbPatients.id, id));
+    return patient;
+  }
+
+  async updateTBPatient(id: number, updates: Partial<InsertTBPatient>): Promise<TBPatient> {
+    const [updated] = await db.update(tbPatients)
+      .set(updates)
+      .where(eq(tbPatients.id, id))
+      .returning();
+    return updated;
   }
 
   async seedData(): Promise<void> {
@@ -291,6 +335,159 @@ export class DatabaseStorage implements IStorage {
       { facilityName: "Poblacion Rural Health Unit", barangay: "Poblacion", latitude: "9.6600", longitude: "125.6850" },
       { facilityName: "Banban Barangay Health Station", barangay: "Banban", latitude: "9.6380", longitude: "125.6400" },
       { facilityName: "Canlumacad Barangay Health Station", barangay: "Canlumacad", latitude: "9.6700", longitude: "125.6950" },
+    ]);
+
+    // DISEASE CASES - Communicable Disease Surveillance
+    await db.insert(diseaseCases).values([
+      {
+        patientName: "Juan Dela Cruz",
+        age: 5, barangay: "Bugas-bugas", addressLine: "Purok 2",
+        phone: "09171111111",
+        condition: "Chickenpox",
+        dateReported: "2025-12-18",
+        status: "New",
+        notes: "Multiple lesions observed",
+        linkedPersonType: null, linkedPersonId: null
+      },
+      {
+        patientName: "Ana Reyes",
+        age: 3, barangay: "Bugas-bugas", addressLine: "Purok 3",
+        phone: "09172222222",
+        condition: "Chickenpox",
+        dateReported: "2025-12-19",
+        status: "Monitoring",
+        notes: "Contact of index case",
+        linkedPersonType: null, linkedPersonId: null
+      },
+      {
+        patientName: "Carlo Santos",
+        age: 6, barangay: "Bugas-bugas", addressLine: "Purok 2",
+        phone: "09173333333",
+        condition: "Chickenpox",
+        dateReported: "2025-12-20",
+        status: "New",
+        notes: "School outbreak contact",
+        linkedPersonType: null, linkedPersonId: null
+      },
+      {
+        patientName: "Baby Girl Cruz",
+        age: 0, barangay: "San Isidro", addressLine: "Purok 1",
+        phone: "09181234567",
+        condition: "Diarrhea",
+        dateReported: "2025-12-15",
+        status: "Monitoring",
+        notes: "ORS provided, monitoring hydration",
+        linkedPersonType: "Child", linkedPersonId: 2
+      },
+      {
+        patientName: "Pedro Aquino",
+        age: 45, barangay: "Poblacion", addressLine: "Centro",
+        phone: "09184444444",
+        condition: "Dengue suspected",
+        dateReported: "2025-12-10",
+        status: "Referred",
+        notes: "Referred to RHU for confirmatory test",
+        linkedPersonType: null, linkedPersonId: null
+      },
+      {
+        patientName: "Maria Lourdes",
+        age: 28, barangay: "Banban", addressLine: "Sitio Riverside",
+        phone: "09185555555",
+        condition: "ARI",
+        dateReported: "2025-12-21",
+        status: "New",
+        notes: "Cough and cold symptoms",
+        linkedPersonType: null, linkedPersonId: null
+      },
+      {
+        patientName: "Jose Rizal Jr",
+        age: 2, barangay: "Canlumacad", addressLine: "Purok 1",
+        phone: null,
+        condition: "Measles suspected",
+        dateReported: "2025-12-08",
+        status: "New",
+        notes: "Rash and fever, needs follow-up",
+        linkedPersonType: null, linkedPersonId: null
+      },
+    ]);
+
+    // TB PATIENTS - DOTS Program
+    await db.insert(tbPatients).values([
+      {
+        firstName: "Antonio", lastName: "Fernandez", age: 52,
+        barangay: "Bugas-bugas", addressLine: "Purok 4",
+        phone: "09176666666",
+        tbType: "Pulmonary",
+        treatmentPhase: "Intensive",
+        treatmentStartDate: "2025-11-01",
+        lastObservedDoseDate: "2025-12-20",
+        nextDotsVisitDate: "2025-12-21",
+        missedDosesCount: 1,
+        medsRegimenName: "Fixed-dose combination (2HRZE)",
+        referralToRHU: false,
+        nextSputumCheckDate: "2025-12-28",
+        outcomeStatus: "Ongoing"
+      },
+      {
+        firstName: "Belen", lastName: "Magsaysay", age: 38,
+        barangay: "San Isidro", addressLine: "Purok 2",
+        phone: "09177777777",
+        tbType: "Pulmonary",
+        treatmentPhase: "Continuation",
+        treatmentStartDate: "2025-08-15",
+        lastObservedDoseDate: "2025-12-18",
+        nextDotsVisitDate: "2025-12-25",
+        missedDosesCount: 0,
+        medsRegimenName: "Fixed-dose combination (4HR)",
+        referralToRHU: false,
+        nextSputumCheckDate: "2026-01-15",
+        outcomeStatus: "Ongoing"
+      },
+      {
+        firstName: "Crisanto", lastName: "Reyes", age: 65,
+        barangay: "Poblacion", addressLine: "Centro",
+        phone: "09178888888",
+        tbType: "Pulmonary",
+        treatmentPhase: "Intensive",
+        treatmentStartDate: "2025-10-15",
+        lastObservedDoseDate: "2025-12-15",
+        nextDotsVisitDate: "2025-12-16",
+        missedDosesCount: 5,
+        medsRegimenName: "Fixed-dose combination (2HRZE)",
+        referralToRHU: true,
+        nextSputumCheckDate: "2025-12-20",
+        outcomeStatus: "Ongoing"
+      },
+      {
+        firstName: "Dolores", lastName: "Cruz", age: 44,
+        barangay: "Banban", addressLine: "Sitio Hilltop",
+        phone: "09179999999",
+        tbType: "Extra-pulmonary",
+        treatmentPhase: "Intensive",
+        treatmentStartDate: "2025-11-20",
+        lastObservedDoseDate: "2025-12-21",
+        nextDotsVisitDate: "2025-12-22",
+        missedDosesCount: 0,
+        medsRegimenName: "Fixed-dose combination (2HRZE)",
+        referralToRHU: false,
+        nextSputumCheckDate: null,
+        outcomeStatus: "Ongoing"
+      },
+      {
+        firstName: "Eduardo", lastName: "Villanueva", age: 58,
+        barangay: "Canlumacad", addressLine: "Purok 3",
+        phone: "09170001111",
+        tbType: "Pulmonary",
+        treatmentPhase: "Continuation",
+        treatmentStartDate: "2025-06-01",
+        lastObservedDoseDate: "2025-12-10",
+        nextDotsVisitDate: "2025-12-17",
+        missedDosesCount: 3,
+        medsRegimenName: "Fixed-dose combination (4HR)",
+        referralToRHU: false,
+        nextSputumCheckDate: "2025-12-22",
+        outcomeStatus: "Ongoing"
+      },
     ]);
 
     console.log("Database seeded successfully!");

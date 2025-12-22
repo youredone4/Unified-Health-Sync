@@ -128,3 +128,48 @@ export const smsOutbox = pgTable("sms_outbox", {
 export const insertSmsSchema = createInsertSchema(smsOutbox).omit({ id: true });
 export type SmsMessage = typeof smsOutbox.$inferSelect;
 export type InsertSmsMessage = z.infer<typeof insertSmsSchema>;
+
+// === DISEASE CASES (Communicable Disease Surveillance) ===
+export const diseaseCases = pgTable("disease_cases", {
+  id: serial("id").primaryKey(),
+  patientName: text("patient_name").notNull(),
+  age: integer("age").notNull(),
+  barangay: text("barangay").notNull(),
+  addressLine: text("address_line"),
+  phone: text("phone"),
+  condition: text("condition").notNull(), // Diarrhea, Chickenpox, ARI, Dengue suspected, Measles suspected
+  dateReported: text("date_reported").notNull(),
+  status: text("status").default("New"), // New, Monitoring, Referred, Closed
+  notes: text("notes"),
+  linkedPersonType: text("linked_person_type"), // Mother, Child, Senior, or null
+  linkedPersonId: integer("linked_person_id"),
+});
+
+export const insertDiseaseCaseSchema = createInsertSchema(diseaseCases).omit({ id: true });
+export type DiseaseCase = typeof diseaseCases.$inferSelect;
+export type InsertDiseaseCase = z.infer<typeof insertDiseaseCaseSchema>;
+
+// === TB PATIENTS (DOTS) ===
+export const tbPatients = pgTable("tb_patients", {
+  id: serial("id").primaryKey(),
+  firstName: text("first_name").notNull(),
+  lastName: text("last_name").notNull(),
+  age: integer("age").notNull(),
+  barangay: text("barangay").notNull(),
+  addressLine: text("address_line"),
+  phone: text("phone"),
+  tbType: text("tb_type").default("Pulmonary"), // Pulmonary or Extra-pulmonary
+  treatmentPhase: text("treatment_phase").notNull(), // Intensive or Continuation
+  treatmentStartDate: text("treatment_start_date").notNull(),
+  lastObservedDoseDate: text("last_observed_dose_date"),
+  nextDotsVisitDate: text("next_dots_visit_date"),
+  missedDosesCount: integer("missed_doses_count").default(0),
+  medsRegimenName: text("meds_regimen_name"),
+  referralToRHU: boolean("referral_to_rhu").default(false),
+  nextSputumCheckDate: text("next_sputum_check_date"),
+  outcomeStatus: text("outcome_status").default("Ongoing"), // Ongoing, Completed, Transferred, LTFU
+});
+
+export const insertTBPatientSchema = createInsertSchema(tbPatients).omit({ id: true });
+export type TBPatient = typeof tbPatients.$inferSelect;
+export type InsertTBPatient = z.infer<typeof insertTBPatientSchema>;

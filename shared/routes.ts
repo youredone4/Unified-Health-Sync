@@ -5,7 +5,9 @@ import {
   insertSeniorSchema, seniors,
   insertInventorySchema, inventory,
   healthStations,
-  insertSmsSchema, smsOutbox
+  insertSmsSchema, smsOutbox,
+  insertDiseaseCaseSchema, diseaseCases,
+  insertTBPatientSchema, tbPatients
 } from './schema';
 
 export const errorSchemas = {
@@ -126,6 +128,56 @@ export const api = {
       input: insertSmsSchema,
       responses: {
         201: z.custom<typeof smsOutbox.$inferSelect>(),
+      },
+    },
+  },
+  diseaseCases: {
+    list: {
+      method: 'GET' as const,
+      path: '/api/disease-cases',
+      responses: {
+        200: z.array(z.custom<typeof diseaseCases.$inferSelect>()),
+      },
+    },
+    get: {
+      method: 'GET' as const,
+      path: '/api/disease-cases/:id',
+      responses: {
+        200: z.custom<typeof diseaseCases.$inferSelect>(),
+        404: errorSchemas.notFound,
+      },
+    },
+    update: {
+      method: 'PUT' as const,
+      path: '/api/disease-cases/:id',
+      input: insertDiseaseCaseSchema.partial(),
+      responses: {
+        200: z.custom<typeof diseaseCases.$inferSelect>(),
+      },
+    },
+  },
+  tbPatients: {
+    list: {
+      method: 'GET' as const,
+      path: '/api/tb-patients',
+      responses: {
+        200: z.array(z.custom<typeof tbPatients.$inferSelect>()),
+      },
+    },
+    get: {
+      method: 'GET' as const,
+      path: '/api/tb-patients/:id',
+      responses: {
+        200: z.custom<typeof tbPatients.$inferSelect>(),
+        404: errorSchemas.notFound,
+      },
+    },
+    update: {
+      method: 'PUT' as const,
+      path: '/api/tb-patients/:id',
+      input: insertTBPatientSchema.partial(),
+      responses: {
+        200: z.custom<typeof tbPatients.$inferSelect>(),
       },
     },
   },
