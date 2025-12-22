@@ -1,0 +1,58 @@
+ADD PATIENT-LEVEL MAP LOCATIONS (CRITICAL)
+
+Update the Map Module so that it can display individual patient/case locations across the Municipality of Placer.
+
+DATA UPDATES (src/data/mockData.js)
+- Add lat and lng to:
+  - Mothers
+  - Children
+  - Seniors
+  - DiseaseCases
+  - TBPatients
+- Keep coordinates plausible for Placer and spread out (not identical).
+- Keep facility coordinates for each barangay health station.
+
+MAP PAGE REQUIREMENTS (src/pages/MapPage.jsx)
+1) Map layers / filters (simple, low literacy)
+- Dropdown or segmented control: “Show on Map”
+  Options:
+  - All
+  - Prenatal (Mothers)
+  - Child Health (Children)
+  - Senior Care (Seniors)
+  - Disease Cases
+  - TB DOTS
+  - Facilities (Barangay Health Stations)
+- Status filter:
+  - All
+  - Overdue only
+  - Due soon only
+
+2) Marker styling (must follow 3-status color rule)
+- Red markers: Overdue
+- Orange markers: Due soon
+- Blue/Green markers: Normal/Info
+Always show text in tooltip indicating status (“OVERDUE”, “DUE SOON”, etc.).
+
+3) Tooltips (plain language)
+- Mothers: “Mother: NAME | Next: Prenatal check or Tetanus Shot | Due: DATE | Status”
+- Children: “Child: NAME | Next Vaccine: LABEL | Next Visit: DATE | Status”
+- Seniors: “Senior: NAME | Next Pickup: DATE | Med: NAME DOSEmg | Status”
+- Disease case: “Case: CONDITION | Patient: NAME | Reported: DATE | Status”
+- TB: “TB DOTS: NAME | Next Visit: DATE | Missed Doses: # | Status”
+- Facilities: “Facility: NAME | Barangay: X”
+
+4) Click-to-open Profile
+- Clicking a marker must open the related Profile/Case page.
+
+5) Map summary counters
+At the top of the map page, show big counters:
+- Pins shown (total)
+- Overdue (count)
+- Due soon (count)
+
+6) Keep it simple
+- Do not implement polygons/boundaries.
+- Clustering is optional; if easy, implement basic marker clustering. Otherwise keep pin volume manageable.
+
+Also update Overview dashboards and analytics to optionally include a “Map View” button for top hotspot barangays (filter map by barangay).

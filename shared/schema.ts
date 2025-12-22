@@ -18,6 +18,8 @@ export const mothers = pgTable("mothers", {
   tt2Date: text("tt2_date"),
   tt3Date: text("tt3_date"),
   status: text("status").default("active"),
+  latitude: text("latitude"),
+  longitude: text("longitude"),
 });
 
 export const insertMotherSchema = createInsertSchema(mothers).omit({ id: true });
@@ -48,6 +50,8 @@ export const children = pgTable("children", {
     date: string;
     weightKg: number;
   }>>().default([]),
+  latitude: text("latitude"),
+  longitude: text("longitude"),
 });
 
 export const insertChildSchema = createInsertSchema(children).omit({ id: true });
@@ -72,6 +76,8 @@ export const seniors = pgTable("seniors", {
   nextPickupDate: text("next_pickup_date"), // static for demo
   htnMedsReady: boolean("htn_meds_ready").default(false),
   pickedUp: boolean("picked_up").default(false),
+  latitude: text("latitude"),
+  longitude: text("longitude"),
 });
 
 export const insertSeniorSchema = createInsertSchema(seniors).omit({ id: true });
@@ -143,6 +149,8 @@ export const diseaseCases = pgTable("disease_cases", {
   notes: text("notes"),
   linkedPersonType: text("linked_person_type"), // Mother, Child, Senior, or null
   linkedPersonId: integer("linked_person_id"),
+  latitude: text("latitude"),
+  longitude: text("longitude"),
 });
 
 export const insertDiseaseCaseSchema = createInsertSchema(diseaseCases).omit({ id: true });
@@ -168,6 +176,8 @@ export const tbPatients = pgTable("tb_patients", {
   referralToRHU: boolean("referral_to_rhu").default(false),
   nextSputumCheckDate: text("next_sputum_check_date"),
   outcomeStatus: text("outcome_status").default("Ongoing"), // Ongoing, Completed, Transferred, LTFU
+  latitude: text("latitude"),
+  longitude: text("longitude"),
 });
 
 export const insertTBPatientSchema = createInsertSchema(tbPatients).omit({ id: true });
