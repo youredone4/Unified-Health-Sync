@@ -1,5 +1,5 @@
 import { differenceInDays, parseISO, addDays, format } from 'date-fns';
-import type { Mother, Child, Senior, InventoryItem } from '@shared/schema';
+import type { Mother, Child, Senior, InventoryItem, DiseaseCase, TBPatient } from '@shared/schema';
 
 export const TODAY = new Date('2025-12-22');
 export const TODAY_STR = '2025-12-22';
@@ -189,4 +189,127 @@ export function getStatusBadgeClass(status: StatusType | StockStatus): string {
 export function formatDate(dateStr: string | null): string {
   if (!dateStr) return 'N/A';
   return format(parseISO(dateStr), 'MMM d, yyyy');
+}
+
+// === DISEASE SURVEILLANCE ===
+export type DiseaseStatusType = 'new' | 'monitoring' | 'referred' | 'closed';
+
+export function getDiseaseStatus(diseaseCase: DiseaseCase): DiseaseStatusType {
+  const status = (diseaseCase.status || 'New').toLowerCase();
+  if (status === 'new') return 'new';
+  if (status === 'monitoring') return 'monitoring';
+  if (status === 'referred') return 'referred';
+  return 'closed';
+}
+
+export function getDaysSinceReported(diseaseCase: DiseaseCase): number {
+  if (!diseaseCase.dateReported) return 0;
+  const reportedDate = parseISO(diseaseCase.dateReported);
+  return differenceInDays(TODAY, reportedDate);
+}
+
+export function isOutbreakCondition(cases: DiseaseCase[]): { isOutbreak: boolean; condition: string | null; count: number } {
+  const conditionCounts: Record<string, number> = {};
+  const recentCases = cases.filter(c => {
+    const daysSince = getDaysSinceReported(c);
+    return daysSince <= 14 && c.status !== 'Closed';
+  });
+  
+  for (const c of recentCases) {
+    conditionCounts[c.condition] = (conditionCounts[c.condition] || 0) + 1;
+  }
+  
+  for (const [condition, count] of Object.entries(conditionCounts)) {
+    if (count >= 3) {
+      return { isOutbreak: true, condition, count };
+    }
+  }
+  
+  return { isOutbreak: false, condition: null, count: 0 };
+}
+
+export function getDiseaseStatusBadgeClass(status: DiseaseStatusType): string {
+  switch (status) {
+    case 'new':
+      return 'status-overdue';
+    case 'monitoring':
+      return 'status-due-soon';
+    case 'referred':
+      return 'status-upcoming';
+    case 'closed':
+      return 'status-completed';
+    default:
+      return '';
+  }
+}
+
+// === TB DOTS ===
+export type TBStatusType = 'overdue' | 'due_today' | 'due_soon' | 'on_track' | 'at_risk' | 'completed';
+
+export function getTBDotsVisitStatus(patient: TBPatient): { status: TBStatusType; daysUntil: number | null } {
+  if (!patient.nextDotsVisitDate) return { status: 'on_track', daysUntil: null };
+  
+  const visitDate = parseISO(patient.nextDotsVisitDate);
+  const daysUntil = differenceInDays(visitDate, TODAY);
+  
+  if (daysUntil < 0) return { status: 'overdue', daysUntil };
+  if (daysUntil === 0) return { status: 'due_today', daysUntil: 0 };
+  if (daysUntil <= 3) return { status: 'due_soon', daysUntil };
+  return { status: 'on_track', daysUntil };
+}
+
+export function getTBMissedDoseRisk(patient: TBPatient): boolean {
+  return (patient.missedDosesCount || 0) >= 3;
+}
+
+export function getTBSputumCheckStatus(patient: TBPatient): { status: StatusType; daysUntil: number | null } {
+  if (!patient.nextSputumCheckDate) return { status: 'upcoming', daysUntil: null };
+  
+  const checkDate = parseISO(patient.nextSputumCheckDate);
+  const daysUntil = differenceInDays(checkDate, TODAY);
+  
+  return {
+    status: daysUntil < 0 ? 'overdue' : daysUntil <= 7 ? 'due_soon' : 'upcoming',
+    daysUntil
+  };
+}
+
+export function getTBOverallStatus(patient: TBPatient): TBStatusType {
+  if (patient.outcomeStatus === 'Completed') return 'completed';
+  if (patient.referralToRHU) return 'at_risk';
+  if ((patient.missedDosesCount || 0) >= 3) return 'at_risk';
+  
+  const visitStatus = getTBDotsVisitStatus(patient);
+  return visitStatus.status;
+}
+
+export function getTBStatusBadgeClass(status: TBStatusType): string {
+  switch (status) {
+    case 'overdue':
+    case 'at_risk':
+      return 'status-overdue';
+    case 'due_today':
+    case 'due_soon':
+      return 'status-due-soon';
+    case 'on_track':
+      return 'status-upcoming';
+    case 'completed':
+      return 'status-completed';
+    default:
+      return '';
+  }
+}
+
+export function getTreatmentDaysRemaining(patient: TBPatient): number {
+  const startDate = parseISO(patient.treatmentStartDate);
+  const totalDays = patient.treatmentPhase === 'Intensive' ? 56 : 112;
+  const daysSinceStart = differenceInDays(TODAY, startDate);
+  return Math.max(0, totalDays - daysSinceStart);
+}
+
+export function getTreatmentProgress(patient: TBPatient): number {
+  const startDate = parseISO(patient.treatmentStartDate);
+  const totalDays = patient.treatmentPhase === 'Intensive' ? 56 : 112;
+  const daysSinceStart = differenceInDays(TODAY, startDate);
+  return Math.min(100, Math.max(0, (daysSinceStart / totalDays) * 100));
 }

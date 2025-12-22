@@ -27,6 +27,8 @@ import {
   TrendingUp,
   AlertTriangle,
   Bot,
+  Siren,
+  ClipboardList,
 } from "lucide-react";
 
 const menuGroups = [
@@ -68,6 +70,21 @@ const menuGroups = [
       { title: "HTN Meds Pickup", url: "/senior", icon: Pill },
       { title: "Senior Dashboard", url: "/senior/dashboard", icon: Activity },
       { title: "Senior Registry", url: "/senior/registry", icon: UserCircle },
+    ],
+  },
+  {
+    label: "Disease Surveillance",
+    items: [
+      { title: "Case Worklist", url: "/disease", icon: Siren },
+      { title: "Case Registry", url: "/disease/registry", icon: ClipboardList },
+      { title: "Outbreak Map", url: "/disease/map", icon: MapPin },
+    ],
+  },
+  {
+    label: "TB DOTS Module",
+    items: [
+      { title: "DOTS Worklist", url: "/tb", icon: Pill },
+      { title: "TB Registry", url: "/tb/registry", icon: ClipboardList },
     ],
   },
   {
