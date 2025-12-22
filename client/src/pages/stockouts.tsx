@@ -19,7 +19,7 @@ export default function StockoutsPage() {
 
   inventory.forEach(inv => {
     const v = (inv.vaccines || {}) as any;
-    const h = (inv.htnMeds || {}) as any;
+    const h = (inv.htnMeds || []) as Array<{ name: string; doseMg: number; qty: number }>;
 
     if (v.bcgQty === 0) issues.push({ barangay: inv.barangay, item: 'BCG', qty: 0, status: 'out' });
     else if (v.bcgQty < 10) issues.push({ barangay: inv.barangay, item: 'BCG', qty: v.bcgQty, status: 'low' });
@@ -36,11 +36,10 @@ export default function StockoutsPage() {
     if (v.mrQty === 0) issues.push({ barangay: inv.barangay, item: 'MR', qty: 0, status: 'out' });
     else if (v.mrQty < 10) issues.push({ barangay: inv.barangay, item: 'MR', qty: v.mrQty, status: 'low' });
 
-    if ((h.amlodipine5mg || 0) === 0) issues.push({ barangay: inv.barangay, item: 'Amlodipine 5mg', qty: 0, status: 'out' });
-    else if ((h.amlodipine5mg || 0) < 20) issues.push({ barangay: inv.barangay, item: 'Amlodipine 5mg', qty: h.amlodipine5mg, status: 'low' });
-
-    if ((h.losartan50mg || 0) === 0) issues.push({ barangay: inv.barangay, item: 'Losartan 50mg', qty: 0, status: 'out' });
-    else if ((h.losartan50mg || 0) < 20) issues.push({ barangay: inv.barangay, item: 'Losartan 50mg', qty: h.losartan50mg, status: 'low' });
+    h.forEach(med => {
+      if (med.qty === 0) issues.push({ barangay: inv.barangay, item: `${med.name} ${med.doseMg}mg`, qty: 0, status: 'out' });
+      else if (med.qty < 20) issues.push({ barangay: inv.barangay, item: `${med.name} ${med.doseMg}mg`, qty: med.qty, status: 'low' });
+    });
   });
 
   const outOfStock = issues.filter(i => i.status === 'out');

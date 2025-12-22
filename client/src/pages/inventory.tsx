@@ -11,9 +11,10 @@ export default function InventoryPage() {
 
   const stockOutBarangays = inventory.filter(inv => {
     const v = inv.vaccines as any;
-    const h = inv.htnMeds as any;
-    return (v && Object.values(v).some((q: any) => q === 0)) || 
-           (h && Object.values(h).some((q: any) => q === 0));
+    const h = (inv.htnMeds || []) as Array<{ name: string; doseMg: number; qty: number }>;
+    const vaccineStockout = v && (v.bcgQty === 0 || v.pentaQty === 0 || v.opvQty === 0 || v.hepBQty === 0 || v.mrQty === 0);
+    const htnStockout = h.some(med => med.qty === 0);
+    return vaccineStockout || htnStockout;
   }).length;
 
   const lowStockBarangays = inventory.filter(inv => {
@@ -98,25 +99,26 @@ export default function InventoryPage() {
               <thead>
                 <tr className="border-b border-border">
                   <th className="text-left py-2 px-3">Barangay</th>
-                  <th className="text-center py-2 px-3">Amlodipine 5mg</th>
-                  <th className="text-center py-2 px-3">Losartan 50mg</th>
-                  <th className="text-center py-2 px-3">Metoprolol 50mg</th>
+                  <th className="text-left py-2 px-3">Medications</th>
                 </tr>
               </thead>
               <tbody>
                 {inventory.map(inv => {
-                  const h = (inv.htnMeds || {}) as any;
+                  const h = (inv.htnMeds || []) as Array<{ name: string; doseMg: number; qty: number }>;
                   return (
                     <tr key={inv.id} className="border-b border-border/50">
                       <td className="py-3 px-3 font-medium">{inv.barangay}</td>
-                      <td className="text-center py-3 px-3">
-                        <StatusBadge status={getStockStatus(h.amlodipine5mg || 0, 20, 100)} label={`${h.amlodipine5mg || 0}`} />
-                      </td>
-                      <td className="text-center py-3 px-3">
-                        <StatusBadge status={getStockStatus(h.losartan50mg || 0, 20, 100)} label={`${h.losartan50mg || 0}`} />
-                      </td>
-                      <td className="text-center py-3 px-3">
-                        <StatusBadge status={getStockStatus(h.metoprolol50mg || 0, 20, 100)} label={`${h.metoprolol50mg || 0}`} />
+                      <td className="py-3 px-3">
+                        <div className="flex flex-wrap gap-2">
+                          {h.length === 0 && <span className="text-muted-foreground">None</span>}
+                          {h.map((med, idx) => (
+                            <StatusBadge 
+                              key={idx} 
+                              status={getStockStatus(med.qty, 20, 100)} 
+                              label={`${med.name} ${med.doseMg}mg: ${med.qty}`} 
+                            />
+                          ))}
+                        </div>
                       </td>
                     </tr>
                   );
