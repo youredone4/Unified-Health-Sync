@@ -1,0 +1,292 @@
+You are building a DEMO web application called:
+
+“GeoHealthSync – Barangay Health Information & Analytics System”
+
+This is a FRONTEND-FOCUSED prototype with mock data and client-side logic.
+The goal is to demonstrate an information system with dashboards, analytics,
+notifications, and module-based navigation for Barangay Health Offices.
+
+DO NOT over-engineer. This is a demo for presentation and grading.
+
+────────────────────────────────────────
+CRITICAL UX REQUIREMENT (MUST FOLLOW)
+────────────────────────────────────────
+The end users are technologically handicapped / low digital literacy.
+Follow these 10 UI Design Rules strictly and reflect them in the UI structure, labels, and components:
+
+UI RULE 1: One primary goal per screen
+- Each page must focus on a single purpose (worklist OR dashboard OR registry), not mixed.
+
+UI RULE 2: Action-first design
+- Default view per module should be the WORKLIST (Due Today / Due Soon / Overdue).
+- Dashboards are secondary.
+
+UI RULE 3: Plain language, minimal acronyms
+- Use “Tetanus Shot 1/2/3” with small text “(TT1/TT2/TT3)” as optional.
+- Use “Overdue Vaccines” instead of “Defaulters”.
+- Use “Underweight Risk (Demo)” not technical z-scores.
+
+UI RULE 4: Shallow navigation (max 2 levels)
+- Module → (Worklist / Dashboard / Registry / Reports)
+- No deep nesting.
+
+UI RULE 5: Consistent layout across all pages
+- Topbar always same.
+- Page sections always: (1) 3–4 large KPI cards (optional) then (2) ONE main table (worklist) then (3) details drawer.
+
+UI RULE 6: Color only for status (3 statuses)
+- Red = OVERDUE
+- Orange = DUE SOON
+- Blue/Green = AVAILABLE/COMPLETED
+Always pair color with text labels (never color-only).
+
+UI RULE 7: Large tap targets + readable typography
+- Buttons ≥ 44px height.
+- Base font 14–16px.
+- Entire table row clickable for “View details”.
+
+UI RULE 8: Progressive disclosure
+- Show only essential columns; put details in a right-side drawer/modal (“Details”).
+- Avoid showing too many vaccine columns in the main list; show them in details view.
+
+UI RULE 9: Error prevention + confirmation
+- Actions like “Mark Done”, “Mark Picked Up”, “Record Given” must confirm in a modal.
+- Show success banners (“Saved”).
+
+UI RULE 10: Forgiving UX
+- Provide undo option for last action (demo state).
+- Clear empty states (“No overdue items today”).
+- Persist filter selections and last page in localStorage (demo-friendly).
+
+────────────────────────────────────────
+TECH STACK (STRICT)
+────────────────────────────────────────
+- React (JavaScript, NOT TypeScript)
+- Vite
+- Client-side routing (simple state-based routing is OK)
+- Recharts for charts (use sparingly; decision-maker pages only)
+- Leaflet + react-leaflet for maps
+- Axios (even if mock data is local, structure code as if API-driven)
+- Plain CSS (single global stylesheet)
+- No backend required; all client-side
+
+────────────────────────────────────────
+CORE REQUIREMENTS
+────────────────────────────────────────
+
+1) MODULE-BASED LEFT SIDEBAR (VERY IMPORTANT)
+The LEFT SIDEBAR must be organized by HEALTH MODULES with collapsible sections.
+Submenus may reuse page components, but the navigation MUST EXIST and feel modular.
+
+EXACT SIDEBAR STRUCTURE (keep it simple, shallow):
+
+• Overview
+  - Municipal Dashboard
+  - Hotspots & Analytics
+
+• Prenatal Module
+  - TT Reminders (Worklist)   [DEFAULT LANDING]
+  - Prenatal Dashboard
+  - Mother Registry
+
+• Neonatal / Child Health Module
+  - Vaccination Schedule (Worklist)   [DEFAULT LANDING]
+  - Child Health Dashboard
+  - Child Registry
+
+• Nutrition Module
+  - Underweight Follow-ups (Worklist) [DEFAULT LANDING]
+  - Growth Monitoring
+  - Nutrition Dashboard
+
+• Senior Care Module
+  - HTN Meds Pickup (Worklist)        [DEFAULT LANDING]
+  - Senior Dashboard
+  - Senior Registry
+
+• Inventory Module
+  - Vaccine & Med Availability
+  - Stock-outs & Low Stock
+
+• Reporting Module
+  - Reports (Export demo)
+  - AI Reporting (RAG demo)
+
+• Map Module
+  - Health Facilities Map
+
+IMPORTANT: For low literacy, default each module to its WORKLIST page.
+
+────────────────────────────────────────
+DATA MODEL (MOCK DATA)
+────────────────────────────────────────
+Municipality: “Placer”
+Barangays:
+- Bugas-bugas
+- San Isidro
+- Poblacion
+- Banban
+- Canlumacad
+
+Mock datasets in src/data/mockData.js:
+1) Mothers
+   - id, name, barangay, gaWeeks, phone
+   - tt1Date, tt2Date, tt3Date, registrationDate
+
+2) Children
+   - id, name, barangay, dob
+   - vaccines object: bcg, hepB, penta1, penta2, penta3, opv1, opv2, opv3, mr1
+   - growth array: { date, weightKg }
+
+3) Seniors
+   - id, name, barangay, phone
+   - lastBP, lastBPDate
+   - htnMedsReady (boolean)
+   - medsReadyDate
+   - pickedUp (boolean)
+
+4) Barangay Health Stations
+   - barangay name
+   - latitude, longitude (plausible, distinct)
+
+Use realistic values and ensure counts are consistent across pages.
+
+────────────────────────────────────────
+HEALTH LOGIC (DEMO RULES — CLIENT-SIDE)
+────────────────────────────────────────
+
+Prenatal – Anti-Tetanus (TT):
+- If TT1 missing → Tetanus Shot 1 due immediately
+- TT2 due = TT1 + 28 days
+- TT3 due = TT2 + 180 days
+- Status: overdue (past), due_soon (≤7 days), upcoming, complete
+Display labels as:
+- “Tetanus Shot 1 (TT1)”, “Tetanus Shot 2 (TT2)”, “Tetanus Shot 3 (TT3)”
+
+Child Vaccination:
+- Due dates from DOB:
+  - BCG, HepB: day 0
+  - Penta1 / OPV1: day 60
+  - Penta2 / OPV2: day 120
+  - Penta3 / OPV3: day 180
+  - MR1: day 270
+- Determine next actionable vaccine
+- Status: overdue, due_soon, upcoming, done
+UI labels:
+- “Overdue Vaccines” not “Defaulters”
+
+Nutrition (IMPORTANT DISCLAIMER):
+- Implement SIMPLE heuristic underweight flag using last weight and age.
+- Label: “Underweight Risk (Demo)”
+- Add TODO note: “Replace with WHO Z-score”.
+
+Senior Care:
+- Notify when htnMedsReady = true AND pickedUp = false
+- Label: “HTN medicine ready for pickup”
+
+Inventory:
+- Show availability by barangay (static quantities from mock data)
+- Flags: “Out of stock”, “Low stock”, “Available”
+No complex consumption math; keep simple.
+
+────────────────────────────────────────
+PAGES (SIMPLE, AT-A-GLANCE)
+────────────────────────────────────────
+
+A) Worklist pages (PRIMARY)
+Each worklist page must have:
+- 3 simple counters: Overdue / Due Soon / Total
+- One main table (max 6 columns)
+- Row click opens a Details Drawer
+- Primary action button (Notify / Mark Done / Mark Picked Up)
+- Confirmation modal + success toast
+- Undo last action (demo)
+
+Worklists:
+- Prenatal: TT due/overdue mothers
+- Child health: vaccines due/overdue
+- Nutrition: underweight follow-ups + missing growth checks
+- Senior care: meds pickup reminders
+- Inventory: stock-out list
+
+B) Dashboards (SECONDARY)
+Dashboards are mostly for decision makers:
+- Use charts ONLY in Overview pages to reduce confusion.
+- For module dashboards, keep charts minimal or omit; use simple KPI cards + one table.
+
+C) Registries (SIMPLE TABLE LISTS)
+- Mother Registry, Child Registry, Senior Registry: searchable lists with a Details Drawer.
+
+D) RAG Demo (STATIC / SIMPLE)
+- Prompt textbox
+- Generate button
+- Outputs: short narrative + top hotspots table + citations (IDs)
+No real LLM calls.
+
+E) Map
+- Show health stations markers
+- Tooltip shows simple counts (TT overdue, overdue vaccines, underweight risk, meds pending)
+- Simple legend (Low/Medium/High risk)
+
+────────────────────────────────────────
+UI / UX REQUIREMENTS
+────────────────────────────────────────
+- Clean, simple dark theme
+- Big readable text, high contrast
+- Use icons sparingly (with text)
+- Use consistent badges:
+  - OVERDUE (red)
+  - DUE SOON (orange)
+  - AVAILABLE/COMPLETED (blue/green)
+- Global Notification Drawer in topbar with the same three severity groupings
+- Store selected filters + last visited page in localStorage
+
+────────────────────────────────────────
+FILES TO GENERATE
+────────────────────────────────────────
+- src/main.jsx
+- src/App.jsx
+- src/styles.css
+- src/data/mockData.js
+- src/lib/healthLogic.js
+- src/components/
+  - Sidebar.jsx
+  - SidebarGroup.jsx
+  - Badge.jsx
+  - NotificationDrawer.jsx
+  - DetailsDrawer.jsx
+  - ConfirmModal.jsx
+  - Toast.jsx
+- src/pages/
+  - OverviewDashboard.jsx
+  - HotspotsAnalytics.jsx
+  - PrenatalWorklist.jsx
+  - PrenatalDashboard.jsx
+  - MotherRegistry.jsx
+  - ChildWorklist.jsx
+  - ChildDashboard.jsx
+  - ChildRegistry.jsx
+  - NutritionWorklist.jsx
+  - GrowthMonitoring.jsx
+  - NutritionDashboard.jsx
+  - SeniorWorklist.jsx
+  - SeniorDashboard.jsx
+  - SeniorRegistry.jsx
+  - InventoryAvailability.jsx
+  - InventoryStockouts.jsx
+  - Reports.jsx
+  - AIReporting.jsx
+  - MapPage.jsx
+- vite.config.js (if needed)
+- package.json scripts that run Vite on Replit:
+  - "dev": "vite --host 0.0.0.0 --port 3000"
+
+IMPORTANT CONSTRAINTS
+- JavaScript only (no TypeScript)
+- No backend required
+- All logic client-side
+- Code must run immediately after generation
+- Keep it simple for low digital literacy users
+- Use consistent mock numbers across screens
+
+Proceed to generate the full project now with working navigation, mock data, health logic, and the low-literacy UI rules baked into the design.
