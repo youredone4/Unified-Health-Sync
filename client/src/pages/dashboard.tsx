@@ -76,13 +76,14 @@ export default function Dashboard() {
         </Card>
       )}
 
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
         <KpiCard title="TT Overdue" value={ttOverdue} icon={Heart} variant={ttOverdue > 0 ? 'danger' : 'default'} />
         <KpiCard title="Overdue Vaccines" value={vaccineOverdue} icon={Baby} variant={vaccineOverdue > 0 ? 'danger' : 'default'} />
         <KpiCard title="Underweight Risk" value={underweightRisk} icon={TrendingUp} variant={underweightRisk > 0 ? 'warning' : 'default'} />
         <KpiCard title="Meds Pending" value={medsPickupPending} icon={Pill} variant={medsPickupPending > 0 ? 'warning' : 'default'} />
-        <KpiCard title="New Disease Cases" value={newDiseases} icon={Siren} variant={newDiseases > 0 ? 'danger' : 'default'} />
-        <KpiCard title="TB Missed Visits" value={tbMissedVisits} icon={Pill} variant={tbMissedVisits > 0 ? 'danger' : 'default'} />
+        <KpiCard title="Disease Cases" value={newDiseases} icon={Siren} variant={newDiseases > 0 ? 'danger' : 'default'} />
+        <KpiCard title="TB Missed" value={tbMissedVisits} icon={Pill} variant={tbMissedVisits > 0 ? 'danger' : 'default'} />
+        <KpiCard title="TB At Risk" value={tbAtRisk} icon={AlertTriangle} variant={tbAtRisk > 0 ? 'warning' : 'default'} />
         <KpiCard title="Stock-outs" value={stockOuts} icon={Package} variant={stockOuts > 0 ? 'danger' : 'default'} />
       </div>
 
