@@ -1,16 +1,22 @@
 import { useQuery } from "@tanstack/react-query";
-import type { Mother, Child, Senior, InventoryItem } from "@shared/schema";
-import { getTTStatus, getNextVaccineStatus, getSeniorPickupStatus, isMedsReadyForPickup, isUnderweightRisk } from "@/lib/healthLogic";
+import { useLocation } from "wouter";
+import type { Mother, Child, Senior, InventoryItem, DiseaseCase, TBPatient } from "@shared/schema";
+import { getTTStatus, getNextVaccineStatus, getSeniorPickupStatus, isMedsReadyForPickup, isUnderweightRisk, isOutbreakCondition, getTBDotsVisitStatus, getTBMissedDoseRisk, getDiseaseStatus } from "@/lib/healthLogic";
 import KpiCard from "@/components/kpi-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { AlertCircle, Baby, Heart, Pill, Package, TrendingUp } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { AlertCircle, Baby, Heart, Pill, Package, TrendingUp, Siren, AlertTriangle, ArrowRight } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line } from "recharts";
 
 export default function Dashboard() {
+  const [, navigate] = useLocation();
   const { data: mothers = [] } = useQuery<Mother[]>({ queryKey: ['/api/mothers'] });
   const { data: children = [] } = useQuery<Child[]>({ queryKey: ['/api/children'] });
   const { data: seniors = [] } = useQuery<Senior[]>({ queryKey: ['/api/seniors'] });
   const { data: inventory = [] } = useQuery<InventoryItem[]>({ queryKey: ['/api/inventory'] });
+  const { data: diseaseCases = [] } = useQuery<DiseaseCase[]>({ queryKey: ['/api/disease-cases'] });
+  const { data: tbPatients = [] } = useQuery<TBPatient[]>({ queryKey: ['/api/tb-patients'] });
 
   const ttOverdue = mothers.filter(m => getTTStatus(m).status === 'overdue').length;
   const vaccineOverdue = children.filter(c => getNextVaccineStatus(c).status === 'overdue').length;
@@ -20,6 +26,11 @@ export default function Dashboard() {
     const v = inv.vaccines as any;
     return v && (v.bcgQty === 0 || v.pentaQty === 0 || v.opvQty === 0 || v.hepBQty === 0 || v.mrQty === 0);
   }).length;
+
+  const outbreak = isOutbreakCondition(diseaseCases);
+  const newDiseases = diseaseCases.filter(c => getDiseaseStatus(c) === 'new').length;
+  const tbMissedVisits = tbPatients.filter(p => getTBDotsVisitStatus(p).status === 'overdue').length;
+  const tbAtRisk = tbPatients.filter(p => getTBMissedDoseRisk(p)).length;
 
   const barangays = ['Bugas-bugas', 'San Isidro', 'Poblacion', 'Banban', 'Canlumacad'];
   const barangayData = barangays.map(b => ({
@@ -45,11 +56,33 @@ export default function Dashboard() {
         <p className="text-muted-foreground">Placer Health Overview</p>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+      {outbreak.isOutbreak && (
+        <Card className="border-destructive bg-destructive/5">
+          <CardContent className="py-4">
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <div className="flex items-center gap-3">
+                <AlertTriangle className="w-6 h-6 text-destructive" />
+                <div>
+                  <p className="font-semibold text-destructive">Outbreak Alert: {outbreak.condition}</p>
+                  <p className="text-sm text-muted-foreground">{outbreak.count} cases reported in the last 14 days</p>
+                </div>
+              </div>
+              <Button onClick={() => navigate('/disease/map')} variant="destructive" size="sm" data-testid="button-view-outbreak">
+                View Map
+                <ArrowRight className="w-4 h-4 ml-2" />
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
         <KpiCard title="TT Overdue" value={ttOverdue} icon={Heart} variant={ttOverdue > 0 ? 'danger' : 'default'} />
         <KpiCard title="Overdue Vaccines" value={vaccineOverdue} icon={Baby} variant={vaccineOverdue > 0 ? 'danger' : 'default'} />
         <KpiCard title="Underweight Risk" value={underweightRisk} icon={TrendingUp} variant={underweightRisk > 0 ? 'warning' : 'default'} />
-        <KpiCard title="Meds Pickup Pending" value={medsPickupPending} icon={Pill} variant={medsPickupPending > 0 ? 'warning' : 'default'} />
+        <KpiCard title="Meds Pending" value={medsPickupPending} icon={Pill} variant={medsPickupPending > 0 ? 'warning' : 'default'} />
+        <KpiCard title="New Disease Cases" value={newDiseases} icon={Siren} variant={newDiseases > 0 ? 'danger' : 'default'} />
+        <KpiCard title="TB Missed Visits" value={tbMissedVisits} icon={Pill} variant={tbMissedVisits > 0 ? 'danger' : 'default'} />
         <KpiCard title="Stock-outs" value={stockOuts} icon={Package} variant={stockOuts > 0 ? 'danger' : 'default'} />
       </div>
 
