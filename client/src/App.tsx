@@ -69,12 +69,12 @@ function Router() {
       <Route path="/reports/ai" component={AIReporting} />
       <Route path="/map" component={MapPage} />
       <Route path="/disease" component={DiseaseWorklist} />
-      <Route path="/disease/:id" component={DiseaseProfile} />
       <Route path="/disease/registry" component={DiseaseRegistry} />
       <Route path="/disease/map" component={DiseaseMap} />
+      <Route path="/disease/:id" component={DiseaseProfile} />
       <Route path="/tb" component={TBWorklist} />
-      <Route path="/tb/:id" component={TBProfile} />
       <Route path="/tb/registry" component={TBRegistry} />
+      <Route path="/tb/:id" component={TBProfile} />
       <Route>
         <div className="flex items-center justify-center h-full">
           <p className="text-muted-foreground">Page not found</p>
