@@ -1,6 +1,5 @@
-
 import type { Express } from "express";
-import { createServer, type Server } from "http";
+import type { Server } from "http";
 import { storage } from "./storage";
 import { api } from "@shared/routes";
 import { z } from "zod";
@@ -16,6 +15,14 @@ export async function registerRoutes(
   app.get(api.mothers.list.path, async (req, res) => {
     const data = await storage.getMothers();
     res.json(data);
+  });
+
+  app.get(api.mothers.get.path, async (req, res) => {
+    const mother = await storage.getMother(Number(req.params.id));
+    if (!mother) {
+      return res.status(404).json({ message: "Mother not found" });
+    }
+    res.json(mother);
   });
 
   app.put(api.mothers.update.path, async (req, res) => {
@@ -34,6 +41,14 @@ export async function registerRoutes(
     res.json(data);
   });
 
+  app.get(api.children.get.path, async (req, res) => {
+    const child = await storage.getChild(Number(req.params.id));
+    if (!child) {
+      return res.status(404).json({ message: "Child not found" });
+    }
+    res.json(child);
+  });
+
   app.put(api.children.update.path, async (req, res) => {
     try {
       const input = api.children.update.input.parse(req.body);
@@ -48,6 +63,14 @@ export async function registerRoutes(
   app.get(api.seniors.list.path, async (req, res) => {
     const data = await storage.getSeniors();
     res.json(data);
+  });
+
+  app.get(api.seniors.get.path, async (req, res) => {
+    const senior = await storage.getSenior(Number(req.params.id));
+    if (!senior) {
+      return res.status(404).json({ message: "Senior not found" });
+    }
+    res.json(senior);
   });
 
   app.put(api.seniors.update.path, async (req, res) => {
@@ -70,6 +93,22 @@ export async function registerRoutes(
   app.get(api.healthStations.list.path, async (req, res) => {
     const data = await storage.getHealthStations();
     res.json(data);
+  });
+
+  // === SMS (Demo) ===
+  app.get(api.sms.list.path, async (req, res) => {
+    const data = await storage.getSmsMessages();
+    res.json(data);
+  });
+
+  app.post(api.sms.send.path, async (req, res) => {
+    try {
+      const input = api.sms.send.input.parse(req.body);
+      const created = await storage.sendSms(input);
+      res.status(201).json(created);
+    } catch (err) {
+      res.status(400).json({ message: "Invalid SMS data" });
+    }
   });
 
   return httpServer;

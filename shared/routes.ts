@@ -1,11 +1,11 @@
-
 import { z } from 'zod';
 import { 
   insertMotherSchema, mothers,
   insertChildSchema, children,
   insertSeniorSchema, seniors,
   insertInventorySchema, inventory,
-  healthStations
+  healthStations,
+  insertSmsSchema, smsOutbox
 } from './schema';
 
 export const errorSchemas = {
@@ -14,9 +14,6 @@ export const errorSchemas = {
     field: z.string().optional(),
   }),
   notFound: z.object({
-    message: z.string(),
-  }),
-  internal: z.object({
     message: z.string(),
   }),
 };
@@ -28,6 +25,14 @@ export const api = {
       path: '/api/mothers',
       responses: {
         200: z.array(z.custom<typeof mothers.$inferSelect>()),
+      },
+    },
+    get: {
+      method: 'GET' as const,
+      path: '/api/mothers/:id',
+      responses: {
+        200: z.custom<typeof mothers.$inferSelect>(),
+        404: errorSchemas.notFound,
       },
     },
     update: {
@@ -47,6 +52,14 @@ export const api = {
         200: z.array(z.custom<typeof children.$inferSelect>()),
       },
     },
+    get: {
+      method: 'GET' as const,
+      path: '/api/children/:id',
+      responses: {
+        200: z.custom<typeof children.$inferSelect>(),
+        404: errorSchemas.notFound,
+      },
+    },
     update: {
       method: 'PUT' as const,
       path: '/api/children/:id',
@@ -62,6 +75,14 @@ export const api = {
       path: '/api/seniors',
       responses: {
         200: z.array(z.custom<typeof seniors.$inferSelect>()),
+      },
+    },
+    get: {
+      method: 'GET' as const,
+      path: '/api/seniors/:id',
+      responses: {
+        200: z.custom<typeof seniors.$inferSelect>(),
+        404: errorSchemas.notFound,
       },
     },
     update: {
@@ -88,6 +109,23 @@ export const api = {
       path: '/api/health-stations',
       responses: {
         200: z.array(z.custom<typeof healthStations.$inferSelect>()),
+      },
+    },
+  },
+  sms: {
+    list: {
+      method: 'GET' as const,
+      path: '/api/sms',
+      responses: {
+        200: z.array(z.custom<typeof smsOutbox.$inferSelect>()),
+      },
+    },
+    send: {
+      method: 'POST' as const,
+      path: '/api/sms',
+      input: insertSmsSchema,
+      responses: {
+        201: z.custom<typeof smsOutbox.$inferSelect>(),
       },
     },
   },

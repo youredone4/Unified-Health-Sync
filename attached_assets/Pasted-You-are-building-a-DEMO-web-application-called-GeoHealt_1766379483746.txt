@@ -1,0 +1,328 @@
+You are building a DEMO web application called:
+
+“GeoHealthSync – Barangay Health Information & Analytics System”
+
+This is a FRONTEND-FOCUSED prototype with mock data and client-side logic.
+It must be SIMPLE and usable by technologically handicapped / low digital literacy users.
+DO NOT over-engineer. This is for demo, grading, and stakeholder presentation.
+
+────────────────────────────────────────
+CRITICAL UX REQUIREMENT: 10 UI RULES (MUST FOLLOW)
+────────────────────────────────────────
+UI RULE 1: One primary goal per screen
+- Each screen must focus on one purpose: Worklist OR Profile OR Dashboard OR Inventory OR Calendar.
+
+UI RULE 2: Action-first design
+- Default landing per module is the WORKLIST (Due Today / Due Soon / Overdue).
+- Profiles show “Next scheduled service” at the top.
+
+UI RULE 3: Plain language
+- Use “Tetanus Shot 1/2/3 (TT1/TT2/TT3)”
+- Use “Overdue Vaccines” not “Defaulters”
+- Use “Underweight Risk (Demo)” not technical z-scores
+
+UI RULE 4: Shallow navigation (max 2 levels)
+- Module → (Worklist / Dashboard / Registry / Calendar / Inventory / Reports)
+- No deep nesting.
+
+UI RULE 5: Consistent layout everywhere
+- Same topbar + same badges + same table layout patterns.
+
+UI RULE 6: Color only for status (3 statuses)
+- Red = OVERDUE
+- Orange = DUE SOON
+- Blue/Green = AVAILABLE/COMPLETED
+Always pair color with text labels.
+
+UI RULE 7: Large targets + readable text
+- Buttons height >= 44px
+- Base font 14–16px minimum
+- Entire row clickable to open “Details / Profile”
+
+UI RULE 8: Progressive disclosure
+- Default view shows only essential columns (max 6 columns)
+- Details in right-side drawer or dedicated Profile page (simple).
+
+UI RULE 9: Confirm risky actions + show success
+- “Mark Done”, “Mark Picked Up”, “Record Vaccine Given”, “Record Weight” must confirm.
+- Show toast banner: “Saved”.
+
+UI RULE 10: Forgiving UX
+- Provide Undo for last action (demo)
+- Clear empty states
+- Persist filters + last page in localStorage
+
+────────────────────────────────────────
+TECH STACK (STRICT)
+────────────────────────────────────────
+- React (JavaScript, NOT TypeScript)
+- Vite
+- Client-side routing (simple state-based routing is OK)
+- Recharts (charts only in Overview/Analytics; keep minimal elsewhere)
+- Leaflet + react-leaflet (Map)
+- Axios (even if mock data is local, structure code as if API-driven)
+- Plain CSS (single global stylesheet)
+- No backend required (all client-side)
+- Must run in Replit with: npm run dev (vite --host 0.0.0.0 --port 3000)
+
+────────────────────────────────────────
+MODULE-BASED LEFT SIDEBAR (COLLAPSIBLE)
+────────────────────────────────────────
+EXACT SIDEBAR STRUCTURE:
+
+• Overview
+  - Municipal Dashboard
+  - Hotspots & Analytics
+  - Calendar (All Schedules)
+
+• Prenatal Module
+  - TT Reminders (Worklist) [DEFAULT]
+  - Prenatal Dashboard
+  - Mother Registry
+
+• Neonatal / Child Health Module
+  - Vaccination Schedule (Worklist) [DEFAULT]
+  - Child Health Dashboard
+  - Child Registry
+
+• Nutrition Module
+  - Underweight Follow-ups (Worklist) [DEFAULT]
+  - Growth Monitoring
+  - Nutrition Dashboard
+
+• Senior Care Module
+  - HTN Meds Pickup (Worklist) [DEFAULT]
+  - Senior Dashboard
+  - Senior Registry
+
+• Inventory Module
+  - Availability & Surplus (Vaccines + Meds)
+  - Stock-outs & Low Stock
+
+• Reporting Module
+  - Reports (Export demo)
+  - AI Reporting (RAG demo)
+
+• Map Module
+  - Health Facilities Map
+
+Navigation must be shallow. Default each module to its Worklist.
+
+────────────────────────────────────────
+DATA MODEL (MOCK DATA — MUST INCLUDE PROFILES & LINKAGES)
+────────────────────────────────────────
+Municipality: “Placer”
+Barangays: Bugas-bugas, San Isidro, Poblacion, Banban, Canlumacad
+
+Create mock data files in src/data/mockData.js with these datasets:
+
+A) Mothers (include profile fields)
+- id, firstName, lastName, age, barangay, addressLine (purok/sitio), phone
+- registrationDate
+- gaWeeks (gestational age in weeks)
+- nextPrenatalCheckDate (STATIC field for demo; do not calculate complex ANC schedule)
+- tt1Date, tt2Date, tt3Date (some missing to trigger due/overdue)
+
+B) Children (must link to mother)
+- id, name, dob, barangay, addressLine
+- motherId (foreign key to Mothers)
+- vaccines: bcg, hepB, penta1, penta2, penta3, opv1, opv2, opv3, mr1 (dates or null)
+- nextVisitDate (STATIC field for demo; next visit includes vaccine + weight measurement)
+- growth: [{date, weightKg}] per visit
+
+C) Seniors (must include medication details)
+- id, firstName, lastName, age, barangay, addressLine, phone
+- lastBP, lastBPDate
+- lastMedicationName (e.g., Amlodipine)
+- lastMedicationDoseMg (number)
+- lastMedicationQuantity (tablets)
+- lastMedicationGivenDate
+- nextPickupDate (STATIC for demo)
+- htnMedsReady (boolean)
+- pickedUp (boolean)
+
+D) Inventory by Barangay (vaccines + HTN meds)
+- barangay
+- vaccines: { bcgQty, hepBQty, pentaQty, opvQty, mrQty }
+- htnMeds: [{ name, doseMg, qty }]
+- define thresholds: lowStockThreshold and surplusThreshold (simple numbers)
+- compute status labels: Out / Low / Available / Surplus (simple)
+
+E) Facilities Coordinates
+- barangay, lat, lng (distinct plausible coordinates)
+- optional: facilityName
+
+Ensure consistency across screens: if Bugas-bugas has many overdue items, it must reflect in overview/hotspots.
+
+────────────────────────────────────────
+HEALTH LOGIC (CLIENT-SIDE IN src/lib/healthLogic.js)
+────────────────────────────────────────
+
+1) Prenatal TT logic
+- If tt1Date missing -> Next: Tetanus Shot 1 (TT1) due immediately
+- TT2 due = TT1 + 28 days
+- TT3 due = TT2 + 180 days
+- Status: overdue / due_soon (<=7 days) / upcoming / complete
+Use a fixed TODAY date for demo stability: 2025-12-22.
+Display as plain language.
+
+Also include Prenatal schedule logic:
+- Mother has nextPrenatalCheckDate (static field). Determine status (overdue/due soon/upcoming).
+
+2) Child logic
+- Determine next vaccine due from DOB schedule:
+  BCG & HepB day 0, Penta1/OPV1 day 60, Penta2/OPV2 day 120, Penta3/OPV3 day 180, MR1 day 270
+- Next actionable vaccine is first not done sorted by due date; compute status (overdue/due soon/upcoming/done)
+- Child next visit must show:
+  - Next vaccine due label
+  - NextVisitDate (static field) which is also the next weigh-in date
+- Growth “Underweight Risk (Demo)” heuristic based on age months and last weight (simple rule), and clearly label demo + TODO replace with WHO z-score.
+
+3) Senior logic
+- HTN meds pickup due status based on nextPickupDate (static)
+- Show “meds ready for pickup” if htnMedsReady true and pickedUp false.
+- Show medication details: lastMedicationName, doseMg, quantity, lastMedicationGivenDate.
+
+4) Inventory logic
+- For each barangay compute:
+  - Vaccine status per type: Out / Low / Available / Surplus
+  - HTN meds status: Out/Low/Available/Surplus
+- Provide a simple “Referral suggestion”:
+  If selected barangay is Out for a vaccine/med, recommend top 1–2 barangays with Available/Surplus (static search).
+
+5) Global Notifications (feeds Notification Drawer)
+Generate list items from:
+- Mothers: TT overdue/due soon; Prenatal check overdue/due soon
+- Children: overdue vaccines; due soon vaccines; underweight risk; missing growth monitoring (if no growth in >60 days)
+- Seniors: meds pickup due soon/overdue; meds ready for pickup
+- Inventory: stock-out alerts (barangay + item)
+Prioritize by severity (Overdue first).
+
+────────────────────────────────────────
+KEY UI SCREENS (MUST BUILD)
+────────────────────────────────────────
+
+GLOBAL:
+- Topbar filters (Municipality fixed Placer; Barangay All+list; Date range simple)
+- Notification Drawer with counts (Overdue / Due Soon / Info)
+- SMS feature (DEMO): “Send SMS” opens a modal preview, then “Send” logs to SMS Outbox + toast “SMS queued (Demo)”.
+- SMS Outbox page or drawer tab (audit trail): date/time, recipient, message, status “Queued (Demo)”.
+
+A) Overview → Municipal Dashboard
+- Simple KPI cards: TT overdue, Overdue Vaccines, Underweight Risk, Meds Pickup Pending, Stock-outs
+- Charts (minimal): line trend and bar by barangay (ok here)
+- Hotspot table by barangay (risk score formula displayed)
+- “Calendar” widget preview: list of upcoming events (top 10)
+
+B) Overview → Calendar (All Schedules)
+- Provide a SIMPLE month view OR a week agenda list (choose simpler if needed).
+- Must show events:
+  - Prenatal check-ups (from mothers.nextPrenatalCheckDate)
+  - TT shot due events (from TT logic)
+  - Child next visit events (children.nextVisitDate, vaccine label)
+  - Senior meds pickup events (seniors.nextPickupDate)
+Clicking event opens Profile.
+If full calendar grid is hard, implement a clear “Agenda List by Date” grouped by date (acceptable and simpler for low literacy).
+
+C) Prenatal Worklist (default)
+- Tabs: Overdue / Due Soon / All
+- Table columns (max 6): Mother, Barangay, What is needed (Next TT or Prenatal Check), Due date, Status, Primary Action
+- Clicking a row opens Mother Profile page (or drawer)
+
+D) Mother Profile
+- Header: name, age, barangay, address, phone
+- BIG “Next Scheduled” card:
+  - Next Prenatal Check date + status + Send SMS
+  - Next Tetanus Shot (Shot 1/2/3) + due date + status + Send SMS
+- History collapsed: prior TT dates, prior checkup visits (static list ok)
+- Actions: Mark done (confirm), Reschedule (demo)
+
+E) Child Worklist (Vaccination Schedule default)
+- Table columns: Child, Mother (name), Barangay, Next Vaccine, Next Visit Date, Status, Action
+- Row opens Child Profile
+
+F) Child Profile (linked to mother)
+- Header: child name, age months, barangay, address
+- Linked Mother: show mother name + button “Open Mother Profile”
+- BIG “Next Visit” card:
+  - Next Visit Date (also weight measurement visit)
+  - Next Vaccine due (label)
+  - Send SMS to mother
+- Vaccine timeline (simple badges)
+- Growth chart (recharts line chart)
+- Underweight Risk (Demo) label if flagged
+- Actions: Record weight (confirm), Mark vaccine given (confirm)
+
+G) Nutrition Worklist (Underweight Follow-ups default)
+- Table columns: Child, Barangay, Last Weight, Last Visit, Risk Flag, Action
+- Row opens Child Profile (growth chart)
+
+H) Senior Worklist (HTN Meds Pickup default)
+- Table columns: Senior, Barangay, Med Ready? (yes/no), Next Pickup Date, Status, Action
+- Row opens Senior Profile
+
+I) Senior Profile
+- Header: name, age, barangay, address, phone
+- BIG “Medication” card:
+  - Last medication: name, dose mg, qty, date
+  - Next pickup date + status
+  - Send SMS
+- BP card: last BP and date
+- Actions: Mark picked up (confirm), Reschedule next pickup (demo)
+
+J) Inventory → Availability & Surplus
+- Table: Barangay, Vaccines status summary, HTN meds status summary, Surplus tags
+- Clicking barangay shows detail panel:
+  - per vaccine: qty + status badge
+  - HTN meds list: name/dose/qty + status
+  - “Referral suggestion” box if item is Out: show recommended barangays with Available/Surplus
+
+K) Map
+- Leaflet map with markers for facilities
+- Tooltip: barangay + key counts + stock-out flag
+- Legend Low/Medium/High risk
+Keep toggles simple; do not overwhelm.
+
+L) Reports + AI Reporting (RAG demo)
+- Report builder UI (static export buttons)
+- AI Reporting: prompt textbox + generate -> outputs narrative + top hotspots + citations (IDs)
+
+────────────────────────────────────────
+STYLING & COMPONENTS (KEEP SIMPLE)
+────────────────────────────────────────
+- Single global stylesheet src/styles.css
+- Components:
+  - Sidebar.jsx + SidebarGroup.jsx (collapsible)
+  - Badge.jsx (Overdue/DueSoon/Available)
+  - NotificationDrawer.jsx (Overdue/DueSoon/Info tabs + SMS outbox tab)
+  - ProfileHeader.jsx (simple key info)
+  - BigNextActionCard.jsx (consistent across profiles)
+  - ConfirmModal.jsx
+  - Toast.jsx
+  - DetailsDrawer.jsx (optional if profiles are full pages)
+
+────────────────────────────────────────
+FILES TO GENERATE
+────────────────────────────────────────
+- package.json with scripts:
+  - "dev": "vite --host 0.0.0.0 --port 3000"
+- vite.config.js (optional)
+- src/main.jsx
+- src/App.jsx
+- src/styles.css
+- src/data/mockData.js
+- src/lib/healthLogic.js
+- src/lib/storage.js (localStorage helpers)
+- src/components/*
+- src/pages/*
+Include README.md with run steps and demo notes.
+
+────────────────────────────────────────
+DEMO SAFETY & CONSISTENCY
+────────────────────────────────────────
+- Use fixed TODAY = 2025-12-22 for stable due/overdue behavior.
+- Ensure all numbers align across overview, worklists, profiles, inventory, and map.
+- Include empty-state messages for tables.
+- Keep screens uncluttered and readable.
+
+Proceed to generate the full project now with working navigation, mock data, profiles (mother-child linkage), SMS demo flow, and a simple calendar/agenda for schedules.
