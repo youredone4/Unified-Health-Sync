@@ -8,6 +8,7 @@ import { AppSidebar } from "@/components/app-sidebar";
 import { Bell } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
+import { ThemeProvider } from "@/contexts/theme-context";
 
 import Dashboard from "@/pages/dashboard";
 import Hotspots from "@/pages/hotspots";
@@ -39,6 +40,7 @@ import DiseaseMap from "@/pages/disease-map";
 import TBWorklist from "@/pages/tb-worklist";
 import TBProfile from "@/pages/tb-profile";
 import TBRegistry from "@/pages/tb-registry";
+import SettingsPage from "@/pages/settings";
 import NotificationDrawer from "@/components/notification-drawer";
 import SmsOutbox from "@/components/sms-outbox";
 
@@ -75,6 +77,7 @@ function Router() {
       <Route path="/tb" component={TBWorklist} />
       <Route path="/tb/registry" component={TBRegistry} />
       <Route path="/tb/:id" component={TBProfile} />
+      <Route path="/settings" component={SettingsPage} />
       <Route>
         <div className="flex items-center justify-center h-full">
           <p className="text-muted-foreground">Page not found</p>
@@ -95,45 +98,47 @@ function App() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <SidebarProvider style={sidebarStyle as React.CSSProperties}>
-          <div className="flex h-screen w-full">
-            <AppSidebar />
-            <SidebarInset className="flex flex-col flex-1">
-              <header className="flex items-center justify-between gap-2 p-3 border-b border-border sticky top-0 z-50 bg-background">
-                <div className="flex items-center gap-2">
-                  <SidebarTrigger data-testid="button-sidebar-toggle" />
-                  <span className="text-sm text-muted-foreground">December 22, 2025</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setSmsOutboxOpen(true)}
-                    data-testid="button-sms-outbox"
-                  >
-                    SMS Outbox
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={() => setNotificationsOpen(true)}
-                    data-testid="button-notifications"
-                  >
-                    <Bell className="w-4 h-4" />
-                  </Button>
-                </div>
-              </header>
-              <main className="flex-1 overflow-auto p-4">
-                <Router />
-              </main>
-            </SidebarInset>
-          </div>
-        </SidebarProvider>
-        <NotificationDrawer open={notificationsOpen} onOpenChange={setNotificationsOpen} />
-        <SmsOutbox open={smsOutboxOpen} onOpenChange={setSmsOutboxOpen} />
-        <Toaster />
-      </TooltipProvider>
+      <ThemeProvider>
+        <TooltipProvider>
+          <SidebarProvider style={sidebarStyle as React.CSSProperties}>
+            <div className="flex h-screen w-full">
+              <AppSidebar />
+              <SidebarInset className="flex flex-col flex-1">
+                <header className="flex items-center justify-between gap-2 p-3 border-b border-border sticky top-0 z-50 bg-background">
+                  <div className="flex items-center gap-2">
+                    <SidebarTrigger data-testid="button-sidebar-toggle" />
+                    <span className="text-sm text-muted-foreground">December 22, 2025</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setSmsOutboxOpen(true)}
+                      data-testid="button-sms-outbox"
+                    >
+                      SMS Outbox
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() => setNotificationsOpen(true)}
+                      data-testid="button-notifications"
+                    >
+                      <Bell className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </header>
+                <main className="flex-1 overflow-auto p-4">
+                  <Router />
+                </main>
+              </SidebarInset>
+            </div>
+          </SidebarProvider>
+          <NotificationDrawer open={notificationsOpen} onOpenChange={setNotificationsOpen} />
+          <SmsOutbox open={smsOutboxOpen} onOpenChange={setSmsOutboxOpen} />
+          <Toaster />
+        </TooltipProvider>
+      </ThemeProvider>
     </QueryClientProvider>
   );
 }

@@ -1,6 +1,6 @@
 import { db } from "./db";
 import { 
-  mothers, children, seniors, inventory, healthStations, smsOutbox, diseaseCases, tbPatients,
+  mothers, children, seniors, inventory, healthStations, smsOutbox, diseaseCases, tbPatients, themeSettings,
   type Mother, type InsertMother,
   type Child, type InsertChild,
   type Senior, type InsertSenior,
@@ -8,7 +8,8 @@ import {
   type HealthStation,
   type SmsMessage, type InsertSmsMessage,
   type DiseaseCase, type InsertDiseaseCase,
-  type TBPatient, type InsertTBPatient
+  type TBPatient, type InsertTBPatient,
+  type ThemeSettings, type InsertThemeSettings
 } from "@shared/schema";
 import { eq } from "drizzle-orm";
 
@@ -38,6 +39,9 @@ export interface IStorage {
   getTBPatients(): Promise<TBPatient[]>;
   getTBPatient(id: number): Promise<TBPatient | undefined>;
   updateTBPatient(id: number, updates: Partial<InsertTBPatient>): Promise<TBPatient>;
+
+  getThemeSettings(): Promise<ThemeSettings | undefined>;
+  updateThemeSettings(updates: Partial<InsertThemeSettings>): Promise<ThemeSettings>;
 
   seedData(): Promise<void>;
 }
@@ -143,6 +147,27 @@ export class DatabaseStorage implements IStorage {
       .where(eq(tbPatients.id, id))
       .returning();
     return updated;
+  }
+
+  async getThemeSettings(): Promise<ThemeSettings | undefined> {
+    const [settings] = await db.select().from(themeSettings);
+    return settings;
+  }
+
+  async updateThemeSettings(updates: Partial<InsertThemeSettings>): Promise<ThemeSettings> {
+    const existing = await this.getThemeSettings();
+    if (existing) {
+      const [updated] = await db.update(themeSettings)
+        .set(updates)
+        .where(eq(themeSettings.id, existing.id))
+        .returning();
+      return updated;
+    } else {
+      const [created] = await db.insert(themeSettings)
+        .values(updates as InsertThemeSettings)
+        .returning();
+      return created;
+    }
   }
 
   async seedData(): Promise<void> {
@@ -488,6 +513,19 @@ export class DatabaseStorage implements IStorage {
         nextSputumCheckDate: "2025-12-22",
         outcomeStatus: "Ongoing"
       },
+    ]);
+
+    // THEME SETTINGS - Default LGU branding
+    await db.insert(themeSettings).values([
+      {
+        lguName: "Placer Municipality",
+        lguSubtitle: "Province of Surigao del Norte",
+        logoUrl: null,
+        colorScheme: "healthcare-green",
+        primaryHue: 152,
+        primarySaturation: 60,
+        primaryLightness: 40,
+      }
     ]);
 
     console.log("Database seeded successfully!");

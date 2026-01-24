@@ -183,3 +183,19 @@ export const tbPatients = pgTable("tb_patients", {
 export const insertTBPatientSchema = createInsertSchema(tbPatients).omit({ id: true });
 export type TBPatient = typeof tbPatients.$inferSelect;
 export type InsertTBPatient = z.infer<typeof insertTBPatientSchema>;
+
+// === THEME SETTINGS (LGU Branding) ===
+export const themeSettings = pgTable("theme_settings", {
+  id: serial("id").primaryKey(),
+  lguName: text("lgu_name").notNull().default("Placer Municipality"),
+  lguSubtitle: text("lgu_subtitle").default("Province of Surigao del Norte"),
+  logoUrl: text("logo_url"),
+  colorScheme: text("color_scheme").notNull().default("healthcare-green"),
+  primaryHue: integer("primary_hue").default(152),
+  primarySaturation: integer("primary_saturation").default(60),
+  primaryLightness: integer("primary_lightness").default(40),
+});
+
+export const insertThemeSettingsSchema = createInsertSchema(themeSettings).omit({ id: true });
+export type ThemeSettings = typeof themeSettings.$inferSelect;
+export type InsertThemeSettings = z.infer<typeof insertThemeSettingsSchema>;

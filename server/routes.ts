@@ -159,5 +159,31 @@ export async function registerRoutes(
     }
   });
 
+  // === THEME SETTINGS ===
+  app.get(api.themeSettings.get.path, async (req, res) => {
+    let settings = await storage.getThemeSettings();
+    if (!settings) {
+      settings = await storage.updateThemeSettings({
+        lguName: "Placer Municipality",
+        lguSubtitle: "Province of Surigao del Norte",
+        colorScheme: "healthcare-green",
+        primaryHue: 152,
+        primarySaturation: 60,
+        primaryLightness: 40,
+      });
+    }
+    res.json(settings);
+  });
+
+  app.put(api.themeSettings.update.path, async (req, res) => {
+    try {
+      const input = api.themeSettings.update.input.parse(req.body);
+      const updated = await storage.updateThemeSettings(input);
+      res.json(updated);
+    } catch (err) {
+      res.status(400).json({ message: "Invalid input" });
+    }
+  });
+
   return httpServer;
 }

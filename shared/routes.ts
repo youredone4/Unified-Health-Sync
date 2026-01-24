@@ -7,7 +7,8 @@ import {
   healthStations,
   insertSmsSchema, smsOutbox,
   insertDiseaseCaseSchema, diseaseCases,
-  insertTBPatientSchema, tbPatients
+  insertTBPatientSchema, tbPatients,
+  insertThemeSettingsSchema, themeSettings
 } from './schema';
 
 export const errorSchemas = {
@@ -178,6 +179,23 @@ export const api = {
       input: insertTBPatientSchema.partial(),
       responses: {
         200: z.custom<typeof tbPatients.$inferSelect>(),
+      },
+    },
+  },
+  themeSettings: {
+    get: {
+      method: 'GET' as const,
+      path: '/api/theme-settings',
+      responses: {
+        200: z.custom<typeof themeSettings.$inferSelect>(),
+      },
+    },
+    update: {
+      method: 'PUT' as const,
+      path: '/api/theme-settings',
+      input: insertThemeSettingsSchema.partial(),
+      responses: {
+        200: z.custom<typeof themeSettings.$inferSelect>(),
       },
     },
   },

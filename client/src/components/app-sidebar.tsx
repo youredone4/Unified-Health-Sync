@@ -9,6 +9,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarHeader,
+  SidebarFooter,
 } from "@/components/ui/sidebar";
 import {
   LayoutDashboard,
@@ -29,7 +30,9 @@ import {
   Bot,
   Siren,
   ClipboardList,
+  Settings,
 } from "lucide-react";
+import { useTheme } from "@/contexts/theme-context";
 
 const menuGroups = [
   {
@@ -111,15 +114,31 @@ const menuGroups = [
 
 export function AppSidebar() {
   const [location] = useLocation();
+  const { settings } = useTheme();
+
+  const lguName = settings?.lguName || "GeoHealthSync";
+  const lguSubtitle = settings?.lguSubtitle || "Barangay Health System";
+  const logoUrl = settings?.logoUrl;
 
   return (
     <Sidebar>
       <SidebarHeader className="p-4 border-b border-sidebar-border">
         <div className="flex items-center gap-2">
-          <Stethoscope className="w-6 h-6 text-primary" />
+          {logoUrl ? (
+            <img 
+              src={logoUrl} 
+              alt="LGU Logo" 
+              className="w-8 h-8 object-contain rounded"
+              onError={(e) => {
+                (e.target as HTMLImageElement).style.display = 'none';
+              }}
+            />
+          ) : (
+            <Stethoscope className="w-6 h-6 text-primary" />
+          )}
           <div>
-            <h1 className="text-base font-semibold">GeoHealthSync</h1>
-            <p className="text-xs text-muted-foreground">Placer Municipality</p>
+            <h1 className="text-base font-semibold" data-testid="text-lgu-name">{lguName}</h1>
+            <p className="text-xs text-muted-foreground" data-testid="text-lgu-subtitle">{lguSubtitle}</p>
           </div>
         </div>
       </SidebarHeader>
@@ -148,6 +167,22 @@ export function AppSidebar() {
           </SidebarGroup>
         ))}
       </SidebarContent>
+      <SidebarFooter className="p-2 border-t border-sidebar-border">
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              asChild
+              data-active={location === "/settings"}
+              className="data-[active=true]:bg-sidebar-accent"
+            >
+              <Link href="/settings" data-testid="nav-settings">
+                <Settings className="w-4 h-4" />
+                <span>Settings</span>
+              </Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
+      </SidebarFooter>
     </Sidebar>
   );
 }
