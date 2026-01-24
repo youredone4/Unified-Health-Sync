@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import {
   Sidebar,
@@ -115,23 +116,23 @@ const menuGroups = [
 export function AppSidebar() {
   const [location] = useLocation();
   const { settings } = useTheme();
+  const [logoError, setLogoError] = useState(false);
 
   const lguName = settings?.lguName || "GeoHealthSync";
   const lguSubtitle = settings?.lguSubtitle || "Barangay Health System";
   const logoUrl = settings?.logoUrl;
+  const showLogo = logoUrl && !logoError;
 
   return (
     <Sidebar>
       <SidebarHeader className="p-4 border-b border-sidebar-border">
         <div className="flex items-center gap-2">
-          {logoUrl ? (
+          {showLogo ? (
             <img 
               src={logoUrl} 
               alt="LGU Logo" 
               className="w-8 h-8 object-contain rounded"
-              onError={(e) => {
-                (e.target as HTMLImageElement).style.display = 'none';
-              }}
+              onError={() => setLogoError(true)}
             />
           ) : (
             <Stethoscope className="w-6 h-6 text-primary" />

@@ -27,6 +27,8 @@ export { colorSchemePresets };
 
 function applyThemeColors(hue: number, saturation: number, lightness: number) {
   const root = document.documentElement;
+  const bgHue = hue;
+  const bgSat = Math.max(20, saturation - 40);
   
   root.style.setProperty('--primary', `${hue} ${saturation}% ${lightness}%`);
   root.style.setProperty('--ring', `${hue} ${saturation}% ${lightness}%`);
@@ -34,8 +36,6 @@ function applyThemeColors(hue: number, saturation: number, lightness: number) {
   root.style.setProperty('--sidebar-primary', `${hue} ${saturation}% ${lightness}%`);
   root.style.setProperty('--sidebar-ring', `${hue} ${saturation}% ${lightness}%`);
   
-  const bgHue = hue;
-  const bgSat = Math.max(20, saturation - 40);
   root.style.setProperty('--background', `${bgHue} ${bgSat}% 98%`);
   root.style.setProperty('--foreground', `${bgHue + 10} ${Math.min(saturation, 40)}% 10%`);
   root.style.setProperty('--border', `${bgHue + 5} ${Math.max(15, saturation - 40)}% 88%`);
@@ -52,8 +52,22 @@ function applyThemeColors(hue: number, saturation: number, lightness: number) {
   root.style.setProperty('--accent-foreground', `${bgHue + 10} ${Math.min(saturation, 40)}% 15%`);
   root.style.setProperty('--input', `${bgHue + 5} ${Math.max(15, saturation - 40)}% 92%`);
   
-  const darkLightness = Math.max(35, lightness + 5);
+  const darkLightness = Math.min(65, lightness + 15);
   root.style.setProperty('--primary-dark', `${hue} ${Math.min(70, saturation + 5)}% ${darkLightness}%`);
+  root.style.setProperty('--background-dark', `${bgHue} ${Math.max(10, bgSat - 10)}% 8%`);
+  root.style.setProperty('--foreground-dark', `${bgHue} ${Math.max(5, bgSat - 15)}% 95%`);
+  root.style.setProperty('--border-dark', `${bgHue + 5} ${Math.max(10, saturation - 45)}% 18%`);
+  root.style.setProperty('--sidebar-dark', `${bgHue + 5} ${Math.max(15, saturation - 35)}% 12%`);
+  root.style.setProperty('--sidebar-foreground-dark', `${bgHue} ${Math.max(5, saturation - 45)}% 90%`);
+  root.style.setProperty('--sidebar-border-dark', `${bgHue + 5} ${Math.max(10, saturation - 45)}% 18%`);
+  root.style.setProperty('--sidebar-accent-dark', `${bgHue + 5} ${Math.max(15, saturation - 40)}% 18%`);
+  root.style.setProperty('--secondary-dark', `${bgHue + 5} ${Math.max(15, saturation - 40)}% 15%`);
+  root.style.setProperty('--secondary-foreground-dark', `${bgHue} ${Math.max(5, saturation - 45)}% 90%`);
+  root.style.setProperty('--muted-dark', `${bgHue + 5} ${Math.max(10, saturation - 45)}% 18%`);
+  root.style.setProperty('--muted-foreground-dark', `${bgHue + 10} 10% 60%`);
+  root.style.setProperty('--accent-dark', `${bgHue + 5} ${Math.max(15, saturation - 40)}% 18%`);
+  root.style.setProperty('--accent-foreground-dark', `${bgHue} ${Math.max(5, saturation - 45)}% 90%`);
+  root.style.setProperty('--input-dark', `${bgHue + 5} ${Math.max(10, saturation - 45)}% 15%`);
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
