@@ -54,16 +54,37 @@ export default function M1ReportPage() {
     return differenceInMonths(TODAY, parseISO(dob));
   };
 
+  // Helper to get age group for M1 report (10-14, 15-19, 20-49)
+  const getAgeGroup = (age: number) => {
+    if (age >= 10 && age <= 14) return "10-14";
+    if (age >= 15 && age <= 19) return "15-19";
+    if (age >= 20 && age <= 49) return "20-49";
+    return "other";
+  };
+
   const prenatalStats = {
     totalActivePregnancies: filteredMothers.filter(m => m.status === "active").length,
-    womenWith4ANC: filteredMothers.filter(m => m.status === "delivered" || m.outcome === "live_birth").length,
-    totalDelivered8ANC: filteredMothers.filter(m => m.outcome).length,
+    // M1 Report: Women with at least 4 ANC visits
+    womenWith4ANC: filteredMothers.filter(m => (m.ancVisits || 0) >= 4).length,
+    womenWith4ANCByAge: {
+      "10-14": filteredMothers.filter(m => (m.ancVisits || 0) >= 4 && getAgeGroup(m.age) === "10-14").length,
+      "15-19": filteredMothers.filter(m => (m.ancVisits || 0) >= 4 && getAgeGroup(m.age) === "15-19").length,
+      "20-49": filteredMothers.filter(m => (m.ancVisits || 0) >= 4 && getAgeGroup(m.age) === "20-49").length,
+    },
+    // M1 Report: Women who completed 8 ANC
+    totalDelivered8ANC: filteredMothers.filter(m => (m.ancVisits || 0) >= 8 && m.outcome).length,
     deliveredTracked: filteredMothers.filter(m => m.outcome && m.status === "delivered").length,
     transIn: 0,
     transOut: 0,
+    // M1 Report: BMI status in first trimester
+    normalBMI: filteredMothers.filter(m => m.bmiStatus === "normal").length,
+    lowBMI: filteredMothers.filter(m => m.bmiStatus === "low").length,
+    highBMI: filteredMothers.filter(m => m.bmiStatus === "high").length,
+    // Trimester breakdown
     firstTrimester: filteredMothers.filter(m => m.gaWeeks && m.gaWeeks <= 12).length,
     secondTrimester: filteredMothers.filter(m => m.gaWeeks && m.gaWeeks > 12 && m.gaWeeks <= 27).length,
     thirdTrimester: filteredMothers.filter(m => m.gaWeeks && m.gaWeeks > 27).length,
+    // M1 Report: Td vaccination
     withTT1: filteredMothers.filter(m => m.tt1Date).length,
     withTT2: filteredMothers.filter(m => m.tt2Date).length,
     withTT3: filteredMothers.filter(m => m.tt3Date).length,
@@ -71,79 +92,94 @@ export default function M1ReportPage() {
     withTT5: filteredMothers.filter(m => m.tt5Date).length,
   };
 
+  const deliveredMothers = filteredMothers.filter(m => m.outcome);
   const intrapartumStats = {
-    totalDeliveries: filteredMothers.filter(m => m.outcome).length,
+    totalDeliveries: deliveredMothers.length,
+    totalDeliveriesByAge: {
+      "10-14": deliveredMothers.filter(m => getAgeGroup(m.age) === "10-14").length,
+      "15-19": deliveredMothers.filter(m => getAgeGroup(m.age) === "15-19").length,
+      "20-49": deliveredMothers.filter(m => getAgeGroup(m.age) === "20-49").length,
+    },
     livebirths: filteredMothers.filter(m => m.outcome === "live_birth").length,
+    livebirtbsByAge: {
+      "10-14": filteredMothers.filter(m => m.outcome === "live_birth" && getAgeGroup(m.age) === "10-14").length,
+      "15-19": filteredMothers.filter(m => m.outcome === "live_birth" && getAgeGroup(m.age) === "15-19").length,
+      "20-49": filteredMothers.filter(m => m.outcome === "live_birth" && getAgeGroup(m.age) === "20-49").length,
+    },
     stillbirths: filteredMothers.filter(m => m.outcome === "stillbirth").length,
-    normalBirthWeight: filteredMothers.filter(m => m.outcome === "live_birth").length,
-    lowBirthWeight: 0,
-    unknownBirthWeight: 0,
-    attendedBySkilled: filteredMothers.filter(m => m.outcome).length,
-    byPhysician: 0,
-    byNurse: filteredMothers.filter(m => m.outcome).length,
-    byMidwife: 0,
+    // M1 Report: Birth weight from schema
+    normalBirthWeight: filteredMothers.filter(m => m.birthWeightCategory === "normal").length,
+    lowBirthWeight: filteredMothers.filter(m => m.birthWeightCategory === "low").length,
+    unknownBirthWeight: filteredMothers.filter(m => m.outcome === "live_birth" && !m.birthWeightCategory).length,
+    // M1 Report: Delivery attendant from schema
+    attendedBySkilled: filteredMothers.filter(m => m.deliveryAttendant && ["physician", "nurse", "midwife"].includes(m.deliveryAttendant)).length,
+    byPhysician: filteredMothers.filter(m => m.deliveryAttendant === "physician").length,
+    byNurse: filteredMothers.filter(m => m.deliveryAttendant === "nurse").length,
+    byMidwife: filteredMothers.filter(m => m.deliveryAttendant === "midwife").length,
+    // M1 Report: Newborn care
+    breastfedWithin1hr: filteredMothers.filter(m => m.breastfedWithin1hr).length,
+  };
+
+  // Helper to count by sex for M1 report
+  const countBySex = (list: typeof filteredChildren, filter: (c: typeof filteredChildren[0]) => boolean) => {
+    const filtered = list.filter(filter);
+    return {
+      male: filtered.filter(c => c.sex === "male").length,
+      female: filtered.filter(c => c.sex === "female").length,
+      total: filtered.length,
+    };
   };
 
   const immunizationStats = {
-    cpab: filteredChildren.filter(c => {
+    // M1 Report: Children protected at birth (HepB within 24hrs)
+    cpab: countBySex(filteredChildren, c => {
       const vaccines = c.vaccines as any;
       return vaccines?.hepB;
-    }).length,
-    bcg028: filteredChildren.filter(c => {
+    }),
+    // M1 Report: BCG (0-28 days)
+    bcg028: countBySex(filteredChildren, c => {
       const vaccines = c.vaccines as any;
       const ageMonths = getChildAgeMonths(c.dob);
       return vaccines?.bcg && ageMonths < 1;
-    }).length,
-    bcg29d1y: filteredChildren.filter(c => {
+    }),
+    // M1 Report: BCG (29 days to 1 year)
+    bcg29d1y: countBySex(filteredChildren, c => {
       const vaccines = c.vaccines as any;
       return vaccines?.bcg;
-    }).length,
-    dptHibHepB1: filteredChildren.filter(c => {
-      const vaccines = c.vaccines as any;
-      return vaccines?.penta1;
-    }).length,
-    dptHibHepB2: filteredChildren.filter(c => {
-      const vaccines = c.vaccines as any;
-      return vaccines?.penta2;
-    }).length,
-    dptHibHepB3: filteredChildren.filter(c => {
-      const vaccines = c.vaccines as any;
-      return vaccines?.penta3;
-    }).length,
-    opv1: filteredChildren.filter(c => {
-      const vaccines = c.vaccines as any;
-      return vaccines?.opv1;
-    }).length,
-    opv2: filteredChildren.filter(c => {
-      const vaccines = c.vaccines as any;
-      return vaccines?.opv2;
-    }).length,
-    opv3: filteredChildren.filter(c => {
-      const vaccines = c.vaccines as any;
-      return vaccines?.opv3;
-    }).length,
-    ipv1: 0,
-    mr1: filteredChildren.filter(c => {
-      const vaccines = c.vaccines as any;
-      return vaccines?.mr1;
-    }).length,
+    }),
+    // M1 Report: DPT-HiB-HepB (Pentavalent)
+    dptHibHepB1: countBySex(filteredChildren, c => (c.vaccines as any)?.penta1),
+    dptHibHepB2: countBySex(filteredChildren, c => (c.vaccines as any)?.penta2),
+    dptHibHepB3: countBySex(filteredChildren, c => (c.vaccines as any)?.penta3),
+    // M1 Report: OPV
+    opv1: countBySex(filteredChildren, c => (c.vaccines as any)?.opv1),
+    opv2: countBySex(filteredChildren, c => (c.vaccines as any)?.opv2),
+    opv3: countBySex(filteredChildren, c => (c.vaccines as any)?.opv3),
+    // M1 Report: IPV (from new schema)
+    ipv1: countBySex(filteredChildren, c => (c.vaccines as any)?.ipv1),
+    // M1 Report: MR/MMR
+    mr1: countBySex(filteredChildren, c => (c.vaccines as any)?.mr1),
   };
 
   const nutritionStats = {
-    breastfedWithin1hr: filteredChildren.filter(c => getChildAgeMonths(c.dob) < 6).length,
-    lbwIronSupp: 0,
-    vitA611mo: filteredChildren.filter(c => {
+    // M1 Report: Breastfeeding - from mothers who delivered
+    breastfedWithin1hr: intrapartumStats.breastfedWithin1hr,
+    // M1 Report: LBW infants with iron supplements
+    lbwIronSupp: filteredChildren.filter(c => c.birthWeightCategory === "low" && c.ironSuppComplete).length,
+    // M1 Report: Vitamin A supplementation from schema
+    vitA611mo: countBySex(filteredChildren, c => {
       const age = getChildAgeMonths(c.dob);
-      return age >= 6 && age <= 11;
-    }).length,
-    vitA1259mo: filteredChildren.filter(c => {
+      return age >= 6 && age <= 11 && c.vitaminA1Date;
+    }),
+    vitA1259mo: countBySex(filteredChildren, c => {
       const age = getChildAgeMonths(c.dob);
-      return age >= 12 && age <= 59;
-    }).length,
-    childrenSeen059: filteredChildren.filter(c => {
+      return age >= 12 && age <= 59 && c.vitaminA2Date;
+    }),
+    // M1 Report: Children seen at health facilities
+    childrenSeen059: countBySex(filteredChildren, c => {
       const age = getChildAgeMonths(c.dob);
       return age >= 0 && age <= 59;
-    }).length,
+    }),
   };
 
   const generatePDF = () => {
@@ -171,11 +207,12 @@ export default function M1ReportPage() {
       startY: 65,
       head: [["Indicators", "10-14", "15-19", "20-49", "TOTAL"]],
       body: [
-        ["1a. Women who gave birth with at least 4 prenatal check-ups", "0", "0", String(prenatalStats.womenWith4ANC), String(prenatalStats.womenWith4ANC)],
+        ["1a. Women who gave birth with at least 4 prenatal check-ups", String(prenatalStats.womenWith4ANCByAge["10-14"]), String(prenatalStats.womenWith4ANCByAge["15-19"]), String(prenatalStats.womenWith4ANCByAge["20-49"]), String(prenatalStats.womenWith4ANC)],
         ["1b. Total No. of Women who delivered and completed 8ANC", "0", "0", String(prenatalStats.totalDelivered8ANC), String(prenatalStats.totalDelivered8ANC)],
         ["1c. Total No. of Women who delivered and were tracked during pregnancy", "0", "0", String(prenatalStats.deliveredTracked), String(prenatalStats.deliveredTracked)],
         ["2a. Pregnant women in 1st trimester with normal BMI", "0", "0", String(prenatalStats.normalBMI), String(prenatalStats.normalBMI)],
-        ["3a. Women pregnant for first time given at least 2 doses of Td", "0", "0", String(prenatalStats.firstPregnancyTd2), String(prenatalStats.firstPregnancyTd2)],
+        ["TT1 Given", "", "", "", String(prenatalStats.withTT1)],
+        ["TT2 Given (at least 2 doses)", "", "", "", String(prenatalStats.withTT2)],
       ],
       theme: "grid",
       headStyles: { fillColor: [0, 128, 128], fontSize: 8 },
@@ -214,16 +251,16 @@ export default function M1ReportPage() {
       startY: yPos + 5,
       head: [["Indicators", "Male", "Female", "Total", "Rate"]],
       body: [
-        ["1. Children protected at birth (CPAB)", "0", String(immunizationStats.cpab), String(immunizationStats.cpab), "0.00"],
-        ["2. BCG (within 0-28 days)", "0", "0", String(immunizationStats.bcg028), "0.00"],
-        ["3. BCG (29 days to 1 year old)", String(Math.floor(immunizationStats.bcg29d1y/2)), String(Math.ceil(immunizationStats.bcg29d1y/2)), String(immunizationStats.bcg29d1y), "0.00"],
-        ["1. DPT-HiB-HepB 1", "0", String(immunizationStats.dptHibHepB1), String(immunizationStats.dptHibHepB1), "0.00"],
-        ["2. DPT-HiB-HepB 2", String(Math.floor(immunizationStats.dptHibHepB2/2)), String(Math.ceil(immunizationStats.dptHibHepB2/2)), String(immunizationStats.dptHibHepB2), "0.00"],
-        ["3. DPT-HiB-HepB 3", String(Math.floor(immunizationStats.dptHibHepB3/2)), String(Math.ceil(immunizationStats.dptHibHepB3/2)), String(immunizationStats.dptHibHepB3), "0.00"],
-        ["4. OPV 1", "0", "0", String(immunizationStats.opv1), "0.00"],
-        ["5. OPV 2", "0", "0", String(immunizationStats.opv2), "0.00"],
-        ["6. OPV 3", "0", "0", String(immunizationStats.opv3), "0.00"],
-        ["7. IPV 1", "0", "0", String(immunizationStats.ipv1), "0.00"],
+        ["1. Children protected at birth (CPAB)", String(immunizationStats.cpab.male), String(immunizationStats.cpab.female), String(immunizationStats.cpab.total), "0.00"],
+        ["2. BCG (within 0-28 days)", String(immunizationStats.bcg028.male), String(immunizationStats.bcg028.female), String(immunizationStats.bcg028.total), "0.00"],
+        ["3. BCG (29 days to 1 year old)", String(immunizationStats.bcg29d1y.male), String(immunizationStats.bcg29d1y.female), String(immunizationStats.bcg29d1y.total), "0.00"],
+        ["1. DPT-HiB-HepB 1", String(immunizationStats.dptHibHepB1.male), String(immunizationStats.dptHibHepB1.female), String(immunizationStats.dptHibHepB1.total), "0.00"],
+        ["2. DPT-HiB-HepB 2", String(immunizationStats.dptHibHepB2.male), String(immunizationStats.dptHibHepB2.female), String(immunizationStats.dptHibHepB2.total), "0.00"],
+        ["3. DPT-HiB-HepB 3", String(immunizationStats.dptHibHepB3.male), String(immunizationStats.dptHibHepB3.female), String(immunizationStats.dptHibHepB3.total), "0.00"],
+        ["4. OPV 1", String(immunizationStats.opv1.male), String(immunizationStats.opv1.female), String(immunizationStats.opv1.total), "0.00"],
+        ["5. OPV 2", String(immunizationStats.opv2.male), String(immunizationStats.opv2.female), String(immunizationStats.opv2.total), "0.00"],
+        ["6. OPV 3", String(immunizationStats.opv3.male), String(immunizationStats.opv3.female), String(immunizationStats.opv3.total), "0.00"],
+        ["7. IPV 1", String(immunizationStats.ipv1.male), String(immunizationStats.ipv1.female), String(immunizationStats.ipv1.total), "0.00"],
       ],
       theme: "grid",
       headStyles: { fillColor: [0, 128, 128], fontSize: 8 },
@@ -243,9 +280,9 @@ export default function M1ReportPage() {
       body: [
         ["1. Newborns who were initiated on breastfeeding within 1 hour after birth", "", "", String(nutritionStats.breastfedWithin1hr)],
         ["2. Infants born with low birth weight (LBW) given complete Iron supplements", "", "", String(nutritionStats.lbwIronSupp)],
-        ["3a. Infants aged 6-11 months old who received 1 dose of Vitamin A", "", "", String(nutritionStats.vitA611mo)],
-        ["3b. Children aged 12-59 months old who completed 2 doses of Vitamin A", "", "", String(nutritionStats.vitA1259mo)],
-        ["6. Children 0-59 months old SEEN during the reporting period", "0", "0", String(nutritionStats.childrenSeen059)],
+        ["3a. Infants aged 6-11 months old who received 1 dose of Vitamin A", String(nutritionStats.vitA611mo.male), String(nutritionStats.vitA611mo.female), String(nutritionStats.vitA611mo.total)],
+        ["3b. Children aged 12-59 months old who completed 2 doses of Vitamin A", String(nutritionStats.vitA1259mo.male), String(nutritionStats.vitA1259mo.female), String(nutritionStats.vitA1259mo.total)],
+        ["6. Children 0-59 months old SEEN during the reporting period", String(nutritionStats.childrenSeen059.male), String(nutritionStats.childrenSeen059.female), String(nutritionStats.childrenSeen059.total)],
       ],
       theme: "grid",
       headStyles: { fillColor: [0, 128, 128], fontSize: 8 },
@@ -417,9 +454,9 @@ export default function M1ReportPage() {
               <div className="text-xs">TT2: {prenatalStats.withTT2} | TT3: {prenatalStats.withTT3}</div>
             </div>
             <div className="bg-background p-3 rounded border">
-              <div className="text-2xl font-bold text-orange-600">{immunizationStats.bcg29d1y}</div>
+              <div className="text-2xl font-bold text-orange-600">{immunizationStats.bcg29d1y.total}</div>
               <div className="text-muted-foreground">BCG Vaccinated</div>
-              <div className="text-xs">Penta: {immunizationStats.dptHibHepB1} | OPV: {immunizationStats.opv1}</div>
+              <div className="text-xs">Penta: {immunizationStats.dptHibHepB1.total} | OPV: {immunizationStats.opv1.total}</div>
             </div>
           </div>
         </CardContent>
@@ -441,9 +478,9 @@ export default function M1ReportPage() {
             <tbody>
               <tr>
                 <td className="border px-2 py-1">1a. Women who gave birth with at least 4 prenatal check-ups</td>
-                <td className="border px-2 py-1 text-center">0</td>
-                <td className="border px-2 py-1 text-center">0</td>
-                <td className="border px-2 py-1 text-center">{prenatalStats.womenWith4ANC}</td>
+                <td className="border px-2 py-1 text-center">{prenatalStats.womenWith4ANCByAge["10-14"]}</td>
+                <td className="border px-2 py-1 text-center">{prenatalStats.womenWith4ANCByAge["15-19"]}</td>
+                <td className="border px-2 py-1 text-center">{prenatalStats.womenWith4ANCByAge["20-49"]}</td>
                 <td className="border px-2 py-1 text-center font-bold">{prenatalStats.womenWith4ANC}</td>
               </tr>
               <tr className="bg-yellow-100">
@@ -607,72 +644,72 @@ export default function M1ReportPage() {
             <tbody>
               <tr>
                 <td className="border px-2 py-1">1. Children protected at birth (CPAB)</td>
-                <td className="border px-2 py-1 text-center">0</td>
-                <td className="border px-2 py-1 text-center">{immunizationStats.cpab}</td>
-                <td className="border px-2 py-1 text-center font-bold">{immunizationStats.cpab}</td>
+                <td className="border px-2 py-1 text-center">{immunizationStats.cpab.male}</td>
+                <td className="border px-2 py-1 text-center">{immunizationStats.cpab.female}</td>
+                <td className="border px-2 py-1 text-center font-bold">{immunizationStats.cpab.total}</td>
                 <td className="border px-2 py-1 text-center bg-yellow-100">0.00</td>
               </tr>
               <tr>
                 <td className="border px-2 py-1">2. BCG (within 0-28 days)</td>
-                <td className="border px-2 py-1 text-center">0</td>
-                <td className="border px-2 py-1 text-center">0</td>
-                <td className="border px-2 py-1 text-center font-bold">{immunizationStats.bcg028}</td>
+                <td className="border px-2 py-1 text-center">{immunizationStats.bcg028.male}</td>
+                <td className="border px-2 py-1 text-center">{immunizationStats.bcg028.female}</td>
+                <td className="border px-2 py-1 text-center font-bold">{immunizationStats.bcg028.total}</td>
                 <td className="border px-2 py-1 text-center bg-yellow-100">0.00</td>
               </tr>
               <tr>
                 <td className="border px-2 py-1">3. BCG (29 days to 1 year old)</td>
-                <td className="border px-2 py-1 text-center">{Math.floor(immunizationStats.bcg29d1y/2)}</td>
-                <td className="border px-2 py-1 text-center">{Math.ceil(immunizationStats.bcg29d1y/2)}</td>
-                <td className="border px-2 py-1 text-center font-bold">{immunizationStats.bcg29d1y}</td>
+                <td className="border px-2 py-1 text-center">{immunizationStats.bcg29d1y.male}</td>
+                <td className="border px-2 py-1 text-center">{immunizationStats.bcg29d1y.female}</td>
+                <td className="border px-2 py-1 text-center font-bold">{immunizationStats.bcg29d1y.total}</td>
                 <td className="border px-2 py-1 text-center bg-yellow-100">0.00</td>
               </tr>
               <tr>
                 <td className="border px-2 py-1">1. DPT-HiB-HepB 1</td>
-                <td className="border px-2 py-1 text-center">0</td>
-                <td className="border px-2 py-1 text-center">{immunizationStats.dptHibHepB1}</td>
-                <td className="border px-2 py-1 text-center font-bold">{immunizationStats.dptHibHepB1}</td>
+                <td className="border px-2 py-1 text-center">{immunizationStats.dptHibHepB1.male}</td>
+                <td className="border px-2 py-1 text-center">{immunizationStats.dptHibHepB1.female}</td>
+                <td className="border px-2 py-1 text-center font-bold">{immunizationStats.dptHibHepB1.total}</td>
                 <td className="border px-2 py-1 text-center bg-yellow-100">0.00</td>
               </tr>
               <tr>
                 <td className="border px-2 py-1">2. DPT-HiB-HepB 2</td>
-                <td className="border px-2 py-1 text-center">{Math.floor(immunizationStats.dptHibHepB2/2)}</td>
-                <td className="border px-2 py-1 text-center">{Math.ceil(immunizationStats.dptHibHepB2/2)}</td>
-                <td className="border px-2 py-1 text-center font-bold">{immunizationStats.dptHibHepB2}</td>
+                <td className="border px-2 py-1 text-center">{immunizationStats.dptHibHepB2.male}</td>
+                <td className="border px-2 py-1 text-center">{immunizationStats.dptHibHepB2.female}</td>
+                <td className="border px-2 py-1 text-center font-bold">{immunizationStats.dptHibHepB2.total}</td>
                 <td className="border px-2 py-1 text-center bg-yellow-100">0.00</td>
               </tr>
               <tr>
                 <td className="border px-2 py-1">3. DPT-HiB-HepB 3</td>
-                <td className="border px-2 py-1 text-center">{Math.floor(immunizationStats.dptHibHepB3/2)}</td>
-                <td className="border px-2 py-1 text-center">{Math.ceil(immunizationStats.dptHibHepB3/2)}</td>
-                <td className="border px-2 py-1 text-center font-bold">{immunizationStats.dptHibHepB3}</td>
+                <td className="border px-2 py-1 text-center">{immunizationStats.dptHibHepB3.male}</td>
+                <td className="border px-2 py-1 text-center">{immunizationStats.dptHibHepB3.female}</td>
+                <td className="border px-2 py-1 text-center font-bold">{immunizationStats.dptHibHepB3.total}</td>
                 <td className="border px-2 py-1 text-center bg-yellow-100">0.00</td>
               </tr>
               <tr>
                 <td className="border px-2 py-1">4. OPV 1</td>
-                <td className="border px-2 py-1 text-center">0</td>
-                <td className="border px-2 py-1 text-center">0</td>
-                <td className="border px-2 py-1 text-center font-bold">{immunizationStats.opv1}</td>
+                <td className="border px-2 py-1 text-center">{immunizationStats.opv1.male}</td>
+                <td className="border px-2 py-1 text-center">{immunizationStats.opv1.female}</td>
+                <td className="border px-2 py-1 text-center font-bold">{immunizationStats.opv1.total}</td>
                 <td className="border px-2 py-1 text-center bg-yellow-100">0.00</td>
               </tr>
               <tr>
                 <td className="border px-2 py-1">5. OPV 2</td>
-                <td className="border px-2 py-1 text-center">0</td>
-                <td className="border px-2 py-1 text-center">0</td>
-                <td className="border px-2 py-1 text-center font-bold">{immunizationStats.opv2}</td>
+                <td className="border px-2 py-1 text-center">{immunizationStats.opv2.male}</td>
+                <td className="border px-2 py-1 text-center">{immunizationStats.opv2.female}</td>
+                <td className="border px-2 py-1 text-center font-bold">{immunizationStats.opv2.total}</td>
                 <td className="border px-2 py-1 text-center bg-yellow-100">0.00</td>
               </tr>
               <tr>
                 <td className="border px-2 py-1">6. OPV 3</td>
-                <td className="border px-2 py-1 text-center">0</td>
-                <td className="border px-2 py-1 text-center">0</td>
-                <td className="border px-2 py-1 text-center font-bold">{immunizationStats.opv3}</td>
+                <td className="border px-2 py-1 text-center">{immunizationStats.opv3.male}</td>
+                <td className="border px-2 py-1 text-center">{immunizationStats.opv3.female}</td>
+                <td className="border px-2 py-1 text-center font-bold">{immunizationStats.opv3.total}</td>
                 <td className="border px-2 py-1 text-center bg-yellow-100">0.00</td>
               </tr>
               <tr>
                 <td className="border px-2 py-1">7. IPV 1</td>
-                <td className="border px-2 py-1 text-center">0</td>
-                <td className="border px-2 py-1 text-center">0</td>
-                <td className="border px-2 py-1 text-center font-bold">{immunizationStats.ipv1}</td>
+                <td className="border px-2 py-1 text-center">{immunizationStats.ipv1.male}</td>
+                <td className="border px-2 py-1 text-center">{immunizationStats.ipv1.female}</td>
+                <td className="border px-2 py-1 text-center font-bold">{immunizationStats.ipv1.total}</td>
                 <td className="border px-2 py-1 text-center bg-yellow-100">0.00</td>
               </tr>
             </tbody>
@@ -707,21 +744,21 @@ export default function M1ReportPage() {
               </tr>
               <tr>
                 <td className="border px-2 py-1">3a. Infants aged 6-11 months old who received 1 dose of Vitamin A supplementation</td>
-                <td className="border px-2 py-1 text-center"></td>
-                <td className="border px-2 py-1 text-center"></td>
-                <td className="border px-2 py-1 text-center font-bold">{nutritionStats.vitA611mo}</td>
+                <td className="border px-2 py-1 text-center">{nutritionStats.vitA611mo.male}</td>
+                <td className="border px-2 py-1 text-center">{nutritionStats.vitA611mo.female}</td>
+                <td className="border px-2 py-1 text-center font-bold">{nutritionStats.vitA611mo.total}</td>
               </tr>
               <tr>
                 <td className="border px-2 py-1">3b. Children aged 12-59 months old who completed 2 doses of Vitamin A Supplementation</td>
-                <td className="border px-2 py-1 text-center"></td>
-                <td className="border px-2 py-1 text-center"></td>
-                <td className="border px-2 py-1 text-center font-bold">{nutritionStats.vitA1259mo}</td>
+                <td className="border px-2 py-1 text-center">{nutritionStats.vitA1259mo.male}</td>
+                <td className="border px-2 py-1 text-center">{nutritionStats.vitA1259mo.female}</td>
+                <td className="border px-2 py-1 text-center font-bold">{nutritionStats.vitA1259mo.total}</td>
               </tr>
               <tr>
                 <td className="border px-2 py-1">6. Children 0-59 months old SEEN during the reporting period at health facilities</td>
-                <td className="border px-2 py-1 text-center">0</td>
-                <td className="border px-2 py-1 text-center">0</td>
-                <td className="border px-2 py-1 text-center font-bold">{nutritionStats.childrenSeen059}</td>
+                <td className="border px-2 py-1 text-center">{nutritionStats.childrenSeen059.male}</td>
+                <td className="border px-2 py-1 text-center">{nutritionStats.childrenSeen059.female}</td>
+                <td className="border px-2 py-1 text-center font-bold">{nutritionStats.childrenSeen059.total}</td>
               </tr>
             </tbody>
           </table>

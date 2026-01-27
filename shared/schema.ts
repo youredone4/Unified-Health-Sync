@@ -2,7 +2,7 @@ import { pgTable, text, serial, integer, boolean, timestamp, jsonb } from "drizz
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
-// === MOTHERS (Prenatal) ===
+// === MOTHERS (Prenatal) - Aligned with M1 Brgy FHSIS Report ===
 export const mothers = pgTable("mothers", {
   id: serial("id").primaryKey(),
   firstName: text("first_name").notNull(),
@@ -15,15 +15,33 @@ export const mothers = pgTable("mothers", {
   gaWeeks: integer("ga_weeks").notNull(), // gestational age at registration
   expectedDeliveryDate: text("expected_delivery_date"), // calculated EDD
   nextPrenatalCheckDate: text("next_prenatal_check_date"), // static for demo
+  
+  // M1 Report: Prenatal Care tracking
+  ancVisits: integer("anc_visits").default(0), // Number of ANC visits completed
+  bmiStatus: text("bmi_status"), // normal, low, high (first trimester)
+  
+  // M1 Report: Tetanus Toxoid (Td) Vaccination
   tt1Date: text("tt1_date"),
   tt2Date: text("tt2_date"),
   tt3Date: text("tt3_date"),
   tt4Date: text("tt4_date"),
   tt5Date: text("tt5_date"),
+  
   status: text("status").default("active"), // active, delivered, deceased
   outcome: text("outcome"), // live_birth, stillbirth, miscarriage, maternal_death
   outcomeDate: text("outcome_date"),
   outcomeNotes: text("outcome_notes"),
+  
+  // M1 Report: Intrapartum/Delivery Care
+  deliveryAttendant: text("delivery_attendant"), // physician, nurse, midwife, hilot, none
+  deliveryLocation: text("delivery_location"), // hospital, birthing_center, home
+  birthWeightKg: text("birth_weight_kg"), // actual birth weight in kg
+  birthWeightCategory: text("birth_weight_category"), // normal (>=2.5kg), low (<2.5kg)
+  
+  // M1 Report: Postpartum/Newborn Care
+  breastfedWithin1hr: boolean("breastfed_within_1hr").default(false),
+  ironSuppGiven: boolean("iron_supp_given").default(false), // for LBW infants
+  
   latitude: text("latitude"),
   longitude: text("longitude"),
 });
@@ -32,15 +50,22 @@ export const insertMotherSchema = createInsertSchema(mothers).omit({ id: true })
 export type Mother = typeof mothers.$inferSelect;
 export type InsertMother = z.infer<typeof insertMotherSchema>;
 
-// === CHILDREN (linked to mother) ===
+// === CHILDREN (linked to mother) - Aligned with M1 Brgy FHSIS Report ===
 export const children = pgTable("children", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
   dob: text("dob").notNull(),
+  sex: text("sex"), // male, female - required for M1 report M/F breakdown
   barangay: text("barangay").notNull(),
   addressLine: text("address_line"),
   motherId: integer("mother_id"), // FK to mothers
   nextVisitDate: text("next_visit_date"), // static for demo - includes vaccine + weight
+  
+  // M1 Report: Birth Information
+  birthWeightKg: text("birth_weight_kg"), // actual birth weight
+  birthWeightCategory: text("birth_weight_category"), // normal (>=2.5kg), low (<2.5kg)
+  
+  // M1 Report: Immunization Services (0-12 months & 13-23 months)
   vaccines: jsonb("vaccines").$type<{
     bcg?: string;
     hepB?: string;
@@ -50,11 +75,26 @@ export const children = pgTable("children", {
     opv1?: string;
     opv2?: string;
     opv3?: string;
+    ipv1?: string; // M1 Report: IPV
+    ipv2?: string;
     mr1?: string;
+    mr2?: string;
+    // 13-23 months boosters
+    penta4?: string;
+    opv4?: string;
   }>().default({}),
+  
+  // M1 Report: Nutrition
+  vitaminA1Date: text("vitamin_a1_date"), // 6-11 months
+  vitaminA2Date: text("vitamin_a2_date"), // 12-59 months
+  ironSuppComplete: boolean("iron_supp_complete").default(false), // for LBW infants
+  breastfedExclusively: boolean("breastfed_exclusively").default(false), // 0-6 months
+  
   growth: jsonb("growth").$type<Array<{
     date: string;
     weightKg: number;
+    heightCm?: number;
+    muac?: number; // mid-upper arm circumference
   }>>().default([]),
   latitude: text("latitude"),
   longitude: text("longitude"),
