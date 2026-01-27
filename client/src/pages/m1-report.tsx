@@ -11,7 +11,7 @@ import { FileText, Download, Save, Plus, ChevronLeft, ChevronRight, RefreshCw, B
 import { useToast } from "@/hooks/use-toast";
 import { useTheme } from "@/contexts/theme-context";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import type { M1TemplateVersion, M1IndicatorCatalog, Barangay, M1ReportInstance, M1IndicatorValue, Mother, Child, MunicipalitySettings, BarangaySettings } from "@shared/schema";
+import type { M1TemplateVersion, M1IndicatorCatalog, Barangay, M1ReportInstance, M1IndicatorValue, Mother, Child, Senior, MunicipalitySettings, BarangaySettings } from "@shared/schema";
 import { differenceInMonths, parseISO } from "date-fns";
 import { TODAY } from "@/lib/healthLogic";
 import jsPDF from "jspdf";
@@ -128,6 +128,7 @@ export default function M1ReportPage() {
 
   const { data: mothers = [] } = useQuery<Mother[]>({ queryKey: ["/api/mothers"] });
   const { data: children = [] } = useQuery<Child[]>({ queryKey: ["/api/children"] });
+  const { data: seniors = [] } = useQuery<Senior[]>({ queryKey: ["/api/seniors"] });
 
   const selectedBarangay = barangays.find(b => b.id === selectedBarangayId);
 
@@ -204,10 +205,16 @@ export default function M1ReportPage() {
   const getChildAgeMonths = (dob: string) => differenceInMonths(TODAY, parseISO(dob));
 
   const computedValues = useMemo(() => {
-    if (!selectedBarangay) return {};
-    const barangayName = selectedBarangay.name;
-    const filteredMothers = mothers.filter(m => m.barangay === barangayName);
-    const filteredChildren = children.filter(c => c.barangay === barangayName);
+    const barangayName = selectedBarangay?.name;
+    const filteredMothers = barangayName 
+      ? mothers.filter(m => m.barangay === barangayName)
+      : mothers;
+    const filteredChildren = barangayName 
+      ? children.filter(c => c.barangay === barangayName)
+      : children;
+    const filteredSeniors = barangayName 
+      ? seniors.filter(s => s.barangay === barangayName)
+      : seniors;
     const deliveredMothers = filteredMothers.filter(m => m.outcome);
 
     const computed: IndicatorValueMap = {};
@@ -289,8 +296,25 @@ export default function M1ReportPage() {
     computed["H-01:TOTAL"] = { valueNumber: deliveredMothers.filter(m => m.outcome === "live_birth").length, valueSource: "COMPUTED" };
     computed["H-02:TOTAL"] = { valueNumber: deliveredMothers.filter(m => m.outcome === "stillbirth").length, valueSource: "COMPUTED" };
 
+    const countSeniorsBySex = (filter: (s: Senior) => boolean) => {
+      const filtered = filteredSeniors.filter(filter);
+      return {
+        "M": filtered.filter(s => s.sex === "M").length,
+        "F": filtered.filter(s => s.sex === "F").length,
+        "TOTAL": filtered.length,
+      };
+    };
+    
+    const hypertensiveSeniors = countSeniorsBySex(s => s.lastBP !== null && s.lastBP !== "");
+    computed["G2-03:TOTAL"] = { valueNumber: hypertensiveSeniors["TOTAL"], valueSource: "COMPUTED" };
+    
+    const seniorsWithMeds = countSeniorsBySex(s => s.lastMedicationGivenDate !== null);
+    computed["G2-04:M"] = { valueNumber: seniorsWithMeds["M"], valueSource: "COMPUTED" };
+    computed["G2-04:F"] = { valueNumber: seniorsWithMeds["F"], valueSource: "COMPUTED" };
+    computed["G2-04:TOTAL"] = { valueNumber: seniorsWithMeds["TOTAL"], valueSource: "COMPUTED" };
+
     return computed;
-  }, [selectedBarangay, mothers, children]);
+  }, [selectedBarangay, mothers, children, seniors]);
 
   const getValue = (rowKey: string, columnKey?: string): number | string => {
     const key = columnKey ? `${rowKey}:${columnKey}` : rowKey;
@@ -342,9 +366,8 @@ export default function M1ReportPage() {
   };
 
   const handleExportPDF = () => {
-    if (!selectedBarangay) return;
     const doc = new jsPDF();
-    const barangayName = selectedBarangay.name;
+    const barangayName = selectedBarangay?.name || "All Barangays (Consolidated)";
     const monthName = MONTHS.find(m => m.value === selectedMonth)?.label || "";
 
     for (let page = 1; page <= 3; page++) {
@@ -692,11 +715,10 @@ export default function M1ReportPage() {
         </div>
       </div>
 
-      {selectedBarangayId && (
-        <Card>
-          <CardHeader className="pb-2 flex flex-row items-center justify-between gap-2">
-            <div>
-              <CardTitle className="text-lg">{selectedBarangay?.name || "All Barangays (Consolidated)"} - {MONTHS.find(m => m.value === selectedMonth)?.label} {selectedYear}</CardTitle>
+      <Card>
+        <CardHeader className="pb-2 flex flex-row items-center justify-between gap-2">
+          <div>
+            <CardTitle className="text-lg">{selectedBarangay?.name || "All Barangays (Consolidated)"} - {MONTHS.find(m => m.value === selectedMonth)?.label} {selectedYear}</CardTitle>
               {existingReport ? (
                 <Badge variant={existingReport.status === "SUBMITTED_LOCKED" ? "default" : "secondary"} className="mt-1">
                   {existingReport.status}
@@ -787,7 +809,6 @@ export default function M1ReportPage() {
             </Tabs>
           </CardContent>
         </Card>
-      )}
     </div>
   );
 }

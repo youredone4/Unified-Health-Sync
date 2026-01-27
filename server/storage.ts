@@ -17,7 +17,7 @@ import {
   type M1TemplateVersion, type M1IndicatorCatalog, type M1ReportInstance, type M1IndicatorValue,
   type MunicipalitySettings, type BarangaySettings,
 } from "@shared/schema";
-import { eq, and, inArray, desc } from "drizzle-orm";
+import { eq, and, inArray, desc, isNull } from "drizzle-orm";
 
 export interface IStorage {
   getMothers(): Promise<Mother[]>;
@@ -272,12 +272,18 @@ export class DatabaseStorage implements IStorage {
     const results: M1IndicatorValue[] = [];
     
     for (const v of values) {
-      // Check if value exists
+      const columnKey = v.columnKey || null;
+      const conditions = [
+        eq(m1IndicatorValues.reportInstanceId, reportId),
+        eq(m1IndicatorValues.rowKey, v.rowKey),
+      ];
+      if (columnKey) {
+        conditions.push(eq(m1IndicatorValues.columnKey, columnKey));
+      } else {
+        conditions.push(isNull(m1IndicatorValues.columnKey));
+      }
       const [existing] = await db.select().from(m1IndicatorValues)
-        .where(and(
-          eq(m1IndicatorValues.reportInstanceId, reportId),
-          eq(m1IndicatorValues.rowKey, v.rowKey)
-        ));
+        .where(and(...conditions));
       
       if (existing) {
         const [updated] = await db.update(m1IndicatorValues)
@@ -294,6 +300,7 @@ export class DatabaseStorage implements IStorage {
         const [created] = await db.insert(m1IndicatorValues).values({
           reportInstanceId: reportId,
           rowKey: v.rowKey,
+          columnKey: v.columnKey || null,
           valueNumber: v.valueNumber,
           valueText: v.valueText,
           valueSource: v.valueSource || "ENCODED",
