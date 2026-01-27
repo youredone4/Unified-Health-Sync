@@ -372,25 +372,55 @@ export default function M1ReportPage() {
     saveValuesMutation.mutate({ reportId: activeReportId, values: valuesToSave });
   };
 
-  const handleExportPDF = () => {
+  const handleExportPDF = async () => {
     const doc = new jsPDF();
     const barangayName = selectedBarangay?.name || "All Barangays (Consolidated)";
     const monthName = MONTHS.find(m => m.value === selectedMonth)?.label || "";
 
+    const logoUrl = (selectedBarangay && barangaySettings?.logoUrl) 
+      ? barangaySettings.logoUrl 
+      : municipalitySettings?.logoUrl;
+
+    const loadImage = (url: string): Promise<HTMLImageElement | null> => {
+      return new Promise((resolve) => {
+        const img = new Image();
+        img.crossOrigin = "anonymous";
+        img.onload = () => resolve(img);
+        img.onerror = () => resolve(null);
+        img.src = url;
+      });
+    };
+
+    let logoImage: HTMLImageElement | null = null;
+    if (logoUrl) {
+      logoImage = await loadImage(logoUrl);
+    }
+
     for (let page = 1; page <= 3; page++) {
       if (page > 1) doc.addPage();
       
-      doc.setFontSize(10);
-      doc.setFont("helvetica", "bold");
-      doc.text("FHSIS REPORT - M1 Brgy", 105, 10, { align: "center" });
+      let headerY = 10;
+      if (logoImage) {
+        const logoSize = 15;
+        doc.addImage(logoImage, "PNG", 14, 8, logoSize, logoSize);
+        doc.setFontSize(10);
+        doc.setFont("helvetica", "bold");
+        doc.text("FHSIS REPORT - M1 Brgy", 105, 14, { align: "center" });
+        headerY = 26;
+      } else {
+        doc.setFontSize(10);
+        doc.setFont("helvetica", "bold");
+        doc.text("FHSIS REPORT - M1 Brgy", 105, 10, { align: "center" });
+        headerY = 18;
+      }
       
       doc.setFontSize(9);
       doc.setFont("helvetica", "normal");
-      doc.text(`Barangay: ${barangayName}`, 14, 18);
-      doc.text(`Municipality: ${municipalitySettings?.municipalityName || settings?.lguName || ""}`, 14, 23);
-      doc.text(`Month/Year: ${monthName} ${selectedYear}`, 14, 28);
+      doc.text(`Barangay: ${barangayName}`, logoImage ? 32 : 14, headerY);
+      doc.text(`Municipality: ${municipalitySettings?.municipalityName || settings?.lguName || ""}`, logoImage ? 32 : 14, headerY + 5);
+      doc.text(`Month/Year: ${monthName} ${selectedYear}`, logoImage ? 32 : 14, headerY + 10);
 
-      let yPos = 35;
+      let yPos = logoImage ? 45 : 35;
       const pageInds = catalog.filter(ind => ind.pageNumber === page);
       const groups: Record<string, M1IndicatorCatalog[]> = {};
       pageInds.forEach(ind => {
