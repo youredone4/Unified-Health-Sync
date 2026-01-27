@@ -383,7 +383,28 @@ export class DatabaseStorage implements IStorage {
     console.log("Seeding database with comprehensive demo data...");
 
     // BARANGAYS - Seed the barangays table first
-    const barangayNames = ["Bugas-bugas", "San Isidro", "Poblacion", "Banban", "Canlumacad"];
+    const barangayNames = [
+      "Amoslog",
+      "Anislagan",
+      "Bad-as",
+      "Boyongan",
+      "Bugas-bugas",
+      "Central (Poblacion)",
+      "Ellaperal (Nonok)",
+      "Ipil (Poblacion)",
+      "Lakandula",
+      "Mabini",
+      "Macalaya",
+      "Magsaysay (Poblacion)",
+      "Magupange",
+      "Pananay-an",
+      "Panhutongan",
+      "San Isidro",
+      "Sani-sani",
+      "Santa Cruz",
+      "Suyoc",
+      "Tagbongabong"
+    ];
     const existingBarangays = await db.select().from(barangays);
     if (existingBarangays.length === 0) {
       await db.insert(barangays).values(barangayNames.map(name => ({ name })));
@@ -421,21 +442,21 @@ export class DatabaseStorage implements IStorage {
       },
       { 
         firstName: "Juana", lastName: "Dela Paz", age: 22,
-        barangay: "Poblacion", addressLine: "Purok 5, Centro",
+        barangay: "Central (Poblacion)", addressLine: "Purok 5, Centro",
         phone: "09191234567", registrationDate: "2024-12-01", gaWeeks: 12,
         nextPrenatalCheckDate: "2025-12-20", // Overdue
         tt1Date: null, tt2Date: null, tt3Date: null
       },
       { 
         firstName: "Sarah", lastName: "Geronimo", age: 26,
-        barangay: "Banban", addressLine: "Sitio Riverside",
+        barangay: "Mabini", addressLine: "Sitio Riverside",
         phone: "09201234567", registrationDate: "2024-10-01", gaWeeks: 28,
         nextPrenatalCheckDate: "2025-12-30",
         tt1Date: "2024-10-15", tt2Date: null, tt3Date: null // TT2 overdue
       },
       { 
         firstName: "Luz", lastName: "Villareal", age: 30,
-        barangay: "Canlumacad", addressLine: "Purok 2",
+        barangay: "Lakandula", addressLine: "Purok 2",
         phone: "09211234567", registrationDate: "2024-07-15", gaWeeks: 36,
         nextPrenatalCheckDate: "2025-12-26",
         tt1Date: "2024-08-01", tt2Date: "2024-09-01", tt3Date: null
@@ -464,7 +485,7 @@ export class DatabaseStorage implements IStorage {
       },
       { 
         name: "John Dela Cruz Jr", 
-        barangay: "Poblacion", addressLine: "Purok 5, Centro",
+        barangay: "Central (Poblacion)", addressLine: "Purok 5, Centro",
         dob: "2025-01-15", // ~11 months
         motherId: null,
         nextVisitDate: "2025-12-20", // Overdue visit
@@ -473,7 +494,7 @@ export class DatabaseStorage implements IStorage {
       },
       { 
         name: "Maria Angela Reyes", 
-        barangay: "Banban", addressLine: "Sitio Riverside",
+        barangay: "Mabini", addressLine: "Sitio Riverside",
         dob: "2025-06-01", // ~7 months
         motherId: null,
         nextVisitDate: "2025-12-29",
@@ -506,7 +527,7 @@ export class DatabaseStorage implements IStorage {
       },
       { 
         firstName: "Ricardo", lastName: "Bautista", age: 75,
-        barangay: "Poblacion", addressLine: "Centro",
+        barangay: "Central (Poblacion)", addressLine: "Centro",
         phone: "09170000003",
         lastBP: "150/95", lastBPDate: "2025-11-20",
         lastMedicationName: "Amlodipine", lastMedicationDoseMg: 10, lastMedicationQuantity: 30,
@@ -516,7 +537,7 @@ export class DatabaseStorage implements IStorage {
       },
       { 
         firstName: "Carmen", lastName: "Villanueva", age: 70,
-        barangay: "Canlumacad", addressLine: "Purok 3",
+        barangay: "Lakandula", addressLine: "Purok 3",
         phone: "09170000004",
         lastBP: "135/85", lastBPDate: "2025-12-18",
         lastMedicationName: "Metoprolol", lastMedicationDoseMg: 25, lastMedicationQuantity: 30,
@@ -549,7 +570,7 @@ export class DatabaseStorage implements IStorage {
         lastUpdated: "2025-12-18"
       },
       { 
-        barangay: "Poblacion",
+        barangay: "Central (Poblacion)",
         vaccines: { bcgQty: 50, hepBQty: 45, pentaQty: 40, opvQty: 35, mrQty: 30 },
         htnMeds: [
           { name: "Amlodipine", doseMg: 5, qty: 200 },
@@ -560,7 +581,7 @@ export class DatabaseStorage implements IStorage {
         lastUpdated: "2025-12-21"
       },
       { 
-        barangay: "Banban",
+        barangay: "Mabini",
         vaccines: { bcgQty: 18, hepBQty: 22, pentaQty: 15, opvQty: 20, mrQty: 12 },
         htnMeds: [
           { name: "Metoprolol", doseMg: 25, qty: 45 }
@@ -569,7 +590,7 @@ export class DatabaseStorage implements IStorage {
         lastUpdated: "2025-12-19"
       },
       { 
-        barangay: "Canlumacad",
+        barangay: "Lakandula",
         vaccines: { bcgQty: 12, hepBQty: 15, pentaQty: 10, opvQty: 8, mrQty: 5 },
         htnMeds: [
           { name: "Amlodipine", doseMg: 5, qty: 25 },
@@ -584,9 +605,9 @@ export class DatabaseStorage implements IStorage {
     await db.insert(healthStations).values([
       { facilityName: "Bugas-bugas Barangay Health Station", barangay: "Bugas-bugas", latitude: "9.6450", longitude: "125.6520" },
       { facilityName: "San Isidro Barangay Health Station", barangay: "San Isidro", latitude: "9.6520", longitude: "125.6680" },
-      { facilityName: "Poblacion Rural Health Unit", barangay: "Poblacion", latitude: "9.6600", longitude: "125.6850" },
-      { facilityName: "Banban Barangay Health Station", barangay: "Banban", latitude: "9.6380", longitude: "125.6400" },
-      { facilityName: "Canlumacad Barangay Health Station", barangay: "Canlumacad", latitude: "9.6700", longitude: "125.6950" },
+      { facilityName: "Central (Poblacion) Rural Health Unit", barangay: "Central (Poblacion)", latitude: "9.6600", longitude: "125.6850" },
+      { facilityName: "Mabini Barangay Health Station", barangay: "Mabini", latitude: "9.6380", longitude: "125.6400" },
+      { facilityName: "Lakandula Barangay Health Station", barangay: "Lakandula", latitude: "9.6700", longitude: "125.6950" },
     ]);
 
     // DISEASE CASES - Communicable Disease Surveillance
@@ -633,7 +654,7 @@ export class DatabaseStorage implements IStorage {
       },
       {
         patientName: "Pedro Aquino",
-        age: 45, barangay: "Poblacion", addressLine: "Centro",
+        age: 45, barangay: "Central (Poblacion)", addressLine: "Centro",
         phone: "09184444444",
         condition: "Dengue suspected",
         dateReported: "2025-12-10",
@@ -643,7 +664,7 @@ export class DatabaseStorage implements IStorage {
       },
       {
         patientName: "Maria Lourdes",
-        age: 28, barangay: "Banban", addressLine: "Sitio Riverside",
+        age: 28, barangay: "Mabini", addressLine: "Sitio Riverside",
         phone: "09185555555",
         condition: "ARI",
         dateReported: "2025-12-21",
@@ -653,7 +674,7 @@ export class DatabaseStorage implements IStorage {
       },
       {
         patientName: "Jose Rizal Jr",
-        age: 2, barangay: "Canlumacad", addressLine: "Purok 1",
+        age: 2, barangay: "Lakandula", addressLine: "Purok 1",
         phone: null,
         condition: "Measles suspected",
         dateReported: "2025-12-08",
@@ -697,7 +718,7 @@ export class DatabaseStorage implements IStorage {
       },
       {
         firstName: "Crisanto", lastName: "Reyes", age: 65,
-        barangay: "Poblacion", addressLine: "Centro",
+        barangay: "Central (Poblacion)", addressLine: "Centro",
         phone: "09178888888",
         tbType: "Pulmonary",
         treatmentPhase: "Intensive",
@@ -712,7 +733,7 @@ export class DatabaseStorage implements IStorage {
       },
       {
         firstName: "Dolores", lastName: "Cruz", age: 44,
-        barangay: "Banban", addressLine: "Sitio Hilltop",
+        barangay: "Mabini", addressLine: "Sitio Hilltop",
         phone: "09179999999",
         tbType: "Extra-pulmonary",
         treatmentPhase: "Intensive",
@@ -727,7 +748,7 @@ export class DatabaseStorage implements IStorage {
       },
       {
         firstName: "Eduardo", lastName: "Villanueva", age: 58,
-        barangay: "Canlumacad", addressLine: "Purok 3",
+        barangay: "Lakandula", addressLine: "Purok 3",
         phone: "09170001111",
         tbType: "Pulmonary",
         treatmentPhase: "Continuation",

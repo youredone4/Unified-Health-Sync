@@ -32,7 +32,12 @@ export default function Dashboard() {
   const tbMissedVisits = tbPatients.filter(p => getTBDotsVisitStatus(p).status === 'overdue').length;
   const tbAtRisk = tbPatients.filter(p => getTBMissedDoseRisk(p)).length;
 
-  const barangays = ['Bugas-bugas', 'San Isidro', 'Poblacion', 'Banban', 'Canlumacad'];
+  const barangays = [
+    "Amoslog", "Anislagan", "Bad-as", "Boyongan", "Bugas-bugas",
+    "Central (Poblacion)", "Ellaperal (Nonok)", "Ipil (Poblacion)", "Lakandula", "Mabini",
+    "Macalaya", "Magsaysay (Poblacion)", "Magupange", "Pananay-an", "Panhutongan",
+    "San Isidro", "Sani-sani", "Santa Cruz", "Suyoc", "Tagbongabong"
+  ];
   const barangayData = barangays.map(b => ({
     name: b,
     overdue: mothers.filter(m => m.barangay === b && getTTStatus(m).status === 'overdue').length +

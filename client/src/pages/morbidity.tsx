@@ -16,7 +16,12 @@ import { format } from "date-fns";
 import type { Consult } from "@shared/schema";
 import { TODAY_STR } from "@/lib/healthLogic";
 
-const BARANGAYS = ["Bugas-bugas", "San Isidro", "Poblacion", "Banban", "Canlumacad"];
+const BARANGAYS = [
+  "Amoslog", "Anislagan", "Bad-as", "Boyongan", "Bugas-bugas",
+  "Central (Poblacion)", "Ellaperal (Nonok)", "Ipil (Poblacion)", "Lakandula", "Mabini",
+  "Macalaya", "Magsaysay (Poblacion)", "Magupange", "Pananay-an", "Panhutongan",
+  "San Isidro", "Sani-sani", "Santa Cruz", "Suyoc", "Tagbongabong"
+];
 
 const COMMON_DIAGNOSES = [
   "Acute Upper Respiratory Infection",

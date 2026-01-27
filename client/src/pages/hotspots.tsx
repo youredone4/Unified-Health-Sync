@@ -11,7 +11,12 @@ export default function Hotspots() {
   const { data: seniors = [] } = useQuery<Senior[]>({ queryKey: ['/api/seniors'] });
   const { data: inventory = [] } = useQuery<InventoryItem[]>({ queryKey: ['/api/inventory'] });
 
-  const barangays = ['Bugas-bugas', 'San Isidro', 'Poblacion', 'Banban', 'Canlumacad'];
+  const barangays = [
+    "Amoslog", "Anislagan", "Bad-as", "Boyongan", "Bugas-bugas",
+    "Central (Poblacion)", "Ellaperal (Nonok)", "Ipil (Poblacion)", "Lakandula", "Mabini",
+    "Macalaya", "Magsaysay (Poblacion)", "Magupange", "Pananay-an", "Panhutongan",
+    "San Isidro", "Sani-sani", "Santa Cruz", "Suyoc", "Tagbongabong"
+  ];
 
   const hotspotData = barangays.map(b => {
     const ttOverdue = mothers.filter(m => m.barangay === b && getTTStatus(m).status === 'overdue').length;
