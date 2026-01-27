@@ -90,7 +90,7 @@ export function registerAdminRoutes(app: Express) {
   // Create new user (Admin only)
   app.post("/api/admin/users", requireAuth, requireRole(UserRole.SYSTEM_ADMIN), async (req: any, res) => {
     try {
-      const { username, password, email, firstName, lastName, role, status } = req.body;
+      const { username, password, email, firstName, lastName, role, status, barangayIds } = req.body;
       
       if (!username || !password) {
         return res.status(400).json({ message: "Username and password are required" });
@@ -98,6 +98,12 @@ export function registerAdminRoutes(app: Express) {
       
       if (password.length < 6) {
         return res.status(400).json({ message: "Password must be at least 6 characters" });
+      }
+      
+      // Validate TL role requires barangay assignments
+      const userRole = role || UserRole.TL;
+      if (userRole === UserRole.TL && (!barangayIds || barangayIds.length === 0)) {
+        return res.status(400).json({ message: "Team Leaders must be assigned to at least one barangay" });
       }
       
       // Check if username already exists
@@ -114,9 +120,19 @@ export function registerAdminRoutes(app: Express) {
         email: email || null,
         firstName: firstName || null,
         lastName: lastName || null,
-        role: role || UserRole.TL,
+        role: userRole,
         status: status || UserStatus.ACTIVE,
       }).returning();
+      
+      // Assign barangays for TL users
+      if (userRole === UserRole.TL && barangayIds && barangayIds.length > 0) {
+        await db.insert(userBarangays).values(
+          barangayIds.map((barangayId: number) => ({
+            userId: newUser.id,
+            barangayId,
+          }))
+        );
+      }
       
       // Audit log
       await createAuditLog(
@@ -127,13 +143,14 @@ export function registerAdminRoutes(app: Express) {
         newUser.id,
         undefined,
         null,
-        { ...newUser, passwordHash: "[REDACTED]" },
+        { ...newUser, passwordHash: "[REDACTED]", assignedBarangays: barangayIds || [] },
         req
       );
       
       res.status(201).json({
         ...newUser,
         passwordHash: undefined,
+        assignedBarangays: barangayIds || [],
       });
     } catch (error) {
       console.error("Error creating user:", error);
@@ -248,6 +265,11 @@ export function registerAdminRoutes(app: Express) {
       const [user] = await db.select().from(users).where(eq(users.id, userId));
       if (!user) {
         return res.status(404).json({ message: "User not found" });
+      }
+      
+      // Validate TL users must have at least one barangay
+      if (user.role === UserRole.TL && (!barangayIds || barangayIds.length === 0)) {
+        return res.status(400).json({ message: "Team Leaders must be assigned to at least one barangay" });
       }
 
       // Get before state for audit

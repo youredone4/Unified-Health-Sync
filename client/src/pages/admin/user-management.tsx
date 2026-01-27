@@ -63,6 +63,7 @@ export default function UserManagement() {
   const [newLastName, setNewLastName] = useState("");
   const [newEmail, setNewEmail] = useState("");
   const [newRole, setNewRole] = useState<string>("TL");
+  const [newBarangayAssignments, setNewBarangayAssignments] = useState<number[]>([]);
 
   const { data: users = [], isLoading } = useQuery<UserWithAssignments[]>({
     queryKey: ["/api/admin/users"],
@@ -74,7 +75,7 @@ export default function UserManagement() {
   });
 
   const createUserMutation = useMutation({
-    mutationFn: async (data: { username: string; password: string; firstName?: string; lastName?: string; email?: string; role: string }) => {
+    mutationFn: async (data: { username: string; password: string; firstName?: string; lastName?: string; email?: string; role: string; barangayIds?: number[] }) => {
       const response = await apiRequest("POST", "/api/admin/users", data);
       return response.json();
     },
@@ -137,6 +138,15 @@ export default function UserManagement() {
     setNewLastName("");
     setNewEmail("");
     setNewRole("TL");
+    setNewBarangayAssignments([]);
+  };
+
+  const toggleNewBarangay = (barangayId: number) => {
+    setNewBarangayAssignments((prev) =>
+      prev.includes(barangayId)
+        ? prev.filter((id) => id !== barangayId)
+        : [...prev, barangayId]
+    );
   };
 
   const handleCreateUser = () => {
@@ -148,6 +158,10 @@ export default function UserManagement() {
       toast({ title: "Password must be at least 6 characters", variant: "destructive" });
       return;
     }
+    if (newRole === UserRole.TL && newBarangayAssignments.length === 0) {
+      toast({ title: "Please assign at least one barangay for Team Leader", variant: "destructive" });
+      return;
+    }
     createUserMutation.mutate({
       username: newUsername.trim(),
       password: newUserPassword,
@@ -155,6 +169,7 @@ export default function UserManagement() {
       lastName: newLastName.trim() || undefined,
       email: newEmail.trim() || undefined,
       role: newRole,
+      barangayIds: newRole === UserRole.TL ? newBarangayAssignments : undefined,
     });
   };
 
@@ -167,6 +182,12 @@ export default function UserManagement() {
 
   const handleSaveUser = () => {
     if (!editingUser) return;
+    
+    // Validate TL users must have at least one barangay
+    if (selectedRole === UserRole.TL && selectedBarangays.length === 0) {
+      toast({ title: "Team Leaders must be assigned to at least one barangay", variant: "destructive" });
+      return;
+    }
     
     updateUserMutation.mutate({
       userId: editingUser.id,
@@ -194,6 +215,7 @@ export default function UserManagement() {
   const filteredUsers = users.filter(user => {
     const searchLower = searchTerm.toLowerCase();
     return (
+      user.username?.toLowerCase().includes(searchLower) ||
       user.email?.toLowerCase().includes(searchLower) ||
       user.firstName?.toLowerCase().includes(searchLower) ||
       user.lastName?.toLowerCase().includes(searchLower)
@@ -316,6 +338,35 @@ export default function UserManagement() {
                         </SelectContent>
                       </Select>
                     </div>
+                    {newRole === UserRole.TL && (
+                      <div className="space-y-2">
+                        <Label className="flex items-center gap-2">
+                          <MapPin className="w-4 h-4" />
+                          Assigned Barangays *
+                        </Label>
+                        <div className="grid grid-cols-2 gap-2 p-3 border rounded-md">
+                          {barangays.map((barangay) => (
+                            <div key={barangay.id} className="flex items-center space-x-2">
+                              <Checkbox
+                                id={`new-brgy-${barangay.id}`}
+                                checked={newBarangayAssignments.includes(barangay.id)}
+                                onCheckedChange={() => toggleNewBarangay(barangay.id)}
+                                data-testid={`checkbox-new-barangay-${barangay.id}`}
+                              />
+                              <label
+                                htmlFor={`new-brgy-${barangay.id}`}
+                                className="text-sm cursor-pointer"
+                              >
+                                {barangay.name}
+                              </label>
+                            </div>
+                          ))}
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          Team Leaders can only access data from their assigned barangays
+                        </p>
+                      </div>
+                    )}
                     <div className="flex justify-end gap-2 pt-4">
                       <Button
                         variant="outline"
