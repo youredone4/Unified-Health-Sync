@@ -232,5 +232,77 @@ export async function registerRoutes(
     }
   });
 
+  // === M1 TEMPLATE SYSTEM ===
+  
+  // Get active M1 template version
+  app.get("/api/m1/templates", async (req, res) => {
+    const templates = await storage.getM1TemplateVersions();
+    res.json(templates);
+  });
+
+  // Get M1 indicator catalog for a template version
+  app.get("/api/m1/templates/:templateId/catalog", async (req, res) => {
+    const catalog = await storage.getM1IndicatorCatalog(Number(req.params.templateId));
+    res.json(catalog);
+  });
+
+  // Get all barangays
+  app.get("/api/barangays", async (req, res) => {
+    const data = await storage.getBarangays();
+    res.json(data);
+  });
+
+  // Get M1 report instances
+  app.get("/api/m1/reports", async (req, res) => {
+    const { barangayId, month, year } = req.query;
+    const reports = await storage.getM1ReportInstances({
+      barangayId: barangayId ? Number(barangayId) : undefined,
+      month: month ? Number(month) : undefined,
+      year: year ? Number(year) : undefined,
+    });
+    res.json(reports);
+  });
+
+  // Get single M1 report instance with values
+  app.get("/api/m1/reports/:id", async (req, res) => {
+    const report = await storage.getM1ReportInstance(Number(req.params.id));
+    if (!report) {
+      return res.status(404).json({ message: "Report not found" });
+    }
+    res.json(report);
+  });
+
+  // Create new M1 report instance
+  app.post("/api/m1/reports", async (req, res) => {
+    try {
+      const report = await storage.createM1ReportInstance(req.body);
+      res.status(201).json(report);
+    } catch (err) {
+      res.status(400).json({ message: "Failed to create report" });
+    }
+  });
+
+  // Update M1 indicator values for a report
+  app.put("/api/m1/reports/:id/values", async (req, res) => {
+    try {
+      const updated = await storage.updateM1IndicatorValues(Number(req.params.id), req.body.values);
+      res.json(updated);
+    } catch (err) {
+      res.status(400).json({ message: "Failed to update values" });
+    }
+  });
+
+  // Get municipality settings
+  app.get("/api/municipality-settings", async (req, res) => {
+    const settings = await storage.getMunicipalitySettings();
+    res.json(settings);
+  });
+
+  // Get barangay settings
+  app.get("/api/barangay-settings/:barangayId", async (req, res) => {
+    const settings = await storage.getBarangaySettings(Number(req.params.barangayId));
+    res.json(settings || {});
+  });
+
   return httpServer;
 }

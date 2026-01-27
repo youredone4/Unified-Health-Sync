@@ -2,6 +2,7 @@ import { db } from "./db";
 import { 
   mothers, children, seniors, inventory, healthStations, smsOutbox, diseaseCases, tbPatients, themeSettings,
   barangays, users, userBarangays, municipalitySettings, UserRole, consults,
+  m1TemplateVersions, m1IndicatorCatalog, m1ReportInstances, m1ReportHeader, m1IndicatorValues, barangaySettings,
   type Mother, type InsertMother,
   type Child, type InsertChild,
   type Senior, type InsertSenior,
@@ -12,7 +13,9 @@ import {
   type TBPatient, type InsertTBPatient,
   type ThemeSettings, type InsertThemeSettings,
   type Consult, type InsertConsult,
-  type Barangay, type User
+  type Barangay, type User,
+  type M1TemplateVersion, type M1IndicatorCatalog, type M1ReportInstance, type M1IndicatorValue,
+  type MunicipalitySettings, type BarangaySettings,
 } from "@shared/schema";
 import { eq, and, inArray, desc } from "drizzle-orm";
 
@@ -51,6 +54,17 @@ export interface IStorage {
   createConsult(consult: InsertConsult): Promise<Consult>;
   updateConsult(id: number, updates: Partial<InsertConsult>): Promise<Consult>;
 
+  // M1 Template System
+  getM1TemplateVersions(): Promise<M1TemplateVersion[]>;
+  getM1IndicatorCatalog(templateVersionId: number): Promise<M1IndicatorCatalog[]>;
+  getBarangays(): Promise<Barangay[]>;
+  getM1ReportInstances(filters: { barangayId?: number; month?: number; year?: number }): Promise<M1ReportInstance[]>;
+  getM1ReportInstance(id: number): Promise<{ instance: M1ReportInstance; values: M1IndicatorValue[] } | undefined>;
+  createM1ReportInstance(data: any): Promise<M1ReportInstance>;
+  updateM1IndicatorValues(reportId: number, values: any[]): Promise<M1IndicatorValue[]>;
+  getMunicipalitySettings(): Promise<MunicipalitySettings | undefined>;
+  getBarangaySettings(barangayId: number): Promise<BarangaySettings | undefined>;
+
   seedData(): Promise<void>;
 }
 
@@ -83,7 +97,7 @@ export class DatabaseStorage implements IStorage {
 
   async updateChild(id: number, updates: Partial<InsertChild>): Promise<Child> {
     const [updated] = await db.update(children)
-      .set(updates)
+      .set(updates as any)
       .where(eq(children.id, id))
       .returning();
     return updated;
@@ -200,6 +214,114 @@ export class DatabaseStorage implements IStorage {
     return updated;
   }
 
+  // M1 Template System Methods
+  async getM1TemplateVersions(): Promise<M1TemplateVersion[]> {
+    return await db.select().from(m1TemplateVersions).where(eq(m1TemplateVersions.isActive, true));
+  }
+
+  async getM1IndicatorCatalog(templateVersionId: number): Promise<M1IndicatorCatalog[]> {
+    return await db.select().from(m1IndicatorCatalog)
+      .where(eq(m1IndicatorCatalog.templateVersionId, templateVersionId))
+      .orderBy(m1IndicatorCatalog.pageNumber, m1IndicatorCatalog.rowOrder);
+  }
+
+  async getBarangays(): Promise<Barangay[]> {
+    return await db.select().from(barangays);
+  }
+
+  async getM1ReportInstances(filters: { barangayId?: number; month?: number; year?: number }): Promise<M1ReportInstance[]> {
+    let query = db.select().from(m1ReportInstances);
+    const conditions = [];
+    if (filters.barangayId) conditions.push(eq(m1ReportInstances.barangayId, filters.barangayId));
+    if (filters.month) conditions.push(eq(m1ReportInstances.month, filters.month));
+    if (filters.year) conditions.push(eq(m1ReportInstances.year, filters.year));
+    
+    if (conditions.length > 0) {
+      return await query.where(and(...conditions));
+    }
+    return await query;
+  }
+
+  async getM1ReportInstance(id: number): Promise<{ instance: M1ReportInstance; values: M1IndicatorValue[] } | undefined> {
+    const [instance] = await db.select().from(m1ReportInstances).where(eq(m1ReportInstances.id, id));
+    if (!instance) return undefined;
+    
+    const values = await db.select().from(m1IndicatorValues).where(eq(m1IndicatorValues.reportInstanceId, id));
+    return { instance, values };
+  }
+
+  async createM1ReportInstance(data: any): Promise<M1ReportInstance> {
+    const now = new Date().toISOString();
+    const [created] = await db.insert(m1ReportInstances).values({
+      templateVersionId: data.templateVersionId,
+      scopeType: data.scopeType || "BARANGAY",
+      barangayId: data.barangayId,
+      barangayName: data.barangayName,
+      month: data.month,
+      year: data.year,
+      status: "DRAFT",
+      createdByUserId: data.createdByUserId,
+      createdAt: now,
+      updatedAt: now,
+    }).returning();
+    return created;
+  }
+
+  async updateM1IndicatorValues(reportId: number, values: any[]): Promise<M1IndicatorValue[]> {
+    const now = new Date().toISOString();
+    const results: M1IndicatorValue[] = [];
+    
+    for (const v of values) {
+      // Check if value exists
+      const [existing] = await db.select().from(m1IndicatorValues)
+        .where(and(
+          eq(m1IndicatorValues.reportInstanceId, reportId),
+          eq(m1IndicatorValues.rowKey, v.rowKey)
+        ));
+      
+      if (existing) {
+        const [updated] = await db.update(m1IndicatorValues)
+          .set({
+            valueNumber: v.valueNumber,
+            valueText: v.valueText,
+            valueSource: v.valueSource || "ENCODED",
+            updatedAt: now,
+          })
+          .where(eq(m1IndicatorValues.id, existing.id))
+          .returning();
+        results.push(updated);
+      } else {
+        const [created] = await db.insert(m1IndicatorValues).values({
+          reportInstanceId: reportId,
+          rowKey: v.rowKey,
+          valueNumber: v.valueNumber,
+          valueText: v.valueText,
+          valueSource: v.valueSource || "ENCODED",
+          createdAt: now,
+          updatedAt: now,
+        }).returning();
+        results.push(created);
+      }
+    }
+    
+    // Update report instance timestamp
+    await db.update(m1ReportInstances)
+      .set({ updatedAt: now })
+      .where(eq(m1ReportInstances.id, reportId));
+    
+    return results;
+  }
+
+  async getMunicipalitySettings(): Promise<MunicipalitySettings | undefined> {
+    const [settings] = await db.select().from(municipalitySettings);
+    return settings;
+  }
+
+  async getBarangaySettings(barangayId: number): Promise<BarangaySettings | undefined> {
+    const [settings] = await db.select().from(barangaySettings).where(eq(barangaySettings.barangayId, barangayId));
+    return settings;
+  }
+
   async seedData(): Promise<void> {
     const existingMothers = await this.getMothers();
     if (existingMothers.length > 0) return;
@@ -218,9 +340,11 @@ export class DatabaseStorage implements IStorage {
     const existingMuniSettings = await db.select().from(municipalitySettings);
     if (existingMuniSettings.length === 0) {
       await db.insert(municipalitySettings).values({
+        municipalityId: 1,
         municipalityName: "Placer Municipality",
         subtitle: "Province of Surigao del Norte",
         logoUrl: null,
+        updatedAt: new Date().toISOString(),
       });
       console.log("Seeded municipality settings");
     }

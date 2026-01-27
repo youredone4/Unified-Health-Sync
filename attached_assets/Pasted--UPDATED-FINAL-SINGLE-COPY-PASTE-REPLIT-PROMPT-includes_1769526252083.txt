@@ -1,0 +1,520 @@
+## UPDATED FINAL SINGLE COPY/PASTE REPLIT PROMPT (includes TL cross-barangay senior med claim flag)
+
+You are revamping an existing LGU health system web app called **GeoHealthSync**. The DOH **FHSIS M1Brgy report is the canonical blueprint**. The entire system (data capture, modules, workflows, computations, dashboards, and exports) must be adjusted so the app can **capture, store, validate, and generate EVERYTHING that appears on the M1Brgy form** exactly.
+
+The user will upload a **real M1Brgy PDF example from one barangay in Municipality of Placer, Surigao del Norte** into Replit. Treat that uploaded PDF as the **fixed template**. Do not approximate the layout. Do not invent fields. The system must conform to the report.
+
+---
+
+# A) Non-negotiable stack + enforcement
+
+* Frontend: **Next.js** with role-based guarded routing.
+* Backend: Next API routes or Node/Express REST.
+* DB: **PostgreSQL + Prisma**.
+* Enforce **RBAC + barangay scoping server-side** (never only UI).
+* Add **audit logging** for all critical actions.
+* Implement **M1Brgy template-driven reporting**:
+
+  * In-app preview mirrors the form structure.
+  * Export **A4 portrait, fixed 3 pages** PDF accepted for government.
+  * Imports for historical M1 data.
+
+---
+
+# 1) Roles + Access Layers (4 layers) + Barangay scope
+
+## Roles
+
+1. SYSTEM_ADMIN
+2. MHO (Doctor / Head of Primary Care Facility)
+3. SHA (Senior Health Administrator/Nurse lead)
+4. TL (Team Leader Nurse per Barangay)
+
+## Rules
+
+* SYSTEM_ADMIN:
+
+  * Full access to all modules and all barangays.
+  * Create/update/disable users; assign TL to one/multiple barangays.
+  * View global/per-barangay audit logs and “view as barangay” for validation.
+* MHO:
+
+  * Full visibility across all modules (all barangays).
+  * Cannot manage users.
+  * Has a doctor-only **Morbidity/Consult** module (can create/search patients, add consult notes).
+* SHA:
+
+  * Same access as MHO across all modules EXCEPT no access to Morbidity/Consult.
+* TL:
+
+  * CRUD only within assigned barangay(s).
+  * Cannot see other barangays’ patient lists/data.
+  * Only cross-barangay info allowed:
+
+    1. stock availability for referral suggestions (no patient info)
+    2. cross-barangay **senior medication claim verification** for the SAME senior being viewed (metadata only; no other patients)
+
+## Required DB tables
+
+* users(id, name, email, passwordHash, role, status, createdAt, updatedAt)
+* barangays(id, name, …)
+* user_barangays(userId, barangayId)  // TL assignments
+
+## Required middleware
+
+* requireAuth
+* requireRole
+* enforceBarangayScope (TL only)
+
+---
+
+# 2) Primary Goal: Make the system reflect the M1Brgy report
+
+## Core directive (Non-negotiable)
+
+The system must be **report-first**: everything in the system should exist because it supports or feeds the M1Brgy report. The M1Brgy PDF defines what must be captured.
+
+### “Capture everything on the report”
+
+For each field/row/indicator appearing on the M1Brgy form, the system must support:
+
+1. Capturing the value either:
+
+   * automatically (computed from event-level data), OR
+   * manually (encoded), OR
+   * via import (historical)
+2. Storing monthly historical records per:
+
+   * Barangay, Month, Year
+   * Municipality consolidated view (computed/aggregated)
+3. Validating completeness for submission.
+4. Rendering in-app preview and exporting to a **fixed 3-page** PDF.
+
+### Two data pathways are mandatory
+
+* **Event-level capture** (vaccinations, consults, births, deaths, cases, TB, nutrition measurements, NCD monitoring, oral health, environmental health, etc.) for auto-computation where possible.
+* **Monthly M1 encoding** for indicators that cannot be computed from available events.
+
+---
+
+# 3) M1Brgy Template System (Fixed, template-driven)
+
+## 3.1 Template version tables
+
+Create these:
+
+### m1_template_versions
+
+* id
+* templateName (e.g., “DOH FHSIS M1Brgy”)
+* versionLabel (e.g., “Placer Example 2025”)
+* sourceFileName (the uploaded PDF file name in Replit)
+* sourcePdfHash
+* pageCount (must be 3)
+* isActive
+* createdAt
+
+### m1_indicator_catalog  (ALL rows/fields from the uploaded PDF)
+
+* id
+* templateVersionId (FK)
+* pageNumber (1..3)
+* sectionCode (A/B/C… exactly as printed)
+* rowKey (unique stable key; use official code if printed; else generate stable)
+* officialLabel (exact text from the PDF)
+* dataType (INT | DECIMAL | TEXT | BOOLEAN)
+* unit (count/percent/etc. if implied)
+* rowOrder (exact row order as seen in PDF)
+* isComputed (boolean)
+* computeSpecJson (nullable; only if computed)
+* isRequired (boolean)
+* helpText (optional)
+
+### m1_report_instances
+
+* id
+* templateVersionId
+* scopeType ("BARANGAY" | "MUNICIPALITY")
+* barangayId (nullable when municipality)
+* month, year
+* status ("DRAFT" | "READY_FOR_REVIEW" | "SUBMITTED_LOCKED")
+* createdByUserId
+* createdAt, updatedAt
+
+### m1_report_header
+
+* reportInstanceId (FK)
+* headerJson (stores all header fields shown on page 1 exactly: barangay, municipality/city, province, projected population of the year, etc.)
+
+### m1_indicator_values
+
+* id
+* reportInstanceId (FK)
+* rowKey (FK to catalog)
+* valueNumber (nullable)
+* valueText (nullable)
+* valueSource ("COMPUTED" | "ENCODED" | "IMPORTED")
+* computedAt (nullable)
+* locked (boolean)
+* createdByUserId
+* createdAt, updatedAt
+
+## 3.2 Template seeding requirement (very important)
+
+Implement an **admin-only Template Seeder tool** that creates the catalog rows for the uploaded PDF template version.
+
+* Admin route:
+
+  * `/admin/m1/template`
+* Features:
+
+  * Create template version record
+  * Seed rows into `m1_indicator_catalog` using a JSON config (no OCR required)
+  * Admin can edit row labels/order/page assignment to match the PDF exactly
+  * Catalog must cover ALL rows across ALL 3 pages
+
+Seeding JSON structure:
+
+```json
+{
+  "templateName": "DOH FHSIS M1Brgy",
+  "versionLabel": "Placer Brgy Example",
+  "rows": [
+    {"pageNumber":1,"sectionCode":"A","rowKey":"A-01","officialLabel":"...exact label...","dataType":"INT","rowOrder":1,"isComputed":false,"isRequired":true},
+    ...
+  ]
+}
+```
+
+---
+
+# 4) M1 Capture UI (must exist, mirrors the PDF)
+
+Create these pages:
+
+### `/reports/m1`
+
+* Select: scope (barangay/municipality), month/year, templateVersion
+* M1 preview grid mirrors PDF sections and ordering
+* Shows value source per row (computed/encoded/imported)
+* Shows missing required fields and completeness
+* Buttons:
+
+  * Save Draft
+  * Mark Ready for Review
+  * Submit/Lock (role-based)
+  * Generate PDF
+  * Export CSV/Excel
+
+### `/reports/m1/capture`
+
+* Full encode screen with exact row structure from catalog
+* If isComputed=true:
+
+  * show computed value + explanation from computeSpecJson
+  * allow override only for SYSTEM_ADMIN (policy)
+* If isComputed=false:
+
+  * allow encoding values per role + scope
+
+### `/reports/m1/import`
+
+* Import historical:
+
+  1. Pre-aggregated M1 values keyed by rowKey
+  2. Optional event-level imports
+* Strict validation:
+
+  * reject unknown rowKeys
+  * require month/year/scope match
+  * prevent duplicates unless override
+* Audit all imports
+
+---
+
+# 5) PDF Generation (Fixed 3 pages, government-acceptable)
+
+## Requirements
+
+* Export PDF A4 portrait, EXACTLY 3 pages.
+* Layout is template-driven using `m1_indicator_catalog.pageNumber` + `rowOrder` + `officialLabel`.
+* Must match ordering/grouping of the uploaded PDF.
+* Clean, readable tables; conservative fonts; consistent margins.
+
+## Branding/logo rule
+
+* Logo appears ONLY on page 1.
+* Dynamic branding:
+
+  * Barangay report: barangay logo/name override → municipality branding → default
+  * Municipality report: municipality branding → default
+
+Tables:
+
+* municipality_settings(municipalityId, municipalityName, subtitle, logoUrl, themeJson, updatedAt)
+* barangay_settings(barangayId, barangayNameOverride?, subtitle?, logoUrl?, themeJson?, updatedAt)
+
+### REQUIRED pseudocode (implement exactly)
+
+Use this exact resolveBranding + header behavior:
+
+```pseudo
+type Branding = { displayName, subtitle, logoUrl, themeJson, source }
+
+function getDefaultBranding():
+  return { displayName:"GeoHealthSync", subtitle:"Municipal Health Information System", logoUrl:null, themeJson:null, source:"DEFAULT" }
+
+function safeTrim(s):
+  if s == null return null
+  t = trim(s)
+  if t == "" return null
+  return t
+
+function coalesceNonEmpty(a,b,c):
+  if safeTrim(a)!=null return safeTrim(a)
+  if safeTrim(b)!=null return safeTrim(b)
+  if safeTrim(c)!=null return safeTrim(c)
+  return null
+
+async function resolveBranding({scope, barangayId, municipalityId}):
+  defaultBranding = getDefaultBranding()
+  muni = db.municipality_settings.findUnique(where municipalityId)
+
+  muniDisplayName = coalesceNonEmpty(muni?.municipalityName, null, defaultBranding.displayName)
+  muniSubtitle    = coalesceNonEmpty(muni?.subtitle, null, defaultBranding.subtitle)
+  muniLogoUrl     = safeTrim(muni?.logoUrl)
+  muniThemeJson   = muni?.themeJson ?? null
+
+  if scope == "municipality":
+    logo = coalesceNonEmpty(muniLogoUrl, defaultBranding.logoUrl, null)
+    return { displayName:muniDisplayName, subtitle:muniSubtitle, logoUrl:logo, themeJson:muniThemeJson, source:(muni!=null?"MUNICIPALITY":"DEFAULT") }
+
+  assert(barangayId != null)
+  brgy = db.barangays.findUnique(where id=barangayId)
+  assert(brgy != null)
+
+  brgySettings = db.barangay_settings.findUnique(where barangayId)
+  brgyDisplayName = coalesceNonEmpty(brgySettings?.barangayNameOverride, brgy?.name, "Barangay (Unnamed)")
+  brgySubtitle    = coalesceNonEmpty(brgySettings?.subtitle, muniSubtitle, defaultBranding.subtitle)
+  brgyLogoUrl     = safeTrim(brgySettings?.logoUrl)
+
+  resolvedLogoUrl  = coalesceNonEmpty(brgyLogoUrl, muniLogoUrl, defaultBranding.logoUrl)
+  resolvedThemeJson = brgySettings?.themeJson ?? muniThemeJson ?? defaultBranding.themeJson
+
+  source = (brgySettings!=null || brgyLogoUrl!=null) ? "BARANGAY"
+         : (muni!=null || muniLogoUrl!=null) ? "MUNICIPALITY"
+         : "DEFAULT"
+
+  return { displayName:brgyDisplayName, subtitle:brgySubtitle, logoUrl:resolvedLogoUrl, themeJson:resolvedThemeJson, source:source }
+
+function drawM1HeaderFirstPage(pdf, page, {branding, reportTitle, periodLabel, scopeLabel, barangayLabel, headerFields}):
+  // LOGO ONLY ON PAGE 1
+  if branding.logoUrl != null:
+    pdf.drawImage(branding.logoUrl, x=24, y=24, w=48, h=48)
+
+  centerX = page.width / 2
+  pdf.setFont("Helvetica", 11, bold=true)
+  pdf.drawText("Field Health Services Information System (FHSIS)", x=centerX, y=24, align="center")
+  pdf.drawText(branding.displayName, x=centerX, y=38, align="center")
+
+  if branding.subtitle != null:
+    pdf.setFont("Helvetica", 10, bold=false)
+    pdf.drawText(branding.subtitle, x=centerX, y=52, align="center")
+
+  pdf.setFont("Helvetica", 12, bold=true)
+  pdf.drawText(reportTitle, x=centerX, y=68, align="center")
+
+  pdf.setFont("Helvetica", 10, bold=false)
+  pdf.drawText(periodLabel, x=centerX, y=84, align="center")
+  pdf.drawText(scopeLabel, x=centerX, y=96, align="center")
+  if barangayLabel != null: pdf.drawText(barangayLabel, x=centerX, y=108, align="center")
+
+  // Print headerFields block per template (barangay, municipality, province, projected population, etc.)
+  // Must match the uploaded PDF header fields.
+  pdf.drawLine(x1=24, y1=120, x2=page.width-24, y2=120)
+
+function drawCompactHeaderNoLogo(pdf, page, {title, period, scope}):
+  // PAGES 2–3: NO LOGO
+  pdf.setFont("Helvetica", 10, bold=true)
+  pdf.drawText(title + " | " + period + " | " + scope, x=24, y=24, align="left")
+  pdf.drawLine(x1=24, y1=32, x2=page.width-24, y2=32)
+```
+
+---
+
+# 6) Revamp existing health modules to feed M1 (report-first)
+
+Keep existing modules but revise/add fields/tables so M1 rows can be computed or encoded. Where computation is not possible, the M1 capture screen must store encoded/imported values.
+
+Mandatory enhancements:
+
+* Prenatal:
+
+  * Track TT1–TT5 dose dates.
+  * Track EDD + gestational weeks.
+  * Overdue pregnancy flag: today > EDD or weeks > 40.
+* Child:
+
+  * Immunization series capture with dose dates.
+* Senior:
+
+  * Registration + BP + HTN meds.
+  * Medication claim events must support cross-barangay verification (see section 7).
+* Mortality:
+
+  * Add death events.
+* Add/extend event tables as needed to satisfy M1 indicators (oral health, NCD services, environmental health, etc.), OR ensure those indicators are encodable in M1 capture.
+
+---
+
+# 7) NEW: TL Cross-Barangay Senior Medication Claim Flag (Privacy-safe verification)
+
+### Goal
+
+When a TL searches/opens a Senior profile, the system must detect if the senior already claimed meds from a different barangay and show a FLAG with:
+
+* where claimed (barangay + facility if available)
+* when claimed (date/time)
+* what claimed (med name/dose/qty)
+* next eligible pickup date
+
+### Privacy + RBAC constraints
+
+* TL still cannot browse other barangays’ patient lists.
+* Cross-barangay visibility is allowed ONLY for the SAME senior being viewed and ONLY for medication-claim metadata required for verification.
+
+### Data model changes (required)
+
+1. Unique senior matching key:
+
+* Add to seniors:
+
+  * `seniorUniqueId` (string, unique) OR `seniorCitizenId` (unique if available)
+  * `dob` (date required)
+  * optional sex
+* If no official ID exists, implement admin merge workflow using name+DOB+sex as fallback match.
+
+2. Immutable medication claim events:
+   Table: `senior_med_claims`
+
+* id
+* seniorId (FK)
+* seniorUniqueId (indexed)
+* claimedAt (datetime)
+* claimedBarangayId
+* claimedFacilityId (optional)
+* medicationName
+* dose
+* quantity
+* cycleDays (default 30) OR store policy reference
+* nextEligibleAt (datetime)
+* claimedByUserId
+* createdAt
+
+Optional: `medication_pickup_policy(medicationName, dose, cycleDays, maxQtyPerCycle)`
+
+### Business logic (required)
+
+On TL view `/senior/:id`:
+
+1. Confirm TL has scope to view this senior (assigned barangay).
+2. Query latest claim across ALL barangays by seniorUniqueId:
+
+   * latestClaim = mostRecent(senior_med_claims where seniorUniqueId = X)
+3. If latestClaim exists:
+
+   * If latestClaim.claimedBarangayId != currentBarangayId:
+
+     * Show Cross-Barangay Claim FLAG:
+
+       * “Already claimed at Barangay ___ on ___”
+       * meds details
+       * next eligible date
+   * If today < latestClaim.nextEligibleAt:
+
+     * Disable pickup confirmation and show “Not eligible until ___”
+4. If no claim exists or eligible, proceed normally.
+
+### UI requirements (required)
+
+* Prominent alert banner on senior profile:
+
+  * Red: not eligible (nextEligibleAt in future)
+  * Yellow: claimed elsewhere but eligible soon
+  * Green: eligible now
+* Add “Last 3 claims” snippet:
+
+  * show date + barangay + med + qty only
+
+### Notifications + audit logs (required)
+
+* If flag triggers: create notification to TL + audit action `SENIOR_CROSS_BRGY_CLAIM_FLAGGED`
+* When claim recorded: audit action `SENIOR_MED_CLAIM_RECORDED`
+
+---
+
+# 8) Morbidity/Consult Module (Admin + MHO only)
+
+Create doctor consult workflow:
+
+* `/morbidity`, `/morbidity/patient/:id`
+* Consult fields: subjective/objective/assessment/plan/notes; prescriptions optional; date-stamped
+* Audit all actions
+* SHA/TL no access
+
+---
+
+# 9) Inventory referral suggestion (stock-only cross-barangay)
+
+When barangay stock low/out, recommend other barangays with stock (no patient leakage). Log and optionally notify.
+
+---
+
+# 10) Audit Logs (Admin view)
+
+Create `audit_logs` table capturing who/what/when/barangay/before-after JSON.
+UI: `/admin/audit` filters.
+
+---
+
+# 11) RAG (role-aware)
+
+Upgrade AI reporting into role-aware RAG:
+
+* TL limited to assigned barangay(s)
+* MHO/SHA/Admin can query consolidated data
+* Provide proactive suggestions and issue flags
+* Avoid exposing PII in summaries.
+
+---
+
+# 12) Prisma models baseline (extend as needed; do not omit core)
+
+Implement at minimum:
+
+* User, Barangay, UserBarangay
+* MunicipalitySettings, BarangaySettings
+* AuditLog
+* Consult
+* DeathEvent
+* M1TemplateVersion, M1IndicatorCatalog, M1ReportInstance, M1ReportHeader, M1IndicatorValue
+* Senior (with seniorUniqueId/seniorCitizenId + DOB) and SeniorMedClaim
+* Existing domain tables (mothers/children/vaccinations/growth/inventory/disease/tb) updated as required by M1
+
+---
+
+# Deliverables (must be complete end-to-end)
+
+1. RBAC + barangay scope server-side
+2. Admin user management + TL assignments
+3. M1 template system: catalog contains **every row on the uploaded M1Brgy PDF**
+4. M1 capture UI (encode/import/compute) + report instance workflow
+5. Fixed 3-page A4 M1 PDF export that matches the uploaded PDF’s ordering/sections; logo only page 1 with dynamic branding
+6. Prenatal TT schedule updated to TT1–TT5 and overdue pregnancy flags
+7. Morbidity/Consult module (Admin+MHO only)
+8. Mortality events + aggregates
+9. Audit logs + admin UI
+10. TL senior cross-barangay medication claim FLAG (where/when/next eligible) + eligibility enforcement
+11. RAG role-aware queries + proactive insights
+
+Build minimal but fully functional UI. No placeholder logic for access control, audit logs, M1 reporting, imports, PDF formatting, or cross-barangay med claim verification.

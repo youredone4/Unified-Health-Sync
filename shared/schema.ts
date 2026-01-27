@@ -104,11 +104,15 @@ export const insertChildSchema = createInsertSchema(children).omit({ id: true })
 export type Child = typeof children.$inferSelect;
 export type InsertChild = z.infer<typeof insertChildSchema>;
 
-// === SENIORS (with medication details) ===
+// === SENIORS (with medication details + cross-barangay matching) ===
 export const seniors = pgTable("seniors", {
   id: serial("id").primaryKey(),
+  seniorUniqueId: text("senior_unique_id"), // For cross-barangay matching
+  seniorCitizenId: text("senior_citizen_id"), // Official senior citizen ID if available
   firstName: text("first_name").notNull(),
   lastName: text("last_name").notNull(),
+  dob: text("dob"), // Date of birth for matching
+  sex: text("sex"), // M or F
   age: integer("age").notNull(),
   barangay: text("barangay").notNull(),
   addressLine: text("address_line"),
@@ -272,6 +276,219 @@ export const consults = pgTable("consults", {
 export const insertConsultSchema = createInsertSchema(consults).omit({ id: true });
 export type Consult = typeof consults.$inferSelect;
 export type InsertConsult = z.infer<typeof insertConsultSchema>;
+
+// === M1 TEMPLATE VERSIONS (Template-driven reporting) ===
+export const m1TemplateVersions = pgTable("m1_template_versions", {
+  id: serial("id").primaryKey(),
+  templateName: text("template_name").notNull(), // e.g., "DOH FHSIS M1Brgy"
+  versionLabel: text("version_label").notNull(), // e.g., "Placer Example 2025"
+  sourceFileName: text("source_file_name"), // Original PDF filename
+  sourcePdfHash: text("source_pdf_hash"), // Hash for version tracking
+  pageCount: integer("page_count").default(3),
+  isActive: boolean("is_active").default(true),
+  createdAt: text("created_at").notNull(),
+});
+
+export const insertM1TemplateVersionSchema = createInsertSchema(m1TemplateVersions).omit({ id: true });
+export type M1TemplateVersion = typeof m1TemplateVersions.$inferSelect;
+export type InsertM1TemplateVersion = z.infer<typeof insertM1TemplateVersionSchema>;
+
+// === M1 INDICATOR CATALOG (All rows/fields from M1 PDF template) ===
+export const m1IndicatorCatalog = pgTable("m1_indicator_catalog", {
+  id: serial("id").primaryKey(),
+  templateVersionId: integer("template_version_id").notNull(), // FK to m1_template_versions
+  pageNumber: integer("page_number").notNull(), // 1, 2, or 3
+  sectionCode: text("section_code").notNull(), // A, B, C, etc.
+  rowKey: text("row_key").notNull(), // Unique stable key (e.g., "A-01")
+  officialLabel: text("official_label").notNull(), // Exact text from PDF
+  dataType: text("data_type").notNull().default("INT"), // INT, DECIMAL, TEXT, BOOLEAN
+  unit: text("unit"), // count, percent, etc.
+  rowOrder: integer("row_order").notNull(), // Exact row order from PDF
+  isComputed: boolean("is_computed").default(false),
+  computeSpecJson: jsonb("compute_spec_json"), // Computation specification if isComputed
+  isRequired: boolean("is_required").default(true),
+  helpText: text("help_text"),
+});
+
+export const insertM1IndicatorCatalogSchema = createInsertSchema(m1IndicatorCatalog).omit({ id: true });
+export type M1IndicatorCatalog = typeof m1IndicatorCatalog.$inferSelect;
+export type InsertM1IndicatorCatalog = z.infer<typeof insertM1IndicatorCatalogSchema>;
+
+// === M1 REPORT INSTANCES (Per barangay/month reports) ===
+export const m1ReportInstances = pgTable("m1_report_instances", {
+  id: serial("id").primaryKey(),
+  templateVersionId: integer("template_version_id").notNull(),
+  scopeType: text("scope_type").notNull().default("BARANGAY"), // BARANGAY or MUNICIPALITY
+  barangayId: integer("barangay_id"), // nullable when municipality
+  barangayName: text("barangay_name"), // denormalized for easy access
+  month: integer("month").notNull(), // 1-12
+  year: integer("year").notNull(),
+  status: text("status").notNull().default("DRAFT"), // DRAFT, READY_FOR_REVIEW, SUBMITTED_LOCKED
+  createdByUserId: text("created_by_user_id"),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});
+
+export const insertM1ReportInstanceSchema = createInsertSchema(m1ReportInstances).omit({ id: true });
+export type M1ReportInstance = typeof m1ReportInstances.$inferSelect;
+export type InsertM1ReportInstance = z.infer<typeof insertM1ReportInstanceSchema>;
+
+// === M1 REPORT HEADER (Header fields for each report) ===
+export const m1ReportHeader = pgTable("m1_report_header", {
+  id: serial("id").primaryKey(),
+  reportInstanceId: integer("report_instance_id").notNull(), // FK
+  headerJson: jsonb("header_json").$type<{
+    barangayName?: string;
+    municipalityCity?: string;
+    province?: string;
+    projectedPopulation?: number;
+    bhsName?: string;
+    bhwName?: string;
+    midwifeName?: string;
+  }>().default({}),
+});
+
+export const insertM1ReportHeaderSchema = createInsertSchema(m1ReportHeader).omit({ id: true });
+export type M1ReportHeader = typeof m1ReportHeader.$inferSelect;
+export type InsertM1ReportHeader = z.infer<typeof insertM1ReportHeaderSchema>;
+
+// === M1 INDICATOR VALUES (Values for each indicator in a report) ===
+export const m1IndicatorValues = pgTable("m1_indicator_values", {
+  id: serial("id").primaryKey(),
+  reportInstanceId: integer("report_instance_id").notNull(), // FK
+  rowKey: text("row_key").notNull(), // FK to catalog rowKey
+  valueNumber: integer("value_number"), // nullable - for INT/DECIMAL
+  valueText: text("value_text"), // nullable - for TEXT
+  valueSource: text("value_source").notNull().default("ENCODED"), // COMPUTED, ENCODED, IMPORTED
+  computedAt: text("computed_at"), // timestamp when computed
+  locked: boolean("locked").default(false),
+  createdByUserId: text("created_by_user_id"),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});
+
+export const insertM1IndicatorValueSchema = createInsertSchema(m1IndicatorValues).omit({ id: true });
+export type M1IndicatorValue = typeof m1IndicatorValues.$inferSelect;
+export type InsertM1IndicatorValue = z.infer<typeof insertM1IndicatorValueSchema>;
+
+// === MUNICIPALITY SETTINGS (Branding) ===
+export const municipalitySettings = pgTable("municipality_settings", {
+  id: serial("id").primaryKey(),
+  municipalityId: integer("municipality_id").notNull().unique(),
+  municipalityName: text("municipality_name"),
+  subtitle: text("subtitle"),
+  logoUrl: text("logo_url"),
+  themeJson: jsonb("theme_json"),
+  updatedAt: text("updated_at").notNull(),
+});
+
+export const insertMunicipalitySettingsSchema = createInsertSchema(municipalitySettings).omit({ id: true });
+export type MunicipalitySettings = typeof municipalitySettings.$inferSelect;
+export type InsertMunicipalitySettings = z.infer<typeof insertMunicipalitySettingsSchema>;
+
+// === BARANGAY SETTINGS (Branding overrides) ===
+export const barangaySettings = pgTable("barangay_settings", {
+  id: serial("id").primaryKey(),
+  barangayId: integer("barangay_id").notNull().unique(),
+  barangayNameOverride: text("barangay_name_override"),
+  subtitle: text("subtitle"),
+  logoUrl: text("logo_url"),
+  themeJson: jsonb("theme_json"),
+  updatedAt: text("updated_at").notNull(),
+});
+
+export const insertBarangaySettingsSchema = createInsertSchema(barangaySettings).omit({ id: true });
+export type BarangaySettings = typeof barangaySettings.$inferSelect;
+export type InsertBarangaySettings = z.infer<typeof insertBarangaySettingsSchema>;
+
+// === SENIOR MED CLAIMS (Cross-barangay verification) ===
+export const seniorMedClaims = pgTable("senior_med_claims", {
+  id: serial("id").primaryKey(),
+  seniorId: integer("senior_id").notNull(), // FK to seniors
+  seniorUniqueId: text("senior_unique_id"), // For cross-barangay matching
+  claimedAt: text("claimed_at").notNull(), // datetime
+  claimedBarangayId: integer("claimed_barangay_id").notNull(),
+  claimedBarangayName: text("claimed_barangay_name"), // denormalized
+  claimedFacilityId: integer("claimed_facility_id"),
+  medicationName: text("medication_name").notNull(),
+  dose: text("dose"),
+  quantity: integer("quantity").notNull(),
+  cycleDays: integer("cycle_days").default(30),
+  nextEligibleAt: text("next_eligible_at").notNull(), // datetime
+  claimedByUserId: text("claimed_by_user_id"),
+  createdAt: text("created_at").notNull(),
+});
+
+export const insertSeniorMedClaimSchema = createInsertSchema(seniorMedClaims).omit({ id: true });
+export type SeniorMedClaim = typeof seniorMedClaims.$inferSelect;
+export type InsertSeniorMedClaim = z.infer<typeof insertSeniorMedClaimSchema>;
+
+// === AUDIT LOGS ===
+export const auditLogs = pgTable("audit_logs", {
+  id: serial("id").primaryKey(),
+  userId: text("user_id"),
+  userName: text("user_name"),
+  action: text("action").notNull(), // CREATE, UPDATE, DELETE, VIEW, etc.
+  entityType: text("entity_type").notNull(), // Mother, Child, Senior, Report, etc.
+  entityId: text("entity_id"),
+  barangayId: integer("barangay_id"),
+  barangayName: text("barangay_name"),
+  beforeJson: jsonb("before_json"),
+  afterJson: jsonb("after_json"),
+  ipAddress: text("ip_address"),
+  createdAt: text("created_at").notNull(),
+});
+
+export const insertAuditLogSchema = createInsertSchema(auditLogs).omit({ id: true });
+export type AuditLog = typeof auditLogs.$inferSelect;
+export type InsertAuditLog = z.infer<typeof insertAuditLogSchema>;
+
+// === DEATH EVENTS (Mortality tracking) ===
+export const deathEvents = pgTable("death_events", {
+  id: serial("id").primaryKey(),
+  deceasedName: text("deceased_name").notNull(),
+  age: integer("age"),
+  sex: text("sex"), // M or F
+  barangay: text("barangay").notNull(),
+  dateOfDeath: text("date_of_death").notNull(),
+  causeOfDeath: text("cause_of_death"),
+  icdCode: text("icd_code"),
+  placeOfDeath: text("place_of_death"), // hospital, home, other
+  linkedPersonType: text("linked_person_type"), // Mother, Child, Senior
+  linkedPersonId: integer("linked_person_id"),
+  reportedBy: text("reported_by"),
+  notes: text("notes"),
+  createdAt: text("created_at").notNull(),
+});
+
+export const insertDeathEventSchema = createInsertSchema(deathEvents).omit({ id: true });
+export type DeathEvent = typeof deathEvents.$inferSelect;
+export type InsertDeathEvent = z.infer<typeof insertDeathEventSchema>;
+
+// === BARANGAYS (Master list) ===
+export const barangays = pgTable("barangays", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  municipalityId: integer("municipality_id"),
+  population: integer("population"),
+  latitude: text("latitude"),
+  longitude: text("longitude"),
+});
+
+export const insertBarangaySchema = createInsertSchema(barangays).omit({ id: true });
+export type Barangay = typeof barangays.$inferSelect;
+export type InsertBarangay = z.infer<typeof insertBarangaySchema>;
+
+// === USER BARANGAY ASSIGNMENTS (TL scope) ===
+export const userBarangays = pgTable("user_barangays", {
+  id: serial("id").primaryKey(),
+  userId: text("user_id").notNull(),
+  barangayId: integer("barangay_id").notNull(),
+});
+
+export const insertUserBarangaySchema = createInsertSchema(userBarangays).omit({ id: true });
+export type UserBarangay = typeof userBarangays.$inferSelect;
+export type InsertUserBarangay = z.infer<typeof insertUserBarangaySchema>;
 
 // === AUTH & RBAC (from Replit Auth integration + extensions) ===
 export * from "./models/auth";
