@@ -1,0 +1,364 @@
+Exact pseudocode: resolveBranding(scope, barangayId, municipalityId) + PDF header renderer
+// ==============================
+// TYPES
+// ==============================
+type Branding = {
+  displayName: string              // "Barangay X" or "Municipality of Y"
+  subtitle: string | null
+  logoUrl: string | null           // may be null if no logo available
+  themeJson: object | null         // optional
+  source: "BARANGAY" | "MUNICIPALITY" | "DEFAULT"
+}
+
+type ResolveBrandingInput = {
+  scope: "barangay" | "municipality"
+  barangayId: string | null
+  municipalityId: string           // single LGU, or from tenant context
+}
+
+type ResolveBrandingOutput = Branding
+
+
+// ==============================
+// HELPERS
+// ==============================
+function getDefaultBranding(): Branding
+  return {
+    displayName: "GeoHealthSync",
+    subtitle: "Municipal Health Information System",
+    logoUrl: null,                     // or built-in asset path
+    themeJson: null,
+    source: "DEFAULT"
+  }
+
+function safeTrim(s: string | null): string | null
+  if s == null then return null
+  let t = trim(s)
+  if t == "" then return null
+  return t
+
+function coalesceNonEmpty(a, b, c)
+  // returns first non-null, non-empty string
+  if safeTrim(a) != null then return safeTrim(a)
+  if safeTrim(b) != null then return safeTrim(b)
+  if safeTrim(c) != null then return safeTrim(c)
+  return null
+
+function assert(condition: boolean, message: string)
+  if !condition then throw Error(message)
+
+
+// ==============================
+// CORE: BRANDING RESOLUTION
+// ==============================
+async function resolveBranding(input: ResolveBrandingInput): ResolveBrandingOutput
+  assert(input.municipalityId != null, "municipalityId required")
+  assert(input.scope in ["barangay", "municipality"], "invalid scope")
+
+  let defaultBranding = getDefaultBranding()
+
+  // Always try municipality settings (used for consolidated + fallback)
+  let muni = await db.municipality_settings.findUnique({
+    where: { municipalityId: input.municipalityId }
+  })
+
+  let muniDisplayName = coalesceNonEmpty(muni?.municipalityName, null, defaultBranding.displayName)
+  let muniSubtitle    = coalesceNonEmpty(muni?.subtitle, null, defaultBranding.subtitle)
+  let muniLogoUrl     = safeTrim(muni?.logoUrl)
+  let muniThemeJson   = muni?.themeJson ?? null
+
+  if input.scope == "municipality"
+    // Municipality consolidated report
+    let logo = coalesceNonEmpty(muniLogoUrl, defaultBranding.logoUrl, null)
+    return {
+      displayName: muniDisplayName,
+      subtitle: muniSubtitle,
+      logoUrl: logo,
+      themeJson: muniThemeJson,
+      source: (logo != null or muni != null) ? "MUNICIPALITY" : "DEFAULT"
+    }
+
+  // scope == "barangay"
+  assert(input.barangayId != null, "barangayId required for barangay scope")
+
+  // Load barangay + barangay settings
+  let brgy = await db.barangays.findUnique({ where: { id: input.barangayId } })
+  assert(brgy != null, "barangay not found")
+
+  let brgySettings = await db.barangay_settings.findUnique({
+    where: { barangayId: input.barangayId }
+  })
+
+  let brgyNameOverride = safeTrim(brgySettings?.barangayNameOverride)
+  let brgyDisplayName  = coalesceNonEmpty(brgyNameOverride, brgy?.name, "Barangay (Unnamed)")
+  let brgySubtitle     = coalesceNonEmpty(brgySettings?.subtitle, muniSubtitle, defaultBranding.subtitle)
+  let brgyLogoUrl      = safeTrim(brgySettings?.logoUrl)
+
+  // Logo fallback order: barangay logo -> municipality logo -> default logo (optional)
+  let resolvedLogoUrl  = coalesceNonEmpty(brgyLogoUrl, muniLogoUrl, defaultBranding.logoUrl)
+
+  // Theme fallback order: barangay theme -> municipality theme -> default theme
+  let resolvedThemeJson = brgySettings?.themeJson ?? muniThemeJson ?? defaultBranding.themeJson
+
+  let source =
+    (brgyLogoUrl != null or brgySettings != null) ? "BARANGAY"
+    : (muniLogoUrl != null or muni != null) ? "MUNICIPALITY"
+    : "DEFAULT"
+
+  return {
+    displayName: brgyDisplayName,
+    subtitle: brgySubtitle,
+    logoUrl: resolvedLogoUrl,
+    themeJson: resolvedThemeJson,
+    source: source
+  }
+
+
+// ==============================
+// PDF HEADER RENDER (FIRST PAGE ONLY)
+// ==============================
+// Assumption: using a PDF library where page coordinates are in points or mm.
+// This function is called ONLY on pageIndex == 0.
+function drawM1HeaderFirstPage(pdf, page, headerInput)
+  // headerInput includes branding + report meta
+  // headerInput: { branding, reportTitle, periodLabel, scopeLabel, barangayLabel }
+
+  let marginLeft = 24
+  let marginTop  = 24
+
+  // Layout spec: Government-style header, readable, not cramped.
+  // - Logo: left
+  // - Center block: Republic/DOH/LGU name + report title + period/scope
+
+  if headerInput.branding.logoUrl != null
+    // Draw logo at top-left; keep modest size to save space
+    // Target size: 48x48 (points) or equivalent
+    pdf.drawImage(page, headerInput.branding.logoUrl, x=marginLeft, y=marginTop, w=48, h=48)
+
+  // Center header block (aligned center on page)
+  let centerX = page.width / 2
+
+  // Use conservative font sizes to match government forms: 10–12pt
+  pdf.setFont("Helvetica", 11, bold=true)
+  pdf.drawText(page, "Field Health Services Information System (FHSIS)", x=centerX, y=marginTop, align="center")
+
+  pdf.setFont("Helvetica", 11, bold=true)
+  pdf.drawText(page, headerInput.branding.displayName, x=centerX, y=marginTop + 14, align="center")
+
+  if headerInput.branding.subtitle != null
+    pdf.setFont("Helvetica", 10, bold=false)
+    pdf.drawText(page, headerInput.branding.subtitle, x=centerX, y=marginTop + 28, align="center")
+
+  pdf.setFont("Helvetica", 12, bold=true)
+  pdf.drawText(page, headerInput.reportTitle, x=centerX, y=marginTop + 44, align="center")
+  // e.g. "FHSIS Monthly Report (M1 / M1Brgy)"
+
+  pdf.setFont("Helvetica", 10, bold=false)
+  pdf.drawText(page, headerInput.periodLabel, x=centerX, y=marginTop + 60, align="center")
+  // e.g. "Reporting Period: June 2025"
+
+  pdf.setFont("Helvetica", 10, bold=false)
+  pdf.drawText(page, headerInput.scopeLabel, x=centerX, y=marginTop + 72, align="center")
+  // e.g. "Scope: Barangay Report" or "Scope: Municipality Consolidated"
+
+  if headerInput.barangayLabel != null
+    pdf.setFont("Helvetica", 10, bold=false)
+    pdf.drawText(page, headerInput.barangayLabel, x=centerX, y=marginTop + 84, align="center")
+    // e.g. "Barangay: San Isidro"
+
+  // Optional: thin divider line below header
+  pdf.drawLine(page, x1=marginLeft, y1=marginTop + 96, x2=page.width - marginLeft, y2=marginTop + 96)
+
+
+// ==============================
+// PDF GENERATION FLOW (3 pages)
+// ==============================
+async function generateM1Pdf(params)
+  // params: { scope, barangayId?, month, year, municipalityId, viewerUserId }
+  // 1) authorize per role + scope
+  // 2) compute or load m1 data rows
+  // 3) resolve branding
+  // 4) render 3-page PDF
+  // 5) only page 1 gets logo/header block; pages 2-3 get compact title line
+
+  authorizeUserForReport(params.viewerUserId, params.scope, params.barangayId)
+
+  let branding = await resolveBranding({
+    scope: params.scope,
+    barangayId: params.barangayId ?? null,
+    municipalityId: params.municipalityId
+  })
+
+  let reportData = await getM1ReportData(params) // computed or imported
+
+  let pdf = pdfLib.createDocument()
+  for pageIndex in [0,1,2]
+    let page = pdf.addPage(size="A4", orientation="portrait")
+
+    if pageIndex == 0
+      drawM1HeaderFirstPage(pdf, page, {
+        branding: branding,
+        reportTitle: "FHSIS Monthly Report (M1 / M1Brgy)",
+        periodLabel: "Reporting Period: " + monthName(params.month) + " " + params.year,
+        scopeLabel: (params.scope == "barangay") ? "Scope: Barangay Report" : "Scope: Municipality Consolidated",
+        barangayLabel: (params.scope == "barangay") ? ("Barangay: " + getBarangayName(params.barangayId)) : null
+      })
+      renderM1BodyPage1(pdf, page, reportData)
+    else
+      drawCompactHeaderNoLogo(pdf, page, {
+        title: "M1 / M1Brgy",
+        period: monthName(params.month) + " " + params.year,
+        scope: (params.scope == "barangay") ? getBarangayName(params.barangayId) : "Municipality Consolidated"
+      })
+      if pageIndex == 1 then renderM1BodyPage2(pdf, page, reportData)
+      if pageIndex == 2 then renderM1BodyPage3(pdf, page, reportData)
+
+  return pdf.saveToBuffer()
+Key corrections applied:
+•	Logo appears only on page 1.
+•	Pages 2–3 use a compact header (no logo) to save space.
+•	Header is designed to be readable in-system, while PDF remains government-formatted (clean typography, consistent margins, A4, print-friendly).
+________________________________________
+Final Replit Prompt (paste this as-is)
+You are enhancing an existing full-stack web app called GeoHealthSync (LGU/RHU health system). The system already contains modules for Overview Dashboard, Hotspots, Calendar, Prenatal TT tracking, Child immunization + growth, Nutrition, Senior HTN meds, Disease Surveillance + mapping, TB DOTS, Inventory, Reporting + AI demo, Mapping, Settings, notifications, and SMS demo.
+A) Tech + Non-negotiables
+•	Frontend: React or Next.js with guarded routes.
+•	Backend: Node/Express or Next API routes.
+•	Database: PostgreSQL + Prisma.
+•	All authorization and barangay scoping MUST be enforced server-side.
+•	Add robust audit logs.
+•	Add M1 (M1Brgy/FHSIS) monthly report generator as a 3-page A4 PDF, with import support for historical data.
+•	The system must be readable in-app; the PDF must follow proper government form formatting (print-friendly, consistent margins, conservative font sizes, clean tables).
+________________________________________
+1) Users, Roles, Access Layers (RBAC + Barangay Scope)
+Implement 4 roles:
+1.	SYSTEM_ADMIN
+2.	MHO (Municipal Health Officer / Head of Primary Care Facility / Doctor)
+3.	SHA (Senior Health Administrator/Nurse Lead)
+4.	TL (Team Leader Nurse per Barangay)
+Permissions
+•	SYSTEM_ADMIN:
+o	Full access to all modules and all barangays.
+o	Can create/update/disable users; assign TL users to one or multiple barangays.
+o	Can view global and per-barangay audit logs and “view as barangay” for verification.
+•	MHO:
+o	Full visibility across all modules (all barangays).
+o	Cannot manage users.
+o	Has exclusive access to a new “Morbidity/Consult” module (doctor consult workflow).
+•	SHA:
+o	Same visibility across existing modules as MHO (all barangays) BUT no access to Morbidity/Consult.
+•	TL:
+o	CRUD access limited to assigned barangay(s) only.
+o	Can encode prenatal/neonatal/child immunizations and follow-ups, nutrition growth measurements, senior registration and medication pickups, and related updates within their barangay scope.
+o	Must not see other barangays’ patient data. Only allowed cross-barangay visibility is inventory referral suggestions (stock availability only; no patient details).
+Implementation
+•	Tables:
+o	users(id, name, email, hashed_password, role, status, createdAt)
+o	barangays(id, name, ...)
+o	user_barangays(userId, barangayId) (TL assignments)
+•	Middleware:
+o	requireAuth
+o	requireRole([...])
+o	enforceBarangayScope(user, barangayId)
+•	Every API query must filter by barangay scope for TL.
+________________________________________
+2) New Module: Morbidity / Consult (Admin + MHO only)
+Create a new module visible ONLY to SYSTEM_ADMIN and MHO:
+•	Routes:
+o	/morbidity (search patients, create consult)
+o	/morbidity/patient/:id (patient summary + consult history + add consult note)
+•	Consult note fields:
+o	consultDateTime (auto), doctorUserId, barangayId
+o	presenting complaint (subjective), objective (vitals optional), assessment, plan, prescriptions(optional text), notes
+•	Data:
+o	consults(id, patientId, consultDateTime, doctorUserId, barangayId, subjective, objective, assessment, plan, notes, createdAt)
+________________________________________
+3) Pregnancy Overdue Flag
+On prenatal mother profiles and dashboards:
+•	Track EDD (expected delivery date) and gestational age.
+•	If today > EDD or gestationalWeeks > 40, mark as Overdue Pregnancy.
+•	Show count on dashboards and flag on mother profile/worklists.
+________________________________________
+4) Update TT Schedule (Critical)
+Replace TT schedule:
+•	TT1: initial any date
+•	TT2: 4 weeks after TT1
+•	TT3: 6 months after TT2
+•	TT4: 1 year after TT3
+•	TT5: 1 year after TT4
+System must compute next due date and status (Overdue/Due Soon/Upcoming) everywhere.
+________________________________________
+5) Inventory Referral Suggestion
+When TL encodes meds/vaccine needs and local barangay stock is low/out:
+•	Recommend other barangays with sufficient stock (stock-only visibility).
+•	Log referral suggestion as an event and optional notification.
+________________________________________
+6) Mortality Tracking
+Add mortality as events:
+•	deaths(id, patientId nullable, barangayId, dateOfDeath, cause(optional), reportedByUserId, createdAt)
+•	Aggregate mortality per barangay and municipality-wide.
+•	Display on dashboards and include in M1 report.
+________________________________________
+7) Audit Logs (Admin visibility required)
+Audit all important actions:
+•	CRUD for patient modules, consults, disease/TB updates, vaccinations, meds pickups, inventory edits/dispense, imports, report generation, authentication.
+•	Table:
+o	audit_logs(id, userId, role, action, entityType, entityId, barangayId, beforeJSON, afterJSON, createdAt)
+•	UI:
+o	/admin/audit with filters (barangay, user, date range, module, action)
+________________________________________
+8) Reporting: M1 (M1Brgy/FHSIS) 3-page PDF + Imports (Historical)
+Implement M1 reporting module:
+•	Routes:
+o	/reports/m1 (generate, preview)
+o	/reports/m1/import (import historical)
+•	Storage:
+o	m1_reports(id, barangayId nullable, month, year, computedJSON, source("computed"|"imported"), createdBy, createdAt)
+•	Imports:
+o	CSV/Excel import with validation (required columns, barangay existence, month/year, duplicate protection)
+o	Allow importing pre-aggregated M1 indicators OR event-level data that can be aggregated.
+PDF Requirements
+•	Output: A4 portrait, exactly 3 pages, print-friendly tables, conservative fonts, proper margins.
+•	Must be legible in-app (preview) and accepted as government-style formatting on export.
+•	Logo appears ONLY on page 1 to save space.
+•	Pages 2–3 use a compact header without logo.
+Dynamic Branding (Modular Logo and Header)
+•	Branding must be resolved at generation time based on scope:
+1.	Barangay M1 report: barangay logo/name if configured, else fallback to municipality branding, else default system branding.
+2.	Municipality consolidated: municipality branding, else default.
+•	Add/extend settings tables:
+o	municipality_settings(municipalityId, municipalityName, subtitle, logoUrl, themeJson, updatedAt)
+o	barangay_settings(barangayId, barangayNameOverride optional, subtitle optional, logoUrl optional, themeJson optional, updatedAt)
+•	Report generation endpoint params:
+o	scope = "barangay"|"municipality"
+o	barangayId required if scope=barangay
+o	month, year
+•	Implement resolveBranding(scope, barangayId, municipalityId) exactly using the pseudocode above.
+•	Implement drawM1HeaderFirstPage() with logo on page 1 only; use compact header on pages 2–3.
+________________________________________
+9) RAG: Query + Real-time Suggestions
+Upgrade AI Reporting into role-aware RAG:
+•	TL can only query their barangay scope.
+•	MHO/SHA/Admin can query consolidated data.
+•	Use RAG to:
+1.	Answer data questions (counts, trends, risks)
+2.	Flag issues (overdue clusters, spikes, stockouts vs demand) and suggest actions
+•	Must avoid exposing PII unless user is authorized and viewing a patient profile.
+________________________________________
+10) Date Handling
+Replace fixed demo date with real “today” in production.
+Keep DEMO_MODE config to force a fixed date for testing.
+________________________________________
+Deliverables
+Implement end-to-end:
+1.	RBAC + barangay scoping
+2.	User management + TL barangay assignment
+3.	Morbidity/Consult module (Admin+MHO only)
+4.	Overdue pregnancy flag everywhere
+5.	Updated TT schedule TT1–TT5
+6.	Inventory referral suggestions
+7.	Mortality tracking + aggregates
+8.	Audit logs + admin UI
+9.	M1 report generator (3-page PDF) + import pipeline + dynamic branding (logo only on page 1)
+10.	RAG querying + proactive insights (role-aware)
+
