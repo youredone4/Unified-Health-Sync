@@ -254,15 +254,15 @@ export async function registerRoutes(
     }
   });
 
-  // === CONSULTS (Morbidity Module - MHO/SYSTEM_ADMIN only access with backend RBAC) ===
-  const morbidityRBAC = [loadUserInfo, requireAuth, requireRole(UserRole.SYSTEM_ADMIN, UserRole.MHO)];
+  // === CONSULTS (Patient Check-up Module - MHO/SYSTEM_ADMIN only access with backend RBAC) ===
+  const patientCheckupRBAC = [loadUserInfo, requireAuth, requireRole(UserRole.SYSTEM_ADMIN, UserRole.MHO)];
   
-  app.get(api.consults.list.path, morbidityRBAC, async (req, res) => {
+  app.get(api.consults.list.path, patientCheckupRBAC, async (req, res) => {
     const data = await storage.getConsults();
     res.json(data);
   });
 
-  app.get(api.consults.get.path, morbidityRBAC, async (req, res) => {
+  app.get(api.consults.get.path, patientCheckupRBAC, async (req, res) => {
     const consult = await storage.getConsult(Number(req.params.id));
     if (!consult) {
       return res.status(404).json({ message: "Consult not found" });
@@ -270,7 +270,7 @@ export async function registerRoutes(
     res.json(consult);
   });
 
-  app.post(api.consults.create.path, morbidityRBAC, async (req, res) => {
+  app.post(api.consults.create.path, patientCheckupRBAC, async (req, res) => {
     try {
       const input = api.consults.create.input.parse(req.body);
       const created = await storage.createConsult(input);
@@ -280,7 +280,7 @@ export async function registerRoutes(
     }
   });
 
-  app.put(api.consults.update.path, morbidityRBAC, async (req, res) => {
+  app.put(api.consults.update.path, patientCheckupRBAC, async (req, res) => {
     try {
       const input = api.consults.update.input.parse(req.body);
       const updated = await storage.updateConsult(Number(req.params.id), input);

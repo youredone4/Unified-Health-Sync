@@ -120,7 +120,7 @@ const menuGroups = [
 export function AppSidebar() {
   const [location] = useLocation();
   const { settings } = useTheme();
-  const { canManageUsers, canViewAuditLogs, canAccessMorbidity } = useAuth();
+  const { canManageUsers, canViewAuditLogs, canAccessPatientCheckup } = useAuth();
   const [logoError, setLogoError] = useState(false);
 
   const lguName = settings?.lguName || "HealthSync";
@@ -175,16 +175,16 @@ export function AppSidebar() {
       </SidebarContent>
       <SidebarFooter className="p-2 border-t border-sidebar-border">
         <SidebarMenu>
-          {canAccessMorbidity && (
+          {canAccessPatientCheckup && (
             <SidebarMenuItem>
               <SidebarMenuButton
                 asChild
-                data-active={location === "/morbidity"}
+                data-active={location === "/patient-checkup"}
                 className="data-[active=true]:bg-sidebar-accent"
               >
-                <Link href="/morbidity" data-testid="nav-morbidity">
+                <Link href="/patient-checkup" data-testid="nav-patient-checkup">
                   <ClipboardPlus className="w-4 h-4" />
-                  <span>Morbidity</span>
+                  <span>Patient Check-up</span>
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>

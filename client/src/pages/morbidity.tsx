@@ -42,8 +42,8 @@ const dispositionColors: Record<string, string> = {
   Admitted: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
 };
 
-export default function MorbidityPage() {
-  const { canAccessMorbidity } = useAuth();
+export default function PatientCheckupPage() {
+  const { canAccessPatientCheckup } = useAuth();
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState("");
   const [filterBarangay, setFilterBarangay] = useState("");
@@ -67,7 +67,7 @@ export default function MorbidityPage() {
 
   const { data: consults = [], isLoading } = useQuery<Consult[]>({
     queryKey: ["/api/consults"],
-    enabled: canAccessMorbidity,
+    enabled: canAccessPatientCheckup,
   });
 
   const createMutation = useMutation({
@@ -111,12 +111,12 @@ export default function MorbidityPage() {
     return matchesSearch && matchesBarangay;
   });
 
-  if (!canAccessMorbidity) {
+  if (!canAccessPatientCheckup) {
     return (
       <div className="flex items-center justify-center h-full">
         <Card>
           <CardContent className="pt-6">
-            <p className="text-muted-foreground">You don't have permission to access the Morbidity module.</p>
+            <p className="text-muted-foreground">You don't have permission to access the Patient Check-up module.</p>
             <p className="text-sm text-muted-foreground mt-2">This feature is only available to System Administrators and Municipal Health Officers.</p>
           </CardContent>
         </Card>
@@ -146,9 +146,9 @@ export default function MorbidityPage() {
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2" data-testid="text-page-title">
             <ClipboardPlus className="w-6 h-6 text-primary" />
-            Morbidity & Consultations
+            Patient Check-up
           </h1>
-          <p className="text-muted-foreground">Record and track patient consultations (MHO access only)</p>
+          <p className="text-muted-foreground">Search and view all patient information across all modules</p>
         </div>
         <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
           <DialogTrigger asChild>

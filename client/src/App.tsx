@@ -48,7 +48,7 @@ import TBRegistry from "@/pages/tb-registry";
 import SettingsPage from "@/pages/settings";
 import UserManagement from "@/pages/admin/user-management";
 import AuditLogs from "@/pages/admin/audit-logs";
-import MorbidityPage from "@/pages/morbidity";
+import PatientCheckupPage from "@/pages/morbidity";
 import M1ReportPage from "@/pages/m1-report";
 import NotificationDrawer from "@/components/notification-drawer";
 import SmsOutbox from "@/components/sms-outbox";
@@ -118,7 +118,7 @@ function Router() {
       <Route path="/tb/registry" component={TBRegistry} />
       <Route path="/tb/:id" component={TBProfile} />
       <Route path="/settings" component={SettingsPage} />
-      <Route path="/morbidity" component={MorbidityPage} />
+      <Route path="/patient-checkup" component={PatientCheckupPage} />
       <Route path="/admin/users">
         <AdminRoute component={UserManagement} permission="users" />
       </Route>

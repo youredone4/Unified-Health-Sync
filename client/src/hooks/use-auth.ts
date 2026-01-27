@@ -56,7 +56,7 @@ export type UserRoleType = typeof UserRole[keyof typeof UserRole];
 // Permission helpers
 export const permissions = {
   canManageUsers: (role?: string) => role === UserRole.SYSTEM_ADMIN,
-  canAccessMorbidity: (role?: string) => role === UserRole.SYSTEM_ADMIN || role === UserRole.MHO,
+  canAccessPatientCheckup: (role?: string) => role === UserRole.SYSTEM_ADMIN || role === UserRole.MHO,
   canViewAuditLogs: (role?: string) => role === UserRole.SYSTEM_ADMIN,
   canGenerateReports: (role?: string) => !!role,
   canImportReports: (role?: string) => role === UserRole.SYSTEM_ADMIN || role === UserRole.MHO,
@@ -109,7 +109,7 @@ export function useAuth() {
     assignedBarangays: user?.assignedBarangays || [],
     // Permission helpers
     canManageUsers: permissions.canManageUsers(user?.role),
-    canAccessMorbidity: permissions.canAccessMorbidity(user?.role),
+    canAccessPatientCheckup: permissions.canAccessPatientCheckup(user?.role),
     canViewAuditLogs: permissions.canViewAuditLogs(user?.role),
   };
 }

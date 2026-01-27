@@ -173,8 +173,8 @@ export const permissions = {
   // User Management - Admin only
   canManageUsers: (role: string) => role === UserRole.SYSTEM_ADMIN,
   
-  // Morbidity/Consult - Admin and MHO only
-  canAccessMorbidity: (role: string) => [UserRole.SYSTEM_ADMIN, UserRole.MHO].includes(role as any),
+  // Patient Check-up/Consult - Admin and MHO only
+  canAccessPatientCheckup: (role: string) => [UserRole.SYSTEM_ADMIN, UserRole.MHO].includes(role as any),
   
   // Audit Logs - Admin only
   canViewAuditLogs: (role: string) => role === UserRole.SYSTEM_ADMIN,
