@@ -48,7 +48,7 @@ import TBRegistry from "@/pages/tb-registry";
 import SettingsPage from "@/pages/settings";
 import UserManagement from "@/pages/admin/user-management";
 import AuditLogs from "@/pages/admin/audit-logs";
-import PatientCheckupPage from "@/pages/morbidity";
+import PatientCheckupPage from "@/pages/patient-checkup";
 import M1ReportPage from "@/pages/m1-report";
 import NotificationDrawer from "@/components/notification-drawer";
 import SmsOutbox from "@/components/sms-outbox";
