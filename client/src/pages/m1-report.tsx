@@ -7,11 +7,11 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { FileText, Download, Save, Plus, ChevronLeft, ChevronRight, RefreshCw } from "lucide-react";
+import { FileText, Download, Save, Plus, ChevronLeft, ChevronRight, RefreshCw, Building2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useTheme } from "@/contexts/theme-context";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import type { M1TemplateVersion, M1IndicatorCatalog, Barangay, M1ReportInstance, M1IndicatorValue, Mother, Child } from "@shared/schema";
+import type { M1TemplateVersion, M1IndicatorCatalog, Barangay, M1ReportInstance, M1IndicatorValue, Mother, Child, MunicipalitySettings, BarangaySettings } from "@shared/schema";
 import { differenceInMonths, parseISO } from "date-fns";
 import { TODAY } from "@/lib/healthLogic";
 import jsPDF from "jspdf";
@@ -33,28 +33,37 @@ const MONTHS = [
 ];
 
 const PAGE_TITLES: Record<number, string> = {
-  1: "Family Planning, Prenatal Care & Tetanus Toxoid",
-  2: "Intrapartum, Newborn Care & Immunization",
-  3: "Nutrition, Senior Citizens, Mortality & Surveillance",
+  1: "Family Planning & Prenatal Care Services",
+  2: "Intrapartum, Postpartum & Immunization Services",
+  3: "Nutrition, NCD Services, Mortality & Disease Surveillance",
 };
 
 const SECTION_TITLES: Record<string, string> = {
   "FP": "Family Planning Services",
   "A": "Prenatal Care Services",
-  "B": "Tetanus Toxoid (Td) Vaccination",
-  "C": "Intrapartum Care / Delivery",
-  "D": "Newborn Care",
-  "E1": "Immunization Services (0-11 months)",
-  "E2": "Immunization Services (13-23 months)",
-  "G": "Nutrition",
-  "H": "Senior Citizens / NCD Services",
-  "I": "TB DOTS",
-  "J": "Mortality / Natality",
-  "K": "Disease Surveillance",
+  "B": "Intrapartum and Newborn Care",
+  "C": "Postpartum Care",
+  "D1": "Immunization Services (Basic)",
+  "D2": "Immunization Services (0-12 months)",
+  "D3": "Immunization Services (13-23 months)",
+  "D4": "School-Based Immunization",
+  "E": "Nutrition",
+  "F": "Management of Sick Children",
+  "G1": "Lifestyle Related (PhilPEN)",
+  "G2": "Cardiovascular Disease Prevention",
+  "G4": "Blindness Prevention Program",
+  "H": "Mortality / Natality",
+  "I": "Disease Surveillance",
 };
 
 interface IndicatorValueMap {
-  [rowKey: string]: { valueNumber?: number | null; valueText?: string | null; valueSource?: string };
+  [key: string]: { valueNumber?: number | null; valueText?: string | null; valueSource?: string };
+}
+
+interface ColumnSpec {
+  columns: string[];
+  hasTotal?: boolean;
+  hasRate?: boolean;
 }
 
 export default function M1ReportPage() {
@@ -83,6 +92,25 @@ export default function M1ReportPage() {
   const { data: barangays = [] } = useQuery<Barangay[]>({
     queryKey: ["/api/barangays"],
   });
+
+  const { data: municipalitySettings } = useQuery<MunicipalitySettings>({
+    queryKey: ["/api/municipality-settings"],
+  });
+
+  const { data: barangaySettings } = useQuery<BarangaySettings>({
+    queryKey: ["/api/barangay-settings", selectedBarangayId],
+    enabled: !!selectedBarangayId,
+  });
+
+  const reportLogo = useMemo(() => {
+    if (selectedBarangayId && barangaySettings?.logoUrl) {
+      return barangaySettings.logoUrl;
+    }
+    if (municipalitySettings?.logoUrl) {
+      return municipalitySettings.logoUrl;
+    }
+    return null;
+  }, [selectedBarangayId, barangaySettings, municipalitySettings]);
 
   const reportInstancesQueryKey = selectedBarangayId 
     ? `/api/m1/reports?barangayId=${selectedBarangayId}&month=${selectedMonth}&year=${selectedYear}`
@@ -149,6 +177,9 @@ export default function M1ReportPage() {
       }
       groups[ind.sectionCode].push(ind);
     });
+    Object.keys(groups).forEach(key => {
+      groups[key].sort((a, b) => a.rowOrder - b.rowOrder);
+    });
     return groups;
   }, [pageIndicators]);
 
@@ -156,7 +187,8 @@ export default function M1ReportPage() {
     const map: IndicatorValueMap = {};
     if (activeReport?.values) {
       activeReport.values.forEach(v => {
-        map[v.rowKey] = { valueNumber: v.valueNumber, valueText: v.valueText, valueSource: v.valueSource || "ENCODED" };
+        const key = v.columnKey ? `${v.rowKey}:${v.columnKey}` : v.rowKey;
+        map[key] = { valueNumber: v.valueNumber, valueText: v.valueText, valueSource: v.valueSource || "ENCODED" };
       });
     }
     return map;
@@ -173,154 +205,113 @@ export default function M1ReportPage() {
 
   const computedValues = useMemo(() => {
     if (!selectedBarangay) return {};
-    const barangayName = selectedBarangay.barangayName;
+    const barangayName = selectedBarangay.name;
     const filteredMothers = mothers.filter(m => m.barangay === barangayName);
     const filteredChildren = children.filter(c => c.barangay === barangayName);
     const deliveredMothers = filteredMothers.filter(m => m.outcome);
 
-    const countBySex = (list: typeof filteredChildren, filter: (c: typeof filteredChildren[0]) => boolean) => {
+    const computed: IndicatorValueMap = {};
+
+    const countByAgeGroup = (list: Mother[], filter: (m: Mother) => boolean) => {
       const filtered = list.filter(filter);
       return {
-        male: filtered.filter(c => c.sex === "male").length,
-        female: filtered.filter(c => c.sex === "female").length,
-        total: filtered.length,
+        "10-14": filtered.filter(m => m.age >= 10 && m.age <= 14).length,
+        "15-19": filtered.filter(m => m.age >= 15 && m.age <= 19).length,
+        "20-49": filtered.filter(m => m.age >= 20 && m.age <= 49).length,
+        "TOTAL": filtered.length,
       };
     };
 
-    const computed: IndicatorValueMap = {};
+    const countBySex = (list: Child[], filter: (c: Child) => boolean) => {
+      const filtered = list.filter(filter);
+      return {
+        "M": filtered.filter(c => c.sex === "male").length,
+        "F": filtered.filter(c => c.sex === "female").length,
+        "TOTAL": filtered.length,
+        "RATE": 0,
+      };
+    };
 
-    computed["A-01"] = { valueNumber: filteredMothers.filter(m => (m.ancVisits || 0) >= 4).length, valueSource: "COMPUTED" };
-    computed["A-02"] = { valueNumber: filteredMothers.filter(m => (m.ancVisits || 0) >= 8 && m.outcome).length, valueSource: "COMPUTED" };
-    computed["A-03"] = { valueNumber: filteredMothers.filter(m => m.outcome && m.status === "delivered").length, valueSource: "COMPUTED" };
-    computed["A-04"] = { valueNumber: filteredMothers.filter(m => m.bmiStatus === "normal").length, valueSource: "COMPUTED" };
-    computed["A-05"] = { valueNumber: filteredMothers.filter(m => m.bmiStatus === "low").length, valueSource: "COMPUTED" };
-    computed["A-06"] = { valueNumber: filteredMothers.filter(m => m.bmiStatus === "high").length, valueSource: "COMPUTED" };
+    const anc8 = countByAgeGroup(deliveredMothers, m => (m.ancVisits || 0) >= 8);
+    computed["A-01b:10-14"] = { valueNumber: anc8["10-14"], valueSource: "COMPUTED" };
+    computed["A-01b:15-19"] = { valueNumber: anc8["15-19"], valueSource: "COMPUTED" };
+    computed["A-01b:20-49"] = { valueNumber: anc8["20-49"], valueSource: "COMPUTED" };
+    computed["A-01b:TOTAL"] = { valueNumber: anc8["TOTAL"], valueSource: "COMPUTED" };
 
-    computed["B-01"] = { valueNumber: filteredMothers.filter(m => m.tt1Date).length, valueSource: "COMPUTED" };
-    computed["B-02"] = { valueNumber: filteredMothers.filter(m => m.tt2Date).length, valueSource: "COMPUTED" };
-    computed["B-03"] = { valueNumber: filteredMothers.filter(m => m.tt3Date).length, valueSource: "COMPUTED" };
-    computed["B-04"] = { valueNumber: filteredMothers.filter(m => m.tt4Date).length, valueSource: "COMPUTED" };
-    computed["B-05"] = { valueNumber: filteredMothers.filter(m => m.tt5Date).length, valueSource: "COMPUTED" };
+    const bmiNormal = countByAgeGroup(filteredMothers, m => m.bmiStatus === "normal");
+    computed["A-02a:10-14"] = { valueNumber: bmiNormal["10-14"], valueSource: "COMPUTED" };
+    computed["A-02a:15-19"] = { valueNumber: bmiNormal["15-19"], valueSource: "COMPUTED" };
+    computed["A-02a:20-49"] = { valueNumber: bmiNormal["20-49"], valueSource: "COMPUTED" };
+    computed["A-02a:TOTAL"] = { valueNumber: bmiNormal["TOTAL"], valueSource: "COMPUTED" };
 
-    computed["C-01"] = { valueNumber: deliveredMothers.length, valueSource: "COMPUTED" };
-    computed["C-02"] = { valueNumber: filteredMothers.filter(m => m.outcome === "live_birth").length, valueSource: "COMPUTED" };
-    computed["C-03"] = { valueNumber: filteredMothers.filter(m => m.outcome === "stillbirth").length, valueSource: "COMPUTED" };
-    computed["C-04"] = { valueNumber: filteredMothers.filter(m => m.birthWeightCategory === "normal").length, valueSource: "COMPUTED" };
-    computed["C-05"] = { valueNumber: filteredMothers.filter(m => m.birthWeightCategory === "low").length, valueSource: "COMPUTED" };
-    computed["C-06"] = { valueNumber: filteredMothers.filter(m => m.deliveryAttendant && ["physician", "nurse", "midwife"].includes(m.deliveryAttendant)).length, valueSource: "COMPUTED" };
-    computed["C-07"] = { valueNumber: filteredMothers.filter(m => m.deliveryAttendant === "physician").length, valueSource: "COMPUTED" };
-    computed["C-08"] = { valueNumber: filteredMothers.filter(m => m.deliveryAttendant === "nurse").length, valueSource: "COMPUTED" };
-    computed["C-09"] = { valueNumber: filteredMothers.filter(m => m.deliveryAttendant === "midwife").length, valueSource: "COMPUTED" };
+    const bmiLow = countByAgeGroup(filteredMothers, m => m.bmiStatus === "low");
+    computed["A-02b:10-14"] = { valueNumber: bmiLow["10-14"], valueSource: "COMPUTED" };
+    computed["A-02b:15-19"] = { valueNumber: bmiLow["15-19"], valueSource: "COMPUTED" };
+    computed["A-02b:20-49"] = { valueNumber: bmiLow["20-49"], valueSource: "COMPUTED" };
+    computed["A-02b:TOTAL"] = { valueNumber: bmiLow["TOTAL"], valueSource: "COMPUTED" };
 
-    computed["D-01"] = { valueNumber: filteredMothers.filter(m => m.breastfedWithin1hr).length, valueSource: "COMPUTED" };
+    const bmiHigh = countByAgeGroup(filteredMothers, m => m.bmiStatus === "high");
+    computed["A-02c:10-14"] = { valueNumber: bmiHigh["10-14"], valueSource: "COMPUTED" };
+    computed["A-02c:15-19"] = { valueNumber: bmiHigh["15-19"], valueSource: "COMPUTED" };
+    computed["A-02c:20-49"] = { valueNumber: bmiHigh["20-49"], valueSource: "COMPUTED" };
+    computed["A-02c:TOTAL"] = { valueNumber: bmiHigh["TOTAL"], valueSource: "COMPUTED" };
 
-    const cpab = countBySex(filteredChildren, c => (c.vaccines as any)?.hepB);
-    computed["E1-01-M"] = { valueNumber: cpab.male, valueSource: "COMPUTED" };
-    computed["E1-01-F"] = { valueNumber: cpab.female, valueSource: "COMPUTED" };
+    const deliveries = countByAgeGroup(deliveredMothers, m => true);
+    computed["B-02:10-14"] = { valueNumber: deliveries["10-14"], valueSource: "COMPUTED" };
+    computed["B-02:15-19"] = { valueNumber: deliveries["15-19"], valueSource: "COMPUTED" };
+    computed["B-02:20-49"] = { valueNumber: deliveries["20-49"], valueSource: "COMPUTED" };
+    computed["B-02:TOTAL"] = { valueNumber: deliveries["TOTAL"], valueSource: "COMPUTED" };
+
+    computed["B-01:VALUE"] = { valueNumber: deliveredMothers.length, valueSource: "COMPUTED" };
+    computed["B-02a:VALUE"] = { valueNumber: deliveredMothers.filter(m => m.birthWeightCategory === "normal").length, valueSource: "COMPUTED" };
+    computed["B-02b:VALUE"] = { valueNumber: deliveredMothers.filter(m => m.birthWeightCategory === "low").length, valueSource: "COMPUTED" };
 
     const bcg = countBySex(filteredChildren, c => (c.vaccines as any)?.bcg);
-    computed["E1-02-M"] = { valueNumber: bcg.male, valueSource: "COMPUTED" };
-    computed["E1-02-F"] = { valueNumber: bcg.female, valueSource: "COMPUTED" };
+    computed["D1-02:M"] = { valueNumber: bcg["M"], valueSource: "COMPUTED" };
+    computed["D1-02:F"] = { valueNumber: bcg["F"], valueSource: "COMPUTED" };
+    computed["D1-02:TOTAL"] = { valueNumber: bcg["TOTAL"], valueSource: "COMPUTED" };
 
     const penta1 = countBySex(filteredChildren, c => (c.vaccines as any)?.penta1);
-    computed["E1-03-M"] = { valueNumber: penta1.male, valueSource: "COMPUTED" };
-    computed["E1-03-F"] = { valueNumber: penta1.female, valueSource: "COMPUTED" };
+    computed["D2-01:M"] = { valueNumber: penta1["M"], valueSource: "COMPUTED" };
+    computed["D2-01:F"] = { valueNumber: penta1["F"], valueSource: "COMPUTED" };
+    computed["D2-01:TOTAL"] = { valueNumber: penta1["TOTAL"], valueSource: "COMPUTED" };
 
-    const penta2 = countBySex(filteredChildren, c => (c.vaccines as any)?.penta2);
-    computed["E1-04-M"] = { valueNumber: penta2.male, valueSource: "COMPUTED" };
-    computed["E1-04-F"] = { valueNumber: penta2.female, valueSource: "COMPUTED" };
-
-    const penta3 = countBySex(filteredChildren, c => (c.vaccines as any)?.penta3);
-    computed["E1-05-M"] = { valueNumber: penta3.male, valueSource: "COMPUTED" };
-    computed["E1-05-F"] = { valueNumber: penta3.female, valueSource: "COMPUTED" };
-
-    const opv1 = countBySex(filteredChildren, c => (c.vaccines as any)?.opv1);
-    computed["E1-06-M"] = { valueNumber: opv1.male, valueSource: "COMPUTED" };
-    computed["E1-06-F"] = { valueNumber: opv1.female, valueSource: "COMPUTED" };
-
-    const opv2 = countBySex(filteredChildren, c => (c.vaccines as any)?.opv2);
-    computed["E1-07-M"] = { valueNumber: opv2.male, valueSource: "COMPUTED" };
-    computed["E1-07-F"] = { valueNumber: opv2.female, valueSource: "COMPUTED" };
-
-    const opv3 = countBySex(filteredChildren, c => (c.vaccines as any)?.opv3);
-    computed["E1-08-M"] = { valueNumber: opv3.male, valueSource: "COMPUTED" };
-    computed["E1-08-F"] = { valueNumber: opv3.female, valueSource: "COMPUTED" };
-
-    const ipv = countBySex(filteredChildren, c => (c.vaccines as any)?.ipv1);
-    computed["E1-09-M"] = { valueNumber: ipv.male, valueSource: "COMPUTED" };
-    computed["E1-09-F"] = { valueNumber: ipv.female, valueSource: "COMPUTED" };
-
-    const pcv1 = countBySex(filteredChildren, c => (c.vaccines as any)?.pcv1);
-    computed["E1-10-M"] = { valueNumber: pcv1.male, valueSource: "COMPUTED" };
-    computed["E1-10-F"] = { valueNumber: pcv1.female, valueSource: "COMPUTED" };
-
-    const pcv2 = countBySex(filteredChildren, c => (c.vaccines as any)?.pcv2);
-    computed["E1-11-M"] = { valueNumber: pcv2.male, valueSource: "COMPUTED" };
-    computed["E1-11-F"] = { valueNumber: pcv2.female, valueSource: "COMPUTED" };
-
-    const pcv3 = countBySex(filteredChildren, c => (c.vaccines as any)?.pcv3);
-    computed["E1-12-M"] = { valueNumber: pcv3.male, valueSource: "COMPUTED" };
-    computed["E1-12-F"] = { valueNumber: pcv3.female, valueSource: "COMPUTED" };
-
-    const mr1 = countBySex(filteredChildren, c => (c.vaccines as any)?.mr1);
-    computed["E1-13-M"] = { valueNumber: mr1.male, valueSource: "COMPUTED" };
-    computed["E1-13-F"] = { valueNumber: mr1.female, valueSource: "COMPUTED" };
-
-    const mr2 = countBySex(filteredChildren, c => (c.vaccines as any)?.mr2);
-    computed["E2-01-M"] = { valueNumber: mr2.male, valueSource: "COMPUTED" };
-    computed["E2-01-F"] = { valueNumber: mr2.female, valueSource: "COMPUTED" };
-
-    computed["G-01"] = { valueNumber: filteredMothers.filter(m => m.breastfedWithin1hr).length, valueSource: "COMPUTED" };
-
-    const vitA611 = countBySex(filteredChildren, c => {
-      const age = getChildAgeMonths(c.dob);
-      return age >= 6 && age <= 11 && c.vitaminA1Date;
-    });
-    computed["G-02-M"] = { valueNumber: vitA611.male, valueSource: "COMPUTED" };
-    computed["G-02-F"] = { valueNumber: vitA611.female, valueSource: "COMPUTED" };
-
-    const vitA1259 = countBySex(filteredChildren, c => {
-      const age = getChildAgeMonths(c.dob);
-      return age >= 12 && age <= 59 && c.vitaminA2Date;
-    });
-    computed["G-03-M"] = { valueNumber: vitA1259.male, valueSource: "COMPUTED" };
-    computed["G-03-F"] = { valueNumber: vitA1259.female, valueSource: "COMPUTED" };
+    computed["E-01:TOTAL"] = { valueNumber: deliveredMothers.filter(m => m.breastfedWithin1hr).length, valueSource: "COMPUTED" };
 
     const seen059 = countBySex(filteredChildren, c => {
       const age = getChildAgeMonths(c.dob);
       return age >= 0 && age <= 59;
     });
-    computed["G-04-M"] = { valueNumber: seen059.male, valueSource: "COMPUTED" };
-    computed["G-04-F"] = { valueNumber: seen059.female, valueSource: "COMPUTED" };
+    computed["E-06:M"] = { valueNumber: seen059["M"], valueSource: "COMPUTED" };
+    computed["E-06:F"] = { valueNumber: seen059["F"], valueSource: "COMPUTED" };
+    computed["E-06:TOTAL"] = { valueNumber: seen059["TOTAL"], valueSource: "COMPUTED" };
+
+    computed["H-01:TOTAL"] = { valueNumber: deliveredMothers.filter(m => m.outcome === "live_birth").length, valueSource: "COMPUTED" };
+    computed["H-02:TOTAL"] = { valueNumber: deliveredMothers.filter(m => m.outcome === "stillbirth").length, valueSource: "COMPUTED" };
 
     return computed;
   }, [selectedBarangay, mothers, children]);
 
-  const getValue = (rowKey: string): number | string => {
-    if (editedValues[rowKey] !== undefined) {
-      return editedValues[rowKey].valueNumber ?? editedValues[rowKey].valueText ?? 0;
+  const getValue = (rowKey: string, columnKey?: string): number | string => {
+    const key = columnKey ? `${rowKey}:${columnKey}` : rowKey;
+    if (editedValues[key] !== undefined) {
+      return editedValues[key].valueNumber ?? editedValues[key].valueText ?? 0;
     }
-    if (savedValuesMap[rowKey] !== undefined) {
-      return savedValuesMap[rowKey].valueNumber ?? savedValuesMap[rowKey].valueText ?? 0;
+    if (savedValuesMap[key] !== undefined) {
+      return savedValuesMap[key].valueNumber ?? savedValuesMap[key].valueText ?? 0;
     }
-    if (computedValues[rowKey] !== undefined) {
-      return computedValues[rowKey].valueNumber ?? 0;
+    if (computedValues[key] !== undefined) {
+      return computedValues[key].valueNumber ?? 0;
     }
     return 0;
   };
 
-  const getValueSource = (rowKey: string): string => {
-    if (editedValues[rowKey]?.valueSource) return editedValues[rowKey].valueSource;
-    if (savedValuesMap[rowKey]?.valueSource) return savedValuesMap[rowKey].valueSource;
-    if (computedValues[rowKey]?.valueSource) return computedValues[rowKey].valueSource;
-    return "ENCODED";
-  };
-
-  const handleValueChange = (rowKey: string, value: string) => {
+  const handleValueChange = (rowKey: string, columnKey: string, value: string) => {
+    const key = columnKey ? `${rowKey}:${columnKey}` : rowKey;
     const numValue = value === "" ? null : parseInt(value, 10);
     setEditedValues(prev => ({
       ...prev,
-      [rowKey]: { valueNumber: isNaN(numValue as number) ? null : numValue, valueSource: "ENCODED" },
+      [key]: { valueNumber: isNaN(numValue as number) ? null : numValue, valueSource: "ENCODED" },
     }));
   };
 
@@ -329,7 +320,7 @@ export default function M1ReportPage() {
     createReportMutation.mutate({
       templateVersionId: activeTemplate.id,
       barangayId: selectedBarangayId,
-      barangayName: selectedBarangay?.barangayName,
+      barangayName: selectedBarangay?.name,
       month: selectedMonth,
       year: selectedYear,
     });
@@ -337,114 +328,105 @@ export default function M1ReportPage() {
 
   const handleSaveValues = () => {
     if (!activeReportId) return;
-    const values = Object.entries(editedValues).map(([rowKey, val]) => ({
-      rowKey,
-      valueNumber: val.valueNumber,
-      valueText: val.valueText,
-      valueSource: val.valueSource || "ENCODED",
-    }));
-    if (values.length === 0) {
-      toast({ title: "No changes", description: "No values have been edited." });
-      return;
-    }
-    saveValuesMutation.mutate({ reportId: activeReportId, values });
-  };
-
-  const handleApplyComputed = () => {
-    const newEdited: IndicatorValueMap = { ...editedValues };
-    Object.entries(computedValues).forEach(([rowKey, val]) => {
-      if (val.valueNumber !== undefined) {
-        newEdited[rowKey] = { valueNumber: val.valueNumber, valueSource: "COMPUTED" };
-      }
+    const valuesToSave = Object.entries(editedValues).map(([key, val]) => {
+      const [rowKey, columnKey] = key.includes(":") ? key.split(":") : [key, null];
+      return {
+        rowKey,
+        columnKey,
+        valueNumber: val.valueNumber,
+        valueText: val.valueText,
+        valueSource: val.valueSource || "ENCODED",
+      };
     });
-    setEditedValues(newEdited);
-    toast({ title: "Applied", description: "Computed values applied. Click Save to persist." });
+    saveValuesMutation.mutate({ reportId: activeReportId, values: valuesToSave });
   };
 
-  const generatePDF = () => {
+  const handleExportPDF = () => {
+    if (!selectedBarangay) return;
     const doc = new jsPDF();
-    const municipalityName = settings?.lguName || "Municipality of Placer";
-    const provinceName = settings?.lguSubtitle || "Province of Surigao del Norte";
-    const barangayName = selectedBarangay?.barangayName || "N/A";
+    const barangayName = selectedBarangay.name;
     const monthName = MONTHS.find(m => m.value === selectedMonth)?.label || "";
 
     for (let page = 1; page <= 3; page++) {
       if (page > 1) doc.addPage();
-
-      doc.setFontSize(12);
+      
+      doc.setFontSize(10);
       doc.setFont("helvetica", "bold");
-      doc.text("DOH FHSIS M1 Brgy Report", 105, 12, { align: "center" });
-      doc.text(PAGE_TITLES[page] || `Page ${page}`, 105, 18, { align: "center" });
-
+      doc.text("FHSIS REPORT - M1 Brgy", 105, 10, { align: "center" });
+      
       doc.setFontSize(9);
       doc.setFont("helvetica", "normal");
-      doc.text(`Barangay: ${barangayName}`, 14, 26);
-      doc.text(`Municipality: ${municipalityName}`, 14, 31);
-      doc.text(`Province: ${provinceName}`, 14, 36);
-      doc.text(`Report Period: ${monthName} ${selectedYear}`, 140, 26);
+      doc.text(`Barangay: ${barangayName}`, 14, 18);
+      doc.text(`Municipality: ${municipalitySettings?.municipalityName || settings?.lguName || ""}`, 14, 23);
+      doc.text(`Month/Year: ${monthName} ${selectedYear}`, 14, 28);
 
+      let yPos = 35;
       const pageInds = catalog.filter(ind => ind.pageNumber === page);
-      const sections: Record<string, M1IndicatorCatalog[]> = {};
+      const groups: Record<string, M1IndicatorCatalog[]> = {};
       pageInds.forEach(ind => {
-        if (!sections[ind.sectionCode]) sections[ind.sectionCode] = [];
-        sections[ind.sectionCode].push(ind);
+        if (!groups[ind.sectionCode]) groups[ind.sectionCode] = [];
+        groups[ind.sectionCode].push(ind);
       });
 
-      let yPos = 44;
-      Object.entries(sections).forEach(([sectionCode, indicators]) => {
-        const sectionTitle = SECTION_TITLES[sectionCode] || sectionCode;
+      Object.entries(groups).forEach(([sectionCode, indicators]) => {
+        indicators.sort((a, b) => a.rowOrder - b.rowOrder);
+        
+        if (yPos > 260) {
+          doc.addPage();
+          yPos = 20;
+        }
 
-        doc.setFontSize(10);
+        doc.setFontSize(9);
         doc.setFont("helvetica", "bold");
-        doc.text(`${sectionCode}. ${sectionTitle}`, 14, yPos);
-        yPos += 4;
+        doc.text(`${sectionCode}. ${SECTION_TITLES[sectionCode] || sectionCode}`, 14, yPos);
+        yPos += 5;
 
-        const hasGender = indicators.some(i => i.rowKey.includes("-M") || i.rowKey.includes("-F"));
-        const headers = hasGender
-          ? [["Indicator", "Male", "Female", "Total"]]
-          : [["Indicator", "Value"]];
+        const colSpec = indicators[0]?.columnSpec as ColumnSpec | null;
+        const colType = indicators[0]?.columnGroupType;
+        
+        let headers: string[][] = [["Indicator", "Value"]];
+        let colWidths: Record<number, { cellWidth: number }> = { 0: { cellWidth: 120 }, 1: { cellWidth: 40 } };
 
-        const body: string[][] = [];
-        const processedRows = new Set<string>();
+        if (colType === "AGE_GROUP") {
+          headers = [["Indicator", "10-14", "15-19", "20-49", "TOTAL"]];
+          colWidths = { 0: { cellWidth: 80 }, 1: { cellWidth: 20 }, 2: { cellWidth: 20 }, 3: { cellWidth: 20 }, 4: { cellWidth: 20 } };
+        } else if (colType === "SEX_RATE" || colType === "SEX") {
+          headers = [["Indicator", "M", "F", "Total", "Rate"]];
+          colWidths = { 0: { cellWidth: 80 }, 1: { cellWidth: 18 }, 2: { cellWidth: 18 }, 3: { cellWidth: 22 }, 4: { cellWidth: 22 } };
+        } else if (colType === "FP_DUAL") {
+          headers = [["Method", "CU 10-14", "CU 15-19", "CU 20-49", "CU Tot", "NA 10-14", "NA 15-19", "NA 20-49", "NA Tot"]];
+          colWidths = { 0: { cellWidth: 35 }, 1: { cellWidth: 16 }, 2: { cellWidth: 16 }, 3: { cellWidth: 16 }, 4: { cellWidth: 16 }, 5: { cellWidth: 16 }, 6: { cellWidth: 16 }, 7: { cellWidth: 16 }, 8: { cellWidth: 16 } };
+        }
 
-        indicators.forEach(ind => {
-          const baseKey = ind.rowKey.replace(/-[MF]$/, "");
-          if (processedRows.has(baseKey)) return;
-          processedRows.add(baseKey);
+        const body: string[][] = indicators.map(ind => {
+          const indent = (ind.indentLevel || 0) > 0 ? "  " : "";
+          const label = indent + ind.officialLabel;
 
-          if (hasGender && (ind.rowKey.endsWith("-M") || ind.rowKey.endsWith("-F"))) {
-            const maleKey = `${baseKey}-M`;
-            const femaleKey = `${baseKey}-F`;
-            const maleVal = getValue(maleKey);
-            const femaleVal = getValue(femaleKey);
-            const total = (typeof maleVal === "number" ? maleVal : 0) + (typeof femaleVal === "number" ? femaleVal : 0);
-            body.push([ind.officialLabel.replace(/ - (Male|Female)$/, ""), String(maleVal), String(femaleVal), String(total)]);
-          } else {
-            const val = getValue(ind.rowKey);
-            body.push([ind.officialLabel, String(val)]);
+          if (colType === "AGE_GROUP") {
+            return [label, String(getValue(ind.rowKey, "10-14")), String(getValue(ind.rowKey, "15-19")), String(getValue(ind.rowKey, "20-49")), String(getValue(ind.rowKey, "TOTAL"))];
+          } else if (colType === "SEX_RATE" || colType === "SEX") {
+            return [label, String(getValue(ind.rowKey, "M")), String(getValue(ind.rowKey, "F")), String(getValue(ind.rowKey, "TOTAL")), String(getValue(ind.rowKey, "RATE") || "0.00")];
+          } else if (colType === "FP_DUAL") {
+            return [label, String(getValue(ind.rowKey, "CU_10-14")), String(getValue(ind.rowKey, "CU_15-19")), String(getValue(ind.rowKey, "CU_20-49")), String(getValue(ind.rowKey, "CU_TOTAL")), String(getValue(ind.rowKey, "NA_10-14")), String(getValue(ind.rowKey, "NA_15-19")), String(getValue(ind.rowKey, "NA_20-49")), String(getValue(ind.rowKey, "NA_TOTAL"))];
           }
+          return [label, String(getValue(ind.rowKey, "VALUE"))];
         });
 
-        if (body.length > 0) {
-          autoTable(doc, {
-            startY: yPos,
-            head: headers,
-            body,
-            theme: "grid",
-            headStyles: { fillColor: [0, 128, 128], fontSize: 8, cellPadding: 1 },
-            bodyStyles: { fontSize: 7, cellPadding: 1 },
-            columnStyles: hasGender
-              ? { 0: { cellWidth: 100 }, 1: { cellWidth: 20 }, 2: { cellWidth: 20 }, 3: { cellWidth: 20 } }
-              : { 0: { cellWidth: 140 }, 1: { cellWidth: 30 } },
-            margin: { left: 14 },
-          });
-          yPos = (doc as any).lastAutoTable.finalY + 6;
-        }
+        autoTable(doc, {
+          startY: yPos,
+          head: headers,
+          body,
+          theme: "grid",
+          headStyles: { fillColor: [0, 102, 102], fontSize: 7, cellPadding: 1 },
+          bodyStyles: { fontSize: 6, cellPadding: 1 },
+          columnStyles: colWidths,
+          margin: { left: 10, right: 10 },
+        });
+        yPos = (doc as any).lastAutoTable.finalY + 6;
       });
 
-      doc.setFontSize(8);
-      doc.text(`Page ${page} of 3`, 105, 290, { align: "center" });
-      doc.text("GeoHealthSync - DOH FHSIS M1 Brgy Report", 105, 294, { align: "center" });
+      doc.setFontSize(7);
+      doc.text(`Page ${page} of 3 | GeoHealthSync - DOH FHSIS M1 Brgy`, 105, 290, { align: "center" });
     }
 
     doc.save(`M1_Report_${barangayName}_${monthName}_${selectedYear}.pdf`);
@@ -452,6 +434,180 @@ export default function M1ReportPage() {
   };
 
   const existingReport = reportInstances.find(r => r.month === selectedMonth && r.year === selectedYear);
+
+  const renderIndicatorTable = (sectionCode: string, indicators: M1IndicatorCatalog[]) => {
+    if (!indicators || indicators.length === 0) return null;
+    
+    const colType = indicators[0]?.columnGroupType;
+    const colSpec = indicators[0]?.columnSpec as ColumnSpec | null;
+    
+    if (colType === "FP_DUAL") {
+      return (
+        <table className="w-full text-sm border-collapse">
+          <thead>
+            <tr className="bg-muted">
+              <th className="border p-2 text-left" rowSpan={2}>Modern FP Methods</th>
+              <th className="border p-1 text-center" colSpan={4}>Current Users (Beginning of Month)</th>
+              <th className="border p-1 text-center" colSpan={4}>New Acceptors (Previous Month)</th>
+            </tr>
+            <tr className="bg-muted/50 text-xs">
+              <th className="border p-1 text-center">10-14</th>
+              <th className="border p-1 text-center">15-19</th>
+              <th className="border p-1 text-center">20-49</th>
+              <th className="border p-1 text-center">TOTAL</th>
+              <th className="border p-1 text-center">10-14</th>
+              <th className="border p-1 text-center">15-19</th>
+              <th className="border p-1 text-center">20-49</th>
+              <th className="border p-1 text-center">TOTAL</th>
+            </tr>
+          </thead>
+          <tbody>
+            {indicators.map(ind => (
+              <tr key={ind.rowKey} className={ind.indentLevel ? "bg-muted/20" : ""}>
+                <td className="border p-2" style={{ paddingLeft: (ind.indentLevel || 0) * 16 + 8 }}>
+                  {ind.officialLabel}
+                </td>
+                {["CU_10-14", "CU_15-19", "CU_20-49", "CU_TOTAL", "NA_10-14", "NA_15-19", "NA_20-49", "NA_TOTAL"].map(col => (
+                  <td key={col} className="border p-1 text-center">
+                    {reportMode === "encode" && !ind.isComputed ? (
+                      <Input
+                        type="number"
+                        className="w-14 h-7 text-center text-xs"
+                        value={getValue(ind.rowKey, col)}
+                        onChange={(e) => handleValueChange(ind.rowKey, col, e.target.value)}
+                        data-testid={`input-${ind.rowKey}-${col}`}
+                      />
+                    ) : (
+                      <span className="text-sm">{getValue(ind.rowKey, col)}</span>
+                    )}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      );
+    }
+
+    if (colType === "AGE_GROUP") {
+      return (
+        <table className="w-full text-sm border-collapse">
+          <thead>
+            <tr className="bg-muted">
+              <th className="border p-2 text-left">Indicators</th>
+              <th className="border p-1 text-center w-16">10-14</th>
+              <th className="border p-1 text-center w-16">15-19</th>
+              <th className="border p-1 text-center w-16">20-49</th>
+              <th className="border p-1 text-center w-16">TOTAL</th>
+            </tr>
+          </thead>
+          <tbody>
+            {indicators.map(ind => (
+              <tr key={ind.rowKey} className={ind.indentLevel ? "bg-muted/20" : ""}>
+                <td className="border p-2" style={{ paddingLeft: (ind.indentLevel || 0) * 16 + 8 }}>
+                  {ind.officialLabel}
+                </td>
+                {["10-14", "15-19", "20-49", "TOTAL"].map(col => (
+                  <td key={col} className="border p-1 text-center">
+                    {reportMode === "encode" && !ind.isComputed ? (
+                      <Input
+                        type="number"
+                        className="w-14 h-7 text-center text-xs"
+                        value={getValue(ind.rowKey, col)}
+                        onChange={(e) => handleValueChange(ind.rowKey, col, e.target.value)}
+                        data-testid={`input-${ind.rowKey}-${col}`}
+                      />
+                    ) : (
+                      <span className="text-sm">{getValue(ind.rowKey, col)}</span>
+                    )}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      );
+    }
+
+    if (colType === "SEX_RATE" || colType === "SEX") {
+      const showRate = colType === "SEX_RATE";
+      return (
+        <table className="w-full text-sm border-collapse">
+          <thead>
+            <tr className="bg-muted">
+              <th className="border p-2 text-left">Indicators</th>
+              <th className="border p-1 text-center w-16">Male</th>
+              <th className="border p-1 text-center w-16">Female</th>
+              <th className="border p-1 text-center w-16">Total</th>
+              {showRate && <th className="border p-1 text-center w-16">Rate</th>}
+            </tr>
+          </thead>
+          <tbody>
+            {indicators.map(ind => (
+              <tr key={ind.rowKey} className={ind.indentLevel ? "bg-muted/20" : ""}>
+                <td className="border p-2" style={{ paddingLeft: (ind.indentLevel || 0) * 16 + 8 }}>
+                  {ind.officialLabel}
+                </td>
+                {["M", "F", "TOTAL"].map(col => (
+                  <td key={col} className="border p-1 text-center">
+                    {reportMode === "encode" && !ind.isComputed ? (
+                      <Input
+                        type="number"
+                        className="w-14 h-7 text-center text-xs"
+                        value={getValue(ind.rowKey, col)}
+                        onChange={(e) => handleValueChange(ind.rowKey, col, e.target.value)}
+                        data-testid={`input-${ind.rowKey}-${col}`}
+                      />
+                    ) : (
+                      <span className="text-sm">{getValue(ind.rowKey, col)}</span>
+                    )}
+                  </td>
+                ))}
+                {showRate && (
+                  <td className="border p-1 text-center text-muted-foreground">
+                    {getValue(ind.rowKey, "RATE") || "0.00"}
+                  </td>
+                )}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      );
+    }
+
+    return (
+      <table className="w-full text-sm border-collapse">
+        <thead>
+          <tr className="bg-muted">
+            <th className="border p-2 text-left">Indicators</th>
+            <th className="border p-1 text-center w-24">Value</th>
+          </tr>
+        </thead>
+        <tbody>
+          {indicators.map(ind => (
+            <tr key={ind.rowKey} className={ind.indentLevel ? "bg-muted/20" : ""}>
+              <td className="border p-2" style={{ paddingLeft: (ind.indentLevel || 0) * 16 + 8 }}>
+                {ind.officialLabel}
+              </td>
+              <td className="border p-1 text-center">
+                {reportMode === "encode" && !ind.isComputed ? (
+                  <Input
+                    type="number"
+                    className="w-20 h-7 text-center text-xs"
+                    value={getValue(ind.rowKey, "VALUE")}
+                    onChange={(e) => handleValueChange(ind.rowKey, "VALUE", e.target.value)}
+                    data-testid={`input-${ind.rowKey}`}
+                  />
+                ) : (
+                  <span className="text-sm">{getValue(ind.rowKey, "VALUE")}</span>
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    );
+  };
 
   if (templatesLoading || catalogLoading) {
     return (
@@ -464,14 +620,23 @@ export default function M1ReportPage() {
   return (
     <div className="p-4 space-y-4">
       <div className="flex items-center justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <FileText className="h-6 w-6" />
-            M1 Brgy Report
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            Template: {activeTemplate?.templateName} - {activeTemplate?.versionLabel}
-          </p>
+        <div className="flex items-center gap-4">
+          {reportLogo ? (
+            <img src={reportLogo} alt="Logo" className="h-12 w-12 object-contain" data-testid="report-logo" />
+          ) : (
+            <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center" data-testid="report-logo-placeholder">
+              <Building2 className="h-6 w-6 text-primary" />
+            </div>
+          )}
+          <div>
+            <h1 className="text-2xl font-bold flex items-center gap-2">
+              <FileText className="h-6 w-6" />
+              FHSIS M1 Brgy Report
+            </h1>
+            <p className="text-sm text-muted-foreground">
+              DOH Template: {activeTemplate?.templateName} - {activeTemplate?.versionLabel}
+            </p>
+          </div>
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
@@ -490,7 +655,7 @@ export default function M1ReportPage() {
               </SelectTrigger>
               <SelectContent>
                 {barangays.map(b => (
-                  <SelectItem key={b.id} value={b.id.toString()}>{b.barangayName}</SelectItem>
+                  <SelectItem key={b.id} value={b.id.toString()}>{b.name}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -530,7 +695,7 @@ export default function M1ReportPage() {
         <Card>
           <CardHeader className="pb-2 flex flex-row items-center justify-between gap-2">
             <div>
-              <CardTitle className="text-lg">{selectedBarangay?.barangayName} - {MONTHS.find(m => m.value === selectedMonth)?.label} {selectedYear}</CardTitle>
+              <CardTitle className="text-lg">{selectedBarangay?.name} - {MONTHS.find(m => m.value === selectedMonth)?.label} {selectedYear}</CardTitle>
               {existingReport ? (
                 <Badge variant={existingReport.status === "SUBMITTED_LOCKED" ? "default" : "secondary"} className="mt-1">
                   {existingReport.status}
@@ -539,7 +704,7 @@ export default function M1ReportPage() {
                 <Badge variant="outline" className="mt-1">No report yet</Badge>
               )}
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
               {!existingReport && (
                 <Button
                   size="sm"
@@ -557,14 +722,26 @@ export default function M1ReportPage() {
                 </Button>
               )}
               {activeReportId && (
-                <Button
-                  size="sm"
-                  variant={reportMode === "encode" ? "default" : "outline"}
-                  onClick={() => setReportMode(reportMode === "encode" ? "view" : "encode")}
-                  data-testid="button-toggle-mode"
-                >
-                  {reportMode === "encode" ? "View Mode" : "Encode Mode"}
-                </Button>
+                <>
+                  <Button
+                    size="sm"
+                    variant={reportMode === "encode" ? "default" : "outline"}
+                    onClick={() => setReportMode(reportMode === "encode" ? "view" : "encode")}
+                    data-testid="button-toggle-mode"
+                  >
+                    {reportMode === "encode" ? "View Mode" : "Encode Mode"}
+                  </Button>
+                  {reportMode === "encode" && Object.keys(editedValues).length > 0 && (
+                    <Button size="sm" onClick={handleSaveValues} disabled={saveValuesMutation.isPending} data-testid="button-save">
+                      <Save className="h-4 w-4 mr-1" />
+                      Save
+                    </Button>
+                  )}
+                  <Button size="sm" variant="outline" onClick={handleExportPDF} data-testid="button-export-pdf">
+                    <Download className="h-4 w-4 mr-1" />
+                    Export PDF
+                  </Button>
+                </>
               )}
             </div>
           </CardHeader>
@@ -587,159 +764,26 @@ export default function M1ReportPage() {
               </div>
 
               {[1, 2, 3].map(page => (
-                <TabsContent key={page} value={page.toString()} className="space-y-4">
+                <TabsContent key={page} value={page.toString()} className="space-y-6">
                   <h3 className="font-semibold text-lg border-b pb-2">{PAGE_TITLES[page]}</h3>
 
-                  {Object.entries(groupedIndicators).map(([sectionCode, indicators]) => (
-                    indicators[0]?.pageNumber === page && (
-                      <div key={sectionCode} className="space-y-2">
-                        <h4 className="font-medium text-sm text-muted-foreground uppercase tracking-wide">
-                          {sectionCode}. {SECTION_TITLES[sectionCode] || sectionCode}
+                  {Object.entries(groupedIndicators)
+                    .filter(([_, indicators]) => indicators[0]?.pageNumber === page)
+                    .sort(([, a], [, b]) => (a[0]?.rowOrder || 0) - (b[0]?.rowOrder || 0))
+                    .map(([sectionCode, indicators]) => (
+                      <div key={sectionCode} className="space-y-3">
+                        <h4 className="font-medium text-sm text-primary uppercase tracking-wide flex items-center gap-2">
+                          <span className="bg-primary text-primary-foreground px-2 py-0.5 rounded text-xs">{sectionCode}</span>
+                          {SECTION_TITLES[sectionCode] || sectionCode}
                         </h4>
-                        <div className="border rounded-md overflow-hidden">
-                          <table className="w-full text-sm">
-                            <thead className="bg-muted/50">
-                              <tr>
-                                <th className="text-left p-2 font-medium">Indicator</th>
-                                {indicators.some(i => i.rowKey.includes("-M") || i.rowKey.includes("-F")) ? (
-                                  <>
-                                    <th className="text-center p-2 font-medium w-20">Male</th>
-                                    <th className="text-center p-2 font-medium w-20">Female</th>
-                                    <th className="text-center p-2 font-medium w-20">Total</th>
-                                  </>
-                                ) : (
-                                  <th className="text-center p-2 font-medium w-24">Value</th>
-                                )}
-                                <th className="text-center p-2 font-medium w-20">Source</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {(() => {
-                                const processedRows = new Set<string>();
-                                return indicators.map(ind => {
-                                  const baseKey = ind.rowKey.replace(/-[MF]$/, "");
-                                  if (processedRows.has(baseKey)) return null;
-                                  processedRows.add(baseKey);
-
-                                  const hasGender = ind.rowKey.endsWith("-M") || ind.rowKey.endsWith("-F");
-
-                                  if (hasGender) {
-                                    const maleKey = `${baseKey}-M`;
-                                    const femaleKey = `${baseKey}-F`;
-                                    const maleVal = getValue(maleKey);
-                                    const femaleVal = getValue(femaleKey);
-                                    const total = (typeof maleVal === "number" ? maleVal : 0) + (typeof femaleVal === "number" ? femaleVal : 0);
-
-                                    return (
-                                      <tr key={baseKey} className="border-t">
-                                        <td className="p-2">{ind.officialLabel.replace(/ - (Male|Female)$/, "")}</td>
-                                        <td className="text-center p-2">
-                                          {reportMode === "encode" ? (
-                                            <Input
-                                              type="number"
-                                              className="h-7 w-16 text-center"
-                                              value={String(maleVal)}
-                                              onChange={(e) => handleValueChange(maleKey, e.target.value)}
-                                              data-testid={`input-${maleKey}`}
-                                            />
-                                          ) : (
-                                            <span>{maleVal}</span>
-                                          )}
-                                        </td>
-                                        <td className="text-center p-2">
-                                          {reportMode === "encode" ? (
-                                            <Input
-                                              type="number"
-                                              className="h-7 w-16 text-center"
-                                              value={String(femaleVal)}
-                                              onChange={(e) => handleValueChange(femaleKey, e.target.value)}
-                                              data-testid={`input-${femaleKey}`}
-                                            />
-                                          ) : (
-                                            <span>{femaleVal}</span>
-                                          )}
-                                        </td>
-                                        <td className="text-center p-2 font-medium">{total}</td>
-                                        <td className="text-center p-2">
-                                          <Badge variant="outline" className="text-xs">
-                                            {getValueSource(maleKey)}
-                                          </Badge>
-                                        </td>
-                                      </tr>
-                                    );
-                                  } else {
-                                    const val = getValue(ind.rowKey);
-                                    return (
-                                      <tr key={ind.rowKey} className="border-t">
-                                        <td className="p-2">{ind.officialLabel}</td>
-                                        <td className="text-center p-2">
-                                          {reportMode === "encode" ? (
-                                            <Input
-                                              type="number"
-                                              className="h-7 w-20 text-center"
-                                              value={String(val)}
-                                              onChange={(e) => handleValueChange(ind.rowKey, e.target.value)}
-                                              data-testid={`input-${ind.rowKey}`}
-                                            />
-                                          ) : (
-                                            <span className="font-medium">{val}</span>
-                                          )}
-                                        </td>
-                                        <td className="text-center p-2">
-                                          <Badge variant="outline" className="text-xs">
-                                            {getValueSource(ind.rowKey)}
-                                          </Badge>
-                                        </td>
-                                      </tr>
-                                    );
-                                  }
-                                });
-                              })()}
-                            </tbody>
-                          </table>
+                        <div className="border rounded-md overflow-x-auto">
+                          {renderIndicatorTable(sectionCode, indicators)}
                         </div>
                       </div>
-                    )
-                  ))}
+                    ))}
                 </TabsContent>
               ))}
             </Tabs>
-
-            <div className="flex items-center justify-between mt-6 pt-4 border-t gap-2 flex-wrap">
-              <div className="flex gap-2">
-                {reportMode === "encode" && activeReportId && (
-                  <>
-                    <Button size="sm" variant="outline" onClick={handleApplyComputed} data-testid="button-apply-computed">
-                      <RefreshCw className="h-4 w-4 mr-1" />
-                      Apply Computed Values
-                    </Button>
-                    <Button
-                      size="sm"
-                      onClick={handleSaveValues}
-                      disabled={saveValuesMutation.isPending || Object.keys(editedValues).length === 0}
-                      data-testid="button-save-values"
-                    >
-                      <Save className="h-4 w-4 mr-1" />
-                      Save Values
-                    </Button>
-                  </>
-                )}
-              </div>
-              <Button size="sm" onClick={generatePDF} data-testid="button-download-pdf">
-                <Download className="h-4 w-4 mr-1" />
-                Download PDF
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {!selectedBarangayId && (
-        <Card>
-          <CardContent className="py-12 text-center text-muted-foreground">
-            <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
-            <p className="text-lg font-medium">Select a Barangay to view or create M1 Report</p>
-            <p className="text-sm">Choose a barangay, month, and year from the filters above.</p>
           </CardContent>
         </Card>
       )}
