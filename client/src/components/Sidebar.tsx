@@ -34,9 +34,9 @@ export function Sidebar() {
       <div className="p-6 border-b border-border/50">
         <h1 className="text-2xl font-bold font-display text-primary flex items-center gap-2">
           <div className="w-8 h-8 rounded bg-primary text-primary-foreground flex items-center justify-center">
-            G
+            H
           </div>
-          GeoHealthSync
+          HealthSync
         </h1>
         <p className="text-xs text-muted-foreground mt-1 uppercase tracking-widest">
           Barangay Health System

@@ -158,7 +158,7 @@ export default function LandingPage() {
         </Card>
 
         <p className="text-xs text-muted-foreground text-center">
-          GeoHealthSync - Health Information System
+          HealthSync - Unified Digital Health Information System
         </p>
       </div>
     </div>

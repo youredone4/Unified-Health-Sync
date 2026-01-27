@@ -123,7 +123,7 @@ export function AppSidebar() {
   const { canManageUsers, canViewAuditLogs, canAccessMorbidity } = useAuth();
   const [logoError, setLogoError] = useState(false);
 
-  const lguName = settings?.lguName || "GeoHealthSync";
+  const lguName = settings?.lguName || "HealthSync";
   const lguSubtitle = settings?.lguSubtitle || "Barangay Health System";
   const logoUrl = settings?.logoUrl;
   const showLogo = logoUrl && !logoError;

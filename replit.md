@@ -1,8 +1,8 @@
-# GeoHealthSync - Barangay Health Information & Analytics System
+# HealthSync - Unified Digital Health Information System
 
 ## Overview
 
-GeoHealthSync is a demo web application designed for Barangay Health Offices in the Philippines. It serves as a health information management and analytics system for tracking prenatal care, child immunizations, senior citizen medication pickups, and medical supply inventory across multiple barangays (villages).
+HealthSync is a demo web application designed for Barangay Health Offices in the Philippines. It serves as a health information management and analytics system for tracking prenatal care, child immunizations, senior citizen medication pickups, and medical supply inventory across multiple barangays (villages).
 
 The application is specifically designed for users with low digital literacy, emphasizing simple language, clear visual status indicators, and action-first workflows. It uses a worklist-driven approach where healthcare workers see their most urgent tasks (overdue and due soon items) prominently.
 
