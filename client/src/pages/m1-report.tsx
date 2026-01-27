@@ -398,8 +398,8 @@ export default function M1ReportPage() {
         groups[ind.sectionCode].push(ind);
       });
 
-      Object.entries(groups).forEach(([sectionCode, indicators]) => {
-        indicators.sort((a, b) => a.rowOrder - b.rowOrder);
+      Object.entries(groups).forEach(([sectionCode, sectionIndicators]) => {
+        sectionIndicators.sort((a, b) => a.rowOrder - b.rowOrder);
         
         if (yPos > 260) {
           doc.addPage();
@@ -411,49 +411,61 @@ export default function M1ReportPage() {
         doc.text(`${sectionCode}. ${SECTION_TITLES[sectionCode] || sectionCode}`, 14, yPos);
         yPos += 5;
 
-        const colSpec = indicators[0]?.columnSpec as ColumnSpec | null;
-        const colType = indicators[0]?.columnGroupType;
-        
-        let headers: string[][] = [["Indicator", "Value", "Remarks"]];
-        let colWidths: Record<number, { cellWidth: number }> = { 0: { cellWidth: 100 }, 1: { cellWidth: 30 }, 2: { cellWidth: 40 } };
+        const groupedByColType: Record<string, M1IndicatorCatalog[]> = {};
+        sectionIndicators.forEach(ind => {
+          const ct = ind.columnGroupType || "SINGLE";
+          if (!groupedByColType[ct]) groupedByColType[ct] = [];
+          groupedByColType[ct].push(ind);
+        });
 
-        if (colType === "AGE_GROUP") {
-          headers = [["Indicator", "10-14", "15-19", "20-49", "TOTAL", "Remarks"]];
-          colWidths = { 0: { cellWidth: 70 }, 1: { cellWidth: 16 }, 2: { cellWidth: 16 }, 3: { cellWidth: 16 }, 4: { cellWidth: 16 }, 5: { cellWidth: 36 } };
-        } else if (colType === "SEX_RATE" || colType === "SEX") {
-          headers = [["Indicator", "M", "F", "Total", "Rate", "Remarks"]];
-          colWidths = { 0: { cellWidth: 65 }, 1: { cellWidth: 14 }, 2: { cellWidth: 14 }, 3: { cellWidth: 18 }, 4: { cellWidth: 18 }, 5: { cellWidth: 36 } };
-        } else if (colType === "FP_DUAL") {
-          headers = [["Method", "CU 10-14", "CU 15-19", "CU 20-49", "CU Tot", "NA 10-14", "NA 15-19", "NA 20-49", "NA Tot", "Remarks"]];
-          colWidths = { 0: { cellWidth: 30 }, 1: { cellWidth: 14 }, 2: { cellWidth: 14 }, 3: { cellWidth: 14 }, 4: { cellWidth: 14 }, 5: { cellWidth: 14 }, 6: { cellWidth: 14 }, 7: { cellWidth: 14 }, 8: { cellWidth: 14 }, 9: { cellWidth: 28 } };
-        }
+        Object.entries(groupedByColType).forEach(([colType, indicators]) => {
+          if (yPos > 260) {
+            doc.addPage();
+            yPos = 20;
+          }
 
-        const body: string[][] = indicators.map(ind => {
-          const indent = (ind.indentLevel || 0) > 0 ? "  " : "";
-          const label = indent + ind.officialLabel;
-          const remarks = String(getValue(ind.rowKey, "REMARKS") || "");
+          let headers: string[][] = [["Indicator", "Value", "Remarks"]];
+          let colWidths: Record<number, { cellWidth: number }> = { 0: { cellWidth: 100 }, 1: { cellWidth: 30 }, 2: { cellWidth: 40 } };
 
           if (colType === "AGE_GROUP") {
-            return [label, String(getValue(ind.rowKey, "10-14")), String(getValue(ind.rowKey, "15-19")), String(getValue(ind.rowKey, "20-49")), String(getValue(ind.rowKey, "TOTAL")), remarks];
+            headers = [["Indicator", "10-14", "15-19", "20-49", "TOTAL", "Remarks"]];
+            colWidths = { 0: { cellWidth: 70 }, 1: { cellWidth: 16 }, 2: { cellWidth: 16 }, 3: { cellWidth: 16 }, 4: { cellWidth: 16 }, 5: { cellWidth: 36 } };
           } else if (colType === "SEX_RATE" || colType === "SEX") {
-            return [label, String(getValue(ind.rowKey, "M")), String(getValue(ind.rowKey, "F")), String(getValue(ind.rowKey, "TOTAL")), String(getValue(ind.rowKey, "RATE") || "0.00"), remarks];
+            headers = [["Indicator", "M", "F", "Total", "Rate", "Remarks"]];
+            colWidths = { 0: { cellWidth: 65 }, 1: { cellWidth: 14 }, 2: { cellWidth: 14 }, 3: { cellWidth: 18 }, 4: { cellWidth: 18 }, 5: { cellWidth: 36 } };
           } else if (colType === "FP_DUAL") {
-            return [label, String(getValue(ind.rowKey, "CU_10-14")), String(getValue(ind.rowKey, "CU_15-19")), String(getValue(ind.rowKey, "CU_20-49")), String(getValue(ind.rowKey, "CU_TOTAL")), String(getValue(ind.rowKey, "NA_10-14")), String(getValue(ind.rowKey, "NA_15-19")), String(getValue(ind.rowKey, "NA_20-49")), String(getValue(ind.rowKey, "NA_TOTAL")), remarks];
+            headers = [["Method", "CU 10-14", "CU 15-19", "CU 20-49", "CU Tot", "NA 10-14", "NA 15-19", "NA 20-49", "NA Tot", "Remarks"]];
+            colWidths = { 0: { cellWidth: 30 }, 1: { cellWidth: 14 }, 2: { cellWidth: 14 }, 3: { cellWidth: 14 }, 4: { cellWidth: 14 }, 5: { cellWidth: 14 }, 6: { cellWidth: 14 }, 7: { cellWidth: 14 }, 8: { cellWidth: 14 }, 9: { cellWidth: 28 } };
           }
-          return [label, String(getValue(ind.rowKey, "VALUE")), remarks];
-        });
 
-        autoTable(doc, {
-          startY: yPos,
-          head: headers,
-          body,
-          theme: "grid",
-          headStyles: { fillColor: [0, 102, 102], fontSize: 7, cellPadding: 1 },
-          bodyStyles: { fontSize: 6, cellPadding: 1 },
-          columnStyles: colWidths,
-          margin: { left: 10, right: 10 },
+          const body: string[][] = indicators.map(ind => {
+            const indent = (ind.indentLevel || 0) > 0 ? "  " : "";
+            const label = indent + ind.officialLabel;
+            const remarks = String(getValue(ind.rowKey, "REMARKS") || "");
+
+            if (colType === "AGE_GROUP") {
+              return [label, String(getValue(ind.rowKey, "10-14")), String(getValue(ind.rowKey, "15-19")), String(getValue(ind.rowKey, "20-49")), String(getValue(ind.rowKey, "TOTAL")), remarks];
+            } else if (colType === "SEX_RATE" || colType === "SEX") {
+              return [label, String(getValue(ind.rowKey, "M")), String(getValue(ind.rowKey, "F")), String(getValue(ind.rowKey, "TOTAL")), String(getValue(ind.rowKey, "RATE") || "0.00"), remarks];
+            } else if (colType === "FP_DUAL") {
+              return [label, String(getValue(ind.rowKey, "CU_10-14")), String(getValue(ind.rowKey, "CU_15-19")), String(getValue(ind.rowKey, "CU_20-49")), String(getValue(ind.rowKey, "CU_TOTAL")), String(getValue(ind.rowKey, "NA_10-14")), String(getValue(ind.rowKey, "NA_15-19")), String(getValue(ind.rowKey, "NA_20-49")), String(getValue(ind.rowKey, "NA_TOTAL")), remarks];
+            }
+            return [label, String(getValue(ind.rowKey, "VALUE")), remarks];
+          });
+
+          autoTable(doc, {
+            startY: yPos,
+            head: headers,
+            body,
+            theme: "grid",
+            headStyles: { fillColor: [0, 102, 102], fontSize: 7, cellPadding: 1 },
+            bodyStyles: { fontSize: 6, cellPadding: 1 },
+            columnStyles: colWidths,
+            margin: { left: 10, right: 10 },
+          });
+          yPos = (doc as any).lastAutoTable.finalY + 4;
         });
-        yPos = (doc as any).lastAutoTable.finalY + 6;
+        yPos += 2;
       });
 
       doc.setFontSize(7);
@@ -469,7 +481,32 @@ export default function M1ReportPage() {
   const renderIndicatorTable = (sectionCode: string, indicators: M1IndicatorCatalog[]) => {
     if (!indicators || indicators.length === 0) return null;
     
-    const colType = indicators[0]?.columnGroupType;
+    const groupedByColType: Record<string, M1IndicatorCatalog[]> = {};
+    indicators.forEach(ind => {
+      const ct = ind.columnGroupType || "SINGLE";
+      if (!groupedByColType[ct]) groupedByColType[ct] = [];
+      groupedByColType[ct].push(ind);
+    });
+    
+    const colTypeGroups = Object.entries(groupedByColType);
+    if (colTypeGroups.length === 1) {
+      return renderSingleColTypeTable(colTypeGroups[0][0], colTypeGroups[0][1]);
+    }
+    
+    return (
+      <div className="space-y-4">
+        {colTypeGroups.map(([colType, inds]) => (
+          <div key={colType}>
+            {renderSingleColTypeTable(colType, inds)}
+          </div>
+        ))}
+      </div>
+    );
+  };
+  
+  const renderSingleColTypeTable = (colType: string, indicators: M1IndicatorCatalog[]) => {
+    if (!indicators || indicators.length === 0) return null;
+    
     const colSpec = indicators[0]?.columnSpec as ColumnSpec | null;
     
     if (colType === "FP_DUAL") {
