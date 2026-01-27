@@ -55,20 +55,26 @@ export default function M1ReportPage() {
   };
 
   const prenatalStats = {
+    totalActivePregnancies: filteredMothers.filter(m => m.status === "active").length,
     womenWith4ANC: filteredMothers.filter(m => m.status === "delivered" || m.outcome === "live_birth").length,
     totalDelivered8ANC: filteredMothers.filter(m => m.outcome).length,
     deliveredTracked: filteredMothers.filter(m => m.outcome && m.status === "delivered").length,
     transIn: 0,
     transOut: 0,
-    normalBMI: filteredMothers.filter(m => m.gaWeeks && m.gaWeeks <= 12).length,
-    lowBMI: 0,
-    highBMI: 0,
-    firstPregnancyTd2: filteredMothers.filter(m => m.tt2Date).length,
+    firstTrimester: filteredMothers.filter(m => m.gaWeeks && m.gaWeeks <= 12).length,
+    secondTrimester: filteredMothers.filter(m => m.gaWeeks && m.gaWeeks > 12 && m.gaWeeks <= 27).length,
+    thirdTrimester: filteredMothers.filter(m => m.gaWeeks && m.gaWeeks > 27).length,
+    withTT1: filteredMothers.filter(m => m.tt1Date).length,
+    withTT2: filteredMothers.filter(m => m.tt2Date).length,
+    withTT3: filteredMothers.filter(m => m.tt3Date).length,
+    withTT4: filteredMothers.filter(m => m.tt4Date).length,
+    withTT5: filteredMothers.filter(m => m.tt5Date).length,
   };
 
   const intrapartumStats = {
     totalDeliveries: filteredMothers.filter(m => m.outcome).length,
     livebirths: filteredMothers.filter(m => m.outcome === "live_birth").length,
+    stillbirths: filteredMothers.filter(m => m.outcome === "stillbirth").length,
     normalBirthWeight: filteredMothers.filter(m => m.outcome === "live_birth").length,
     lowBirthWeight: 0,
     unknownBirthWeight: 0,
@@ -387,6 +393,38 @@ export default function M1ReportPage() {
         </CardContent>
       </Card>
 
+      <Card className="print:border-0 print:shadow-none bg-blue-50 dark:bg-blue-950">
+        <CardContent className="pt-4">
+          <h3 className="font-bold text-sm bg-blue-600 text-white px-2 py-1 mb-2">DATA SUMMARY - Records from System</h3>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+            <div className="bg-background p-3 rounded border">
+              <div className="text-2xl font-bold text-primary">{filteredMothers.length}</div>
+              <div className="text-muted-foreground">Pregnant Women</div>
+              <div className="text-xs mt-1">
+                {filteredMothers.map(m => `${m.firstName} ${m.lastName}`).join(", ") || "None"}
+              </div>
+            </div>
+            <div className="bg-background p-3 rounded border">
+              <div className="text-2xl font-bold text-primary">{filteredChildren.length}</div>
+              <div className="text-muted-foreground">Children (0-59 mo)</div>
+              <div className="text-xs mt-1">
+                {filteredChildren.map(c => c.name).join(", ") || "None"}
+              </div>
+            </div>
+            <div className="bg-background p-3 rounded border">
+              <div className="text-2xl font-bold text-green-600">{prenatalStats.withTT1}</div>
+              <div className="text-muted-foreground">TT1 Given</div>
+              <div className="text-xs">TT2: {prenatalStats.withTT2} | TT3: {prenatalStats.withTT3}</div>
+            </div>
+            <div className="bg-background p-3 rounded border">
+              <div className="text-2xl font-bold text-orange-600">{immunizationStats.bcg29d1y}</div>
+              <div className="text-muted-foreground">BCG Vaccinated</div>
+              <div className="text-xs">Penta: {immunizationStats.dptHibHepB1} | OPV: {immunizationStats.opv1}</div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       <Card className="print:border-0 print:shadow-none">
         <CardContent className="pt-4">
           <h3 className="font-bold text-sm bg-muted px-2 py-1 mb-2">PRENATAL CARE SERVICES</h3>
@@ -432,19 +470,56 @@ export default function M1ReportPage() {
                 <td className="border px-2 py-1 text-center font-bold">{prenatalStats.deliveredTracked}</td>
                 <td className="border px-2 py-1 text-center font-bold">{prenatalStats.deliveredTracked}</td>
               </tr>
-              <tr>
-                <td className="border px-2 py-1">2a. Number of pregnant women seen in the first trimester who have normal BMI</td>
+              <tr className="bg-green-50 dark:bg-green-950">
+                <td className="border px-2 py-1 font-semibold">Active Pregnancies (Current Period)</td>
                 <td className="border px-2 py-1 text-center">0</td>
                 <td className="border px-2 py-1 text-center">0</td>
-                <td className="border px-2 py-1 text-center">{prenatalStats.normalBMI}</td>
-                <td className="border px-2 py-1 text-center font-bold">{prenatalStats.normalBMI}</td>
+                <td className="border px-2 py-1 text-center">{prenatalStats.totalActivePregnancies}</td>
+                <td className="border px-2 py-1 text-center font-bold">{prenatalStats.totalActivePregnancies}</td>
               </tr>
               <tr>
-                <td className="border px-2 py-1">3a. Number of women pregnant for the first time given at least 2 doses of Tetanus diphtheria (Td) vaccination</td>
-                <td className="border px-2 py-1 text-center">0</td>
-                <td className="border px-2 py-1 text-center">0</td>
-                <td className="border px-2 py-1 text-center">{prenatalStats.firstPregnancyTd2}</td>
-                <td className="border px-2 py-1 text-center font-bold">{prenatalStats.firstPregnancyTd2}</td>
+                <td className="border px-2 py-1 pl-6">a. 1st Trimester (1-12 weeks)</td>
+                <td className="border px-2 py-1 text-center" colSpan={3}></td>
+                <td className="border px-2 py-1 text-center">{prenatalStats.firstTrimester}</td>
+              </tr>
+              <tr>
+                <td className="border px-2 py-1 pl-6">b. 2nd Trimester (13-27 weeks)</td>
+                <td className="border px-2 py-1 text-center" colSpan={3}></td>
+                <td className="border px-2 py-1 text-center">{prenatalStats.secondTrimester}</td>
+              </tr>
+              <tr>
+                <td className="border px-2 py-1 pl-6">c. 3rd Trimester (28+ weeks)</td>
+                <td className="border px-2 py-1 text-center" colSpan={3}></td>
+                <td className="border px-2 py-1 text-center">{prenatalStats.thirdTrimester}</td>
+              </tr>
+              <tr className="bg-yellow-100 dark:bg-yellow-900">
+                <td className="border px-2 py-1 font-semibold">Tetanus Toxoid (Td) Vaccination Status</td>
+                <td className="border px-2 py-1 text-center" colSpan={4}></td>
+              </tr>
+              <tr>
+                <td className="border px-2 py-1 pl-6">TT1 Given</td>
+                <td className="border px-2 py-1 text-center" colSpan={3}></td>
+                <td className="border px-2 py-1 text-center font-bold">{prenatalStats.withTT1}</td>
+              </tr>
+              <tr>
+                <td className="border px-2 py-1 pl-6">TT2 Given (at least 2 doses)</td>
+                <td className="border px-2 py-1 text-center" colSpan={3}></td>
+                <td className="border px-2 py-1 text-center font-bold">{prenatalStats.withTT2}</td>
+              </tr>
+              <tr>
+                <td className="border px-2 py-1 pl-6">TT3 Given</td>
+                <td className="border px-2 py-1 text-center" colSpan={3}></td>
+                <td className="border px-2 py-1 text-center font-bold">{prenatalStats.withTT3}</td>
+              </tr>
+              <tr>
+                <td className="border px-2 py-1 pl-6">TT4 Given</td>
+                <td className="border px-2 py-1 text-center" colSpan={3}></td>
+                <td className="border px-2 py-1 text-center font-bold">{prenatalStats.withTT4}</td>
+              </tr>
+              <tr>
+                <td className="border px-2 py-1 pl-6">TT5 Given (Fully Protected)</td>
+                <td className="border px-2 py-1 text-center" colSpan={3}></td>
+                <td className="border px-2 py-1 text-center font-bold">{prenatalStats.withTT5}</td>
               </tr>
             </tbody>
           </table>
