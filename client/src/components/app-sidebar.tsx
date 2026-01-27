@@ -33,6 +33,7 @@ import {
   ClipboardList,
   Settings,
   Shield,
+  ClipboardPlus,
 } from "lucide-react";
 import { useTheme } from "@/contexts/theme-context";
 import { useAuth } from "@/hooks/use-auth";
@@ -104,6 +105,7 @@ const menuGroups = [
     label: "Reporting Module",
     items: [
       { title: "Reports", url: "/reports", icon: FileText },
+      { title: "M1 Report", url: "/reports/m1", icon: ClipboardList },
       { title: "AI Reporting", url: "/reports/ai", icon: Bot },
     ],
   },
@@ -118,7 +120,7 @@ const menuGroups = [
 export function AppSidebar() {
   const [location] = useLocation();
   const { settings } = useTheme();
-  const { canManageUsers, canViewAuditLogs } = useAuth();
+  const { canManageUsers, canViewAuditLogs, canAccessMorbidity } = useAuth();
   const [logoError, setLogoError] = useState(false);
 
   const lguName = settings?.lguName || "GeoHealthSync";
@@ -173,6 +175,20 @@ export function AppSidebar() {
       </SidebarContent>
       <SidebarFooter className="p-2 border-t border-sidebar-border">
         <SidebarMenu>
+          {canAccessMorbidity && (
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                asChild
+                data-active={location === "/morbidity"}
+                className="data-[active=true]:bg-sidebar-accent"
+              >
+                <Link href="/morbidity" data-testid="nav-morbidity">
+                  <ClipboardPlus className="w-4 h-4" />
+                  <span>Morbidity</span>
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          )}
           {canManageUsers && (
             <SidebarMenuItem>
               <SidebarMenuButton

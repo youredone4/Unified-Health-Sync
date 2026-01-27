@@ -5,6 +5,8 @@ import { api } from "@shared/routes";
 import { z } from "zod";
 import { setupAuth, registerAuthRoutes } from "./replit_integrations/auth";
 import { registerAdminRoutes } from "./routes/admin";
+import { loadUserInfo, requireAuth, requireRole } from "./middleware/rbac";
+import { UserRole } from "@shared/schema";
 
 export async function registerRoutes(
   httpServer: Server,
@@ -188,6 +190,42 @@ export async function registerRoutes(
     try {
       const input = api.themeSettings.update.input.parse(req.body);
       const updated = await storage.updateThemeSettings(input);
+      res.json(updated);
+    } catch (err) {
+      res.status(400).json({ message: "Invalid input" });
+    }
+  });
+
+  // === CONSULTS (Morbidity Module - MHO/SYSTEM_ADMIN only access with backend RBAC) ===
+  const morbidityRBAC = [loadUserInfo, requireAuth, requireRole(UserRole.SYSTEM_ADMIN, UserRole.MHO)];
+  
+  app.get(api.consults.list.path, morbidityRBAC, async (req, res) => {
+    const data = await storage.getConsults();
+    res.json(data);
+  });
+
+  app.get(api.consults.get.path, morbidityRBAC, async (req, res) => {
+    const consult = await storage.getConsult(Number(req.params.id));
+    if (!consult) {
+      return res.status(404).json({ message: "Consult not found" });
+    }
+    res.json(consult);
+  });
+
+  app.post(api.consults.create.path, morbidityRBAC, async (req, res) => {
+    try {
+      const input = api.consults.create.input.parse(req.body);
+      const created = await storage.createConsult(input);
+      res.status(201).json(created);
+    } catch (err) {
+      res.status(400).json({ message: "Invalid input" });
+    }
+  });
+
+  app.put(api.consults.update.path, morbidityRBAC, async (req, res) => {
+    try {
+      const input = api.consults.update.input.parse(req.body);
+      const updated = await storage.updateConsult(Number(req.params.id), input);
       res.json(updated);
     } catch (err) {
       res.status(400).json({ message: "Invalid input" });

@@ -1,7 +1,7 @@
 import { db } from "./db";
 import { 
   mothers, children, seniors, inventory, healthStations, smsOutbox, diseaseCases, tbPatients, themeSettings,
-  barangays, users, userBarangays, municipalitySettings, UserRole,
+  barangays, users, userBarangays, municipalitySettings, UserRole, consults,
   type Mother, type InsertMother,
   type Child, type InsertChild,
   type Senior, type InsertSenior,
@@ -11,9 +11,10 @@ import {
   type DiseaseCase, type InsertDiseaseCase,
   type TBPatient, type InsertTBPatient,
   type ThemeSettings, type InsertThemeSettings,
+  type Consult, type InsertConsult,
   type Barangay, type User
 } from "@shared/schema";
-import { eq, and, inArray } from "drizzle-orm";
+import { eq, and, inArray, desc } from "drizzle-orm";
 
 export interface IStorage {
   getMothers(): Promise<Mother[]>;
@@ -44,6 +45,11 @@ export interface IStorage {
 
   getThemeSettings(): Promise<ThemeSettings | undefined>;
   updateThemeSettings(updates: Partial<InsertThemeSettings>): Promise<ThemeSettings>;
+
+  getConsults(): Promise<Consult[]>;
+  getConsult(id: number): Promise<Consult | undefined>;
+  createConsult(consult: InsertConsult): Promise<Consult>;
+  updateConsult(id: number, updates: Partial<InsertConsult>): Promise<Consult>;
 
   seedData(): Promise<void>;
 }
@@ -170,6 +176,28 @@ export class DatabaseStorage implements IStorage {
         .returning();
       return created;
     }
+  }
+
+  async getConsults(): Promise<Consult[]> {
+    return await db.select().from(consults).orderBy(desc(consults.consultDate));
+  }
+
+  async getConsult(id: number): Promise<Consult | undefined> {
+    const [consult] = await db.select().from(consults).where(eq(consults.id, id));
+    return consult;
+  }
+
+  async createConsult(consult: InsertConsult): Promise<Consult> {
+    const [created] = await db.insert(consults).values(consult).returning();
+    return created;
+  }
+
+  async updateConsult(id: number, updates: Partial<InsertConsult>): Promise<Consult> {
+    const [updated] = await db.update(consults)
+      .set(updates)
+      .where(eq(consults.id, id))
+      .returning();
+    return updated;
   }
 
   async seedData(): Promise<void> {

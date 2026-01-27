@@ -7,49 +7,143 @@ export const TODAY_STR = '2025-12-22';
 export type StatusType = 'overdue' | 'due_soon' | 'upcoming' | 'completed' | 'available';
 
 export interface TTStatus {
-  nextShot: 'TT1' | 'TT2' | 'TT3' | null;
+  nextShot: 'TT1' | 'TT2' | 'TT3' | 'TT4' | 'TT5' | null;
   nextShotLabel: string;
   dueDate: string | null;
   status: StatusType;
+  completedShots: number;
 }
 
+// TT Vaccination Schedule per DOH guidelines:
+// TT1: Anytime during pregnancy (or first contact)
+// TT2: 4 weeks (28 days) after TT1
+// TT3: 6 months (180 days) after TT2
+// TT4: 1 year (365 days) after TT3
+// TT5: 1 year (365 days) after TT4
+export const TT_SCHEDULE = [
+  { shot: 'TT1' as const, label: 'Tetanus Toxoid 1 (TT1)', daysAfterPrevious: 0 },
+  { shot: 'TT2' as const, label: 'Tetanus Toxoid 2 (TT2)', daysAfterPrevious: 28 },
+  { shot: 'TT3' as const, label: 'Tetanus Toxoid 3 (TT3)', daysAfterPrevious: 180 },
+  { shot: 'TT4' as const, label: 'Tetanus Toxoid 4 (TT4)', daysAfterPrevious: 365 },
+  { shot: 'TT5' as const, label: 'Tetanus Toxoid 5 (TT5)', daysAfterPrevious: 365 },
+] as const;
+
 export function getTTStatus(mother: Mother): TTStatus {
-  if (!mother.tt1Date) {
+  const ttDates = [
+    mother.tt1Date,
+    mother.tt2Date,
+    mother.tt3Date,
+    mother.tt4Date,
+    mother.tt5Date,
+  ];
+
+  // Count completed shots
+  const completedShots = ttDates.filter(d => d).length;
+
+  // If all shots complete
+  if (completedShots >= 5) {
+    return {
+      nextShot: null,
+      nextShotLabel: 'All TT shots complete (TT5)',
+      dueDate: null,
+      status: 'completed',
+      completedShots: 5
+    };
+  }
+
+  // Find next shot
+  const nextShotIndex = completedShots;
+  const nextShotInfo = TT_SCHEDULE[nextShotIndex];
+
+  // TT1 has no previous date requirement
+  if (nextShotIndex === 0) {
     return {
       nextShot: 'TT1',
-      nextShotLabel: 'Tetanus Shot 1 (TT1)',
+      nextShotLabel: nextShotInfo.label,
       dueDate: null,
-      status: 'overdue'
+      status: 'overdue',
+      completedShots: 0
     };
   }
 
-  if (!mother.tt2Date) {
-    const tt2Due = addDays(parseISO(mother.tt1Date), 28);
-    const daysUntil = differenceInDays(tt2Due, TODAY);
+  // Calculate due date based on previous shot
+  const previousShotDate = ttDates[nextShotIndex - 1];
+  if (!previousShotDate) {
     return {
-      nextShot: 'TT2',
-      nextShotLabel: 'Tetanus Shot 2 (TT2)',
-      dueDate: format(tt2Due, 'yyyy-MM-dd'),
-      status: daysUntil < 0 ? 'overdue' : daysUntil <= 7 ? 'due_soon' : 'upcoming'
+      nextShot: nextShotInfo.shot,
+      nextShotLabel: nextShotInfo.label,
+      dueDate: null,
+      status: 'overdue',
+      completedShots
     };
   }
 
-  if (!mother.tt3Date) {
-    const tt3Due = addDays(parseISO(mother.tt2Date), 180);
-    const daysUntil = differenceInDays(tt3Due, TODAY);
-    return {
-      nextShot: 'TT3',
-      nextShotLabel: 'Tetanus Shot 3 (TT3)',
-      dueDate: format(tt3Due, 'yyyy-MM-dd'),
-      status: daysUntil < 0 ? 'overdue' : daysUntil <= 7 ? 'due_soon' : 'upcoming'
-    };
-  }
+  const dueDate = addDays(parseISO(previousShotDate), nextShotInfo.daysAfterPrevious);
+  const daysUntil = differenceInDays(dueDate, TODAY);
 
   return {
-    nextShot: null,
-    nextShotLabel: 'All TT shots complete',
-    dueDate: null,
-    status: 'completed'
+    nextShot: nextShotInfo.shot,
+    nextShotLabel: nextShotInfo.label,
+    dueDate: format(dueDate, 'yyyy-MM-dd'),
+    status: daysUntil < 0 ? 'overdue' : daysUntil <= 7 ? 'due_soon' : 'upcoming',
+    completedShots
+  };
+}
+
+// Pregnancy status based on expected delivery date
+export interface PregnancyStatus {
+  isOverdue: boolean;
+  daysOverdue: number;
+  weeksPregnant: number;
+  expectedDeliveryDate: string | null;
+  status: 'normal' | 'term' | 'overdue' | 'delivered' | 'closed';
+}
+
+export function getPregnancyStatus(mother: Mother): PregnancyStatus {
+  // If outcome is set, pregnancy is closed
+  if (mother.outcome) {
+    return {
+      isOverdue: false,
+      daysOverdue: 0,
+      weeksPregnant: 0,
+      expectedDeliveryDate: mother.expectedDeliveryDate || null,
+      status: 'closed'
+    };
+  }
+
+  if (mother.status === 'delivered') {
+    return {
+      isOverdue: false,
+      daysOverdue: 0,
+      weeksPregnant: 40,
+      expectedDeliveryDate: mother.expectedDeliveryDate || null,
+      status: 'delivered'
+    };
+  }
+
+  // Calculate current weeks pregnant based on registration GA and time elapsed
+  const regDate = parseISO(mother.registrationDate);
+  const daysElapsed = differenceInDays(TODAY, regDate);
+  const weeksElapsed = Math.floor(daysElapsed / 7);
+  const currentGaWeeks = mother.gaWeeks + weeksElapsed;
+
+  // Calculate EDD if not set
+  let eddStr = mother.expectedDeliveryDate;
+  if (!eddStr) {
+    const weeksToDelivery = 40 - mother.gaWeeks;
+    const edd = addDays(regDate, weeksToDelivery * 7);
+    eddStr = format(edd, 'yyyy-MM-dd');
+  }
+
+  const edd = parseISO(eddStr);
+  const daysOverdue = differenceInDays(TODAY, edd);
+
+  return {
+    isOverdue: daysOverdue > 0,
+    daysOverdue: Math.max(0, daysOverdue),
+    weeksPregnant: currentGaWeeks,
+    expectedDeliveryDate: eddStr,
+    status: daysOverdue > 7 ? 'overdue' : currentGaWeeks >= 37 ? 'term' : 'normal'
   };
 }
 

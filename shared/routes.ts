@@ -8,7 +8,8 @@ import {
   insertSmsSchema, smsOutbox,
   insertDiseaseCaseSchema, diseaseCases,
   insertTBPatientSchema, tbPatients,
-  insertThemeSettingsSchema, themeSettings
+  insertThemeSettingsSchema, themeSettings,
+  insertConsultSchema, consults
 } from './schema';
 
 export const errorSchemas = {
@@ -196,6 +197,39 @@ export const api = {
       input: insertThemeSettingsSchema.partial(),
       responses: {
         200: z.custom<typeof themeSettings.$inferSelect>(),
+      },
+    },
+  },
+  consults: {
+    list: {
+      method: 'GET' as const,
+      path: '/api/consults',
+      responses: {
+        200: z.array(z.custom<typeof consults.$inferSelect>()),
+      },
+    },
+    get: {
+      method: 'GET' as const,
+      path: '/api/consults/:id',
+      responses: {
+        200: z.custom<typeof consults.$inferSelect>(),
+        404: errorSchemas.notFound,
+      },
+    },
+    create: {
+      method: 'POST' as const,
+      path: '/api/consults',
+      input: insertConsultSchema,
+      responses: {
+        201: z.custom<typeof consults.$inferSelect>(),
+      },
+    },
+    update: {
+      method: 'PUT' as const,
+      path: '/api/consults/:id',
+      input: insertConsultSchema.partial(),
+      responses: {
+        200: z.custom<typeof consults.$inferSelect>(),
       },
     },
   },

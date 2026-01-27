@@ -12,12 +12,18 @@ export const mothers = pgTable("mothers", {
   addressLine: text("address_line"), // purok/sitio
   phone: text("phone"),
   registrationDate: text("registration_date").notNull(),
-  gaWeeks: integer("ga_weeks").notNull(), // gestational age
+  gaWeeks: integer("ga_weeks").notNull(), // gestational age at registration
+  expectedDeliveryDate: text("expected_delivery_date"), // calculated EDD
   nextPrenatalCheckDate: text("next_prenatal_check_date"), // static for demo
   tt1Date: text("tt1_date"),
   tt2Date: text("tt2_date"),
   tt3Date: text("tt3_date"),
-  status: text("status").default("active"),
+  tt4Date: text("tt4_date"),
+  tt5Date: text("tt5_date"),
+  status: text("status").default("active"), // active, delivered, deceased
+  outcome: text("outcome"), // live_birth, stillbirth, miscarriage, maternal_death
+  outcomeDate: text("outcome_date"),
+  outcomeNotes: text("outcome_notes"),
   latitude: text("latitude"),
   longitude: text("longitude"),
 });
@@ -199,6 +205,33 @@ export const themeSettings = pgTable("theme_settings", {
 export const insertThemeSettingsSchema = createInsertSchema(themeSettings).omit({ id: true });
 export type ThemeSettings = typeof themeSettings.$inferSelect;
 export type InsertThemeSettings = z.infer<typeof insertThemeSettingsSchema>;
+
+// === MORBIDITY/CONSULT (MHO only) ===
+export const consults = pgTable("consults", {
+  id: serial("id").primaryKey(),
+  patientName: text("patient_name").notNull(),
+  age: integer("age").notNull(),
+  sex: text("sex").notNull(), // M or F
+  barangay: text("barangay").notNull(),
+  addressLine: text("address_line"),
+  consultDate: text("consult_date").notNull(),
+  chiefComplaint: text("chief_complaint").notNull(),
+  diagnosis: text("diagnosis").notNull(),
+  icdCode: text("icd_code"), // ICD-10 code if applicable
+  treatment: text("treatment"),
+  disposition: text("disposition").default("Treated"), // Treated, Referred, Admitted
+  referredTo: text("referred_to"), // Facility name if referred
+  consultType: text("consult_type").default("General"), // General, Prenatal, Child, Senior
+  linkedPersonType: text("linked_person_type"), // Mother, Child, Senior
+  linkedPersonId: integer("linked_person_id"),
+  notes: text("notes"),
+  createdBy: text("created_by"), // User ID who created
+  createdAt: text("created_at").notNull(),
+});
+
+export const insertConsultSchema = createInsertSchema(consults).omit({ id: true });
+export type Consult = typeof consults.$inferSelect;
+export type InsertConsult = z.infer<typeof insertConsultSchema>;
 
 // === AUTH & RBAC (from Replit Auth integration + extensions) ===
 export * from "./models/auth";
