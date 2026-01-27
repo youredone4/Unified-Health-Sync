@@ -1,7 +1,7 @@
 import { db } from "./db";
 import { 
   mothers, children, seniors, inventory, healthStations, smsOutbox, diseaseCases, tbPatients, themeSettings,
-  barangays, users, userBarangays, municipalitySettings, UserRole, consults,
+  barangays, users, userBarangays, municipalitySettings, UserRole, consults, seniorMedClaims,
   m1TemplateVersions, m1IndicatorCatalog, m1ReportInstances, m1ReportHeader, m1IndicatorValues, barangaySettings,
   type Mother, type InsertMother,
   type Child, type InsertChild,
@@ -16,8 +16,9 @@ import {
   type Barangay, type User,
   type M1TemplateVersion, type M1IndicatorCatalog, type M1ReportInstance, type M1IndicatorValue,
   type MunicipalitySettings, type BarangaySettings,
+  type SeniorMedClaim, type InsertSeniorMedClaim,
 } from "@shared/schema";
-import { eq, and, inArray, desc, isNull } from "drizzle-orm";
+import { eq, and, inArray, desc, isNull, gte, sql } from "drizzle-orm";
 
 export interface IStorage {
   getMothers(): Promise<Mother[]>;
@@ -64,6 +65,11 @@ export interface IStorage {
   updateM1IndicatorValues(reportId: number, values: any[]): Promise<M1IndicatorValue[]>;
   getMunicipalitySettings(): Promise<MunicipalitySettings | undefined>;
   getBarangaySettings(barangayId: number): Promise<BarangaySettings | undefined>;
+
+  // Senior Medication Claims (Cross-barangay verification)
+  getSeniorMedClaims(seniorId?: number): Promise<SeniorMedClaim[]>;
+  checkSeniorEligibility(seniorUniqueId: string): Promise<{ eligible: boolean; reason?: string; lastClaim?: SeniorMedClaim }>;
+  createSeniorMedClaim(claim: InsertSeniorMedClaim): Promise<SeniorMedClaim>;
 
   seedData(): Promise<void>;
 }
@@ -327,6 +333,47 @@ export class DatabaseStorage implements IStorage {
   async getBarangaySettings(barangayId: number): Promise<BarangaySettings | undefined> {
     const [settings] = await db.select().from(barangaySettings).where(eq(barangaySettings.barangayId, barangayId));
     return settings;
+  }
+
+  // Senior Medication Claims (Cross-barangay verification)
+  async getSeniorMedClaims(seniorId?: number): Promise<SeniorMedClaim[]> {
+    if (seniorId) {
+      return await db.select().from(seniorMedClaims).where(eq(seniorMedClaims.seniorId, seniorId)).orderBy(desc(seniorMedClaims.claimedAt));
+    }
+    return await db.select().from(seniorMedClaims).orderBy(desc(seniorMedClaims.claimedAt));
+  }
+
+  async checkSeniorEligibility(seniorUniqueId: string): Promise<{ eligible: boolean; reason?: string; lastClaim?: SeniorMedClaim }> {
+    const now = new Date().toISOString();
+    
+    // Find recent claims by this senior (using unique ID for cross-barangay matching)
+    const recentClaims = await db
+      .select()
+      .from(seniorMedClaims)
+      .where(
+        and(
+          eq(seniorMedClaims.seniorUniqueId, seniorUniqueId),
+          gte(seniorMedClaims.nextEligibleAt, now)
+        )
+      )
+      .orderBy(desc(seniorMedClaims.claimedAt))
+      .limit(1);
+
+    if (recentClaims.length > 0) {
+      const lastClaim = recentClaims[0];
+      return {
+        eligible: false,
+        reason: `Already claimed at ${lastClaim.claimedBarangayName} on ${new Date(lastClaim.claimedAt).toLocaleDateString()}. Next eligible: ${new Date(lastClaim.nextEligibleAt).toLocaleDateString()}`,
+        lastClaim,
+      };
+    }
+
+    return { eligible: true };
+  }
+
+  async createSeniorMedClaim(claim: InsertSeniorMedClaim): Promise<SeniorMedClaim> {
+    const [created] = await db.insert(seniorMedClaims).values(claim).returning();
+    return created;
   }
 
   async seedData(): Promise<void> {

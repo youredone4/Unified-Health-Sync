@@ -1,16 +1,23 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useParams, useLocation } from "wouter";
-import type { Senior } from "@shared/schema";
+import type { Senior, SeniorMedClaim, Barangay } from "@shared/schema";
 import { getSeniorPickupStatus, isMedsReadyForPickup, formatDate } from "@/lib/healthLogic";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import StatusBadge from "@/components/status-badge";
 import ConfirmModal from "@/components/confirm-modal";
 import SmsModal from "@/components/sms-modal";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Pill, Heart, MessageSquare, Check } from "lucide-react";
+import { ArrowLeft, Pill, Heart, MessageSquare, Check, ShieldCheck, AlertTriangle, History } from "lucide-react";
 import { useState } from "react";
 import { apiRequest } from "@/lib/queryClient";
+
+interface EligibilityResult {
+  eligible: boolean;
+  reason?: string;
+  lastClaim?: SeniorMedClaim;
+}
 
 export default function SeniorProfile() {
   const { id } = useParams<{ id: string }>();
@@ -20,8 +27,29 @@ export default function SeniorProfile() {
 
   const { data: senior, isLoading } = useQuery<Senior>({ queryKey: ['/api/seniors', id] });
   
+  const { data: barangays = [] } = useQuery<Barangay[]>({ queryKey: ['/api/barangays'] });
+  
+  const { data: claims = [] } = useQuery<SeniorMedClaim[]>({
+    queryKey: ['/api/senior-med-claims', { seniorId: id }],
+    queryFn: async () => {
+      const res = await fetch(`/api/senior-med-claims?seniorId=${id}`);
+      return res.json();
+    },
+    enabled: !!id,
+  });
+
+  const { data: eligibility } = useQuery<EligibilityResult>({
+    queryKey: ['/api/senior-med-claims/check-eligibility', senior?.seniorUniqueId],
+    queryFn: async () => {
+      const res = await fetch(`/api/senior-med-claims/check-eligibility/${senior?.seniorUniqueId}`);
+      return res.json();
+    },
+    enabled: !!senior?.seniorUniqueId,
+  });
+  
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [smsOpen, setSmsOpen] = useState(false);
+  const [claimOpen, setClaimOpen] = useState(false);
 
   const updateMutation = useMutation({
     mutationFn: async (updates: Partial<Senior>) => {
@@ -33,6 +61,41 @@ export default function SeniorProfile() {
       toast({ title: "Saved", description: "Record updated successfully" });
       setConfirmOpen(false);
     }
+  });
+
+  const claimMutation = useMutation({
+    mutationFn: async () => {
+      const seniorBarangay = barangays.find(b => b.name === senior?.barangay);
+      if (!seniorBarangay) {
+        throw new Error(`Barangay "${senior?.barangay}" not found in registry`);
+      }
+      if (!senior?.seniorUniqueId) {
+        throw new Error("Senior must have a unique ID to record cross-barangay claims");
+      }
+      return apiRequest('POST', '/api/senior-med-claims', {
+        seniorId: Number(id),
+        seniorUniqueId: senior.seniorUniqueId,
+        claimedBarangayId: seniorBarangay.id,
+        claimedBarangayName: senior.barangay,
+        medicationName: senior.lastMedicationName || 'Hypertension medication',
+        dose: senior.lastMedicationDoseMg ? `${senior.lastMedicationDoseMg}mg` : undefined,
+        quantity: senior.lastMedicationQuantity || 30,
+        cycleDays: 30,
+      });
+    },
+    onSuccess: () => {
+      if (id) {
+        queryClient.invalidateQueries({ queryKey: ['/api/senior-med-claims', { seniorId: id }] });
+      }
+      if (senior?.seniorUniqueId) {
+        queryClient.invalidateQueries({ queryKey: ['/api/senior-med-claims/check-eligibility', senior.seniorUniqueId] });
+      }
+      toast({ title: "Medication Claimed", description: "Claim recorded successfully" });
+      setClaimOpen(false);
+    },
+    onError: (error: any) => {
+      toast({ title: "Claim Failed", description: error.message || "This senior may have already claimed elsewhere", variant: "destructive" });
+    },
   });
 
   if (isLoading || !senior) {
@@ -115,6 +178,68 @@ export default function SeniorProfile() {
         </div>
       </div>
 
+      <Card className={eligibility?.eligible === false ? 'border-orange-500/30' : eligibility?.eligible === true ? 'border-green-500/30' : ''}>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base flex items-center justify-between">
+            <span className="flex items-center gap-2">
+              <ShieldCheck className="w-4 h-4 text-blue-400" />
+              Cross-Barangay Medication Verification
+            </span>
+            {eligibility?.eligible === true && (
+              <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">Eligible</Badge>
+            )}
+            {eligibility?.eligible === false && (
+              <Badge className="bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200">Not Eligible</Badge>
+            )}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {senior.seniorUniqueId ? (
+            <>
+              <p className="text-sm text-muted-foreground">
+                Unique ID: <span className="font-mono">{senior.seniorUniqueId}</span>
+              </p>
+              {eligibility?.eligible === false && (
+                <div className="flex items-start gap-2 p-3 rounded-md bg-orange-500/10 border border-orange-500/30">
+                  <AlertTriangle className="w-4 h-4 text-orange-500 mt-0.5" />
+                  <p className="text-sm">{eligibility.reason}</p>
+                </div>
+              )}
+              {eligibility?.eligible === true && (
+                <div className="flex items-center gap-2">
+                  <Button size="sm" onClick={() => setClaimOpen(true)} className="gap-1" data-testid="button-record-claim">
+                    <Pill className="w-3 h-3" /> Record Medication Claim
+                  </Button>
+                </div>
+              )}
+            </>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              No unique ID assigned. Cross-barangay verification not available.
+            </p>
+          )}
+
+          {claims.length > 0 && (
+            <div className="space-y-2">
+              <h4 className="text-sm font-medium flex items-center gap-2">
+                <History className="w-4 h-4" /> Claim History
+              </h4>
+              <div className="space-y-2 max-h-40 overflow-y-auto">
+                {claims.map((claim) => (
+                  <div key={claim.id} className="text-xs p-2 rounded-md bg-muted/50 flex justify-between items-center">
+                    <div>
+                      <span className="font-medium">{claim.medicationName}</span>
+                      <span className="text-muted-foreground"> - {claim.quantity} units at {claim.claimedBarangayName}</span>
+                    </div>
+                    <span className="text-muted-foreground">{formatDate(claim.claimedAt)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       <ConfirmModal
         open={confirmOpen}
         onOpenChange={setConfirmOpen}
@@ -131,6 +256,16 @@ export default function SeniorProfile() {
         recipient={`${senior.firstName} ${senior.lastName}`}
         phone={senior.phone}
         defaultMessage={smsMessage}
+      />
+
+      <ConfirmModal
+        open={claimOpen}
+        onOpenChange={setClaimOpen}
+        title="Record Medication Claim"
+        description={`Record medication claim for ${senior.firstName} ${senior.lastName}? This will mark them as having received their medication at ${senior.barangay} and prevent duplicate claims at other barangays for 30 days.`}
+        onConfirm={() => claimMutation.mutate()}
+        confirmText="Record Claim"
+        isLoading={claimMutation.isPending}
       />
     </div>
   );

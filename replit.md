@@ -66,6 +66,12 @@ Key entities:
 - `senior_med_claims` - Cross-barangay medication claim verification for seniors
 - `audit_logs` - System-wide audit logging
 
+**Cross-Barangay Medication Verification:**
+The senior profile page includes medication claim verification that prevents duplicate claims across barangays. Seniors with a `seniorUniqueId` can be tracked for medication pickups across all barangays in the municipality. The system checks eligibility before recording claims and shows claim history with barangay names and dates.
+
+**M1 Report CSV Import:**
+The M1 report encoding page supports CSV file import for bulk entry of indicator values. Expected CSV format: `row_key, column_key, value` (e.g., `FP-01, M, 25`). Values are validated against the indicator catalog before import and displayed for preview. Imported values have `valueSource: 'IMPORTED'`.
+
 ### Health Logic
 All date-based health status calculations (overdue, due soon, upcoming) are computed client-side in `client/src/lib/healthLogic.ts`. This file contains the core business logic for determining vaccination schedules, prenatal check deadlines, and medication pickup status based on a fixed demo date.
 

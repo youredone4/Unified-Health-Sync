@@ -387,34 +387,7 @@ export const insertM1IndicatorValueSchema = createInsertSchema(m1IndicatorValues
 export type M1IndicatorValue = typeof m1IndicatorValues.$inferSelect;
 export type InsertM1IndicatorValue = z.infer<typeof insertM1IndicatorValueSchema>;
 
-// === MUNICIPALITY SETTINGS (Branding) ===
-export const municipalitySettings = pgTable("municipality_settings", {
-  id: serial("id").primaryKey(),
-  municipalityId: integer("municipality_id").notNull().unique(),
-  municipalityName: text("municipality_name"),
-  subtitle: text("subtitle"),
-  logoUrl: text("logo_url"),
-  themeJson: jsonb("theme_json"),
-  updatedAt: text("updated_at").notNull(),
-});
-
-export const insertMunicipalitySettingsSchema = createInsertSchema(municipalitySettings).omit({ id: true });
-export type MunicipalitySettings = typeof municipalitySettings.$inferSelect;
-export type InsertMunicipalitySettings = z.infer<typeof insertMunicipalitySettingsSchema>;
-
-// === BARANGAY SETTINGS (Branding overrides) ===
-export const barangaySettings = pgTable("barangay_settings", {
-  barangayId: serial("barangay_id").primaryKey(),
-  barangayNameOverride: text("barangay_name_override"),
-  subtitle: text("subtitle"),
-  logoUrl: text("logo_url"),
-  themeJson: jsonb("theme_json"),
-  updatedAt: timestamp("updated_at").defaultNow(),
-});
-
-export const insertBarangaySettingsSchema = createInsertSchema(barangaySettings).omit({ barangayId: true });
-export type BarangaySettings = typeof barangaySettings.$inferSelect;
-export type InsertBarangaySettings = z.infer<typeof insertBarangaySettingsSchema>;
+// Note: municipalitySettings and barangaySettings are defined in ./models/auth.ts
 
 // === SENIOR MED CLAIMS (Cross-barangay verification) ===
 export const seniorMedClaims = pgTable("senior_med_claims", {
@@ -438,26 +411,6 @@ export const insertSeniorMedClaimSchema = createInsertSchema(seniorMedClaims).om
 export type SeniorMedClaim = typeof seniorMedClaims.$inferSelect;
 export type InsertSeniorMedClaim = z.infer<typeof insertSeniorMedClaimSchema>;
 
-// === AUDIT LOGS ===
-export const auditLogs = pgTable("audit_logs", {
-  id: serial("id").primaryKey(),
-  userId: text("user_id"),
-  userName: text("user_name"),
-  action: text("action").notNull(), // CREATE, UPDATE, DELETE, VIEW, etc.
-  entityType: text("entity_type").notNull(), // Mother, Child, Senior, Report, etc.
-  entityId: text("entity_id"),
-  barangayId: integer("barangay_id"),
-  barangayName: text("barangay_name"),
-  beforeJson: jsonb("before_json"),
-  afterJson: jsonb("after_json"),
-  ipAddress: text("ip_address"),
-  createdAt: text("created_at").notNull(),
-});
-
-export const insertAuditLogSchema = createInsertSchema(auditLogs).omit({ id: true });
-export type AuditLog = typeof auditLogs.$inferSelect;
-export type InsertAuditLog = z.infer<typeof insertAuditLogSchema>;
-
 // === DEATH EVENTS (Mortality tracking) ===
 export const deathEvents = pgTable("death_events", {
   id: serial("id").primaryKey(),
@@ -480,30 +433,6 @@ export const insertDeathEventSchema = createInsertSchema(deathEvents).omit({ id:
 export type DeathEvent = typeof deathEvents.$inferSelect;
 export type InsertDeathEvent = z.infer<typeof insertDeathEventSchema>;
 
-// === BARANGAYS (Master list) ===
-export const barangays = pgTable("barangays", {
-  id: serial("id").primaryKey(),
-  name: text("name").notNull(),
-  municipalityId: integer("municipality_id"),
-  population: integer("population"),
-  latitude: text("latitude"),
-  longitude: text("longitude"),
-});
-
-export const insertBarangaySchema = createInsertSchema(barangays).omit({ id: true });
-export type Barangay = typeof barangays.$inferSelect;
-export type InsertBarangay = z.infer<typeof insertBarangaySchema>;
-
-// === USER BARANGAY ASSIGNMENTS (TL scope) ===
-export const userBarangays = pgTable("user_barangays", {
-  id: serial("id").primaryKey(),
-  userId: text("user_id").notNull(),
-  barangayId: integer("barangay_id").notNull(),
-});
-
-export const insertUserBarangaySchema = createInsertSchema(userBarangays).omit({ id: true });
-export type UserBarangay = typeof userBarangays.$inferSelect;
-export type InsertUserBarangay = z.infer<typeof insertUserBarangaySchema>;
-
 // === AUTH & RBAC (from Replit Auth integration + extensions) ===
+// Note: barangays, userBarangays, auditLogs, users, sessions are defined in ./models/auth.ts
 export * from "./models/auth";

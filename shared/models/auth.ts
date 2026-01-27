@@ -50,11 +50,14 @@ export type User = typeof users.$inferSelect;
 // === BARANGAYS TABLE ===
 export const barangays = pgTable("barangays", {
   id: serial("id").primaryKey(),
-  name: text("name").notNull().unique(),
-  createdAt: timestamp("created_at").defaultNow(),
+  name: text("name").notNull(),
+  municipalityId: serial("municipality_id"),
+  population: serial("population"),
+  latitude: text("latitude"),
+  longitude: text("longitude"),
 });
 
-export const insertBarangaySchema = createInsertSchema(barangays).omit({ id: true, createdAt: true });
+export const insertBarangaySchema = createInsertSchema(barangays).omit({ id: true });
 export type Barangay = typeof barangays.$inferSelect;
 export type InsertBarangay = z.infer<typeof insertBarangaySchema>;
 
@@ -84,11 +87,12 @@ export type BarangaySettings = typeof barangaySettings.$inferSelect;
 // === MUNICIPALITY SETTINGS (for report branding) ===
 export const municipalitySettings = pgTable("municipality_settings", {
   id: serial("id").primaryKey(),
-  municipalityName: text("municipality_name").notNull(),
+  municipalityId: serial("municipality_id").notNull().unique(),
+  municipalityName: text("municipality_name"),
   subtitle: text("subtitle"),
   logoUrl: text("logo_url"),
   themeJson: jsonb("theme_json"),
-  updatedAt: timestamp("updated_at").defaultNow(),
+  updatedAt: text("updated_at").notNull(),
 });
 
 export type MunicipalitySettings = typeof municipalitySettings.$inferSelect;

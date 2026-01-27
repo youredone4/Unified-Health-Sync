@@ -94,6 +94,64 @@ export async function registerRoutes(
     }
   });
 
+  // === SENIOR MEDICATION CLAIMS (Cross-barangay verification) ===
+  app.get("/api/senior-med-claims", async (req, res) => {
+    try {
+      const seniorId = req.query.seniorId ? Number(req.query.seniorId) : undefined;
+      const claims = await storage.getSeniorMedClaims(seniorId);
+      res.json(claims);
+    } catch (err) {
+      res.status(500).json({ message: "Failed to fetch medication claims" });
+    }
+  });
+
+  app.get("/api/senior-med-claims/check-eligibility/:seniorUniqueId", async (req, res) => {
+    try {
+      const { seniorUniqueId } = req.params;
+      const result = await storage.checkSeniorEligibility(seniorUniqueId);
+      res.json(result);
+    } catch (err) {
+      res.status(500).json({ message: "Failed to check eligibility" });
+    }
+  });
+
+  app.post("/api/senior-med-claims", async (req: any, res) => {
+    try {
+      const { seniorId, seniorUniqueId, claimedBarangayId, claimedBarangayName, medicationName, dose, quantity, cycleDays = 30 } = req.body;
+      
+      // Check eligibility first
+      if (seniorUniqueId) {
+        const eligibility = await storage.checkSeniorEligibility(seniorUniqueId);
+        if (!eligibility.eligible) {
+          return res.status(400).json({ message: eligibility.reason, lastClaim: eligibility.lastClaim });
+        }
+      }
+
+      const now = new Date();
+      const nextEligibleAt = new Date(now);
+      nextEligibleAt.setDate(nextEligibleAt.getDate() + cycleDays);
+
+      const claim = await storage.createSeniorMedClaim({
+        seniorId,
+        seniorUniqueId,
+        claimedAt: now.toISOString(),
+        claimedBarangayId,
+        claimedBarangayName,
+        medicationName,
+        dose,
+        quantity,
+        cycleDays,
+        nextEligibleAt: nextEligibleAt.toISOString(),
+        claimedByUserId: req.userInfo?.id,
+        createdAt: now.toISOString(),
+      });
+
+      res.status(201).json(claim);
+    } catch (err: any) {
+      res.status(400).json({ message: err.message || "Failed to create medication claim" });
+    }
+  });
+
   // === INVENTORY ===
   app.get(api.inventory.list.path, async (req, res) => {
     const data = await storage.getInventory();
