@@ -362,5 +362,57 @@ export async function registerRoutes(
     res.json(settings || {});
   });
 
+  // Bulk import M1 CSV data for a specific barangay and month/year
+  app.post("/api/m1/bulk-import", async (req, res) => {
+    try {
+      const { barangayId, barangayName, month, year, values, templateVersionId } = req.body;
+      
+      if (!barangayId || !month || !year || !values || !Array.isArray(values)) {
+        return res.status(400).json({ message: "Missing required fields: barangayId, month, year, values" });
+      }
+      
+      // Check for existing report or create new one
+      const existingReports = await storage.getM1ReportInstances({ barangayId, month, year });
+      let reportId: number;
+      
+      if (existingReports.length > 0) {
+        reportId = existingReports[0].id;
+      } else {
+        const newReport = await storage.createM1ReportInstance({
+          templateVersionId: templateVersionId || 1,
+          scopeType: "BARANGAY",
+          barangayId,
+          barangayName,
+          month,
+          year,
+          createdByUserId: null,
+        });
+        reportId = newReport.id;
+      }
+      
+      // Update values
+      const updatedValues = await storage.updateM1IndicatorValues(reportId, values.map((v: any) => ({
+        ...v,
+        valueSource: "IMPORTED"
+      })));
+      
+      res.json({ reportId, importedCount: updatedValues.length });
+    } catch (err) {
+      console.error("Bulk import error:", err);
+      res.status(500).json({ message: "Failed to import data" });
+    }
+  });
+
+  // Seed historical M1 data for all barangays
+  app.post("/api/m1/seed-historical", async (req, res) => {
+    try {
+      const result = await storage.seedHistoricalM1Data();
+      res.json(result);
+    } catch (err) {
+      console.error("Historical seeding error:", err);
+      res.status(500).json({ message: "Failed to seed historical data" });
+    }
+  });
+
   return httpServer;
 }

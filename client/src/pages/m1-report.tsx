@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
-import { FileText, Download, Save, Plus, ChevronLeft, ChevronRight, RefreshCw, Building2, Upload, FileSpreadsheet, AlertCircle } from "lucide-react";
+import { FileText, Download, Save, Plus, ChevronLeft, ChevronRight, RefreshCw, Building2, Upload, FileSpreadsheet, AlertCircle, Database, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useTheme } from "@/contexts/theme-context";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -168,6 +168,26 @@ export default function M1ReportPage() {
     },
     onError: () => {
       toast({ title: "Error", description: "Failed to save values.", variant: "destructive" });
+    },
+  });
+
+  const seedHistoricalMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/m1/seed-historical", {});
+      return res.json();
+    },
+    onSuccess: (data) => {
+      toast({ 
+        title: "Historical Data Generated", 
+        description: `Created ${data.reportsCreated} reports with ${data.valuesCreated} indicator values for all barangays (2020-2025).` 
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/m1/reports"] });
+      if (reportInstancesQueryKey) {
+        queryClient.invalidateQueries({ queryKey: [reportInstancesQueryKey] });
+      }
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to generate historical data.", variant: "destructive" });
     },
   });
 
@@ -962,11 +982,33 @@ export default function M1ReportPage() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value="2020">2020</SelectItem>
+                <SelectItem value="2021">2021</SelectItem>
+                <SelectItem value="2022">2022</SelectItem>
+                <SelectItem value="2023">2023</SelectItem>
                 <SelectItem value="2024">2024</SelectItem>
                 <SelectItem value="2025">2025</SelectItem>
                 <SelectItem value="2026">2026</SelectItem>
               </SelectContent>
             </Select>
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <Label className="text-xs">Test Data</Label>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => seedHistoricalMutation.mutate()}
+              disabled={seedHistoricalMutation.isPending}
+              data-testid="button-seed-historical"
+            >
+              {seedHistoricalMutation.isPending ? (
+                <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+              ) : (
+                <Database className="h-4 w-4 mr-1" />
+              )}
+              Generate 2020-2025 Data
+            </Button>
           </div>
         </div>
       </div>

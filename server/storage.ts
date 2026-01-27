@@ -778,6 +778,149 @@ export class DatabaseStorage implements IStorage {
 
     console.log("Database seeded successfully!");
   }
+
+  // Seed historical M1 report data for all barangays from 2020 to 2025
+  async seedHistoricalM1Data(): Promise<{ reportsCreated: number; valuesCreated: number }> {
+    console.log("Seeding historical M1 data for all barangays (2020-2025)...");
+    
+    const allBarangays = await this.getBarangays();
+    const templates = await this.getM1TemplateVersions();
+    const activeTemplate = templates.find(t => t.isActive) || templates[0];
+    
+    if (!activeTemplate) {
+      throw new Error("No M1 template found");
+    }
+    
+    let reportsCreated = 0;
+    let valuesCreated = 0;
+    
+    // Key health indicators with realistic data patterns
+    const healthIndicators = [
+      // Prenatal indicators
+      { rowKey: "A-01a", columns: ["10-14", "15-19", "20-49", "TOTAL"], category: "prenatal" },
+      { rowKey: "A-01b", columns: ["10-14", "15-19", "20-49", "TOTAL"], category: "prenatal" },
+      { rowKey: "A-02a", columns: ["10-14", "15-19", "20-49", "TOTAL"], category: "prenatal" },
+      { rowKey: "A-03", columns: ["10-14", "15-19", "20-49", "TOTAL"], category: "prenatal" },
+      { rowKey: "A-04", columns: ["10-14", "15-19", "20-49", "TOTAL"], category: "prenatal" },
+      // Immunization indicators
+      { rowKey: "D2-01", columns: ["M", "F", "TOTAL"], category: "immunization" },
+      { rowKey: "D2-02", columns: ["M", "F", "TOTAL"], category: "immunization" },
+      { rowKey: "D2-03", columns: ["M", "F", "TOTAL"], category: "immunization" },
+      { rowKey: "D2-04", columns: ["M", "F", "TOTAL"], category: "immunization" },
+      { rowKey: "D2-05", columns: ["M", "F", "TOTAL"], category: "immunization" },
+      // Nutrition indicators
+      { rowKey: "E-01", columns: ["M", "F", "TOTAL"], category: "nutrition" },
+      { rowKey: "E-02", columns: ["M", "F", "TOTAL"], category: "nutrition" },
+      { rowKey: "E-03", columns: ["M", "F", "TOTAL"], category: "nutrition" },
+      // NCD / Hypertension
+      { rowKey: "G1-01", columns: ["M", "F", "TOTAL"], category: "ncd" },
+      { rowKey: "G1-02", columns: ["M", "F", "TOTAL"], category: "ncd" },
+      { rowKey: "G2-01", columns: ["M", "F", "TOTAL"], category: "ncd" },
+      { rowKey: "G2-02", columns: ["M", "F", "TOTAL"], category: "ncd" },
+      // Disease Surveillance
+      { rowKey: "I-01", columns: ["M", "F", "TOTAL"], category: "disease" },
+      { rowKey: "I-02", columns: ["M", "F", "TOTAL"], category: "disease" },
+      { rowKey: "I-03", columns: ["M", "F", "TOTAL"], category: "disease" },
+    ];
+    
+    // Generate data for each year and month
+    for (const barangay of allBarangays) {
+      // Base values vary by barangay size (some bigger, some smaller)
+      const barangayFactor = 0.5 + Math.random() * 1.5; // 0.5 to 2.0
+      
+      for (let year = 2020; year <= 2025; year++) {
+        // Yearly trend factor (gradual improvement over time)
+        const yearFactor = 1 + (year - 2020) * 0.08; // 8% improvement per year
+        
+        const maxMonth = year === 2025 ? 12 : 12; // All months for historical
+        for (let month = 1; month <= maxMonth; month++) {
+          // Check if report exists
+          const existingReports = await this.getM1ReportInstances({ 
+            barangayId: barangay.id, 
+            month, 
+            year 
+          });
+          
+          if (existingReports.length > 0) continue; // Skip if exists
+          
+          // Seasonal factor (more cases in rainy/flu season)
+          const seasonalFactor = month >= 6 && month <= 10 ? 1.2 : 1.0;
+          
+          // Create report instance
+          const report = await this.createM1ReportInstance({
+            templateVersionId: activeTemplate.id,
+            scopeType: "BARANGAY",
+            barangayId: barangay.id,
+            barangayName: barangay.name,
+            month,
+            year,
+            createdByUserId: null,
+          });
+          reportsCreated++;
+          
+          // Generate indicator values
+          const values: any[] = [];
+          
+          for (const indicator of healthIndicators) {
+            // Base value depends on category
+            let baseValue = 0;
+            switch (indicator.category) {
+              case "prenatal":
+                baseValue = Math.round(3 + Math.random() * 8); // 3-11 per age group
+                break;
+              case "immunization":
+                baseValue = Math.round(5 + Math.random() * 15); // 5-20 per sex
+                break;
+              case "nutrition":
+                baseValue = Math.round(8 + Math.random() * 20); // 8-28
+                break;
+              case "ncd":
+                baseValue = Math.round(10 + Math.random() * 30); // 10-40
+                break;
+              case "disease":
+                baseValue = Math.round(2 + Math.random() * 10); // 2-12
+                break;
+            }
+            
+            // Apply all factors
+            const adjustedBase = Math.round(baseValue * barangayFactor * yearFactor * seasonalFactor);
+            
+            for (const col of indicator.columns) {
+              let value = adjustedBase;
+              
+              // For TOTAL column, sum the others
+              if (col === "TOTAL") {
+                // Already calculated as part of the loop
+                value = Math.round(adjustedBase * 2.5); // Approximate total
+              } else if (col === "10-14") {
+                value = Math.round(adjustedBase * 0.2); // Smaller age group
+              } else if (col === "15-19") {
+                value = Math.round(adjustedBase * 0.35);
+              } else if (col === "20-49") {
+                value = Math.round(adjustedBase * 0.45);
+              } else if (col === "M" || col === "F") {
+                value = Math.round(adjustedBase * (0.4 + Math.random() * 0.2)); // ~40-60%
+              }
+              
+              values.push({
+                rowKey: indicator.rowKey,
+                columnKey: col,
+                valueNumber: Math.max(0, value),
+                valueSource: "IMPORTED"
+              });
+              valuesCreated++;
+            }
+          }
+          
+          // Save all values for this report
+          await this.updateM1IndicatorValues(report.id, values);
+        }
+      }
+    }
+    
+    console.log(`Historical M1 data seeded: ${reportsCreated} reports, ${valuesCreated} indicator values`);
+    return { reportsCreated, valuesCreated };
+  }
 }
 
 export const storage = new DatabaseStorage();
