@@ -436,3 +436,6 @@ export type InsertDeathEvent = z.infer<typeof insertDeathEventSchema>;
 // === AUTH & RBAC (from Replit Auth integration + extensions) ===
 // Note: barangays, userBarangays, auditLogs, users, sessions are defined in ./models/auth.ts
 export * from "./models/auth";
+
+// === CHAT/CONVERSATIONS (for AI Reporting) ===
+export * from "./models/chat";

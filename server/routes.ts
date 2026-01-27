@@ -414,5 +414,41 @@ export async function registerRoutes(
     }
   });
 
+  // === AI INSIGHTS (RAG) ===
+  app.get("/api/ai/insights", loadUserInfo, requireAuth, async (req, res) => {
+    try {
+      const { generateHealthInsights } = await import("./ai-insights");
+      const result = await generateHealthInsights();
+      res.json(result);
+    } catch (err) {
+      console.error("AI insights error:", err);
+      res.status(500).json({ message: "Failed to generate AI insights" });
+    }
+  });
+
+  app.get("/api/ai/insights/stream", loadUserInfo, requireAuth, async (req, res) => {
+    try {
+      res.setHeader("Content-Type", "text/event-stream");
+      res.setHeader("Cache-Control", "no-cache");
+      res.setHeader("Connection", "keep-alive");
+
+      const { streamHealthInsights } = await import("./ai-insights");
+      await streamHealthInsights((text) => {
+        res.write(`data: ${JSON.stringify({ content: text })}\n\n`);
+      });
+
+      res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
+      res.end();
+    } catch (err) {
+      console.error("AI streaming error:", err);
+      if (res.headersSent) {
+        res.write(`data: ${JSON.stringify({ error: "Failed to stream insights" })}\n\n`);
+        res.end();
+      } else {
+        res.status(500).json({ message: "Failed to stream AI insights" });
+      }
+    }
+  });
+
   return httpServer;
 }
