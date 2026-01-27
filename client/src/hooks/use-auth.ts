@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useEffect } from "react";
 import type { User } from "@shared/models/auth";
 
 // Extended user info with role and barangay assignments
@@ -6,6 +7,16 @@ export interface AuthUser extends User {
   role: string;
   status: string;
   assignedBarangays: string[];
+}
+
+// Store last login info for the landing page
+function saveLastLoginInfo(user: AuthUser | null) {
+  if (user) {
+    localStorage.setItem("lastLoginInfo", JSON.stringify({
+      role: user.role,
+      barangay: user.assignedBarangays?.[0] || null,
+    }));
+  }
 }
 
 async function fetchUser(): Promise<AuthUser | null> {
@@ -63,6 +74,13 @@ export function useAuth() {
     retry: false,
     staleTime: 1000 * 60 * 5, // 5 minutes
   });
+
+  // Save last login info for the landing page logo
+  useEffect(() => {
+    if (user) {
+      saveLastLoginInfo(user);
+    }
+  }, [user]);
 
   const logoutMutation = useMutation({
     mutationFn: logout,
