@@ -1,7 +1,15 @@
 import type { RequestHandler } from "express";
+import "express-session";
 import { db } from "../db";
 import { users, userBarangays, barangays, UserRole, auditLogs } from "@shared/schema";
 import { eq, and, inArray } from "drizzle-orm";
+
+// Extend express-session types
+declare module "express-session" {
+  interface SessionData {
+    userId?: string;
+  }
+}
 
 // Extended request type with user info
 declare global {
@@ -9,6 +17,7 @@ declare global {
     interface Request {
       userInfo?: {
         id: string;
+        username: string;
         email: string | null;
         firstName: string | null;
         lastName: string | null;
@@ -22,15 +31,13 @@ declare global {
 
 // Middleware to load full user info including role and assigned barangays
 export const loadUserInfo: RequestHandler = async (req, res, next) => {
-  const user = req.user as any;
+  const userId = req.session?.userId;
   
-  if (!user?.claims?.sub) {
+  if (!userId) {
     return next();
   }
 
   try {
-    const userId = user.claims.sub;
-    
     // Get user with role
     const [dbUser] = await db.select().from(users).where(eq(users.id, userId));
     
@@ -57,6 +64,7 @@ export const loadUserInfo: RequestHandler = async (req, res, next) => {
 
     req.userInfo = {
       id: dbUser.id,
+      username: dbUser.username,
       email: dbUser.email,
       firstName: dbUser.firstName,
       lastName: dbUser.lastName,

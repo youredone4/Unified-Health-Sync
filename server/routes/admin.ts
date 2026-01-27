@@ -3,6 +3,7 @@ import { db } from "../db";
 import { users, barangays, userBarangays, auditLogs, UserRole, UserStatus } from "@shared/schema";
 import { eq, and, desc, like, or, inArray, sql } from "drizzle-orm";
 import { loadUserInfo, requireAuth, requireRole, createAuditLog, permissions } from "../middleware/rbac";
+import { hashPassword } from "../auth";
 
 export function registerAdminRoutes(app: Express) {
   // Apply user info loading to all routes
@@ -103,10 +104,64 @@ export function registerAdminRoutes(app: Express) {
     }
   });
 
-  // Update user role and status
+  // Create new user (Admin only)
+  app.post("/api/admin/users", requireAuth, requireRole(UserRole.SYSTEM_ADMIN), async (req: any, res) => {
+    try {
+      const { username, password, email, firstName, lastName, role, status } = req.body;
+      
+      if (!username || !password) {
+        return res.status(400).json({ message: "Username and password are required" });
+      }
+      
+      if (password.length < 6) {
+        return res.status(400).json({ message: "Password must be at least 6 characters" });
+      }
+      
+      // Check if username already exists
+      const [existing] = await db.select().from(users).where(eq(users.username, username));
+      if (existing) {
+        return res.status(400).json({ message: "Username already exists" });
+      }
+      
+      const passwordHash = await hashPassword(password);
+      
+      const [newUser] = await db.insert(users).values({
+        username,
+        passwordHash,
+        email: email || null,
+        firstName: firstName || null,
+        lastName: lastName || null,
+        role: role || UserRole.TL,
+        status: status || UserStatus.ACTIVE,
+      }).returning();
+      
+      // Audit log
+      await createAuditLog(
+        req.userInfo.id,
+        req.userInfo.role,
+        "CREATE",
+        "USER",
+        newUser.id,
+        undefined,
+        null,
+        { ...newUser, passwordHash: "[REDACTED]" },
+        req
+      );
+      
+      res.status(201).json({
+        ...newUser,
+        passwordHash: undefined,
+      });
+    } catch (error) {
+      console.error("Error creating user:", error);
+      res.status(500).json({ message: "Failed to create user" });
+    }
+  });
+
+  // Update user (role, status, password)
   app.put("/api/admin/users/:id", requireAuth, requireRole(UserRole.SYSTEM_ADMIN), async (req: any, res) => {
     try {
-      const { role, status } = req.body;
+      const { role, status, password, firstName, lastName, email } = req.body;
       const userId = req.params.id;
 
       // Get before state for audit
@@ -120,13 +175,24 @@ export function registerAdminRoutes(app: Express) {
         return res.status(400).json({ message: "Cannot disable your own account" });
       }
 
+      // Build update object
+      const updateData: any = {
+        role: role || beforeUser.role,
+        status: status || beforeUser.status,
+        firstName: firstName !== undefined ? firstName : beforeUser.firstName,
+        lastName: lastName !== undefined ? lastName : beforeUser.lastName,
+        email: email !== undefined ? email : beforeUser.email,
+        updatedAt: new Date(),
+      };
+      
+      // Update password if provided
+      if (password && password.length >= 6) {
+        updateData.passwordHash = await hashPassword(password);
+      }
+
       const [updated] = await db
         .update(users)
-        .set({
-          role: role || beforeUser.role,
-          status: status || beforeUser.status,
-          updatedAt: new Date(),
-        })
+        .set(updateData)
         .where(eq(users.id, userId))
         .returning();
 
@@ -138,15 +204,54 @@ export function registerAdminRoutes(app: Express) {
         "USER",
         userId,
         undefined,
-        beforeUser,
-        updated,
+        { ...beforeUser, passwordHash: "[REDACTED]" },
+        { ...updated, passwordHash: "[REDACTED]" },
         req
       );
 
-      res.json(updated);
+      res.json({
+        ...updated,
+        passwordHash: undefined,
+      });
     } catch (error) {
       console.error("Error updating user:", error);
       res.status(500).json({ message: "Failed to update user" });
+    }
+  });
+
+  // Delete user (Admin only)
+  app.delete("/api/admin/users/:id", requireAuth, requireRole(UserRole.SYSTEM_ADMIN), async (req: any, res) => {
+    try {
+      const userId = req.params.id;
+      
+      // Prevent admin from deleting themselves
+      if (userId === req.userInfo.id) {
+        return res.status(400).json({ message: "Cannot delete your own account" });
+      }
+      
+      const [deletedUser] = await db.delete(users).where(eq(users.id, userId)).returning();
+      
+      if (!deletedUser) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      
+      // Audit log
+      await createAuditLog(
+        req.userInfo.id,
+        req.userInfo.role,
+        "DELETE",
+        "USER",
+        userId,
+        undefined,
+        { ...deletedUser, passwordHash: "[REDACTED]" },
+        null,
+        req
+      );
+      
+      res.json({ message: "User deleted successfully" });
+    } catch (error) {
+      console.error("Error deleting user:", error);
+      res.status(500).json({ message: "Failed to delete user" });
     }
   });
 

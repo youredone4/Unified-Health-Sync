@@ -19,6 +19,51 @@ The application is specifically designed for users with low digital literacy, em
 
 Preferred communication style: Simple, everyday language.
 
+## Authentication & Authorization
+
+### Username/Password Authentication
+The system uses session-based username/password authentication. There is NO social login, no Replit Auth, and no self-registration. All user accounts are created and managed by System Administrators.
+
+**Key Features:**
+- Session-based authentication with PostgreSQL session store
+- bcrypt password hashing (10 salt rounds)
+- Sessions expire after 1 week
+- No self-registration - all users created by admin
+
+**Default Admin Credentials:**
+- Username: `admin`
+- Password: `admin123`
+- The admin account is auto-seeded on first startup if no admin exists
+
+**Auth Files:**
+- `server/auth.ts` - Authentication setup, password hashing, session management, auth routes
+- `client/src/hooks/use-auth.ts` - React hook for authentication state
+- `client/src/pages/landing.tsx` - Login page with username/password form
+
+### Role-Based Access Control (RBAC)
+
+**Roles:**
+- `SYSTEM_ADMIN` - Full access, can manage users and view audit logs
+- `MHO` - Municipal Health Officer, management access
+- `SHA` - Sanitary Health Aide, operational access  
+- `TL` - Team Leader, restricted to assigned barangays only
+
+**TL Barangay Scoping:**
+Team Leaders can only access data from their assigned barangays. The `user_barangay_assignments` table links TL users to specific barangays.
+
+**RBAC Middleware:**
+- `server/middleware/rbac.ts` - Middleware for role checking and TL barangay scoping
+- `loadUserInfo` - Loads user session info
+- `requireAuth` - Requires authentication
+- `requireRole` - Requires specific roles
+
+### User Management
+System Admins can manage users at `/admin/users`:
+- Create users with username, password, role, barangay assignments
+- Edit user roles and status
+- Reset user passwords
+- Delete users (cannot delete self)
+
 ## System Architecture
 
 ### Frontend Architecture
