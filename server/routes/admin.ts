@@ -9,24 +9,7 @@ export function registerAdminRoutes(app: Express) {
   // Apply user info loading to all routes
   app.use(loadUserInfo);
 
-  // === CURRENT USER WITH ROLE INFO ===
-  app.get("/api/auth/me", requireAuth, async (req: any, res) => {
-    try {
-      const userInfo = req.userInfo;
-      res.json({
-        id: userInfo.id,
-        email: userInfo.email,
-        firstName: userInfo.firstName,
-        lastName: userInfo.lastName,
-        role: userInfo.role,
-        status: userInfo.status,
-        assignedBarangays: userInfo.assignedBarangays,
-      });
-    } catch (error) {
-      console.error("Error fetching user info:", error);
-      res.status(500).json({ message: "Failed to fetch user info" });
-    }
-  });
+  // Note: /api/auth/me is defined in server/auth.ts - no duplicate here
 
   // === BARANGAYS ===
   app.get("/api/barangays", requireAuth, async (req, res) => {

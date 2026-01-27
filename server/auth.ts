@@ -3,7 +3,7 @@ import session from "express-session";
 import type { Express, RequestHandler } from "express";
 import connectPg from "connect-pg-simple";
 import { db } from "./db";
-import { users, UserRole, UserStatus } from "@shared/schema";
+import { users, userBarangays, UserRole, UserStatus } from "@shared/schema";
 import { eq } from "drizzle-orm";
 
 const SALT_ROUNDS = 10;
@@ -35,6 +35,7 @@ export function getSession() {
     cookie: {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
       maxAge: sessionTtl,
     },
   });
@@ -163,6 +164,15 @@ export function registerAuthRoutes(app: Express): void {
         return res.status(403).json({ message: "Account is disabled" });
       }
       
+      // Get assigned barangays for TL users
+      let assignedBarangays: number[] = [];
+      if (user.role === UserRole.TL) {
+        const assignments = await db.select()
+          .from(userBarangays)
+          .where(eq(userBarangays.userId, userId));
+        assignedBarangays = assignments.map(a => a.barangayId);
+      }
+      
       res.json({
         id: user.id,
         username: user.username,
@@ -171,6 +181,7 @@ export function registerAuthRoutes(app: Express): void {
         lastName: user.lastName,
         role: user.role,
         status: user.status,
+        assignedBarangays,
       });
     } catch (error) {
       console.error("Error fetching current user:", error);
