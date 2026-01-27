@@ -3,11 +3,20 @@ import type { Server } from "http";
 import { storage } from "./storage";
 import { api } from "@shared/routes";
 import { z } from "zod";
+import { setupAuth, registerAuthRoutes } from "./replit_integrations/auth";
+import { registerAdminRoutes } from "./routes/admin";
 
 export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
+  // Setup authentication BEFORE other routes
+  await setupAuth(app);
+  registerAuthRoutes(app);
+  
+  // Register admin routes (user management, audit logs, etc.)
+  registerAdminRoutes(app);
+
   // Seed data on startup
   await storage.seedData();
 

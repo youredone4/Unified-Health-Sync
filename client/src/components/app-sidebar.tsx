@@ -32,8 +32,10 @@ import {
   Siren,
   ClipboardList,
   Settings,
+  Shield,
 } from "lucide-react";
 import { useTheme } from "@/contexts/theme-context";
+import { useAuth } from "@/hooks/use-auth";
 
 const menuGroups = [
   {
@@ -116,6 +118,7 @@ const menuGroups = [
 export function AppSidebar() {
   const [location] = useLocation();
   const { settings } = useTheme();
+  const { canManageUsers, canViewAuditLogs } = useAuth();
   const [logoError, setLogoError] = useState(false);
 
   const lguName = settings?.lguName || "GeoHealthSync";
@@ -170,6 +173,34 @@ export function AppSidebar() {
       </SidebarContent>
       <SidebarFooter className="p-2 border-t border-sidebar-border">
         <SidebarMenu>
+          {canManageUsers && (
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                asChild
+                data-active={location === "/admin/users"}
+                className="data-[active=true]:bg-sidebar-accent"
+              >
+                <Link href="/admin/users" data-testid="nav-admin-users">
+                  <Users className="w-4 h-4" />
+                  <span>User Management</span>
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          )}
+          {canViewAuditLogs && (
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                asChild
+                data-active={location === "/admin/audit"}
+                className="data-[active=true]:bg-sidebar-accent"
+              >
+                <Link href="/admin/audit" data-testid="nav-admin-audit">
+                  <Shield className="w-4 h-4" />
+                  <span>Audit Logs</span>
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          )}
           <SidebarMenuItem>
             <SidebarMenuButton
               asChild

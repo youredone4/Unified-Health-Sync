@@ -5,11 +5,16 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { SidebarProvider, SidebarTrigger, SidebarInset } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
-import { Bell } from "lucide-react";
+import { Bell, LogOut, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useState } from "react";
 import { ThemeProvider } from "@/contexts/theme-context";
+import { useAuth } from "@/hooks/use-auth";
 
+import LandingPage from "@/pages/landing";
 import Dashboard from "@/pages/dashboard";
 import Hotspots from "@/pages/hotspots";
 import CalendarPage from "@/pages/calendar";
@@ -41,8 +46,40 @@ import TBWorklist from "@/pages/tb-worklist";
 import TBProfile from "@/pages/tb-profile";
 import TBRegistry from "@/pages/tb-registry";
 import SettingsPage from "@/pages/settings";
+import UserManagement from "@/pages/admin/user-management";
+import AuditLogs from "@/pages/admin/audit-logs";
 import NotificationDrawer from "@/components/notification-drawer";
 import SmsOutbox from "@/components/sms-outbox";
+
+const roleLabels: Record<string, string> = {
+  SYSTEM_ADMIN: "Admin",
+  MHO: "MHO",
+  SHA: "SHA",
+  TL: "Team Leader",
+};
+
+// Demo date per project requirements
+const DEMO_DATE = "December 22, 2025";
+
+// Route guard component for admin pages
+function AdminRoute({ component: Component, permission }: { component: React.ComponentType; permission: "users" | "audit" }) {
+  const { canManageUsers, canViewAuditLogs } = useAuth();
+  
+  const hasPermission = permission === "users" ? canManageUsers : canViewAuditLogs;
+  
+  if (!hasPermission) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <div className="text-center">
+          <p className="text-lg font-medium mb-2">Access Denied</p>
+          <p className="text-muted-foreground">You don't have permission to access this page.</p>
+        </div>
+      </div>
+    );
+  }
+  
+  return <Component />;
+}
 
 function Router() {
   return (
@@ -78,6 +115,12 @@ function Router() {
       <Route path="/tb/registry" component={TBRegistry} />
       <Route path="/tb/:id" component={TBProfile} />
       <Route path="/settings" component={SettingsPage} />
+      <Route path="/admin/users">
+        <AdminRoute component={UserManagement} permission="users" />
+      </Route>
+      <Route path="/admin/audit">
+        <AdminRoute component={AuditLogs} permission="audit" />
+      </Route>
       <Route>
         <div className="flex items-center justify-center h-full">
           <p className="text-muted-foreground">Page not found</p>
@@ -87,7 +130,8 @@ function Router() {
   );
 }
 
-function App() {
+function AuthenticatedApp() {
+  const { user, role, logout, isLoggingOut } = useAuth();
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [smsOutboxOpen, setSmsOutboxOpen] = useState(false);
 
@@ -97,48 +141,119 @@ function App() {
   };
 
   return (
+    <ThemeProvider>
+      <TooltipProvider>
+        <SidebarProvider style={sidebarStyle as React.CSSProperties}>
+          <div className="flex h-screen w-full">
+            <AppSidebar />
+            <SidebarInset className="flex flex-col flex-1">
+              <header className="flex items-center justify-between gap-2 p-3 border-b border-border sticky top-0 z-50 bg-background">
+                <div className="flex items-center gap-2">
+                  <SidebarTrigger data-testid="button-sidebar-toggle" />
+                  <span className="text-sm text-muted-foreground">{DEMO_DATE}</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setSmsOutboxOpen(true)}
+                    data-testid="button-sms-outbox"
+                  >
+                    SMS Outbox
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => setNotificationsOpen(true)}
+                    data-testid="button-notifications"
+                  >
+                    <Bell className="w-4 h-4" />
+                  </Button>
+                  
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="sm" className="gap-2" data-testid="button-user-menu">
+                        <Avatar className="w-6 h-6">
+                          <AvatarImage src={user?.profileImageUrl || undefined} />
+                          <AvatarFallback>
+                            <User className="w-4 h-4" />
+                          </AvatarFallback>
+                        </Avatar>
+                        <span className="hidden sm:inline max-w-32 truncate">
+                          {user?.firstName || user?.email || "User"}
+                        </span>
+                        {role && (
+                          <Badge variant="secondary" className="text-xs hidden md:inline">
+                            {roleLabels[role] || role}
+                          </Badge>
+                        )}
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-56">
+                      <DropdownMenuLabel>
+                        <div className="flex flex-col">
+                          <span>{user?.firstName} {user?.lastName}</span>
+                          <span className="text-xs font-normal text-muted-foreground">{user?.email}</span>
+                        </div>
+                      </DropdownMenuLabel>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        onClick={() => logout()}
+                        disabled={isLoggingOut}
+                        data-testid="button-logout"
+                      >
+                        <LogOut className="w-4 h-4 mr-2" />
+                        {isLoggingOut ? "Signing out..." : "Sign Out"}
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              </header>
+              <main className="flex-1 overflow-auto p-4">
+                <Router />
+              </main>
+            </SidebarInset>
+          </div>
+        </SidebarProvider>
+        <NotificationDrawer open={notificationsOpen} onOpenChange={setNotificationsOpen} />
+        <SmsOutbox open={smsOutboxOpen} onOpenChange={setSmsOutboxOpen} />
+        <Toaster />
+      </TooltipProvider>
+    </ThemeProvider>
+  );
+}
+
+function App() {
+  const { isAuthenticated, isLoading } = useAuth();
+
+  // Show loading state while checking auth
+  if (isLoading) {
+    return (
+      <QueryClientProvider client={queryClient}>
+        <div className="flex items-center justify-center h-screen">
+          <div className="text-center">
+            <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full mx-auto mb-4"></div>
+            <p className="text-muted-foreground">Loading...</p>
+          </div>
+        </div>
+      </QueryClientProvider>
+    );
+  }
+
+  // Show landing page if not authenticated
+  if (!isAuthenticated) {
+    return (
+      <QueryClientProvider client={queryClient}>
+        <LandingPage />
+        <Toaster />
+      </QueryClientProvider>
+    );
+  }
+
+  // Show authenticated app
+  return (
     <QueryClientProvider client={queryClient}>
-      <ThemeProvider>
-        <TooltipProvider>
-          <SidebarProvider style={sidebarStyle as React.CSSProperties}>
-            <div className="flex h-screen w-full">
-              <AppSidebar />
-              <SidebarInset className="flex flex-col flex-1">
-                <header className="flex items-center justify-between gap-2 p-3 border-b border-border sticky top-0 z-50 bg-background">
-                  <div className="flex items-center gap-2">
-                    <SidebarTrigger data-testid="button-sidebar-toggle" />
-                    <span className="text-sm text-muted-foreground">December 22, 2025</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setSmsOutboxOpen(true)}
-                      data-testid="button-sms-outbox"
-                    >
-                      SMS Outbox
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      onClick={() => setNotificationsOpen(true)}
-                      data-testid="button-notifications"
-                    >
-                      <Bell className="w-4 h-4" />
-                    </Button>
-                  </div>
-                </header>
-                <main className="flex-1 overflow-auto p-4">
-                  <Router />
-                </main>
-              </SidebarInset>
-            </div>
-          </SidebarProvider>
-          <NotificationDrawer open={notificationsOpen} onOpenChange={setNotificationsOpen} />
-          <SmsOutbox open={smsOutboxOpen} onOpenChange={setSmsOutboxOpen} />
-          <Toaster />
-        </TooltipProvider>
-      </ThemeProvider>
+      <AuthenticatedApp />
     </QueryClientProvider>
   );
 }

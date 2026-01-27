@@ -1,6 +1,7 @@
 import { db } from "./db";
 import { 
   mothers, children, seniors, inventory, healthStations, smsOutbox, diseaseCases, tbPatients, themeSettings,
+  barangays, users, userBarangays, municipalitySettings, UserRole,
   type Mother, type InsertMother,
   type Child, type InsertChild,
   type Senior, type InsertSenior,
@@ -9,9 +10,10 @@ import {
   type SmsMessage, type InsertSmsMessage,
   type DiseaseCase, type InsertDiseaseCase,
   type TBPatient, type InsertTBPatient,
-  type ThemeSettings, type InsertThemeSettings
+  type ThemeSettings, type InsertThemeSettings,
+  type Barangay, type User
 } from "@shared/schema";
-import { eq } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
 
 export interface IStorage {
   getMothers(): Promise<Mother[]>;
@@ -175,6 +177,25 @@ export class DatabaseStorage implements IStorage {
     if (existingMothers.length > 0) return;
 
     console.log("Seeding database with comprehensive demo data...");
+
+    // BARANGAYS - Seed the barangays table first
+    const barangayNames = ["Bugas-bugas", "San Isidro", "Poblacion", "Banban", "Canlumacad"];
+    const existingBarangays = await db.select().from(barangays);
+    if (existingBarangays.length === 0) {
+      await db.insert(barangays).values(barangayNames.map(name => ({ name })));
+      console.log("Seeded barangays table");
+    }
+
+    // MUNICIPALITY SETTINGS - Seed default municipality settings
+    const existingMuniSettings = await db.select().from(municipalitySettings);
+    if (existingMuniSettings.length === 0) {
+      await db.insert(municipalitySettings).values({
+        municipalityName: "Placer Municipality",
+        subtitle: "Province of Surigao del Norte",
+        logoUrl: null,
+      });
+      console.log("Seeded municipality settings");
+    }
 
     // MOTHERS - with detailed profile fields
     const mothersData = await db.insert(mothers).values([

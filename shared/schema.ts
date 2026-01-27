@@ -199,3 +199,6 @@ export const themeSettings = pgTable("theme_settings", {
 export const insertThemeSettingsSchema = createInsertSchema(themeSettings).omit({ id: true });
 export type ThemeSettings = typeof themeSettings.$inferSelect;
 export type InsertThemeSettings = z.infer<typeof insertThemeSettingsSchema>;
+
+// === AUTH & RBAC (from Replit Auth integration + extensions) ===
+export * from "./models/auth";
