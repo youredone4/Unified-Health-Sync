@@ -993,23 +993,6 @@ export default function M1ReportPage() {
             </Select>
           </div>
 
-          <div className="flex flex-col gap-1">
-            <Label className="text-xs">Test Data</Label>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => seedHistoricalMutation.mutate()}
-              disabled={seedHistoricalMutation.isPending}
-              data-testid="button-seed-historical"
-            >
-              {seedHistoricalMutation.isPending ? (
-                <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-              ) : (
-                <Database className="h-4 w-4 mr-1" />
-              )}
-              Generate 2020-2025 Data
-            </Button>
-          </div>
         </div>
       </div>
 

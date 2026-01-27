@@ -104,7 +104,6 @@ const menuGroups = [
   {
     label: "Reporting Module",
     items: [
-      { title: "Reports", url: "/reports", icon: FileText },
       { title: "M1 Report", url: "/reports/m1", icon: ClipboardList },
       { title: "AI Reporting", url: "/reports/ai", icon: Bot },
     ],
