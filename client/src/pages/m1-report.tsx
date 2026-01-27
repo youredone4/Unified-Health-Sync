@@ -332,11 +332,18 @@ export default function M1ReportPage() {
 
   const handleValueChange = (rowKey: string, columnKey: string, value: string) => {
     const key = columnKey ? `${rowKey}:${columnKey}` : rowKey;
-    const numValue = value === "" ? null : parseInt(value, 10);
-    setEditedValues(prev => ({
-      ...prev,
-      [key]: { valueNumber: isNaN(numValue as number) ? null : numValue, valueSource: "ENCODED" },
-    }));
+    if (columnKey === "REMARKS") {
+      setEditedValues(prev => ({
+        ...prev,
+        [key]: { valueText: value || null, valueSource: "ENCODED" },
+      }));
+    } else {
+      const numValue = value === "" ? null : parseInt(value, 10);
+      setEditedValues(prev => ({
+        ...prev,
+        [key]: { valueNumber: isNaN(numValue as number) ? null : numValue, valueSource: "ENCODED" },
+      }));
+    }
   };
 
   const handleCreateReport = () => {
@@ -407,32 +414,33 @@ export default function M1ReportPage() {
         const colSpec = indicators[0]?.columnSpec as ColumnSpec | null;
         const colType = indicators[0]?.columnGroupType;
         
-        let headers: string[][] = [["Indicator", "Value"]];
-        let colWidths: Record<number, { cellWidth: number }> = { 0: { cellWidth: 120 }, 1: { cellWidth: 40 } };
+        let headers: string[][] = [["Indicator", "Value", "Remarks"]];
+        let colWidths: Record<number, { cellWidth: number }> = { 0: { cellWidth: 100 }, 1: { cellWidth: 30 }, 2: { cellWidth: 40 } };
 
         if (colType === "AGE_GROUP") {
-          headers = [["Indicator", "10-14", "15-19", "20-49", "TOTAL"]];
-          colWidths = { 0: { cellWidth: 80 }, 1: { cellWidth: 20 }, 2: { cellWidth: 20 }, 3: { cellWidth: 20 }, 4: { cellWidth: 20 } };
+          headers = [["Indicator", "10-14", "15-19", "20-49", "TOTAL", "Remarks"]];
+          colWidths = { 0: { cellWidth: 70 }, 1: { cellWidth: 16 }, 2: { cellWidth: 16 }, 3: { cellWidth: 16 }, 4: { cellWidth: 16 }, 5: { cellWidth: 36 } };
         } else if (colType === "SEX_RATE" || colType === "SEX") {
-          headers = [["Indicator", "M", "F", "Total", "Rate"]];
-          colWidths = { 0: { cellWidth: 80 }, 1: { cellWidth: 18 }, 2: { cellWidth: 18 }, 3: { cellWidth: 22 }, 4: { cellWidth: 22 } };
+          headers = [["Indicator", "M", "F", "Total", "Rate", "Remarks"]];
+          colWidths = { 0: { cellWidth: 65 }, 1: { cellWidth: 14 }, 2: { cellWidth: 14 }, 3: { cellWidth: 18 }, 4: { cellWidth: 18 }, 5: { cellWidth: 36 } };
         } else if (colType === "FP_DUAL") {
-          headers = [["Method", "CU 10-14", "CU 15-19", "CU 20-49", "CU Tot", "NA 10-14", "NA 15-19", "NA 20-49", "NA Tot"]];
-          colWidths = { 0: { cellWidth: 35 }, 1: { cellWidth: 16 }, 2: { cellWidth: 16 }, 3: { cellWidth: 16 }, 4: { cellWidth: 16 }, 5: { cellWidth: 16 }, 6: { cellWidth: 16 }, 7: { cellWidth: 16 }, 8: { cellWidth: 16 } };
+          headers = [["Method", "CU 10-14", "CU 15-19", "CU 20-49", "CU Tot", "NA 10-14", "NA 15-19", "NA 20-49", "NA Tot", "Remarks"]];
+          colWidths = { 0: { cellWidth: 30 }, 1: { cellWidth: 14 }, 2: { cellWidth: 14 }, 3: { cellWidth: 14 }, 4: { cellWidth: 14 }, 5: { cellWidth: 14 }, 6: { cellWidth: 14 }, 7: { cellWidth: 14 }, 8: { cellWidth: 14 }, 9: { cellWidth: 28 } };
         }
 
         const body: string[][] = indicators.map(ind => {
           const indent = (ind.indentLevel || 0) > 0 ? "  " : "";
           const label = indent + ind.officialLabel;
+          const remarks = String(getValue(ind.rowKey, "REMARKS") || "");
 
           if (colType === "AGE_GROUP") {
-            return [label, String(getValue(ind.rowKey, "10-14")), String(getValue(ind.rowKey, "15-19")), String(getValue(ind.rowKey, "20-49")), String(getValue(ind.rowKey, "TOTAL"))];
+            return [label, String(getValue(ind.rowKey, "10-14")), String(getValue(ind.rowKey, "15-19")), String(getValue(ind.rowKey, "20-49")), String(getValue(ind.rowKey, "TOTAL")), remarks];
           } else if (colType === "SEX_RATE" || colType === "SEX") {
-            return [label, String(getValue(ind.rowKey, "M")), String(getValue(ind.rowKey, "F")), String(getValue(ind.rowKey, "TOTAL")), String(getValue(ind.rowKey, "RATE") || "0.00")];
+            return [label, String(getValue(ind.rowKey, "M")), String(getValue(ind.rowKey, "F")), String(getValue(ind.rowKey, "TOTAL")), String(getValue(ind.rowKey, "RATE") || "0.00"), remarks];
           } else if (colType === "FP_DUAL") {
-            return [label, String(getValue(ind.rowKey, "CU_10-14")), String(getValue(ind.rowKey, "CU_15-19")), String(getValue(ind.rowKey, "CU_20-49")), String(getValue(ind.rowKey, "CU_TOTAL")), String(getValue(ind.rowKey, "NA_10-14")), String(getValue(ind.rowKey, "NA_15-19")), String(getValue(ind.rowKey, "NA_20-49")), String(getValue(ind.rowKey, "NA_TOTAL"))];
+            return [label, String(getValue(ind.rowKey, "CU_10-14")), String(getValue(ind.rowKey, "CU_15-19")), String(getValue(ind.rowKey, "CU_20-49")), String(getValue(ind.rowKey, "CU_TOTAL")), String(getValue(ind.rowKey, "NA_10-14")), String(getValue(ind.rowKey, "NA_15-19")), String(getValue(ind.rowKey, "NA_20-49")), String(getValue(ind.rowKey, "NA_TOTAL")), remarks];
           }
-          return [label, String(getValue(ind.rowKey, "VALUE"))];
+          return [label, String(getValue(ind.rowKey, "VALUE")), remarks];
         });
 
         autoTable(doc, {
@@ -472,6 +480,7 @@ export default function M1ReportPage() {
               <th className="border p-2 text-left" rowSpan={2}>Modern FP Methods</th>
               <th className="border p-1 text-center" colSpan={4}>Current Users (Beginning of Month)</th>
               <th className="border p-1 text-center" colSpan={4}>New Acceptors (Previous Month)</th>
+              <th className="border p-1 text-center w-32" rowSpan={2}>Remarks</th>
             </tr>
             <tr className="bg-muted/50 text-xs">
               <th className="border p-1 text-center">10-14</th>
@@ -505,6 +514,19 @@ export default function M1ReportPage() {
                     )}
                   </td>
                 ))}
+                <td className="border p-1 text-center">
+                  {reportMode === "encode" ? (
+                    <Input
+                      type="text"
+                      className="w-full h-7 text-xs"
+                      value={getValue(ind.rowKey, "REMARKS") || ""}
+                      onChange={(e) => handleValueChange(ind.rowKey, "REMARKS", e.target.value)}
+                      data-testid={`input-${ind.rowKey}-REMARKS`}
+                    />
+                  ) : (
+                    <span className="text-xs text-muted-foreground">{getValue(ind.rowKey, "REMARKS")}</span>
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>
@@ -522,6 +544,7 @@ export default function M1ReportPage() {
               <th className="border p-1 text-center w-16">15-19</th>
               <th className="border p-1 text-center w-16">20-49</th>
               <th className="border p-1 text-center w-16">TOTAL</th>
+              <th className="border p-1 text-center w-32">Remarks</th>
             </tr>
           </thead>
           <tbody>
@@ -545,6 +568,19 @@ export default function M1ReportPage() {
                     )}
                   </td>
                 ))}
+                <td className="border p-1 text-center">
+                  {reportMode === "encode" ? (
+                    <Input
+                      type="text"
+                      className="w-full h-7 text-xs"
+                      value={getValue(ind.rowKey, "REMARKS") || ""}
+                      onChange={(e) => handleValueChange(ind.rowKey, "REMARKS", e.target.value)}
+                      data-testid={`input-${ind.rowKey}-REMARKS`}
+                    />
+                  ) : (
+                    <span className="text-xs text-muted-foreground">{getValue(ind.rowKey, "REMARKS")}</span>
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>
@@ -554,45 +590,100 @@ export default function M1ReportPage() {
 
     if (colType === "SEX_RATE" || colType === "SEX") {
       const showRate = colType === "SEX_RATE";
+      const indColSpec = colSpec?.columns || ["M", "F", "TOTAL"];
+      const hasM = indColSpec.includes("M");
+      const hasF = indColSpec.includes("F");
       return (
         <table className="w-full text-sm border-collapse">
           <thead>
             <tr className="bg-muted">
               <th className="border p-2 text-left">Indicators</th>
-              <th className="border p-1 text-center w-16">Male</th>
-              <th className="border p-1 text-center w-16">Female</th>
+              {hasM && <th className="border p-1 text-center w-16">Male</th>}
+              {hasF && <th className="border p-1 text-center w-16">Female</th>}
               <th className="border p-1 text-center w-16">Total</th>
               {showRate && <th className="border p-1 text-center w-16">Rate</th>}
+              <th className="border p-1 text-center w-32">Remarks</th>
             </tr>
           </thead>
           <tbody>
-            {indicators.map(ind => (
-              <tr key={ind.rowKey} className={ind.indentLevel ? "bg-muted/20" : ""}>
-                <td className="border p-2" style={{ paddingLeft: (ind.indentLevel || 0) * 16 + 8 }}>
-                  {ind.officialLabel}
-                </td>
-                {["M", "F", "TOTAL"].map(col => (
-                  <td key={col} className="border p-1 text-center">
+            {indicators.map(ind => {
+              const rowColSpec = (ind.columnSpec as ColumnSpec | null)?.columns || indColSpec;
+              const rowHasM = rowColSpec.includes("M");
+              const rowHasF = rowColSpec.includes("F");
+              const rowShowRate = rowColSpec.includes("RATE");
+              return (
+                <tr key={ind.rowKey} className={ind.indentLevel ? "bg-muted/20" : ""}>
+                  <td className="border p-2" style={{ paddingLeft: (ind.indentLevel || 0) * 16 + 8 }}>
+                    {ind.officialLabel}
+                  </td>
+                  {hasM && (
+                    <td className="border p-1 text-center">
+                      {rowHasM ? (
+                        reportMode === "encode" && !ind.isComputed ? (
+                          <Input
+                            type="number"
+                            className="w-14 h-7 text-center text-xs"
+                            value={getValue(ind.rowKey, "M")}
+                            onChange={(e) => handleValueChange(ind.rowKey, "M", e.target.value)}
+                            data-testid={`input-${ind.rowKey}-M`}
+                          />
+                        ) : (
+                          <span className="text-sm">{getValue(ind.rowKey, "M")}</span>
+                        )
+                      ) : <span className="text-muted-foreground">-</span>}
+                    </td>
+                  )}
+                  {hasF && (
+                    <td className="border p-1 text-center">
+                      {rowHasF ? (
+                        reportMode === "encode" && !ind.isComputed ? (
+                          <Input
+                            type="number"
+                            className="w-14 h-7 text-center text-xs"
+                            value={getValue(ind.rowKey, "F")}
+                            onChange={(e) => handleValueChange(ind.rowKey, "F", e.target.value)}
+                            data-testid={`input-${ind.rowKey}-F`}
+                          />
+                        ) : (
+                          <span className="text-sm">{getValue(ind.rowKey, "F")}</span>
+                        )
+                      ) : <span className="text-muted-foreground">-</span>}
+                    </td>
+                  )}
+                  <td className="border p-1 text-center">
                     {reportMode === "encode" && !ind.isComputed ? (
                       <Input
                         type="number"
                         className="w-14 h-7 text-center text-xs"
-                        value={getValue(ind.rowKey, col)}
-                        onChange={(e) => handleValueChange(ind.rowKey, col, e.target.value)}
-                        data-testid={`input-${ind.rowKey}-${col}`}
+                        value={getValue(ind.rowKey, "TOTAL")}
+                        onChange={(e) => handleValueChange(ind.rowKey, "TOTAL", e.target.value)}
+                        data-testid={`input-${ind.rowKey}-TOTAL`}
                       />
                     ) : (
-                      <span className="text-sm">{getValue(ind.rowKey, col)}</span>
+                      <span className="text-sm">{getValue(ind.rowKey, "TOTAL")}</span>
                     )}
                   </td>
-                ))}
-                {showRate && (
-                  <td className="border p-1 text-center text-muted-foreground">
-                    {getValue(ind.rowKey, "RATE") || "0.00"}
+                  {showRate && (
+                    <td className="border p-1 text-center text-muted-foreground">
+                      {rowShowRate ? (getValue(ind.rowKey, "RATE") || "0.00") : "-"}
+                    </td>
+                  )}
+                  <td className="border p-1 text-center">
+                    {reportMode === "encode" ? (
+                      <Input
+                        type="text"
+                        className="w-full h-7 text-xs"
+                        value={getValue(ind.rowKey, "REMARKS") || ""}
+                        onChange={(e) => handleValueChange(ind.rowKey, "REMARKS", e.target.value)}
+                        data-testid={`input-${ind.rowKey}-REMARKS`}
+                      />
+                    ) : (
+                      <span className="text-xs text-muted-foreground">{getValue(ind.rowKey, "REMARKS")}</span>
+                    )}
                   </td>
-                )}
-              </tr>
-            ))}
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       );
@@ -604,6 +695,7 @@ export default function M1ReportPage() {
           <tr className="bg-muted">
             <th className="border p-2 text-left">Indicators</th>
             <th className="border p-1 text-center w-24">Value</th>
+            <th className="border p-1 text-center w-32">Remarks</th>
           </tr>
         </thead>
         <tbody>
@@ -623,6 +715,19 @@ export default function M1ReportPage() {
                   />
                 ) : (
                   <span className="text-sm">{getValue(ind.rowKey, "VALUE")}</span>
+                )}
+              </td>
+              <td className="border p-1 text-center">
+                {reportMode === "encode" ? (
+                  <Input
+                    type="text"
+                    className="w-full h-7 text-xs"
+                    value={getValue(ind.rowKey, "REMARKS") || ""}
+                    onChange={(e) => handleValueChange(ind.rowKey, "REMARKS", e.target.value)}
+                    data-testid={`input-${ind.rowKey}-REMARKS`}
+                  />
+                ) : (
+                  <span className="text-xs text-muted-foreground">{getValue(ind.rowKey, "REMARKS")}</span>
                 )}
               </td>
             </tr>
