@@ -50,10 +50,21 @@ The server uses a storage abstraction pattern (`IStorage` interface) that enable
 Key entities:
 - `mothers` - Prenatal patients with TT vaccination tracking
 - `children` - Immunization records with vaccine JSON and growth measurements
-- `seniors` - Hypertension medication pickup tracking
+- `seniors` - Hypertension medication pickup tracking (with seniorUniqueId for cross-barangay verification)
 - `inventory` - Vaccine and medication stock by barangay
 - `healthStations` - Facility locations with coordinates
 - `smsOutbox` - Demo SMS message queue
+- `barangays` - Registered barangays (Poblacion, San Isidro, Mabini, Rizal, Buenavista)
+
+**M1 Template System Tables:**
+- `m1_template_versions` - Template version records for DOH FHSIS M1Brgy
+- `m1_indicator_catalog` - 121 indicators covering all sections of the M1Brgy form (FP, A-K)
+- `m1_report_instances` - Per-barangay/month report instances with DRAFT/SUBMITTED workflow
+- `m1_indicator_values` - Stored indicator values with valueSource (COMPUTED/ENCODED/IMPORTED)
+- `municipality_settings` - Municipality-level branding settings
+- `barangay_settings` - Barangay-level branding overrides
+- `senior_med_claims` - Cross-barangay medication claim verification for seniors
+- `audit_logs` - System-wide audit logging
 
 ### Health Logic
 All date-based health status calculations (overdue, due soon, upcoming) are computed client-side in `client/src/lib/healthLogic.ts`. This file contains the core business logic for determining vaccination schedules, prenatal check deadlines, and medication pickup status based on a fixed demo date.

@@ -33,9 +33,24 @@ const MONTHS = [
 ];
 
 const PAGE_TITLES: Record<number, string> = {
-  1: "Maternal Care Services & Tetanus Toxoid Vaccination",
-  2: "Immunization & Nutrition Services",
-  3: "Senior Citizens, Mortality & Disease Surveillance",
+  1: "Family Planning, Prenatal Care & Tetanus Toxoid",
+  2: "Intrapartum, Newborn Care & Immunization",
+  3: "Nutrition, Senior Citizens, Mortality & Surveillance",
+};
+
+const SECTION_TITLES: Record<string, string> = {
+  "FP": "Family Planning Services",
+  "A": "Prenatal Care Services",
+  "B": "Tetanus Toxoid (Td) Vaccination",
+  "C": "Intrapartum Care / Delivery",
+  "D": "Newborn Care",
+  "E1": "Immunization Services (0-11 months)",
+  "E2": "Immunization Services (13-23 months)",
+  "G": "Nutrition",
+  "H": "Senior Citizens / NCD Services",
+  "I": "TB DOTS",
+  "J": "Mortality / Natality",
+  "K": "Disease Surveillance",
 };
 
 interface IndicatorValueMap {
@@ -200,60 +215,60 @@ export default function M1ReportPage() {
     computed["D-01"] = { valueNumber: filteredMothers.filter(m => m.breastfedWithin1hr).length, valueSource: "COMPUTED" };
 
     const cpab = countBySex(filteredChildren, c => (c.vaccines as any)?.hepB);
-    computed["E-01-M"] = { valueNumber: cpab.male, valueSource: "COMPUTED" };
-    computed["E-01-F"] = { valueNumber: cpab.female, valueSource: "COMPUTED" };
+    computed["E1-01-M"] = { valueNumber: cpab.male, valueSource: "COMPUTED" };
+    computed["E1-01-F"] = { valueNumber: cpab.female, valueSource: "COMPUTED" };
 
     const bcg = countBySex(filteredChildren, c => (c.vaccines as any)?.bcg);
-    computed["E-02-M"] = { valueNumber: bcg.male, valueSource: "COMPUTED" };
-    computed["E-02-F"] = { valueNumber: bcg.female, valueSource: "COMPUTED" };
+    computed["E1-02-M"] = { valueNumber: bcg.male, valueSource: "COMPUTED" };
+    computed["E1-02-F"] = { valueNumber: bcg.female, valueSource: "COMPUTED" };
 
     const penta1 = countBySex(filteredChildren, c => (c.vaccines as any)?.penta1);
-    computed["E-03-M"] = { valueNumber: penta1.male, valueSource: "COMPUTED" };
-    computed["E-03-F"] = { valueNumber: penta1.female, valueSource: "COMPUTED" };
+    computed["E1-03-M"] = { valueNumber: penta1.male, valueSource: "COMPUTED" };
+    computed["E1-03-F"] = { valueNumber: penta1.female, valueSource: "COMPUTED" };
 
     const penta2 = countBySex(filteredChildren, c => (c.vaccines as any)?.penta2);
-    computed["E-04-M"] = { valueNumber: penta2.male, valueSource: "COMPUTED" };
-    computed["E-04-F"] = { valueNumber: penta2.female, valueSource: "COMPUTED" };
+    computed["E1-04-M"] = { valueNumber: penta2.male, valueSource: "COMPUTED" };
+    computed["E1-04-F"] = { valueNumber: penta2.female, valueSource: "COMPUTED" };
 
     const penta3 = countBySex(filteredChildren, c => (c.vaccines as any)?.penta3);
-    computed["E-05-M"] = { valueNumber: penta3.male, valueSource: "COMPUTED" };
-    computed["E-05-F"] = { valueNumber: penta3.female, valueSource: "COMPUTED" };
+    computed["E1-05-M"] = { valueNumber: penta3.male, valueSource: "COMPUTED" };
+    computed["E1-05-F"] = { valueNumber: penta3.female, valueSource: "COMPUTED" };
 
     const opv1 = countBySex(filteredChildren, c => (c.vaccines as any)?.opv1);
-    computed["E-06-M"] = { valueNumber: opv1.male, valueSource: "COMPUTED" };
-    computed["E-06-F"] = { valueNumber: opv1.female, valueSource: "COMPUTED" };
+    computed["E1-06-M"] = { valueNumber: opv1.male, valueSource: "COMPUTED" };
+    computed["E1-06-F"] = { valueNumber: opv1.female, valueSource: "COMPUTED" };
 
     const opv2 = countBySex(filteredChildren, c => (c.vaccines as any)?.opv2);
-    computed["E-07-M"] = { valueNumber: opv2.male, valueSource: "COMPUTED" };
-    computed["E-07-F"] = { valueNumber: opv2.female, valueSource: "COMPUTED" };
+    computed["E1-07-M"] = { valueNumber: opv2.male, valueSource: "COMPUTED" };
+    computed["E1-07-F"] = { valueNumber: opv2.female, valueSource: "COMPUTED" };
 
     const opv3 = countBySex(filteredChildren, c => (c.vaccines as any)?.opv3);
-    computed["E-08-M"] = { valueNumber: opv3.male, valueSource: "COMPUTED" };
-    computed["E-08-F"] = { valueNumber: opv3.female, valueSource: "COMPUTED" };
+    computed["E1-08-M"] = { valueNumber: opv3.male, valueSource: "COMPUTED" };
+    computed["E1-08-F"] = { valueNumber: opv3.female, valueSource: "COMPUTED" };
 
     const ipv = countBySex(filteredChildren, c => (c.vaccines as any)?.ipv1);
-    computed["E-09-M"] = { valueNumber: ipv.male, valueSource: "COMPUTED" };
-    computed["E-09-F"] = { valueNumber: ipv.female, valueSource: "COMPUTED" };
+    computed["E1-09-M"] = { valueNumber: ipv.male, valueSource: "COMPUTED" };
+    computed["E1-09-F"] = { valueNumber: ipv.female, valueSource: "COMPUTED" };
 
     const pcv1 = countBySex(filteredChildren, c => (c.vaccines as any)?.pcv1);
-    computed["E-10-M"] = { valueNumber: pcv1.male, valueSource: "COMPUTED" };
-    computed["E-10-F"] = { valueNumber: pcv1.female, valueSource: "COMPUTED" };
+    computed["E1-10-M"] = { valueNumber: pcv1.male, valueSource: "COMPUTED" };
+    computed["E1-10-F"] = { valueNumber: pcv1.female, valueSource: "COMPUTED" };
 
     const pcv2 = countBySex(filteredChildren, c => (c.vaccines as any)?.pcv2);
-    computed["E-11-M"] = { valueNumber: pcv2.male, valueSource: "COMPUTED" };
-    computed["E-11-F"] = { valueNumber: pcv2.female, valueSource: "COMPUTED" };
+    computed["E1-11-M"] = { valueNumber: pcv2.male, valueSource: "COMPUTED" };
+    computed["E1-11-F"] = { valueNumber: pcv2.female, valueSource: "COMPUTED" };
 
     const pcv3 = countBySex(filteredChildren, c => (c.vaccines as any)?.pcv3);
-    computed["E-12-M"] = { valueNumber: pcv3.male, valueSource: "COMPUTED" };
-    computed["E-12-F"] = { valueNumber: pcv3.female, valueSource: "COMPUTED" };
+    computed["E1-12-M"] = { valueNumber: pcv3.male, valueSource: "COMPUTED" };
+    computed["E1-12-F"] = { valueNumber: pcv3.female, valueSource: "COMPUTED" };
 
     const mr1 = countBySex(filteredChildren, c => (c.vaccines as any)?.mr1);
-    computed["F-01-M"] = { valueNumber: mr1.male, valueSource: "COMPUTED" };
-    computed["F-01-F"] = { valueNumber: mr1.female, valueSource: "COMPUTED" };
+    computed["E1-13-M"] = { valueNumber: mr1.male, valueSource: "COMPUTED" };
+    computed["E1-13-F"] = { valueNumber: mr1.female, valueSource: "COMPUTED" };
 
     const mr2 = countBySex(filteredChildren, c => (c.vaccines as any)?.mr2);
-    computed["F-02-M"] = { valueNumber: mr2.male, valueSource: "COMPUTED" };
-    computed["F-02-F"] = { valueNumber: mr2.female, valueSource: "COMPUTED" };
+    computed["E2-01-M"] = { valueNumber: mr2.male, valueSource: "COMPUTED" };
+    computed["E2-01-F"] = { valueNumber: mr2.female, valueSource: "COMPUTED" };
 
     computed["G-01"] = { valueNumber: filteredMothers.filter(m => m.breastfedWithin1hr).length, valueSource: "COMPUTED" };
 
@@ -377,7 +392,7 @@ export default function M1ReportPage() {
 
       let yPos = 44;
       Object.entries(sections).forEach(([sectionCode, indicators]) => {
-        const sectionTitle = indicators[0]?.sectionTitle || sectionCode;
+        const sectionTitle = SECTION_TITLES[sectionCode] || sectionCode;
 
         doc.setFontSize(10);
         doc.setFont("helvetica", "bold");
@@ -403,10 +418,10 @@ export default function M1ReportPage() {
             const maleVal = getValue(maleKey);
             const femaleVal = getValue(femaleKey);
             const total = (typeof maleVal === "number" ? maleVal : 0) + (typeof femaleVal === "number" ? femaleVal : 0);
-            body.push([ind.indicatorLabel, String(maleVal), String(femaleVal), String(total)]);
+            body.push([ind.officialLabel.replace(/ - (Male|Female)$/, ""), String(maleVal), String(femaleVal), String(total)]);
           } else {
             const val = getValue(ind.rowKey);
-            body.push([ind.indicatorLabel, String(val)]);
+            body.push([ind.officialLabel, String(val)]);
           }
         });
 
@@ -579,7 +594,7 @@ export default function M1ReportPage() {
                     indicators[0]?.pageNumber === page && (
                       <div key={sectionCode} className="space-y-2">
                         <h4 className="font-medium text-sm text-muted-foreground uppercase tracking-wide">
-                          {sectionCode}. {indicators[0]?.sectionTitle}
+                          {sectionCode}. {SECTION_TITLES[sectionCode] || sectionCode}
                         </h4>
                         <div className="border rounded-md overflow-hidden">
                           <table className="w-full text-sm">
@@ -617,7 +632,7 @@ export default function M1ReportPage() {
 
                                     return (
                                       <tr key={baseKey} className="border-t">
-                                        <td className="p-2">{ind.indicatorLabel}</td>
+                                        <td className="p-2">{ind.officialLabel.replace(/ - (Male|Female)$/, "")}</td>
                                         <td className="text-center p-2">
                                           {reportMode === "encode" ? (
                                             <Input
@@ -656,7 +671,7 @@ export default function M1ReportPage() {
                                     const val = getValue(ind.rowKey);
                                     return (
                                       <tr key={ind.rowKey} className="border-t">
-                                        <td className="p-2">{ind.indicatorLabel}</td>
+                                        <td className="p-2">{ind.officialLabel}</td>
                                         <td className="text-center p-2">
                                           {reportMode === "encode" ? (
                                             <Input
