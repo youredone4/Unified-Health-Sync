@@ -145,7 +145,7 @@ HEALTH STATISTICS:
 - Total Pregnant Mothers: ${stats.totalMothers} (${stats.activeMothers} active, ${stats.deliveredMothers} delivered)
 - Mothers without any TT vaccination: ${stats.mothersWithNoTT}
 - Mothers with complete TT (5 doses): ${stats.mothersWithCompleteTT}
-- Total Children: ${stats.totalChildren} (${stats.childrenUnder1.length} under 1 year old)
+- Total Children: ${stats.totalChildren} (${stats.childrenUnder1} under 1 year old)
 - Children with complete primary vaccines: ${stats.childrenWithCompletePrimaryVaccines}
 - Children missing age-appropriate vaccines: ${stats.childrenMissingVaccines}
 - Low birth weight children: ${stats.lowBirthWeightChildren}
