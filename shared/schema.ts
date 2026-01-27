@@ -298,12 +298,26 @@ export const m1IndicatorCatalog = pgTable("m1_indicator_catalog", {
   id: serial("id").primaryKey(),
   templateVersionId: integer("template_version_id").notNull(), // FK to m1_template_versions
   pageNumber: integer("page_number").notNull(), // 1, 2, or 3
-  sectionCode: text("section_code").notNull(), // A, B, C, etc.
+  sectionCode: text("section_code").notNull(), // FP, A, B, C, etc.
   rowKey: text("row_key").notNull(), // Unique stable key (e.g., "A-01")
   officialLabel: text("official_label").notNull(), // Exact text from PDF
   dataType: text("data_type").notNull().default("INT"), // INT, DECIMAL, TEXT, BOOLEAN
   unit: text("unit"), // count, percent, etc.
   rowOrder: integer("row_order").notNull(), // Exact row order from PDF
+  indentLevel: integer("indent_level").default(0), // 0=main, 1=sub-indicator (a., b., etc.)
+  
+  // Column group for multi-column DOH format
+  columnGroupType: text("column_group_type"), // AGE_GROUP, SEX, RATE, FP_CURRENT, FP_NEW, etc.
+  columnSpec: jsonb("column_spec").$type<{
+    columns: string[]; // ["10-14", "15-19", "20-49", "TOTAL"] or ["M", "F", "TOTAL", "RATE"]
+    hasTotal?: boolean;
+    hasRate?: boolean;
+  }>(),
+  
+  // Data source mapping for computed indicators
+  dataSourceTable: text("data_source_table"), // mothers, children, seniors, etc.
+  dataSourceFilter: jsonb("data_source_filter"), // JSON filter criteria
+  
   isComputed: boolean("is_computed").default(false),
   computeSpecJson: jsonb("compute_spec_json"), // Computation specification if isComputed
   isRequired: boolean("is_required").default(true),
@@ -357,7 +371,9 @@ export const m1IndicatorValues = pgTable("m1_indicator_values", {
   id: serial("id").primaryKey(),
   reportInstanceId: integer("report_instance_id").notNull(), // FK
   rowKey: text("row_key").notNull(), // FK to catalog rowKey
+  columnKey: text("column_key"), // For multi-column: "10-14", "15-19", "20-49", "TOTAL", "M", "F", "RATE"
   valueNumber: integer("value_number"), // nullable - for INT/DECIMAL
+  valueDecimal: text("value_decimal"), // for rates and percentages
   valueText: text("value_text"), // nullable - for TEXT
   valueSource: text("value_source").notNull().default("ENCODED"), // COMPUTED, ENCODED, IMPORTED
   computedAt: text("computed_at"), // timestamp when computed
