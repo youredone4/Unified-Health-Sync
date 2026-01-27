@@ -223,37 +223,39 @@ function AuthenticatedApp() {
   );
 }
 
-function App() {
+function AppContent() {
   const { isAuthenticated, isLoading } = useAuth();
 
   // Show loading state while checking auth
   if (isLoading) {
     return (
-      <QueryClientProvider client={queryClient}>
-        <div className="flex items-center justify-center h-screen">
-          <div className="text-center">
-            <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full mx-auto mb-4"></div>
-            <p className="text-muted-foreground">Loading...</p>
-          </div>
+      <div className="flex items-center justify-center h-screen">
+        <div className="text-center">
+          <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Loading...</p>
         </div>
-      </QueryClientProvider>
+      </div>
     );
   }
 
   // Show landing page if not authenticated
   if (!isAuthenticated) {
     return (
-      <QueryClientProvider client={queryClient}>
+      <>
         <LandingPage />
         <Toaster />
-      </QueryClientProvider>
+      </>
     );
   }
 
   // Show authenticated app
+  return <AuthenticatedApp />;
+}
+
+function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <AuthenticatedApp />
+      <AppContent />
     </QueryClientProvider>
   );
 }
