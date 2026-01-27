@@ -643,9 +643,9 @@ export default function M1ReportPage() {
           <div className="flex flex-col gap-1">
             <Label className="text-xs">Barangay</Label>
             <Select
-              value={selectedBarangayId?.toString() || ""}
+              value={selectedBarangayId === null ? "all" : selectedBarangayId.toString()}
               onValueChange={(v) => {
-                setSelectedBarangayId(parseInt(v, 10));
+                setSelectedBarangayId(v === "all" ? null : parseInt(v, 10));
                 setActiveReportId(null);
                 setEditedValues({});
               }}
@@ -654,6 +654,7 @@ export default function M1ReportPage() {
                 <SelectValue placeholder="Select Barangay" />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value="all">All Barangays (Consolidated)</SelectItem>
                 {barangays.map(b => (
                   <SelectItem key={b.id} value={b.id.toString()}>{b.name}</SelectItem>
                 ))}
@@ -695,7 +696,7 @@ export default function M1ReportPage() {
         <Card>
           <CardHeader className="pb-2 flex flex-row items-center justify-between gap-2">
             <div>
-              <CardTitle className="text-lg">{selectedBarangay?.name} - {MONTHS.find(m => m.value === selectedMonth)?.label} {selectedYear}</CardTitle>
+              <CardTitle className="text-lg">{selectedBarangay?.name || "All Barangays (Consolidated)"} - {MONTHS.find(m => m.value === selectedMonth)?.label} {selectedYear}</CardTitle>
               {existingReport ? (
                 <Badge variant={existingReport.status === "SUBMITTED_LOCKED" ? "default" : "secondary"} className="mt-1">
                   {existingReport.status}

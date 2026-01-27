@@ -404,16 +404,15 @@ export type InsertMunicipalitySettings = z.infer<typeof insertMunicipalitySettin
 
 // === BARANGAY SETTINGS (Branding overrides) ===
 export const barangaySettings = pgTable("barangay_settings", {
-  id: serial("id").primaryKey(),
-  barangayId: integer("barangay_id").notNull().unique(),
+  barangayId: serial("barangay_id").primaryKey(),
   barangayNameOverride: text("barangay_name_override"),
   subtitle: text("subtitle"),
   logoUrl: text("logo_url"),
   themeJson: jsonb("theme_json"),
-  updatedAt: text("updated_at").notNull(),
+  updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-export const insertBarangaySettingsSchema = createInsertSchema(barangaySettings).omit({ id: true });
+export const insertBarangaySettingsSchema = createInsertSchema(barangaySettings).omit({ barangayId: true });
 export type BarangaySettings = typeof barangaySettings.$inferSelect;
 export type InsertBarangaySettings = z.infer<typeof insertBarangaySettingsSchema>;
 
