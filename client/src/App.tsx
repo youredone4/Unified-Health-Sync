@@ -57,7 +57,7 @@ const roleLabels: Record<string, string> = {
   SYSTEM_ADMIN: "Admin",
   MHO: "MHO",
   SHA: "SHA",
-  TL: "Team Leader",
+  TL: "Team Leader (Barangay Nurse)",
 };
 
 // Demo date per project requirements

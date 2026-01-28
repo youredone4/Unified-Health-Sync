@@ -3,7 +3,7 @@ import session from "express-session";
 import type { Express, RequestHandler } from "express";
 import connectPg from "connect-pg-simple";
 import { db } from "./db";
-import { users, userBarangays, UserRole, UserStatus } from "@shared/schema";
+import { users, userBarangays, barangays, UserRole, UserStatus } from "@shared/schema";
 import { eq } from "drizzle-orm";
 
 const SALT_ROUNDS = 10;
@@ -55,6 +55,9 @@ export async function setupAuth(app: Express) {
   
   // Seed initial admin user if none exists
   await seedInitialAdmin();
+  
+  // Seed the 20 Placer barangays if not present
+  await seedPlacerBarangays();
 }
 
 // Seed initial SYSTEM_ADMIN
@@ -81,6 +84,34 @@ async function seedInitialAdmin() {
     }
   } catch (error) {
     console.error("Error seeding admin user:", error);
+  }
+}
+
+// Seed the 20 official Placer, Surigao del Norte barangays
+const PLACER_BARANGAYS = [
+  "Amoslog", "Anislagan", "Bad-as", "Boyongan", "Bugas-bugas",
+  "Central (Poblacion)", "Ellaperal (Nonok)", "Ipil (Poblacion)", "Lakandula", "Mabini",
+  "Macalaya", "Magsaysay (Poblacion)", "Magupange", "Pananay-an", "Panhutongan",
+  "San Isidro", "Sani-sani", "Santa Cruz", "Suyoc", "Tagbongabong"
+];
+
+async function seedPlacerBarangays() {
+  try {
+    const existingBarangays = await db.select().from(barangays);
+    const existingNames = new Set(existingBarangays.map(b => b.name));
+    
+    const missingBarangays = PLACER_BARANGAYS.filter(name => !existingNames.has(name));
+    
+    if (missingBarangays.length > 0) {
+      await db.insert(barangays).values(
+        missingBarangays.map(name => ({ name, municipalityId: 1 }))
+      );
+      console.log(`Seeded ${missingBarangays.length} missing Placer barangays`);
+    } else {
+      console.log("All 20 Placer barangays already exist");
+    }
+  } catch (error) {
+    console.error("Error seeding barangays:", error);
   }
 }
 

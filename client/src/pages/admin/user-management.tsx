@@ -35,7 +35,7 @@ const roleLabels: Record<string, string> = {
   SYSTEM_ADMIN: "System Admin",
   MHO: "Municipal Health Officer",
   SHA: "Senior Health Admin",
-  TL: "Team Leader",
+  TL: "Team Leader (Barangay Nurse)",
 };
 
 const roleColors: Record<string, string> = {
@@ -159,7 +159,7 @@ export default function UserManagement() {
       return;
     }
     if (newRole === UserRole.TL && newBarangayAssignments.length === 0) {
-      toast({ title: "Please assign at least one barangay for Team Leader", variant: "destructive" });
+      toast({ title: "Please assign at least one barangay for Team Leader (Barangay Nurse)", variant: "destructive" });
       return;
     }
     createUserMutation.mutate({
@@ -185,7 +185,7 @@ export default function UserManagement() {
     
     // Validate TL users must have at least one barangay
     if (selectedRole === UserRole.TL && selectedBarangays.length === 0) {
-      toast({ title: "Team Leaders must be assigned to at least one barangay", variant: "destructive" });
+      toast({ title: "Team Leader (Barangay Nurse) must be assigned to at least one barangay", variant: "destructive" });
       return;
     }
     
@@ -363,7 +363,7 @@ export default function UserManagement() {
                           ))}
                         </div>
                         <p className="text-xs text-muted-foreground">
-                          Team Leaders can only access data from their assigned barangays
+                          Team Leader (Barangay Nurse) can only access data from their assigned barangays
                         </p>
                       </div>
                     )}
@@ -532,7 +532,7 @@ export default function UserManagement() {
                                   ))}
                                 </div>
                                 <p className="text-xs text-muted-foreground">
-                                  Team Leaders can only access data from their assigned barangays
+                                  Team Leader (Barangay Nurse) can only access data from their assigned barangays
                                 </p>
                               </div>
                             )}
