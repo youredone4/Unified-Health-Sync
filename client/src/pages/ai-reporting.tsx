@@ -32,6 +32,9 @@ interface TrendData {
   seniorMedComplianceRate: number;
   tbAdherenceRate: number;
   diseaseIncidenceRate: number;
+  recentDiseaseCount: number;
+  previousDiseaseCount: number;
+  diseaseTrendDirection: "INCREASING" | "STABLE" | "DECREASING";
 }
 
 interface HealthStats {
@@ -215,41 +218,83 @@ export default function AIReporting() {
       </div>
 
       {trends && (
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-          <MetricCard 
-            label="Immunization" 
-            value={trends.immunizationCoverageRate} 
-            target={95} 
-            icon={Shield} 
-            color="bg-blue-500/10 border-blue-500" 
-          />
-          <MetricCard 
-            label="TT Vaccination" 
-            value={trends.ttVaccinationRate} 
-            target={100} 
-            icon={Heart} 
-            color="bg-pink-500/10 border-pink-500" 
-          />
-          <MetricCard 
-            label="Med Compliance" 
-            value={trends.seniorMedComplianceRate} 
-            target={90} 
-            icon={Users} 
-            color="bg-green-500/10 border-green-500" 
-          />
-          <MetricCard 
-            label="TB Adherence" 
-            value={trends.tbAdherenceRate} 
-            target={95} 
-            icon={Activity} 
-            color="bg-orange-500/10 border-orange-500" 
-          />
-          <MetricCard 
-            label="New Cases" 
-            value={trends.diseaseIncidenceRate} 
-            icon={AlertTriangle} 
-            color="bg-red-500/10 border-red-500" 
-          />
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+            <MetricCard 
+              label="Immunization" 
+              value={trends.immunizationCoverageRate} 
+              target={95} 
+              icon={Shield} 
+              color="bg-blue-500/10 border-blue-500" 
+            />
+            <MetricCard 
+              label="TT Vaccination" 
+              value={trends.ttVaccinationRate} 
+              target={100} 
+              icon={Heart} 
+              color="bg-pink-500/10 border-pink-500" 
+            />
+            <MetricCard 
+              label="Med Compliance" 
+              value={trends.seniorMedComplianceRate} 
+              target={90} 
+              icon={Users} 
+              color="bg-green-500/10 border-green-500" 
+            />
+            <MetricCard 
+              label="TB Adherence" 
+              value={trends.tbAdherenceRate} 
+              target={95} 
+              icon={Activity} 
+              color="bg-orange-500/10 border-orange-500" 
+            />
+            <MetricCard 
+              label="New Cases" 
+              value={trends.diseaseIncidenceRate} 
+              icon={AlertTriangle} 
+              color="bg-red-500/10 border-red-500" 
+            />
+          </div>
+          
+          <Card className={`${
+            trends.diseaseTrendDirection === "INCREASING" ? "border-red-500/30 bg-red-500/5" :
+            trends.diseaseTrendDirection === "DECREASING" ? "border-green-500/30 bg-green-500/5" :
+            "border-yellow-500/30 bg-yellow-500/5"
+          }`}>
+            <CardContent className="py-3 px-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className={`p-2 rounded-full ${
+                    trends.diseaseTrendDirection === "INCREASING" ? "bg-red-500/20" :
+                    trends.diseaseTrendDirection === "DECREASING" ? "bg-green-500/20" :
+                    "bg-yellow-500/20"
+                  }`}>
+                    {trends.diseaseTrendDirection === "INCREASING" ? (
+                      <TrendingUp className="w-4 h-4 text-red-400" />
+                    ) : trends.diseaseTrendDirection === "DECREASING" ? (
+                      <TrendingUp className="w-4 h-4 text-green-400 rotate-180" />
+                    ) : (
+                      <Activity className="w-4 h-4 text-yellow-400" />
+                    )}
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium">Disease Trend: {trends.diseaseTrendDirection}</p>
+                    <p className="text-xs text-muted-foreground">
+                      Last 30 days: {trends.recentDiseaseCount} cases | Previous 30 days: {trends.previousDiseaseCount} cases
+                    </p>
+                  </div>
+                </div>
+                <Badge className={`${
+                  trends.diseaseTrendDirection === "INCREASING" ? "bg-red-500/20 text-red-400 border-red-500/30" :
+                  trends.diseaseTrendDirection === "DECREASING" ? "bg-green-500/20 text-green-400 border-green-500/30" :
+                  "bg-yellow-500/20 text-yellow-400 border-yellow-500/30"
+                }`}>
+                  {trends.diseaseTrendDirection === "INCREASING" ? "Requires Attention" :
+                   trends.diseaseTrendDirection === "DECREASING" ? "Improving" : "Monitor"}
+                </Badge>
+              </div>
+            </CardContent>
+          </Card>
         </div>
       )}
 

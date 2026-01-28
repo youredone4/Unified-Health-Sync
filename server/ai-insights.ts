@@ -43,6 +43,9 @@ interface TrendData {
   seniorMedComplianceRate: number;
   tbAdherenceRate: number;
   diseaseIncidenceRate: number;
+  recentDiseaseCount: number;
+  previousDiseaseCount: number;
+  diseaseTrendDirection: "INCREASING" | "STABLE" | "DECREASING";
 }
 
 interface RiskScore {
@@ -208,17 +211,49 @@ async function getEnhancedHealthStatistics(): Promise<EnhancedHealthStats> {
   
   const diseaseIncidenceRate = Math.round((baseStats.newDiseaseCases / Math.max(1, baseStats.totalDiseaseCases)) * 100);
   
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+  const sixtyDaysAgo = new Date();
+  sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
+  
+  const recentDiseases = allDiseases.filter(d => {
+    if (!d.dateReported) return false;
+    return new Date(d.dateReported) >= thirtyDaysAgo;
+  });
+  const previousDiseases = allDiseases.filter(d => {
+    if (!d.dateReported) return false;
+    const reportDate = new Date(d.dateReported);
+    return reportDate >= sixtyDaysAgo && reportDate < thirtyDaysAgo;
+  });
+  
+  const recentDiseaseCount = recentDiseases.length;
+  const previousDiseaseCount = previousDiseases.length;
+  
+  let diseaseTrendDirection: "INCREASING" | "STABLE" | "DECREASING" = "STABLE";
+  if (previousDiseaseCount > 0) {
+    const changePercent = ((recentDiseaseCount - previousDiseaseCount) / previousDiseaseCount) * 100;
+    if (changePercent > 20) diseaseTrendDirection = "INCREASING";
+    else if (changePercent < -20) diseaseTrendDirection = "DECREASING";
+  }
+  
   const trends: TrendData = {
     immunizationCoverageRate,
     ttVaccinationRate,
     seniorMedComplianceRate,
     tbAdherenceRate,
     diseaseIncidenceRate,
+    recentDiseaseCount,
+    previousDiseaseCount,
+    diseaseTrendDirection,
   };
   
   const highRiskMothers = allMothers.filter(m => {
-    if (!m.tt1Date) return true;
-    if (m.status === "active") return true;
+    if (!m.tt1Date && m.status === "active") return true;
+    const gaWeeks = m.gaWeeks || 0;
+    if (gaWeeks >= 28 && !m.tt2Date) return true;
+    if (gaWeeks >= 36 && !m.tt3Date) return true;
+    const hasLowBirthWeightRisk = m.age && (m.age < 18 || m.age > 35);
+    if (hasLowBirthWeightRisk && m.status === "active") return true;
     return false;
   }).length;
   
@@ -353,12 +388,30 @@ async function getEnhancedHealthStatistics(): Promise<EnhancedHealthStats> {
   
   const topDisease = baseStats.topDiseases[0];
   if (topDisease && topDisease.count > 20) {
+    const trendConfidence = diseaseTrendDirection === "INCREASING" ? "HIGH" : "MEDIUM";
+    const trendWarning = diseaseTrendDirection === "INCREASING" 
+      ? ` Disease cases are INCREASING (${recentDiseaseCount} in last 30 days vs ${previousDiseaseCount} previously).`
+      : diseaseTrendDirection === "DECREASING"
+      ? ` Cases are decreasing (${recentDiseaseCount} recent vs ${previousDiseaseCount} previous).`
+      : "";
     predictions.push({
       category: "Disease Surveillance",
-      forecast: `${topDisease.condition} is the leading condition with ${topDisease.count} cases. Potential for community outbreak.`,
-      confidence: "MEDIUM",
-      timeframe: "Next 1-2 months",
-      recommendation: "Enhance surveillance and case investigation. Prepare outbreak response supplies.",
+      forecast: `${topDisease.condition} is the leading condition with ${topDisease.count} cases.${trendWarning} Potential for community outbreak.`,
+      confidence: trendConfidence,
+      timeframe: diseaseTrendDirection === "INCREASING" ? "Immediate" : "Next 1-2 months",
+      recommendation: diseaseTrendDirection === "INCREASING" 
+        ? "URGENT: Deploy outbreak response team. Increase surveillance and case investigation immediately."
+        : "Enhance surveillance and case investigation. Prepare outbreak response supplies.",
+    });
+  }
+  
+  if (diseaseTrendDirection === "INCREASING") {
+    predictions.push({
+      category: "Outbreak Alert",
+      forecast: `Disease cases increased from ${previousDiseaseCount} (previous 30 days) to ${recentDiseaseCount} (last 30 days). This ${Math.round(((recentDiseaseCount - previousDiseaseCount) / Math.max(1, previousDiseaseCount)) * 100)}% increase signals potential outbreak conditions.`,
+      confidence: "HIGH",
+      timeframe: "Next 2-4 weeks",
+      recommendation: "Activate disease surveillance protocols. Increase reporting frequency. Prepare medical supplies for surge capacity.",
     });
   }
   
