@@ -450,5 +450,16 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/ai/risk-analysis", loadUserInfo, requireAuth, async (req, res) => {
+    try {
+      const { getRiskAnalysis } = await import("./ai-insights");
+      const result = await getRiskAnalysis();
+      res.json(result);
+    } catch (err) {
+      console.error("Risk analysis error:", err);
+      res.status(500).json({ message: "Failed to get risk analysis" });
+    }
+  });
+
   return httpServer;
 }
