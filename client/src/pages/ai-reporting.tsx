@@ -26,6 +26,15 @@ interface Prediction {
   recommendation: string;
 }
 
+type TrendDirection = "INCREASING" | "STABLE" | "DECREASING";
+
+interface MetricTrend {
+  current: number;
+  previous: number;
+  direction: TrendDirection;
+  changePercent: number;
+}
+
 interface TrendData {
   immunizationCoverageRate: number;
   ttVaccinationRate: number;
@@ -34,7 +43,12 @@ interface TrendData {
   diseaseIncidenceRate: number;
   recentDiseaseCount: number;
   previousDiseaseCount: number;
-  diseaseTrendDirection: "INCREASING" | "STABLE" | "DECREASING";
+  diseaseTrendDirection: TrendDirection;
+  immunizationTrend: MetricTrend;
+  ttVaccinationTrend: MetricTrend;
+  seniorComplianceTrend: MetricTrend;
+  tbAdherenceTrend: MetricTrend;
+  diseaseTrend: MetricTrend;
 }
 
 interface HealthStats {
@@ -90,15 +104,37 @@ function ConfidenceBadge({ level }: { level: "HIGH" | "MEDIUM" | "LOW" }) {
   return <Badge className={colors[level]}>{level} Confidence</Badge>;
 }
 
-function MetricCard({ label, value, target, icon: Icon, color }: { 
+function TrendIndicator({ trend }: { trend?: MetricTrend }) {
+  if (!trend) return null;
+  
+  const getColor = () => {
+    if (trend.direction === "INCREASING") return "text-green-400";
+    if (trend.direction === "DECREASING") return "text-red-400";
+    return "text-yellow-400";
+  };
+  
+  const getIcon = () => {
+    if (trend.direction === "INCREASING") return <TrendingUp className="w-3 h-3" />;
+    if (trend.direction === "DECREASING") return <TrendingUp className="w-3 h-3 rotate-180" />;
+    return <Activity className="w-3 h-3" />;
+  };
+  
+  return (
+    <div className={`flex items-center gap-1 text-xs ${getColor()}`}>
+      {getIcon()}
+      <span>{trend.changePercent > 0 ? "+" : ""}{trend.changePercent}%</span>
+    </div>
+  );
+}
+
+function MetricCard({ label, value, target, icon: Icon, color, trend }: { 
   label: string; 
   value: number; 
   target?: number; 
   icon: any; 
   color: string;
+  trend?: MetricTrend;
 }) {
-  const progressColor = value >= (target || 80) ? "bg-green-500" : value >= 60 ? "bg-yellow-500" : "bg-red-500";
-  
   return (
     <Card className={`${color} border-opacity-30`}>
       <CardContent className="p-4">
@@ -109,7 +145,15 @@ function MetricCard({ label, value, target, icon: Icon, color }: {
           </div>
           {target && <span className="text-xs text-muted-foreground">Target: {target}%</span>}
         </div>
-        <div className="text-2xl font-bold">{value}%</div>
+        <div className="flex items-center justify-between">
+          <div className="text-2xl font-bold">{value}%</div>
+          <TrendIndicator trend={trend} />
+        </div>
+        {trend && (
+          <div className="text-xs text-muted-foreground mt-1">
+            Last 30d: {trend.current} | Prev: {trend.previous}
+          </div>
+        )}
         {target && (
           <Progress value={value} className="h-1.5 mt-2" />
         )}
@@ -225,34 +269,39 @@ export default function AIReporting() {
               value={trends.immunizationCoverageRate} 
               target={95} 
               icon={Shield} 
-              color="bg-blue-500/10 border-blue-500" 
+              color="bg-blue-500/10 border-blue-500"
+              trend={trends.immunizationTrend}
             />
             <MetricCard 
               label="TT Vaccination" 
               value={trends.ttVaccinationRate} 
               target={100} 
               icon={Heart} 
-              color="bg-pink-500/10 border-pink-500" 
+              color="bg-pink-500/10 border-pink-500"
+              trend={trends.ttVaccinationTrend}
             />
             <MetricCard 
               label="Med Compliance" 
               value={trends.seniorMedComplianceRate} 
               target={90} 
               icon={Users} 
-              color="bg-green-500/10 border-green-500" 
+              color="bg-green-500/10 border-green-500"
+              trend={trends.seniorComplianceTrend}
             />
             <MetricCard 
               label="TB Adherence" 
               value={trends.tbAdherenceRate} 
               target={95} 
               icon={Activity} 
-              color="bg-orange-500/10 border-orange-500" 
+              color="bg-orange-500/10 border-orange-500"
+              trend={trends.tbAdherenceTrend}
             />
             <MetricCard 
               label="New Cases" 
               value={trends.diseaseIncidenceRate} 
               icon={AlertTriangle} 
-              color="bg-red-500/10 border-red-500" 
+              color="bg-red-500/10 border-red-500"
+              trend={trends.diseaseTrend}
             />
           </div>
           

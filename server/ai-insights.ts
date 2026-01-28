@@ -37,6 +37,15 @@ interface HealthStats {
   topDiseases: { condition: string; count: number }[];
 }
 
+type TrendDirection = "INCREASING" | "STABLE" | "DECREASING";
+
+interface MetricTrend {
+  current: number;
+  previous: number;
+  direction: TrendDirection;
+  changePercent: number;
+}
+
 interface TrendData {
   immunizationCoverageRate: number;
   ttVaccinationRate: number;
@@ -45,7 +54,12 @@ interface TrendData {
   diseaseIncidenceRate: number;
   recentDiseaseCount: number;
   previousDiseaseCount: number;
-  diseaseTrendDirection: "INCREASING" | "STABLE" | "DECREASING";
+  diseaseTrendDirection: TrendDirection;
+  immunizationTrend: MetricTrend;
+  ttVaccinationTrend: MetricTrend;
+  seniorComplianceTrend: MetricTrend;
+  tbAdherenceTrend: MetricTrend;
+  diseaseTrend: MetricTrend;
 }
 
 interface RiskScore {
@@ -81,6 +95,24 @@ function calculateRiskLevel(value: number, lowThreshold: number, highThreshold: 
   if (value >= highThreshold) return "HIGH";
   if (value >= lowThreshold) return "MEDIUM";
   return "LOW";
+}
+
+function calculateTrendDirection(current: number, previous: number): TrendDirection {
+  if (previous === 0) return "STABLE";
+  const changePercent = ((current - previous) / previous) * 100;
+  if (changePercent > 20) return "INCREASING";
+  if (changePercent < -20) return "DECREASING";
+  return "STABLE";
+}
+
+function createMetricTrend(current: number, previous: number): MetricTrend {
+  const changePercent = previous > 0 ? Math.round(((current - previous) / previous) * 100) : 0;
+  return {
+    current,
+    previous,
+    direction: calculateTrendDirection(current, previous),
+    changePercent,
+  };
 }
 
 async function getHealthStatistics(): Promise<HealthStats> {
@@ -215,6 +247,8 @@ async function getEnhancedHealthStatistics(): Promise<EnhancedHealthStats> {
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
   const sixtyDaysAgo = new Date();
   sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
+  const ninetyDaysAgo = new Date();
+  ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
   
   const recentDiseases = allDiseases.filter(d => {
     if (!d.dateReported) return false;
@@ -229,12 +263,71 @@ async function getEnhancedHealthStatistics(): Promise<EnhancedHealthStats> {
   const recentDiseaseCount = recentDiseases.length;
   const previousDiseaseCount = previousDiseases.length;
   
-  let diseaseTrendDirection: "INCREASING" | "STABLE" | "DECREASING" = "STABLE";
+  let diseaseTrendDirection: TrendDirection = "STABLE";
   if (previousDiseaseCount > 0) {
     const changePercent = ((recentDiseaseCount - previousDiseaseCount) / previousDiseaseCount) * 100;
     if (changePercent > 20) diseaseTrendDirection = "INCREASING";
     else if (changePercent < -20) diseaseTrendDirection = "DECREASING";
   }
+  
+  const recentChildrenRegistered = allChildren.filter(c => {
+    if (!c.dob) return false;
+    return new Date(c.dob) >= thirtyDaysAgo;
+  }).length;
+  const previousChildrenRegistered = allChildren.filter(c => {
+    if (!c.dob) return false;
+    const dob = new Date(c.dob);
+    return dob >= sixtyDaysAgo && dob < thirtyDaysAgo;
+  }).length;
+  const recentChildrenVaccinated = allChildren.filter(c => {
+    const vaccines = (c.vaccines as Record<string, string>) || {};
+    const bcgDate = vaccines.bcg;
+    if (!bcgDate) return false;
+    return new Date(bcgDate) >= thirtyDaysAgo;
+  }).length;
+  const previousChildrenVaccinated = allChildren.filter(c => {
+    const vaccines = (c.vaccines as Record<string, string>) || {};
+    const bcgDate = vaccines.bcg;
+    if (!bcgDate) return false;
+    const vDate = new Date(bcgDate);
+    return vDate >= sixtyDaysAgo && vDate < thirtyDaysAgo;
+  }).length;
+  
+  const recentMothersWithTT = allMothers.filter(m => {
+    if (!m.tt1Date) return false;
+    return new Date(m.tt1Date) >= thirtyDaysAgo;
+  }).length;
+  const previousMothersWithTT = allMothers.filter(m => {
+    if (!m.tt1Date) return false;
+    const ttDate = new Date(m.tt1Date);
+    return ttDate >= sixtyDaysAgo && ttDate < thirtyDaysAgo;
+  }).length;
+  
+  const recentSeniorsCompliant = allSeniors.filter(s => {
+    if (!s.lastMedicationGivenDate) return false;
+    const pickupDate = new Date(s.lastMedicationGivenDate);
+    return pickupDate >= thirtyDaysAgo;
+  }).length;
+  const previousSeniorsCompliant = allSeniors.filter(s => {
+    if (!s.lastMedicationGivenDate) return false;
+    const pickupDate = new Date(s.lastMedicationGivenDate);
+    return pickupDate >= sixtyDaysAgo && pickupDate < thirtyDaysAgo;
+  }).length;
+  
+  const recentTBAdherent = allTB.filter(t => {
+    const missedDoses = t.missedDosesCount || 0;
+    return t.outcomeStatus === "Ongoing" && missedDoses === 0;
+  }).length;
+  const previousTBAdherent = allTB.filter(t => {
+    const missedDoses = t.missedDosesCount || 0;
+    return t.outcomeStatus === "Completed" || (t.outcomeStatus === "Ongoing" && missedDoses <= 1);
+  }).length;
+  
+  const immunizationTrend = createMetricTrend(recentChildrenVaccinated, previousChildrenVaccinated);
+  const ttVaccinationTrend = createMetricTrend(recentMothersWithTT, previousMothersWithTT);
+  const seniorComplianceTrend = createMetricTrend(recentSeniorsCompliant, previousSeniorsCompliant);
+  const tbAdherenceTrend = createMetricTrend(recentTBAdherent, previousTBAdherent);
+  const diseaseTrend = createMetricTrend(recentDiseaseCount, previousDiseaseCount);
   
   const trends: TrendData = {
     immunizationCoverageRate,
@@ -245,6 +338,11 @@ async function getEnhancedHealthStatistics(): Promise<EnhancedHealthStats> {
     recentDiseaseCount,
     previousDiseaseCount,
     diseaseTrendDirection,
+    immunizationTrend,
+    ttVaccinationTrend,
+    seniorComplianceTrend,
+    tbAdherenceTrend,
+    diseaseTrend,
   };
   
   const highRiskMothers = allMothers.filter(m => {
@@ -346,43 +444,72 @@ async function getEnhancedHealthStatistics(): Promise<EnhancedHealthStats> {
   const predictions: Prediction[] = [];
   
   if (immunizationCoverageRate < 80) {
+    const immTrendInfo = immunizationTrend.direction === "DECREASING"
+      ? ` Immunization activity is DECLINING (${immunizationTrend.current} vaccinated recently vs ${immunizationTrend.previous} previously, ${immunizationTrend.changePercent}% change).`
+      : immunizationTrend.direction === "INCREASING"
+      ? ` Immunization activity improving (${immunizationTrend.current} vaccinated recently vs ${immunizationTrend.previous} previously).`
+      : "";
     predictions.push({
       category: "Immunization",
-      forecast: `At current rates, immunization coverage will remain below 80% target. ${baseStats.childrenMissingVaccines} children need immediate catch-up.`,
-      confidence: "HIGH",
-      timeframe: "Next 3 months",
-      recommendation: "Deploy mobile vaccination teams to underserved barangays. Prioritize: " + 
-        riskScores.filter(r => r.immunizationRisk === "HIGH").slice(0, 3).map(r => r.barangay).join(", "),
+      forecast: `At current rates, immunization coverage will remain below 80% target.${immTrendInfo} ${baseStats.childrenMissingVaccines} children need immediate catch-up.`,
+      confidence: immunizationTrend.direction === "DECREASING" ? "HIGH" : "MEDIUM",
+      timeframe: immunizationTrend.direction === "DECREASING" ? "Immediate" : "Next 3 months",
+      recommendation: immunizationTrend.direction === "DECREASING"
+        ? "URGENT: Immunization declining. Launch emergency catch-up campaign targeting: " + 
+          riskScores.filter(r => r.immunizationRisk === "HIGH").slice(0, 3).map(r => r.barangay).join(", ")
+        : "Deploy mobile vaccination teams to underserved barangays. Prioritize: " + 
+          riskScores.filter(r => r.immunizationRisk === "HIGH").slice(0, 3).map(r => r.barangay).join(", "),
     });
   }
   
   if (baseStats.mothersWithNoTT > baseStats.totalMothers * 0.1) {
+    const ttTrendInfo = ttVaccinationTrend.direction === "DECREASING" 
+      ? ` TT vaccinations are DECLINING (${ttVaccinationTrend.current} recent vs ${ttVaccinationTrend.previous} previous, ${ttVaccinationTrend.changePercent}% change).`
+      : ttVaccinationTrend.direction === "INCREASING"
+      ? ` TT vaccinations are improving (${ttVaccinationTrend.current} recent vs ${ttVaccinationTrend.previous} previous).`
+      : "";
     predictions.push({
       category: "Prenatal Care",
-      forecast: `${Math.round((baseStats.mothersWithNoTT / baseStats.totalMothers) * 100)}% of mothers lack TT protection. Risk of neonatal tetanus remains elevated.`,
-      confidence: "MEDIUM",
-      timeframe: "Next 6 months",
-      recommendation: "Integrate TT vaccination into all prenatal visits. Focus on barangays with lowest coverage.",
+      forecast: `${Math.round((baseStats.mothersWithNoTT / baseStats.totalMothers) * 100)}% of mothers lack TT protection.${ttTrendInfo} Risk of neonatal tetanus remains elevated.`,
+      confidence: ttVaccinationTrend.direction === "DECREASING" ? "HIGH" : "MEDIUM",
+      timeframe: ttVaccinationTrend.direction === "DECREASING" ? "Immediate" : "Next 6 months",
+      recommendation: ttVaccinationTrend.direction === "DECREASING" 
+        ? "URGENT: TT vaccination declining. Launch intensive prenatal outreach immediately."
+        : "Integrate TT vaccination into all prenatal visits. Focus on barangays with lowest coverage.",
     });
   }
   
   if (baseStats.seniorsWithHighBP > baseStats.totalSeniors * 0.5) {
+    const complianceTrendInfo = seniorComplianceTrend.direction === "DECREASING"
+      ? ` Medication pickup is DECLINING (${seniorComplianceTrend.current} recent vs ${seniorComplianceTrend.previous} previous, ${seniorComplianceTrend.changePercent}% change).`
+      : seniorComplianceTrend.direction === "INCREASING"
+      ? ` Medication pickup improving (${seniorComplianceTrend.current} recent vs ${seniorComplianceTrend.previous} previous).`
+      : "";
     predictions.push({
       category: "Senior Health",
-      forecast: `${Math.round((baseStats.seniorsWithHighBP / baseStats.totalSeniors) * 100)}% of seniors have uncontrolled hypertension. Cardiovascular event risk is elevated.`,
-      confidence: "HIGH",
-      timeframe: "Ongoing",
-      recommendation: "Implement monthly BP monitoring and medication review. Consider home visit program for high-risk seniors.",
+      forecast: `${Math.round((baseStats.seniorsWithHighBP / baseStats.totalSeniors) * 100)}% of seniors have uncontrolled hypertension.${complianceTrendInfo} Cardiovascular event risk is elevated.`,
+      confidence: seniorComplianceTrend.direction === "DECREASING" ? "HIGH" : "MEDIUM",
+      timeframe: seniorComplianceTrend.direction === "DECREASING" ? "Immediate" : "Ongoing",
+      recommendation: seniorComplianceTrend.direction === "DECREASING"
+        ? "URGENT: Medication compliance declining. Deploy community health workers for home visits and follow-up."
+        : "Implement monthly BP monitoring and medication review. Consider home visit program for high-risk seniors.",
     });
   }
   
   if (baseStats.tbPatientsWithMissedDoses > baseStats.totalTBPatients * 0.3) {
+    const tbTrendInfo = tbAdherenceTrend.direction === "DECREASING"
+      ? ` TB adherence is DECLINING (${tbAdherenceTrend.current} adherent patients vs ${tbAdherenceTrend.previous} previously, ${tbAdherenceTrend.changePercent}% change).`
+      : tbAdherenceTrend.direction === "INCREASING"
+      ? ` TB adherence improving (${tbAdherenceTrend.current} adherent vs ${tbAdherenceTrend.previous} previously).`
+      : "";
     predictions.push({
       category: "TB Program",
-      forecast: `${Math.round((baseStats.tbPatientsWithMissedDoses / baseStats.totalTBPatients) * 100)}% of TB patients have missed doses. Risk of treatment failure and drug resistance.`,
-      confidence: "HIGH",
-      timeframe: "Immediate",
-      recommendation: "Strengthen DOTS supervision. Assign community health workers for daily observed therapy.",
+      forecast: `${Math.round((baseStats.tbPatientsWithMissedDoses / baseStats.totalTBPatients) * 100)}% of TB patients have missed doses.${tbTrendInfo} Risk of treatment failure and drug resistance.`,
+      confidence: tbAdherenceTrend.direction === "DECREASING" ? "HIGH" : "MEDIUM",
+      timeframe: tbAdherenceTrend.direction === "DECREASING" ? "Immediate" : "Next month",
+      recommendation: tbAdherenceTrend.direction === "DECREASING"
+        ? "CRITICAL: TB treatment adherence declining. Initiate emergency DOTS intervention with daily supervision."
+        : "Strengthen DOTS supervision. Assign community health workers for daily observed therapy.",
     });
   }
   
