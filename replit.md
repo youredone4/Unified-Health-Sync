@@ -14,6 +14,39 @@ The application is specifically designed for users with low digital literacy, em
 - Inventory management for vaccines and medications by barangay
 - SMS notification system (demo mode)
 - Interactive map of health facilities
+- AI-powered predictive health analytics with trend analysis
+
+## AI Reporting & Predictive Analytics
+
+The AI Reporting module (`/ai-reporting`) provides predictive health analytics:
+
+**Key Features:**
+- Period-over-period trend analysis comparing last 30 days vs previous 30 days
+- Risk scoring for barangays across 5 health categories
+- High-risk patient identification with clinical criteria
+- Predictions with confidence levels and timeframes
+
+**Trend Metrics:**
+- Immunization: BCG vaccination activity trends
+- TT Vaccination: Maternal tetanus toxoid trends
+- Medication Compliance: Senior medication pickup trends
+- TB Adherence: DOTS treatment adherence trends
+- Disease Incidence: New case reporting trends
+
+**Risk Levels:**
+- HIGH: Immediate attention needed (red)
+- MEDIUM: Monitoring required (yellow)
+- LOW: Acceptable performance (green)
+
+**High-Risk Criteria:**
+- Mothers: No TT + active status, overdue TT by GA weeks, age <18 or >35
+- Children: Low birth weight or missing critical vaccines
+- Seniors: Blood pressure ≥160/100
+- TB: Multiple missed doses
+
+**Files:**
+- `server/ai-insights.ts` - Backend analytics engine
+- `client/src/pages/ai-reporting.tsx` - Analytics dashboard UI
 
 ## User Preferences
 
