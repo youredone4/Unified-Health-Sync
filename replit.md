@@ -16,9 +16,9 @@ The application is specifically designed for users with low digital literacy, em
 - Interactive map of health facilities
 - AI-powered predictive health analytics with trend analysis
 
-## AI Reporting & Predictive Analytics
+## Health Analytics
 
-The AI Reporting module (`/ai-reporting`) provides predictive health analytics:
+The Health Analytics module (`/reports/ai`) provides predictive health analytics:
 
 **Key Features:**
 - Period-over-period trend analysis comparing last 30 days vs previous 30 days

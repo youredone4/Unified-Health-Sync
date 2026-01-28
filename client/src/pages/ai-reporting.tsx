@@ -233,7 +233,7 @@ export default function AIReporting() {
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2" data-testid="text-page-title">
             <Bot className="w-6 h-6 text-purple-400" />
-            Predictive Health Analytics
+            Health Analytics
           </h1>
           <p className="text-muted-foreground">AI-powered predictions, risk analysis, and health forecasting</p>
         </div>
@@ -665,7 +665,7 @@ export default function AIReporting() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">About Predictive Health Analytics</CardTitle>
+          <CardTitle className="text-base">About Health Analytics</CardTitle>
         </CardHeader>
         <CardContent>
           <p className="text-sm text-muted-foreground">
