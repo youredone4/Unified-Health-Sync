@@ -22,10 +22,12 @@ import PrenatalWorklist from "@/pages/prenatal-worklist";
 import PrenatalDashboard from "@/pages/prenatal-dashboard";
 import MotherRegistry from "@/pages/mother-registry";
 import MotherProfile from "@/pages/mother-profile";
+import MotherForm from "@/pages/mother-form";
 import ChildWorklist from "@/pages/child-worklist";
 import ChildDashboard from "@/pages/child-dashboard";
 import ChildRegistry from "@/pages/child-registry";
 import ChildProfile from "@/pages/child-profile";
+import ChildForm from "@/pages/child-form";
 import NutritionWorklist from "@/pages/nutrition-worklist";
 import GrowthMonitoring from "@/pages/growth-monitoring";
 import NutritionDashboard from "@/pages/nutrition-dashboard";
@@ -33,6 +35,7 @@ import SeniorWorklist from "@/pages/senior-worklist";
 import SeniorDashboard from "@/pages/senior-dashboard";
 import SeniorRegistry from "@/pages/senior-registry";
 import SeniorProfile from "@/pages/senior-profile";
+import SeniorForm from "@/pages/senior-form";
 import InventoryPage from "@/pages/inventory";
 import StockoutsPage from "@/pages/stockouts";
 import ReportsPage from "@/pages/reports";
@@ -92,10 +95,14 @@ function Router() {
       <Route path="/prenatal" component={PrenatalWorklist} />
       <Route path="/prenatal/dashboard" component={PrenatalDashboard} />
       <Route path="/prenatal/registry" component={MotherRegistry} />
+      <Route path="/mother/new" component={MotherForm} />
+      <Route path="/mother/:id/edit" component={MotherForm} />
       <Route path="/mother/:id" component={MotherProfile} />
       <Route path="/child" component={ChildWorklist} />
       <Route path="/child/dashboard" component={ChildDashboard} />
       <Route path="/child/registry" component={ChildRegistry} />
+      <Route path="/child/new" component={ChildForm} />
+      <Route path="/child/:id/edit" component={ChildForm} />
       <Route path="/child/:id" component={ChildProfile} />
       <Route path="/nutrition" component={NutritionWorklist} />
       <Route path="/nutrition/growth" component={GrowthMonitoring} />
@@ -103,6 +110,8 @@ function Router() {
       <Route path="/senior" component={SeniorWorklist} />
       <Route path="/senior/dashboard" component={SeniorDashboard} />
       <Route path="/senior/registry" component={SeniorRegistry} />
+      <Route path="/senior/new" component={SeniorForm} />
+      <Route path="/senior/:id/edit" component={SeniorForm} />
       <Route path="/senior/:id" component={SeniorProfile} />
       <Route path="/inventory" component={InventoryPage} />
       <Route path="/inventory/stockouts" component={StockoutsPage} />

@@ -39,12 +39,28 @@ export const api = {
         404: errorSchemas.notFound,
       },
     },
+    create: {
+      method: 'POST' as const,
+      path: '/api/mothers',
+      input: insertMotherSchema,
+      responses: {
+        201: z.custom<typeof mothers.$inferSelect>(),
+      },
+    },
     update: {
       method: 'PUT' as const,
       path: '/api/mothers/:id',
       input: insertMotherSchema.partial(),
       responses: {
         200: z.custom<typeof mothers.$inferSelect>(),
+      },
+    },
+    delete: {
+      method: 'DELETE' as const,
+      path: '/api/mothers/:id',
+      responses: {
+        200: z.object({ success: z.boolean() }),
+        404: errorSchemas.notFound,
       },
     },
   },
@@ -64,12 +80,28 @@ export const api = {
         404: errorSchemas.notFound,
       },
     },
+    create: {
+      method: 'POST' as const,
+      path: '/api/children',
+      input: insertChildSchema,
+      responses: {
+        201: z.custom<typeof children.$inferSelect>(),
+      },
+    },
     update: {
       method: 'PUT' as const,
       path: '/api/children/:id',
       input: insertChildSchema.partial(),
       responses: {
         200: z.custom<typeof children.$inferSelect>(),
+      },
+    },
+    delete: {
+      method: 'DELETE' as const,
+      path: '/api/children/:id',
+      responses: {
+        200: z.object({ success: z.boolean() }),
+        404: errorSchemas.notFound,
       },
     },
   },
@@ -89,12 +121,28 @@ export const api = {
         404: errorSchemas.notFound,
       },
     },
+    create: {
+      method: 'POST' as const,
+      path: '/api/seniors',
+      input: insertSeniorSchema,
+      responses: {
+        201: z.custom<typeof seniors.$inferSelect>(),
+      },
+    },
     update: {
       method: 'PUT' as const,
       path: '/api/seniors/:id',
       input: insertSeniorSchema.partial(),
       responses: {
         200: z.custom<typeof seniors.$inferSelect>(),
+      },
+    },
+    delete: {
+      method: 'DELETE' as const,
+      path: '/api/seniors/:id',
+      responses: {
+        200: z.object({ success: z.boolean() }),
+        404: errorSchemas.notFound,
       },
     },
   },
@@ -149,6 +197,14 @@ export const api = {
         404: errorSchemas.notFound,
       },
     },
+    create: {
+      method: 'POST' as const,
+      path: '/api/disease-cases',
+      input: insertDiseaseCaseSchema,
+      responses: {
+        201: z.custom<typeof diseaseCases.$inferSelect>(),
+      },
+    },
     update: {
       method: 'PUT' as const,
       path: '/api/disease-cases/:id',
@@ -172,6 +228,14 @@ export const api = {
       responses: {
         200: z.custom<typeof tbPatients.$inferSelect>(),
         404: errorSchemas.notFound,
+      },
+    },
+    create: {
+      method: 'POST' as const,
+      path: '/api/tb-patients',
+      input: insertTBPatientSchema,
+      responses: {
+        201: z.custom<typeof tbPatients.$inferSelect>(),
       },
     },
     update: {

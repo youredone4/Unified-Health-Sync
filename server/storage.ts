@@ -23,15 +23,21 @@ import { eq, and, inArray, desc, isNull, gte, sql } from "drizzle-orm";
 export interface IStorage {
   getMothers(): Promise<Mother[]>;
   getMother(id: number): Promise<Mother | undefined>;
+  createMother(mother: InsertMother): Promise<Mother>;
   updateMother(id: number, updates: Partial<InsertMother>): Promise<Mother>;
+  deleteMother(id: number): Promise<boolean>;
   
   getChildren(): Promise<Child[]>;
   getChild(id: number): Promise<Child | undefined>;
+  createChild(child: InsertChild): Promise<Child>;
   updateChild(id: number, updates: Partial<InsertChild>): Promise<Child>;
+  deleteChild(id: number): Promise<boolean>;
 
   getSeniors(): Promise<Senior[]>;
   getSenior(id: number): Promise<Senior | undefined>;
+  createSenior(senior: InsertSenior): Promise<Senior>;
   updateSenior(id: number, updates: Partial<InsertSenior>): Promise<Senior>;
+  deleteSenior(id: number): Promise<boolean>;
 
   getInventory(): Promise<InventoryItem[]>;
   getHealthStations(): Promise<HealthStation[]>;
@@ -41,10 +47,12 @@ export interface IStorage {
 
   getDiseaseCases(): Promise<DiseaseCase[]>;
   getDiseaseCase(id: number): Promise<DiseaseCase | undefined>;
+  createDiseaseCase(data: InsertDiseaseCase): Promise<DiseaseCase>;
   updateDiseaseCase(id: number, updates: Partial<InsertDiseaseCase>): Promise<DiseaseCase>;
 
   getTBPatients(): Promise<TBPatient[]>;
   getTBPatient(id: number): Promise<TBPatient | undefined>;
+  createTBPatient(data: InsertTBPatient): Promise<TBPatient>;
   updateTBPatient(id: number, updates: Partial<InsertTBPatient>): Promise<TBPatient>;
 
   getThemeSettings(): Promise<ThemeSettings | undefined>;
@@ -84,12 +92,22 @@ export class DatabaseStorage implements IStorage {
     return mother;
   }
 
+  async createMother(mother: InsertMother): Promise<Mother> {
+    const [created] = await db.insert(mothers).values(mother).returning();
+    return created;
+  }
+
   async updateMother(id: number, updates: Partial<InsertMother>): Promise<Mother> {
     const [updated] = await db.update(mothers)
       .set(updates)
       .where(eq(mothers.id, id))
       .returning();
     return updated;
+  }
+
+  async deleteMother(id: number): Promise<boolean> {
+    const result = await db.delete(mothers).where(eq(mothers.id, id));
+    return true;
   }
 
   async getChildren(): Promise<Child[]> {
@@ -101,12 +119,22 @@ export class DatabaseStorage implements IStorage {
     return child;
   }
 
+  async createChild(child: InsertChild): Promise<Child> {
+    const [created] = await db.insert(children).values(child as any).returning();
+    return created;
+  }
+
   async updateChild(id: number, updates: Partial<InsertChild>): Promise<Child> {
     const [updated] = await db.update(children)
       .set(updates as any)
       .where(eq(children.id, id))
       .returning();
     return updated;
+  }
+
+  async deleteChild(id: number): Promise<boolean> {
+    await db.delete(children).where(eq(children.id, id));
+    return true;
   }
 
   async getSeniors(): Promise<Senior[]> {
@@ -118,12 +146,22 @@ export class DatabaseStorage implements IStorage {
     return senior;
   }
 
+  async createSenior(senior: InsertSenior): Promise<Senior> {
+    const [created] = await db.insert(seniors).values(senior).returning();
+    return created;
+  }
+
   async updateSenior(id: number, updates: Partial<InsertSenior>): Promise<Senior> {
     const [updated] = await db.update(seniors)
       .set(updates)
       .where(eq(seniors.id, id))
       .returning();
     return updated;
+  }
+
+  async deleteSenior(id: number): Promise<boolean> {
+    await db.delete(seniors).where(eq(seniors.id, id));
+    return true;
   }
 
   async getInventory(): Promise<InventoryItem[]> {
@@ -152,6 +190,11 @@ export class DatabaseStorage implements IStorage {
     return diseaseCase;
   }
 
+  async createDiseaseCase(data: InsertDiseaseCase): Promise<DiseaseCase> {
+    const [created] = await db.insert(diseaseCases).values(data).returning();
+    return created;
+  }
+
   async updateDiseaseCase(id: number, updates: Partial<InsertDiseaseCase>): Promise<DiseaseCase> {
     const [updated] = await db.update(diseaseCases)
       .set(updates)
@@ -167,6 +210,11 @@ export class DatabaseStorage implements IStorage {
   async getTBPatient(id: number): Promise<TBPatient | undefined> {
     const [patient] = await db.select().from(tbPatients).where(eq(tbPatients.id, id));
     return patient;
+  }
+
+  async createTBPatient(data: InsertTBPatient): Promise<TBPatient> {
+    const [created] = await db.insert(tbPatients).values(data).returning();
+    return created;
   }
 
   async updateTBPatient(id: number, updates: Partial<InsertTBPatient>): Promise<TBPatient> {
