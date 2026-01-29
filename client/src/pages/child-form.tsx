@@ -126,7 +126,7 @@ export default function ChildForm() {
       sex: formData.sex || null,
       barangay: formData.barangay,
       addressLine: formData.addressLine || null,
-      motherId: formData.motherId ? parseInt(formData.motherId) : null,
+      motherId: formData.motherId && formData.motherId !== "none" ? parseInt(formData.motherId) : null,
       nextVisitDate: formData.nextVisitDate || null,
       birthWeightKg: formData.birthWeightKg || null,
       birthWeightCategory: formData.birthWeightCategory || null,
@@ -222,7 +222,7 @@ export default function ChildForm() {
                   <SelectValue placeholder="Select barangay" />
                 </SelectTrigger>
                 <SelectContent>
-                  {barangays.map(b => (
+                  {barangays.filter(b => b.name).map(b => (
                     <SelectItem key={b.id} value={b.name}>{b.name}</SelectItem>
                   ))}
                 </SelectContent>
@@ -244,8 +244,8 @@ export default function ChildForm() {
                   <SelectValue placeholder="Link to mother" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">None</SelectItem>
-                  {mothers.map(m => (
+                  <SelectItem value="none">None</SelectItem>
+                  {mothers.filter(m => m.id).map(m => (
                     <SelectItem key={m.id} value={m.id.toString()}>
                       {m.firstName} {m.lastName}
                     </SelectItem>

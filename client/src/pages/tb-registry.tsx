@@ -1,13 +1,14 @@
 import { useQuery } from "@tanstack/react-query";
-import { useLocation } from "wouter";
+import { useLocation, Link } from "wouter";
 import type { TBPatient } from "@shared/schema";
 import { formatDate, getTreatmentProgress } from "@/lib/healthLogic";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ClipboardList, Search } from "lucide-react";
+import { ClipboardList, Search, Plus } from "lucide-react";
 import { useState } from "react";
 
 export default function TBRegistry() {
@@ -33,12 +34,20 @@ export default function TBRegistry() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold flex items-center gap-2" data-testid="text-page-title">
-          <ClipboardList className="w-6 h-6 text-purple-500" />
-          TB Patient Registry
-        </h1>
-        <p className="text-muted-foreground">All TB DOTS patients</p>
+      <div className="flex items-center justify-between flex-wrap gap-4">
+        <div>
+          <h1 className="text-2xl font-bold flex items-center gap-2" data-testid="text-page-title">
+            <ClipboardList className="w-6 h-6 text-purple-500" />
+            TB Patient Registry
+          </h1>
+          <p className="text-muted-foreground">All TB DOTS patients</p>
+        </div>
+        <Link href="/tb/new">
+          <Button data-testid="button-add-tb">
+            <Plus className="w-4 h-4 mr-2" />
+            Add New TB Patient
+          </Button>
+        </Link>
       </div>
 
       <Card>

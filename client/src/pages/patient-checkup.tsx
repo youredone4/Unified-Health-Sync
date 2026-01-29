@@ -46,7 +46,7 @@ export default function PatientCheckupPage() {
   const { canAccessPatientCheckup } = useAuth();
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState("");
-  const [filterBarangay, setFilterBarangay] = useState("");
+  const [filterBarangay, setFilterBarangay] = useState("all");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [newConsult, setNewConsult] = useState({
     patientName: "",
@@ -107,7 +107,7 @@ export default function PatientCheckupPage() {
   const filteredConsults = consults.filter(consult => {
     const matchesSearch = consult.patientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       consult.diagnosis.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesBarangay = !filterBarangay || consult.barangay === filterBarangay;
+    const matchesBarangay = filterBarangay === "all" || consult.barangay === filterBarangay;
     return matchesSearch && matchesBarangay;
   });
 
@@ -358,7 +358,7 @@ export default function PatientCheckupPage() {
                   <SelectValue placeholder="All barangays" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All barangays</SelectItem>
+                  <SelectItem value="all">All barangays</SelectItem>
                   {BARANGAYS.map(b => (
                     <SelectItem key={b} value={b}>{b}</SelectItem>
                   ))}

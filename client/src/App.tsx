@@ -48,6 +48,9 @@ import DiseaseMap from "@/pages/disease-map";
 import TBWorklist from "@/pages/tb-worklist";
 import TBProfile from "@/pages/tb-profile";
 import TBRegistry from "@/pages/tb-registry";
+import TBForm from "@/pages/tb-form";
+import DiseaseForm from "@/pages/disease-form";
+import InventoryForm from "@/pages/inventory-form";
 import SettingsPage from "@/pages/settings";
 import UserManagement from "@/pages/admin/user-management";
 import AuditLogs from "@/pages/admin/audit-logs";
@@ -114,6 +117,8 @@ function Router() {
       <Route path="/senior/:id/edit" component={SeniorForm} />
       <Route path="/senior/:id" component={SeniorProfile} />
       <Route path="/inventory" component={InventoryPage} />
+      <Route path="/inventory/new" component={InventoryForm} />
+      <Route path="/inventory/:id/edit" component={InventoryForm} />
       <Route path="/inventory/stockouts" component={StockoutsPage} />
       <Route path="/reports" component={ReportsPage} />
       <Route path="/reports/ai" component={AIReporting} />
@@ -122,9 +127,13 @@ function Router() {
       <Route path="/disease" component={DiseaseWorklist} />
       <Route path="/disease/registry" component={DiseaseRegistry} />
       <Route path="/disease/map" component={DiseaseMap} />
+      <Route path="/disease/new" component={DiseaseForm} />
+      <Route path="/disease/:id/edit" component={DiseaseForm} />
       <Route path="/disease/:id" component={DiseaseProfile} />
       <Route path="/tb" component={TBWorklist} />
       <Route path="/tb/registry" component={TBRegistry} />
+      <Route path="/tb/new" component={TBForm} />
+      <Route path="/tb/:id/edit" component={TBForm} />
       <Route path="/tb/:id" component={TBProfile} />
       <Route path="/settings" component={SettingsPage} />
       <Route path="/patient-checkup" component={PatientCheckupPage} />

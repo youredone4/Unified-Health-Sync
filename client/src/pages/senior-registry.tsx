@@ -1,10 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
-import { useLocation } from "wouter";
+import { useLocation, Link } from "wouter";
 import type { Senior } from "@shared/schema";
 import { formatDate } from "@/lib/healthLogic";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Users, Search } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Users, Search, Plus } from "lucide-react";
 import { useState } from "react";
 
 export default function SeniorRegistry() {
@@ -19,12 +20,20 @@ export default function SeniorRegistry() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold flex items-center gap-2" data-testid="text-page-title">
-          <Users className="w-6 h-6" />
-          Senior Registry
-        </h1>
-        <p className="text-muted-foreground">All registered seniors</p>
+      <div className="flex items-center justify-between flex-wrap gap-4">
+        <div>
+          <h1 className="text-2xl font-bold flex items-center gap-2" data-testid="text-page-title">
+            <Users className="w-6 h-6" />
+            Senior Registry
+          </h1>
+          <p className="text-muted-foreground">All registered seniors</p>
+        </div>
+        <Link href="/senior/new">
+          <Button data-testid="button-add-senior">
+            <Plus className="w-4 h-4 mr-2" />
+            Add New Senior
+          </Button>
+        </Link>
       </div>
 
       <div className="relative max-w-sm">

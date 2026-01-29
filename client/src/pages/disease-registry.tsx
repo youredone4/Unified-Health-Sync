@@ -1,12 +1,13 @@
 import { useQuery } from "@tanstack/react-query";
-import { useLocation } from "wouter";
+import { useLocation, Link } from "wouter";
 import type { DiseaseCase } from "@shared/schema";
 import { formatDate } from "@/lib/healthLogic";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ClipboardList, Search } from "lucide-react";
+import { ClipboardList, Search, Plus } from "lucide-react";
 import { useState } from "react";
 
 export default function DiseaseRegistry() {
@@ -41,12 +42,20 @@ export default function DiseaseRegistry() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold flex items-center gap-2" data-testid="text-page-title">
-          <ClipboardList className="w-6 h-6 text-orange-500" />
-          Disease Case Registry
-        </h1>
-        <p className="text-muted-foreground">All reported disease cases</p>
+      <div className="flex items-center justify-between flex-wrap gap-4">
+        <div>
+          <h1 className="text-2xl font-bold flex items-center gap-2" data-testid="text-page-title">
+            <ClipboardList className="w-6 h-6 text-orange-500" />
+            Disease Case Registry
+          </h1>
+          <p className="text-muted-foreground">All reported disease cases</p>
+        </div>
+        <Link href="/disease/new">
+          <Button data-testid="button-add-case">
+            <Plus className="w-4 h-4 mr-2" />
+            Add New Case
+          </Button>
+        </Link>
       </div>
 
       <Card>

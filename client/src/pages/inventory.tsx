@@ -1,10 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "wouter";
 import type { InventoryItem } from "@shared/schema";
 import { getStockStatus } from "@/lib/healthLogic";
 import KpiCard from "@/components/kpi-card";
 import StatusBadge from "@/components/status-badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Package, AlertCircle, CheckCircle, TrendingUp } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Package, AlertCircle, CheckCircle, TrendingUp, Plus } from "lucide-react";
 
 export default function InventoryPage() {
   const { data: inventory = [], isLoading } = useQuery<InventoryItem[]>({ queryKey: ['/api/inventory'] });
@@ -28,12 +30,20 @@ export default function InventoryPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold flex items-center gap-2" data-testid="text-page-title">
-          <Package className="w-6 h-6 text-green-400" />
-          Inventory - Availability & Surplus
-        </h1>
-        <p className="text-muted-foreground">Vaccine and HTN meds stock by barangay</p>
+      <div className="flex items-center justify-between flex-wrap gap-4">
+        <div>
+          <h1 className="text-2xl font-bold flex items-center gap-2" data-testid="text-page-title">
+            <Package className="w-6 h-6 text-green-400" />
+            Inventory - Availability & Surplus
+          </h1>
+          <p className="text-muted-foreground">Vaccine and HTN meds stock by barangay</p>
+        </div>
+        <Link href="/inventory/new">
+          <Button data-testid="button-add-inventory">
+            <Plus className="w-4 h-4 mr-2" />
+            Add Inventory
+          </Button>
+        </Link>
       </div>
 
       <div className="grid grid-cols-3 gap-4">
