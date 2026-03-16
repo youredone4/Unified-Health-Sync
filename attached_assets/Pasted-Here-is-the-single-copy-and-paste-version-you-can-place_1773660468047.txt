@@ -1,0 +1,138 @@
+Here is the **single copy-and-paste version** you can place directly into **Replit Planning / Ghostwriter**:
+
+```
+Improve only the Disease Heat Index Map visualization in my existing municipal health dashboard.
+
+Context
+The dashboard is already working. It uses Leaflet with OpenStreetMap and currently displays barangays as colored circle markers with labels. Do NOT rebuild the dashboard or change the layout.
+
+Your task is to improve only the map visualization layer.
+
+Primary Objective
+Replace the current circle-marker outbreak visualization with a true heatmap gradient overlay so the map looks like a real epidemiological outbreak heatmap showing disease concentration across the Municipality of Placer, Surigao del Norte.
+
+Do not modify:
+- dashboard layout
+- sidebar
+- statistics cards
+- case tables
+- summary panels
+- backend logic
+
+Only modify the map visualization.
+
+Implementation Requirements
+
+1. Use a true heatmap layer
+Integrate the Leaflet Heatmap plugin (leaflet-heat) and render disease intensity as a gradient overlay.
+
+Heatmap points must be built from the existing dataset already used in the dashboard.
+
+Format of heatmap data:
+[
+  [lat, lng, weight],
+  [9.6530, 125.6041, 12],
+  [9.6564, 125.6023, 9]
+]
+
+The weight value must represent the total number of disease cases in that barangay after filters are applied.
+
+2. Smooth gradient visualization
+The heatmap should use outbreak-style colors:
+
+green = low cases  
+yellow = moderate cases  
+orange = high cases  
+red = critical cluster  
+
+Suggested heatmap configuration:
+radius: 40  
+blur: 30  
+maxZoom: 15  
+
+Use an automatic max intensity based on filtered data so the visualization stays readable even with small case numbers.
+
+3. Keep barangay labels
+Barangay names should still appear as subtle labels or lightweight markers.
+
+Labels should:
+- be small
+- not dominate the map
+- remain readable
+
+The heatmap gradient must be the primary visual element.
+
+4. Dynamic data source
+The heatmap must pull from the existing disease dataset already used by the dashboard.
+
+Group the data by:
+- barangay
+- disease
+- number of cases
+
+Aggregate totals per barangay and convert them into weighted heatmap points.
+
+5. Filtering support
+The heatmap must update dynamically when filters are applied.
+
+Supported filters:
+- disease type
+- time range (last 7 / 14 / 30 days)
+
+The map must update without reloading the page.
+
+When filters change:
+- recompute aggregated barangay totals
+- rebuild heatmap points
+- update the heatmap layer only
+
+Do not recreate the entire map instance.
+
+6. Performance
+Maintain smooth rendering.
+
+Requirements:
+- reuse the existing Leaflet map instance
+- remove and recreate only the heat layer when data changes
+- avoid full map reinitialization
+
+7. Optional toggle switch (recommended)
+
+Add a toggle above the map:
+
+Map Mode:
+[ Heatmap ] [ Barangay Markers ]
+
+Behavior:
+
+Heatmap mode
+- shows gradient heatmap
+- shows subtle barangay labels
+
+Barangay Markers mode
+- shows the original circle-marker visualization
+
+Default view should be Heatmap.
+
+Expected Result
+
+The map should resemble a modern public health outbreak heatmap where:
+
+- clusters glow in red or orange
+- moderate areas appear yellow
+- low activity areas appear green
+- transitions between areas are smooth gradients
+- visualization represents disease spread rather than isolated circles
+
+Deliverables
+
+Provide:
+1. the required leaflet-heat import
+2. the code to convert the filtered dataset into heatmap points
+3. the heatmap rendering function
+4. the update logic when filters change
+5. any minor CSS needed for subtle barangay labels
+
+Important
+This is an enhancement to an existing working dashboard. Do not redesign or rebuild unrelated components. Only improve the map visualization logic.
+```
