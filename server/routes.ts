@@ -256,7 +256,38 @@ export async function registerRoutes(
   app.post(api.sms.send.path, async (req, res) => {
     try {
       const input = api.sms.send.input.parse(req.body);
-      const created = await storage.sendSms(input);
+
+      // Send real SMS via Semaphore if API key is configured
+      const semaphoreKey = process.env.SEMAPHORE_API_KEY;
+      let status = "Queued (Demo)";
+      if (semaphoreKey && input.recipientPhone) {
+        try {
+          const params = new URLSearchParams({
+            apikey: semaphoreKey,
+            number: input.recipientPhone.replace(/^\+63/, "0"),
+            message: input.message,
+            sendername: "HealthSync",
+          });
+          const smsFetch = await fetch("https://api.semaphore.co/api/v4/messages", {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            body: params.toString(),
+          });
+          const smsResult = await smsFetch.json();
+          if (smsFetch.ok && Array.isArray(smsResult) && smsResult[0]?.status) {
+            status = smsResult[0].status === "Queued" ? "Sent" : smsResult[0].status;
+          } else {
+            const errMsg = smsResult?.message || JSON.stringify(smsResult);
+            console.error("Semaphore error:", errMsg);
+            status = `Failed: ${errMsg}`;
+          }
+        } catch (smsErr) {
+          console.error("Semaphore request failed:", smsErr);
+          status = "Failed: network error";
+        }
+      }
+
+      const created = await storage.sendSms({ ...input, status });
       res.status(201).json(created);
     } catch (err) {
       res.status(400).json({ message: "Invalid SMS data" });

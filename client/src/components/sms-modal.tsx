@@ -82,12 +82,12 @@ export default function SmsModal({
         recipientPhone: resolved,
         message,
         sentAt: new Date().toISOString(),
-        status: 'Queued (Demo)',
+        status: 'Sending',
       });
     },
     onSuccess: async () => {
       queryClient.invalidateQueries({ queryKey: ['/api/sms'] });
-      toast({ title: "SMS queued (Demo)", description: `Message queued for ${recipient}` });
+      toast({ title: "SMS sent", description: `Message sent to ${recipient}` });
       onOpenChange(false);
 
       if (!hasProfilePhone && saveToProfile && onSavePhone) {

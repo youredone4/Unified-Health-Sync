@@ -33,7 +33,11 @@ export default function SmsOutbox({ open, onOpenChange }: SmsOutboxProps) {
             >
               <div className="flex justify-between items-start mb-2">
                 <p className="font-medium text-sm">{msg.recipient}</p>
-                <span className="text-xs bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded">
+                <span className={`text-xs px-2 py-0.5 rounded ${
+                  msg.status === 'Sent' ? 'bg-green-500/20 text-green-400' :
+                  msg.status?.startsWith('Failed') ? 'bg-red-500/20 text-red-400' :
+                  'bg-blue-500/20 text-blue-400'
+                }`}>
                   {msg.status}
                 </span>
               </div>
