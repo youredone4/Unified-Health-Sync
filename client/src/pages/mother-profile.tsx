@@ -8,7 +8,8 @@ import StatusBadge from "@/components/status-badge";
 import ConfirmModal from "@/components/confirm-modal";
 import SmsModal from "@/components/sms-modal";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Heart, Stethoscope, MessageSquare, Check } from "lucide-react";
+import { useAuth, permissions } from "@/hooks/use-auth";
+import { ArrowLeft, Heart, Stethoscope, MessageSquare, Check, Pencil, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { apiRequest } from "@/lib/queryClient";
 
@@ -17,11 +18,13 @@ export default function MotherProfile() {
   const [, navigate] = useLocation();
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { user } = useAuth();
 
   const { data: mother, isLoading } = useQuery<Mother>({ queryKey: ['/api/mothers', id] });
   
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmAction, setConfirmAction] = useState<'tt' | 'prenatal'>('tt');
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const [smsOpen, setSmsOpen] = useState(false);
 
   const updateMutation = useMutation({
@@ -36,12 +39,28 @@ export default function MotherProfile() {
     }
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: async () => {
+      return apiRequest('DELETE', `/api/mothers/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/mothers'] });
+      toast({ title: "Deleted", description: "Patient record permanently deleted" });
+      navigate('/prenatal');
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Could not delete record", variant: "destructive" });
+    }
+  });
+
   if (isLoading || !mother) {
     return <div className="flex items-center justify-center h-64"><p className="text-muted-foreground">Loading...</p></div>;
   }
 
   const tt = getTTStatus(mother);
   const pc = getPrenatalCheckStatus(mother);
+  const canUpdate = permissions.canUpdate(user?.role);
+  const canDelete = permissions.canDelete(user?.role);
 
   const handleMarkDone = () => {
     if (confirmAction === 'tt') {
@@ -62,9 +81,23 @@ export default function MotherProfile() {
 
   return (
     <div className="space-y-6">
-      <Button variant="ghost" onClick={() => navigate('/prenatal')} className="gap-2" data-testid="button-back">
-        <ArrowLeft className="w-4 h-4" /> Back to Worklist
-      </Button>
+      <div className="flex items-center justify-between">
+        <Button variant="ghost" onClick={() => navigate('/prenatal')} className="gap-2" data-testid="button-back">
+          <ArrowLeft className="w-4 h-4" /> Back to Worklist
+        </Button>
+        <div className="flex gap-2">
+          {canUpdate && (
+            <Button variant="outline" size="sm" onClick={() => navigate(`/mother/${id}/edit`)} className="gap-1" data-testid="button-edit-mother">
+              <Pencil className="w-4 h-4" /> Edit
+            </Button>
+          )}
+          {canDelete && (
+            <Button variant="destructive" size="sm" onClick={() => setDeleteOpen(true)} className="gap-1" data-testid="button-delete-mother">
+              <Trash2 className="w-4 h-4" /> Delete
+            </Button>
+          )}
+        </div>
+      </div>
 
       <div className="flex flex-col md:flex-row gap-6">
         <Card className="flex-1">
@@ -150,6 +183,16 @@ export default function MotherProfile() {
         onConfirm={handleMarkDone}
         confirmText="Yes, Mark Done"
         isLoading={updateMutation.isPending}
+      />
+
+      <ConfirmModal
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        title="Delete Patient Record"
+        description={`Are you sure you want to permanently delete ${mother.firstName} ${mother.lastName}'s record? This action cannot be undone. All prenatal records for this patient will be permanently deleted.`}
+        onConfirm={() => deleteMutation.mutate()}
+        confirmText="Yes, Delete Permanently"
+        isLoading={deleteMutation.isPending}
       />
 
       <SmsModal

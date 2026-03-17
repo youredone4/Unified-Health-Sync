@@ -9,7 +9,8 @@ import StatusBadge from "@/components/status-badge";
 import ConfirmModal from "@/components/confirm-modal";
 import SmsModal from "@/components/sms-modal";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Pill, Heart, MessageSquare, Check, ShieldCheck, AlertTriangle, History } from "lucide-react";
+import { useAuth, permissions } from "@/hooks/use-auth";
+import { ArrowLeft, Pill, Heart, MessageSquare, Check, ShieldCheck, AlertTriangle, History, Pencil, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { apiRequest } from "@/lib/queryClient";
 
@@ -24,6 +25,7 @@ export default function SeniorProfile() {
   const [, navigate] = useLocation();
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { user } = useAuth();
 
   const { data: senior, isLoading } = useQuery<Senior>({ queryKey: ['/api/seniors', id] });
   
@@ -48,6 +50,7 @@ export default function SeniorProfile() {
   });
   
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const [smsOpen, setSmsOpen] = useState(false);
   const [claimOpen, setClaimOpen] = useState(false);
 
@@ -60,6 +63,20 @@ export default function SeniorProfile() {
       queryClient.invalidateQueries({ queryKey: ['/api/seniors', id] });
       toast({ title: "Saved", description: "Record updated successfully" });
       setConfirmOpen(false);
+    }
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async () => {
+      return apiRequest('DELETE', `/api/seniors/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/seniors'] });
+      toast({ title: "Deleted", description: "Senior record permanently deleted" });
+      navigate('/senior');
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Could not delete record", variant: "destructive" });
     }
   });
 
@@ -104,6 +121,8 @@ export default function SeniorProfile() {
 
   const pickup = getSeniorPickupStatus(senior);
   const medsReady = isMedsReadyForPickup(senior);
+  const canUpdate = permissions.canUpdate(user?.role);
+  const canDelete = permissions.canDelete(user?.role);
 
   const handleMarkPickedUp = () => {
     updateMutation.mutate({ pickedUp: true, htnMedsReady: false });
@@ -113,9 +132,23 @@ export default function SeniorProfile() {
 
   return (
     <div className="space-y-6">
-      <Button variant="ghost" onClick={() => navigate('/senior')} className="gap-2" data-testid="button-back">
-        <ArrowLeft className="w-4 h-4" /> Back to Worklist
-      </Button>
+      <div className="flex items-center justify-between">
+        <Button variant="ghost" onClick={() => navigate('/senior')} className="gap-2" data-testid="button-back">
+          <ArrowLeft className="w-4 h-4" /> Back to Worklist
+        </Button>
+        <div className="flex gap-2">
+          {canUpdate && (
+            <Button variant="outline" size="sm" onClick={() => navigate(`/senior/${id}/edit`)} className="gap-1" data-testid="button-edit-senior">
+              <Pencil className="w-4 h-4" /> Edit
+            </Button>
+          )}
+          {canDelete && (
+            <Button variant="destructive" size="sm" onClick={() => setDeleteOpen(true)} className="gap-1" data-testid="button-delete-senior">
+              <Trash2 className="w-4 h-4" /> Delete
+            </Button>
+          )}
+        </div>
+      </div>
 
       <div className="flex flex-col md:flex-row gap-6">
         <Card className="flex-1">
@@ -258,6 +291,16 @@ export default function SeniorProfile() {
         onConfirm={handleMarkPickedUp}
         confirmText="Yes, Mark Picked Up"
         isLoading={updateMutation.isPending}
+      />
+
+      <ConfirmModal
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        title="Delete Senior Record"
+        description={`Are you sure you want to permanently delete ${senior.firstName} ${senior.lastName}'s record? This action cannot be undone. All medication pickup and claim records for this senior will be permanently deleted.`}
+        onConfirm={() => deleteMutation.mutate()}
+        confirmText="Yes, Delete Permanently"
+        isLoading={deleteMutation.isPending}
       />
 
       <SmsModal

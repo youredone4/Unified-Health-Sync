@@ -9,7 +9,8 @@ import StatusBadge from "@/components/status-badge";
 import ConfirmModal from "@/components/confirm-modal";
 import SmsModal from "@/components/sms-modal";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Baby, Calendar, MessageSquare, Check, Scale, AlertTriangle, User } from "lucide-react";
+import { useAuth, permissions } from "@/hooks/use-auth";
+import { ArrowLeft, Baby, Calendar, MessageSquare, Check, Scale, AlertTriangle, User, Pencil, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { apiRequest } from "@/lib/queryClient";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
@@ -19,12 +20,14 @@ export default function ChildProfile() {
   const [, navigate] = useLocation();
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { user } = useAuth();
 
   const { data: child, isLoading } = useQuery<Child>({ queryKey: ['/api/children', id] });
   const { data: mothers = [] } = useQuery<Mother[]>({ queryKey: ['/api/mothers'] });
   
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmAction, setConfirmAction] = useState<'vaccine' | 'weight'>('vaccine');
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const [smsOpen, setSmsOpen] = useState(false);
 
   const mother = child?.motherId ? mothers.find(m => m.id === child.motherId) : null;
@@ -41,6 +44,20 @@ export default function ChildProfile() {
     }
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: async () => {
+      return apiRequest('DELETE', `/api/children/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/children'] });
+      toast({ title: "Deleted", description: "Child record permanently deleted" });
+      navigate('/child');
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Could not delete record", variant: "destructive" });
+    }
+  });
+
   if (isLoading || !child) {
     return <div className="flex items-center justify-center h-64"><p className="text-muted-foreground">Loading...</p></div>;
   }
@@ -51,6 +68,8 @@ export default function ChildProfile() {
   const zScoreResult = child ? getWeightZScore(child) : null;
   const underweight = zScoreResult && (zScoreResult.category === 'SAM' || zScoreResult.category === 'MAM');
   const growth = child.growth || [];
+  const canUpdate = permissions.canUpdate(user?.role);
+  const canDelete = permissions.canDelete(user?.role);
 
   const handleMarkVaccine = () => {
     if (vax.nextVaccine) {
@@ -66,9 +85,23 @@ export default function ChildProfile() {
 
   return (
     <div className="space-y-6">
-      <Button variant="ghost" onClick={() => navigate('/child')} className="gap-2" data-testid="button-back">
-        <ArrowLeft className="w-4 h-4" /> Back to Worklist
-      </Button>
+      <div className="flex items-center justify-between">
+        <Button variant="ghost" onClick={() => navigate('/child')} className="gap-2" data-testid="button-back">
+          <ArrowLeft className="w-4 h-4" /> Back to Worklist
+        </Button>
+        <div className="flex gap-2">
+          {canUpdate && (
+            <Button variant="outline" size="sm" onClick={() => navigate(`/child/${id}/edit`)} className="gap-1" data-testid="button-edit-child">
+              <Pencil className="w-4 h-4" /> Edit
+            </Button>
+          )}
+          {canDelete && (
+            <Button variant="destructive" size="sm" onClick={() => setDeleteOpen(true)} className="gap-1" data-testid="button-delete-child">
+              <Trash2 className="w-4 h-4" /> Delete
+            </Button>
+          )}
+        </div>
+      </div>
 
       <div className="flex flex-col md:flex-row gap-6">
         <Card className="flex-1">
@@ -192,6 +225,16 @@ export default function ChildProfile() {
         onConfirm={handleMarkVaccine}
         confirmText="Yes, Mark Given"
         isLoading={updateMutation.isPending}
+      />
+
+      <ConfirmModal
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        title="Delete Child Record"
+        description={`Are you sure you want to permanently delete ${child.name}'s record? This action cannot be undone. All immunization and growth records for this child will be permanently deleted.`}
+        onConfirm={() => deleteMutation.mutate()}
+        confirmText="Yes, Delete Permanently"
+        isLoading={deleteMutation.isPending}
       />
 
       <SmsModal

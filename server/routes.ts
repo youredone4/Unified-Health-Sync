@@ -5,7 +5,7 @@ import { api } from "@shared/routes";
 import { z } from "zod";
 import { setupAuth, registerAuthRoutes } from "./auth";
 import { registerAdminRoutes } from "./routes/admin";
-import { loadUserInfo, requireAuth, requireRole } from "./middleware/rbac";
+import { loadUserInfo, requireAuth, requireRole, createAuditLog } from "./middleware/rbac";
 import { UserRole } from "@shared/schema";
 
 export async function registerRoutes(
@@ -24,8 +24,10 @@ export async function registerRoutes(
 
   // RBAC middleware for registry read - all authenticated users can read
   const registryReadRBAC = [loadUserInfo, requireAuth];
-  // RBAC middleware for registry CRUD - TL, SHA, MHO, and SYSTEM_ADMIN can create/update/delete
+  // RBAC middleware for registry CRUD - all operational roles can create/update
   const registryRBAC = [loadUserInfo, requireAuth, requireRole(UserRole.SYSTEM_ADMIN, UserRole.MHO, UserRole.SHA, UserRole.TL)];
+  // RBAC middleware for registry DELETE - SYSTEM_ADMIN only
+  const adminOnlyRBAC = [loadUserInfo, requireAuth, requireRole(UserRole.SYSTEM_ADMIN)];
 
   // Helper to filter data by TL's assigned barangays
   function filterByBarangay<T extends { barangay: string }>(data: T[], userInfo: Express.Request["userInfo"]): T[] {
@@ -89,11 +91,12 @@ export async function registerRoutes(
     res.json(updated);
   }));
 
-  app.delete(api.mothers.delete.path, registryRBAC, ar(async (req, res) => {
+  app.delete(api.mothers.delete.path, adminOnlyRBAC, ar(async (req, res) => {
     const id = parseId(req.params.id, res); if (id === null) return;
     const mother = await storage.getMother(id);
     if (!mother) return res.status(404).json({ message: "Mother not found" });
     await storage.deleteMother(id);
+    await createAuditLog(req.userInfo!.id, req.userInfo!.role, "DELETE", "MOTHER", String(id), undefined, undefined, undefined, req);
     res.json({ success: true });
   }));
 
@@ -129,11 +132,12 @@ export async function registerRoutes(
     res.json(updated);
   }));
 
-  app.delete(api.children.delete.path, registryRBAC, ar(async (req, res) => {
+  app.delete(api.children.delete.path, adminOnlyRBAC, ar(async (req, res) => {
     const id = parseId(req.params.id, res); if (id === null) return;
     const child = await storage.getChild(id);
     if (!child) return res.status(404).json({ message: "Child not found" });
     await storage.deleteChild(id);
+    await createAuditLog(req.userInfo!.id, req.userInfo!.role, "DELETE", "CHILD", String(id), undefined, undefined, undefined, req);
     res.json({ success: true });
   }));
 
@@ -169,11 +173,12 @@ export async function registerRoutes(
     res.json(updated);
   }));
 
-  app.delete(api.seniors.delete.path, registryRBAC, ar(async (req, res) => {
+  app.delete(api.seniors.delete.path, adminOnlyRBAC, ar(async (req, res) => {
     const id = parseId(req.params.id, res); if (id === null) return;
     const senior = await storage.getSenior(id);
     if (!senior) return res.status(404).json({ message: "Senior not found" });
     await storage.deleteSenior(id);
+    await createAuditLog(req.userInfo!.id, req.userInfo!.role, "DELETE", "SENIOR", String(id), undefined, undefined, undefined, req);
     res.json({ success: true });
   }));
 
