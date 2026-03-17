@@ -1,0 +1,226 @@
+Refactor the existing sidebar navigation and related route access in my municipal health dashboard so that navigation is role-based, cleaner, and strictly aligned with each user profile role.
+
+Important Context
+- The system is already working.
+- Do NOT rebuild the whole dashboard.
+- Do NOT change the database unless absolutely necessary.
+- Do NOT break existing routes, modules, dashboards, tables, filters, or backend logic.
+- Replit may already know some existing role visibility rules, so inspect the current role-based logic first during Planning before changing anything.
+- This task is a refactor of navigation structure and role-based access behavior only.
+
+Primary Goal
+Refactor the sidebar so that users only see modules and menu items relevant to their assigned role, and make sure the UI, route protection, and access logic consistently respect the logged-in user’s role.
+
+Current Roles
+The system has these user roles:
+- System Admin
+- Municipal Health Officer
+- Senior Health Admin
+- Team Leader (Barangay Nurse)
+
+Core Requirement
+Make sure the sidebar, route visibility, and page/module access all strictly follow the logged-in user’s role.
+
+Do NOT only hide menu items visually.
+Also enforce role restrictions in:
+- sidebar rendering
+- frontend route access
+- page/module guards
+- backend/API access if role checking already exists or can be safely extended
+
+Refactor Scope
+
+1. Refactor sidebar into grouped sections
+Reorganize the sidebar into clear grouped sections while preserving existing routes and screens.
+
+Target sidebar structure:
+
+Overview
+- Municipal Dashboard
+- Hotspots & Analytics
+- Calendar
+
+Maternal and Child Care
+- TT Reminders
+- Prenatal Dashboard
+- Mother Registry
+- Vaccination Schedule
+- Child Dashboard
+- Child Registry
+
+Community Nutrition
+- Growth Monitoring
+- Nutrition Dashboard
+- Underweight Follow-ups
+
+Senior Care
+- HTN Meds Pickup
+- Senior Dashboard
+- Senior Registry
+
+Disease Surveillance
+- Case Worklist
+- Case Registry
+- Outbreak Map
+
+TB DOTS
+- DOTS Worklist
+- TB Registry
+
+Inventory and Supply
+- Availability & Surplus
+- Stock-outs & Low Stock
+
+Reports and Analytics
+- M1 Report
+- Health Analytics
+
+Communication
+- Messages
+
+Clinical Services
+- Patient Check-up
+
+Administration
+- User Management
+- Audit Logs
+- Settings
+
+2. Inspect existing role visibility first
+Before applying changes:
+- inspect the current sidebar role visibility logic
+- inspect current route/page access logic
+- reuse the existing role source from authenticated user/profile
+- preserve existing correct permissions where already implemented
+- only refactor where needed to centralize and clean up access control
+
+3. Make sidebar role-based
+Create a centralized role-based menu configuration instead of hardcoding one long static sidebar.
+
+Requirements:
+- define allowed roles per section
+- define allowed roles per menu item
+- hide sections with no visible child items
+- preserve icons
+- preserve active page highlighting
+- preserve current routing
+
+4. Enforce exact role-aware access
+Use these access rules unless the current system already has stricter correct rules that should be preserved:
+
+System Admin
+- full access to all sections and items
+- includes Administration
+
+Municipal Health Officer
+- strategic and operational oversight access
+- has access to Patient Check-up
+- focus on Overview, Hotspots & Analytics, Calendar, Disease Surveillance, Inventory and Supply, Reports and Analytics, Communication, and other relevant oversight modules
+- should not automatically receive full Administration access unless already intended by the current system
+
+Senior Health Admin
+- should have similar access to Municipal Health Officer
+- must NOT have access to Patient Check-up
+- should not have full System Admin privileges unless already intended by the current system
+
+Team Leader (Barangay Nurse)
+- operational/frontline view only
+- show only modules needed for daily frontline work
+- hide admin-only and management-only tools
+
+For Team Leader, prioritize:
+- Municipal Dashboard
+- Calendar
+- Prenatal Dashboard
+- Child Dashboard
+- Nutrition Dashboard
+- Senior Dashboard
+- Mother Registry
+- Child Registry
+- Senior Registry
+- Case Worklist
+- DOTS Worklist
+- HTN Meds Pickup
+- Messages
+
+Hide from Team Leader unless explicitly required by current working permissions:
+- Patient Check-up
+- User Management
+- Audit Logs
+- Settings
+- high-level analytics meant for management
+- unnecessary administrative modules
+
+5. Patient Check-up rule
+This is important:
+- Patient Check-up must be visible and accessible only to Municipal Health Officer
+- Senior Health Admin must not see or access Patient Check-up
+- Team Leader must not see or access Patient Check-up unless current rules explicitly require it, but default to no access
+- Protect the route so unauthorized users cannot open Patient Check-up directly by URL
+
+6. Add route/page protection
+Refactor route handling so users cannot manually access unauthorized pages by URL.
+
+Requirements:
+- add role guards to routes/pages
+- unauthorized routes should redirect safely to an allowed dashboard or show an access denied page
+- do not rely on sidebar hiding alone
+
+7. Keep one source of truth for permissions
+The system already uses profile roles. Reuse the existing authenticated user role source.
+Do not create duplicate role logic if one already exists.
+
+Refactor so that:
+- sidebar rendering
+- route guards
+- page access checks
+
+all use the same centralized permission source.
+
+8. Improve sidebar usability
+Enhance the sidebar UI without redesigning the whole dashboard.
+
+Requirements:
+- grouped sections
+- better spacing between sections
+- consistent icon alignment
+- collapsible groups if suitable for the current stack
+- keep it clean and professional
+- maintain mobile/responsive behavior if already present
+
+9. Technical implementation expectations
+Please inspect the current project structure first and refactor safely.
+
+Implementation expectations:
+- create a reusable sidebar configuration object
+- create reusable permission-checking helpers
+- avoid duplicating role checks across many files
+- centralize role access logic as much as possible
+- preserve current module components and page content
+- only refactor what is needed for role-based navigation and protection
+
+10. Deliverables
+Provide:
+1. the refactored sidebar structure
+2. the centralized role-to-menu configuration
+3. the route guard / permission-check logic
+4. the files changed
+5. a short explanation of how role access is enforced
+6. confirmation that Patient Check-up is Municipal Health Officer only
+7. confirmation that Senior Health Admin has similar access to Municipal Health Officer except for Patient Check-up
+
+Important Constraints
+- Do NOT rebuild unrelated modules
+- Do NOT redesign the entire UI
+- Do NOT remove working functionality unless it is unauthorized for a given role
+- Do NOT expose admin pages to non-admin roles
+- Make sure the final implementation strictly respects the user’s profile role
+
+Success Criteria
+- each role sees only the correct sidebar items
+- Patient Check-up is Municipal Health Officer only
+- Senior Health Admin matches Municipal Health Officer access except for Patient Check-up
+- hidden modules cannot be opened directly by URL
+- sidebar remains organized and readable
+- existing system functionality remains intact
+- user role is the single source of truth for navigation access
