@@ -1,6 +1,4 @@
-import { useState, useMemo, useRef, useEffect } from "react";
-import { usePagination } from "@/hooks/use-pagination";
-import TablePagination from "@/components/table-pagination";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -9,10 +7,11 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
-import { FileText, Download, Save, Plus, ChevronLeft, ChevronRight, RefreshCw, Building2, Upload, FileSpreadsheet, AlertCircle, Database, Loader2 } from "lucide-react";
+import { FileText, Download, Save, Plus, ChevronLeft, ChevronRight, RefreshCw, Building2, Upload, Database, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useTheme } from "@/contexts/theme-context";
+import { useAuth, permissions } from "@/hooks/use-auth";
+import DiseaseImportDialog from "@/components/disease-import-dialog";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { M1TemplateVersion, M1IndicatorCatalog, Barangay, M1ReportInstance, M1IndicatorValue, Mother, Child, Senior, MunicipalitySettings, BarangaySettings } from "@shared/schema";
 import { differenceInMonths, parseISO } from "date-fns";
@@ -80,13 +79,8 @@ export default function M1ReportPage() {
   const [reportMode, setReportMode] = useState<"view" | "encode">("view");
   const [editedValues, setEditedValues] = useState<IndicatorValueMap>({});
   const [activeReportId, setActiveReportId] = useState<number | null>(null);
-  const [importOpen, setImportOpen] = useState(false);
-  const [importPreview, setImportPreview] = useState<{ rowKey: string; columnKey: string; value: number; }[]>([]);
-  const [importErrors, setImportErrors] = useState<string[]>([]);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const importPagination = usePagination(importPreview);
-  useEffect(() => { importPagination.resetPage(); }, [importPreview]);
+  const [diseaseImportOpen, setDiseaseImportOpen] = useState(false);
+  const { user } = useAuth();
 
   const { data: templates = [], isLoading: templatesLoading } = useQuery<M1TemplateVersion[]>({
     queryKey: ["/api/m1/templates"],
@@ -196,84 +190,6 @@ export default function M1ReportPage() {
     },
   });
 
-  const parseCSVImport = (csvText: string) => {
-    const lines = csvText.trim().split('\n');
-    const errors: string[] = [];
-    const parsed: { rowKey: string; columnKey: string; value: number }[] = [];
-    
-    const validRowKeys = new Set(catalog.map(c => c.rowKey));
-    
-    lines.forEach((line, idx) => {
-      if (idx === 0 && (line.toLowerCase().includes('row') || line.toLowerCase().includes('indicator'))) {
-        return;
-      }
-      
-      const parts = line.split(',').map(p => p.trim().replace(/^["']|["']$/g, ''));
-      if (parts.length < 3) {
-        errors.push(`Line ${idx + 1}: Invalid format (need row_key, column_key, value)`);
-        return;
-      }
-      
-      const [rowKey, columnKey, valueStr] = parts;
-      const value = parseFloat(valueStr);
-      
-      if (!rowKey) {
-        errors.push(`Line ${idx + 1}: Missing row key`);
-        return;
-      }
-      
-      if (!validRowKeys.has(rowKey)) {
-        errors.push(`Line ${idx + 1}: Unknown row key "${rowKey}"`);
-        return;
-      }
-      
-      if (!columnKey) {
-        errors.push(`Line ${idx + 1}: Missing column key`);
-        return;
-      }
-      
-      if (isNaN(value)) {
-        errors.push(`Line ${idx + 1}: Invalid value "${valueStr}"`);
-        return;
-      }
-      
-      parsed.push({ rowKey, columnKey, value });
-    });
-    
-    setImportErrors(errors);
-    setImportPreview(parsed);
-  };
-
-  const handleFileImport = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const text = event.target?.result as string;
-      parseCSVImport(text);
-    };
-    reader.readAsText(file);
-  };
-
-  const applyImportedValues = () => {
-    if (!activeReportId || importPreview.length === 0) return;
-    
-    const newValues: IndicatorValueMap = { ...editedValues };
-    importPreview.forEach(item => {
-      const key = `${item.rowKey}:${item.columnKey}`;
-      newValues[key] = { 
-        valueNumber: item.value, 
-        valueSource: 'IMPORTED'
-      };
-    });
-    
-    setEditedValues(newValues);
-    setImportOpen(false);
-    setImportPreview([]);
-    setImportErrors([]);
-    toast({ title: "Values Imported", description: `${importPreview.length} indicator values loaded. Click Save to persist.` });
-  };
 
   const pageIndicators = useMemo(() => {
     return catalog.filter(ind => ind.pageNumber === currentPage);
@@ -1050,10 +966,10 @@ export default function M1ReportPage() {
                     <Download className="h-4 w-4 mr-1" />
                     Export PDF
                   </Button>
-                  {reportMode === "encode" && (
-                    <Button size="sm" variant="outline" onClick={() => setImportOpen(true)} data-testid="button-import-csv">
+                  {permissions.canImportReports(user?.role) && (
+                    <Button size="sm" variant="outline" onClick={() => setDiseaseImportOpen(true)} data-testid="button-import-disease">
                       <Upload className="h-4 w-4 mr-1" />
-                      Import CSV
+                      Import Disease Data
                     </Button>
                   )}
                 </>
@@ -1102,94 +1018,7 @@ export default function M1ReportPage() {
           </CardContent>
         </Card>
 
-        <Dialog open={importOpen} onOpenChange={setImportOpen}>
-          <DialogContent className="max-w-lg">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <FileSpreadsheet className="h-5 w-5" />
-                Import Indicator Values from CSV
-              </DialogTitle>
-              <DialogDescription>
-                Upload a CSV file with indicator values. Expected format: row_key, column_key, value.
-              </DialogDescription>
-            </DialogHeader>
-            
-            <div className="space-y-4">
-              <div className="border-2 border-dashed rounded-md p-4 text-center">
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".csv,.txt"
-                  onChange={handleFileImport}
-                  className="hidden"
-                  data-testid="input-csv-file"
-                />
-                <Button
-                  variant="outline"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="gap-2"
-                  data-testid="button-select-file"
-                >
-                  <Upload className="h-4 w-4" />
-                  Select CSV File
-                </Button>
-                <p className="text-xs text-muted-foreground mt-2">
-                  Example: FP-01, M, 25
-                </p>
-              </div>
-
-              {importErrors.length > 0 && (
-                <div className="bg-destructive/10 border border-destructive/30 rounded-md p-3 max-h-32 overflow-y-auto">
-                  <h4 className="text-sm font-medium text-destructive flex items-center gap-2 mb-2">
-                    <AlertCircle className="h-4 w-4" />
-                    Import Errors ({importErrors.length})
-                  </h4>
-                  <ul className="text-xs space-y-1 text-destructive">
-                    {importErrors.map((err, i) => (
-                      <li key={i}>{err}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              {importPreview.length > 0 && (
-                <div className="space-y-2">
-                  <h4 className="text-sm font-medium">Preview ({importPreview.length} values)</h4>
-                  <div className="border rounded-md">
-                    <table className="w-full text-xs">
-                      <thead className="bg-muted">
-                        <tr>
-                          <th className="px-2 py-1 text-left">Row Key</th>
-                          <th className="px-2 py-1 text-left">Column</th>
-                          <th className="px-2 py-1 text-right">Value</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {importPagination.pagedItems.map((item, i) => (
-                          <tr key={i} className="border-t">
-                            <td className="px-2 py-1 font-mono">{item.rowKey}</td>
-                            <td className="px-2 py-1 font-mono">{item.columnKey}</td>
-                            <td className="px-2 py-1 text-right">{item.value}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                  <TablePagination pagination={importPagination} pageSizeOptions={[10, 25, 50]} />
-                </div>
-              )}
-            </div>
-
-            <DialogFooter>
-              <Button variant="outline" onClick={() => { setImportOpen(false); setImportPreview([]); setImportErrors([]); }} data-testid="button-cancel-import">
-                Cancel
-              </Button>
-              <Button onClick={applyImportedValues} disabled={importPreview.length === 0} data-testid="button-apply-import">
-                Import {importPreview.length} Values
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+        <DiseaseImportDialog open={diseaseImportOpen} onOpenChange={setDiseaseImportOpen} />
     </div>
   );
 }

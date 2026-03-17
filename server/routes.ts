@@ -289,6 +289,15 @@ export async function registerRoutes(
     res.json(updated);
   }));
 
+  app.post("/api/disease-cases/bulk", requireAuth, requireRole([UserRole.SYSTEM_ADMIN, UserRole.MHO]), ar(async (req, res) => {
+    const { rows, replace = false } = req.body;
+    if (!Array.isArray(rows)) {
+      return res.status(400).json({ message: "rows must be an array" });
+    }
+    const imported = await storage.bulkImportDiseaseCases(rows, replace as boolean);
+    res.json({ imported });
+  }));
+
   // === TB PATIENTS ===
   app.get(api.tbPatients.list.path, async (req, res) => {
     const data = await storage.getTBPatients();

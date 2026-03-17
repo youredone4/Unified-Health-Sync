@@ -51,6 +51,7 @@ export interface IStorage {
   getDiseaseCase(id: number): Promise<DiseaseCase | undefined>;
   createDiseaseCase(data: InsertDiseaseCase): Promise<DiseaseCase>;
   updateDiseaseCase(id: number, updates: Partial<InsertDiseaseCase>): Promise<DiseaseCase>;
+  bulkImportDiseaseCases(rows: Array<{ barangay: string; disease_name: string; cases: number; reporting_date: string }>, replace: boolean): Promise<number>;
 
   getTBPatients(): Promise<TBPatient[]>;
   getTBPatient(id: number): Promise<TBPatient | undefined>;
@@ -222,6 +223,31 @@ export class DatabaseStorage implements IStorage {
       .where(eq(diseaseCases.id, id))
       .returning();
     return updated;
+  }
+
+  async bulkImportDiseaseCases(rows: Array<{ barangay: string; disease_name: string; cases: number; reporting_date: string }>, replace: boolean): Promise<number> {
+    if (replace) {
+      await db.delete(diseaseCases).where(sql`notes LIKE '%[[bulk-import]]%'`);
+    }
+    const records: InsertDiseaseCase[] = [];
+    for (const row of rows) {
+      const count = Math.min(Math.max(1, Math.round(row.cases)), 100);
+      for (let i = 0; i < count; i++) {
+        records.push({
+          patientName: "Imported Patient",
+          age: 0,
+          barangay: row.barangay,
+          condition: row.disease_name,
+          dateReported: row.reporting_date,
+          status: "New",
+          notes: `[[bulk-import]] Aggregate: ${row.cases} case(s) reported`,
+        });
+      }
+    }
+    if (records.length > 0) {
+      await db.insert(diseaseCases).values(records);
+    }
+    return records.length;
   }
 
   async getTBPatients(): Promise<TBPatient[]> {
