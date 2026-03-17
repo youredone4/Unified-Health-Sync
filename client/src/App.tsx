@@ -1,4 +1,4 @@
-import { Switch, Route } from "wouter";
+import { Switch, Route, useLocation } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -12,7 +12,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useState } from "react";
 import { ThemeProvider } from "@/contexts/theme-context";
-import { useAuth, sidebarPermissions } from "@/hooks/use-auth";
+import { useAuth, sidebarPermissions, permissions } from "@/hooks/use-auth";
 
 import LandingPage from "@/pages/landing";
 import Dashboard from "@/pages/dashboard";
@@ -82,11 +82,14 @@ function AccessDenied() {
 }
 
 // Generic role-based route guard.
-// allowedRoles should come from sidebarPermissions[path] so sidebar visibility and
-// route access enforcement share the same policy — single source of truth.
+// Uses permissions.canAccessRoute() (which reads sidebarPermissions) so that
+// sidebar visibility and route access enforcement always share the same policy.
+// allowedRoles is kept as a fallback/documentation prop but guard logic runs
+// through the central helper so the two are always in sync.
 function RoleRoute({ component: Component, allowedRoles }: { component: React.ComponentType; allowedRoles: readonly string[] }) {
   const { role } = useAuth();
-  if (!role || !allowedRoles.includes(role)) return <AccessDenied />;
+  const [location] = useLocation();
+  if (!role || !permissions.canAccessRoute(role, location)) return <AccessDenied />;
   return <Component />;
 }
 
@@ -138,7 +141,9 @@ function Router() {
         <RoleRoute component={M1ReportPage} allowedRoles={sidebarPermissions["/reports/m1"]} />
       </Route>
       <Route path="/disease" component={DiseaseWorklist} />
-      <Route path="/disease/registry" component={DiseaseRegistry} />
+      <Route path="/disease/registry">
+        <RoleRoute component={DiseaseRegistry} allowedRoles={sidebarPermissions["/disease/registry"]} />
+      </Route>
       <Route path="/disease/map">
         <RoleRoute component={DiseaseMap} allowedRoles={sidebarPermissions["/disease/map"]} />
       </Route>
@@ -146,7 +151,9 @@ function Router() {
       <Route path="/disease/:id/edit" component={DiseaseForm} />
       <Route path="/disease/:id" component={DiseaseProfile} />
       <Route path="/tb" component={TBWorklist} />
-      <Route path="/tb/registry" component={TBRegistry} />
+      <Route path="/tb/registry">
+        <RoleRoute component={TBRegistry} allowedRoles={sidebarPermissions["/tb/registry"]} />
+      </Route>
       <Route path="/tb/new" component={TBForm} />
       <Route path="/tb/:id/edit" component={TBForm} />
       <Route path="/tb/:id" component={TBProfile} />
