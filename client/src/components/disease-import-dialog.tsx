@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from "@/components/ui/alert-dialog";
@@ -75,6 +75,12 @@ export default function DiseaseImportDialog({ open, onOpenChange }: Props) {
   const [history, setHistory] = useState<ImportHistoryEntry[]>(() =>
     user ? loadHistory(user.id) : []
   );
+
+  useEffect(() => {
+    if (user?.id) {
+      setHistory(loadHistory(user.id));
+    }
+  }, [user?.id]);
 
   const validPagination = usePagination(validRows, 10);
   const errorPagination = usePagination(parseErrors, 10);
