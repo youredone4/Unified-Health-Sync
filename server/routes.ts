@@ -654,16 +654,9 @@ export async function registerRoutes(
   app.post("/api/dm/messages/:id/read", loadUserInfo, requireAuth, async (req: any, res) => {
     try {
       const currentUserId = req.session?.userId as string;
-      // Mark all messages from the sender of this message as read
       const msgId = parseInt(req.params.id);
       if (isNaN(msgId)) return res.status(400).json({ message: "Invalid message id" });
-      // We resolve the sender by looking at the message thread
-      // For simplicity: mark all unread messages to current user as read (same as thread-level read)
-      // The UI passes the otherUserId context; accept via body as fallback
-      const otherUserId = req.body?.senderId as string | undefined;
-      if (otherUserId) {
-        await storage.markDMThreadRead(currentUserId, otherUserId);
-      }
+      await storage.markDMMessageRead(msgId, currentUserId);
       res.json({ ok: true });
     } catch (err) {
       res.status(500).json({ message: "Failed to mark as read" });
