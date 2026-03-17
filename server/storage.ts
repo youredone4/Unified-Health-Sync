@@ -96,6 +96,7 @@ export interface IStorage {
   sendDMMessage(senderId: string, receiverId: string, content: string): Promise<DirectMessage>;
   markDMThreadRead(currentUserId: string, otherUserId: string): Promise<void>;
   markDMMessageRead(messageId: number, currentUserId: string): Promise<void>;
+  getDMMessageSender(messageId: number): Promise<string | null>;
   getDMUnreadCount(userId: string): Promise<number>;
   searchUsers(query: string, excludeUserId: string): Promise<User[]>;
 
@@ -539,6 +540,14 @@ export class DatabaseStorage implements IStorage {
         .set({ readAt: new Date() })
         .where(eq(directMessages.id, messageId));
     }
+  }
+
+  async getDMMessageSender(messageId: number): Promise<string | null> {
+    const [msg] = await db.select({ senderId: directMessages.senderId })
+      .from(directMessages)
+      .where(eq(directMessages.id, messageId))
+      .limit(1);
+    return msg?.senderId ?? null;
   }
 
   async getDMUnreadCount(userId: string): Promise<number> {

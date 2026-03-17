@@ -650,13 +650,20 @@ export async function registerRoutes(
     }
   });
 
-  // Mark individual message as read by message id
+  // Mark thread as read via message id — looks up message to find the thread sender,
+  // then marks all messages in that thread as read (canonical read endpoint per task spec)
   app.post("/api/dm/messages/:id/read", loadUserInfo, requireAuth, async (req: any, res) => {
     try {
       const currentUserId = req.session?.userId as string;
       const msgId = parseInt(req.params.id);
       if (isNaN(msgId)) return res.status(400).json({ message: "Invalid message id" });
+      // First mark the single message (validates receiver)
       await storage.markDMMessageRead(msgId, currentUserId);
+      // Then mark the whole thread from that sender as read
+      const senderId = await storage.getDMMessageSender(msgId);
+      if (senderId && senderId !== currentUserId) {
+        await storage.markDMThreadRead(currentUserId, senderId);
+      }
       res.json({ ok: true });
     } catch (err) {
       res.status(500).json({ message: "Failed to mark as read" });
