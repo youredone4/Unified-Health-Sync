@@ -5,18 +5,16 @@ import { getDiseaseStatus, getDaysSinceReported, isOutbreakCondition, formatDate
 import KpiCard from "@/components/kpi-card";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { AlertCircle, Eye, Activity, AlertTriangle, Siren } from "lucide-react";
-import { useState, useEffect } from "react";
+import { Button } from "@/components/ui/button";
+import { AlertCircle, Eye, Activity, AlertTriangle, Siren, X } from "lucide-react";
+import { useState } from "react";
+
+type FilterKey = 'new' | 'monitoring' | 'all' | null;
 
 export default function DiseaseWorklist() {
   const [, navigate] = useLocation();
   const { data: cases = [], isLoading } = useQuery<DiseaseCase[]>({ queryKey: ['/api/disease-cases'] });
-  const [activeTab, setActiveTab] = useState(() => localStorage.getItem('disease-tab') || 'new');
-
-  useEffect(() => {
-    localStorage.setItem('disease-tab', activeTab);
-  }, [activeTab]);
+  const [activeFilter, setActiveFilter] = useState<FilterKey>(null);
 
   const casesWithStatus = cases.map(c => ({
     ...c,
@@ -30,10 +28,22 @@ export default function DiseaseWorklist() {
 
   const outbreak = isOutbreakCondition(cases);
 
+  const handleCardClick = (filter: FilterKey) => {
+    setActiveFilter(prev => prev === filter ? null : filter);
+  };
+
   const getFilteredCases = () => {
-    if (activeTab === 'new') return newCases;
-    if (activeTab === 'monitoring') return monitoringCases;
+    if (activeFilter === 'new') return newCases;
+    if (activeFilter === 'monitoring') return monitoringCases;
+    if (activeFilter === 'all') return activeCases;
     return activeCases;
+  };
+
+  const getFilterLabel = () => {
+    if (activeFilter === 'new') return `New Cases (${newCases.length})`;
+    if (activeFilter === 'monitoring') return `Monitoring (${monitoringCases.length})`;
+    if (activeFilter === 'all') return `All Active (${activeCases.length})`;
+    return `All Active (${activeCases.length})`;
   };
 
   const getStatusVariant = (status: string) => {
@@ -46,8 +56,8 @@ export default function DiseaseWorklist() {
   };
 
   const renderRow = (c: typeof casesWithStatus[0]) => (
-    <tr 
-      key={c.id} 
+    <tr
+      key={c.id}
       onClick={() => navigate(`/disease/${c.id}`)}
       className="border-b border-border/50 cursor-pointer hover-elevate"
       data-testid={`row-disease-${c.id}`}
@@ -65,7 +75,7 @@ export default function DiseaseWorklist() {
       <td className="py-3 px-3">{formatDate(c.dateReported)}</td>
       <td className="py-3 px-3 text-muted-foreground">{c.daysSince} day{c.daysSince !== 1 ? 's' : ''} ago</td>
       <td className="py-3 px-3">
-        <Badge variant={getStatusVariant(c.status || 'New')}>{c.status}</Badge>
+        <Badge variant={getStatusVariant(c.status || 'New') as any}>{c.status}</Badge>
       </td>
     </tr>
   );
@@ -99,22 +109,50 @@ export default function DiseaseWorklist() {
       )}
 
       <div className="grid grid-cols-3 gap-4">
-        <KpiCard title="New Cases" value={newCases.length} icon={AlertCircle} variant="danger" />
-        <KpiCard title="Monitoring" value={monitoringCases.length} icon={Eye} variant="warning" />
-        <KpiCard title="Active Total" value={activeCases.length} icon={Activity} />
+        <KpiCard
+          title="New Cases"
+          value={newCases.length}
+          icon={AlertCircle}
+          variant="danger"
+          onClick={() => handleCardClick('new')}
+          active={activeFilter === 'new'}
+        />
+        <KpiCard
+          title="Monitoring"
+          value={monitoringCases.length}
+          icon={Eye}
+          variant="warning"
+          onClick={() => handleCardClick('monitoring')}
+          active={activeFilter === 'monitoring'}
+        />
+        <KpiCard
+          title="Active Total"
+          value={activeCases.length}
+          icon={Activity}
+          onClick={() => handleCardClick('all')}
+          active={activeFilter === 'all'}
+        />
       </div>
 
       <Card>
-        <CardHeader className="pb-0">
-          <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList>
-              <TabsTrigger value="new" data-testid="tab-new">New ({newCases.length})</TabsTrigger>
-              <TabsTrigger value="monitoring" data-testid="tab-monitoring">Monitoring ({monitoringCases.length})</TabsTrigger>
-              <TabsTrigger value="all" data-testid="tab-all">All Active ({activeCases.length})</TabsTrigger>
-            </TabsList>
-          </Tabs>
+        <CardHeader className="pb-3 flex-row items-center justify-between space-y-0">
+          <p className="text-sm font-medium text-muted-foreground">
+            Showing: <span className="text-foreground font-semibold">{getFilterLabel()}</span>
+          </p>
+          {activeFilter && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setActiveFilter(null)}
+              className="h-7 text-xs gap-1"
+              data-testid="button-clear-filter"
+            >
+              <X className="w-3 h-3" />
+              Clear filter
+            </Button>
+          )}
         </CardHeader>
-        <CardContent className="pt-4">
+        <CardContent className="pt-0">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>

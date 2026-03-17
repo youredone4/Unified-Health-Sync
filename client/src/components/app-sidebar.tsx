@@ -108,12 +108,6 @@ const menuGroups = [
       { title: "Health Analytics", url: "/reports/ai", icon: Bot },
     ],
   },
-  {
-    label: "Map Module",
-    items: [
-      { title: "Health Facilities Map", url: "/map", icon: MapPin },
-    ],
-  },
 ];
 
 export function AppSidebar() {

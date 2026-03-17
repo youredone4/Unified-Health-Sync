@@ -5,19 +5,17 @@ import { getTBDotsVisitStatus, getTBOverallStatus, getTBMissedDoseRisk, formatDa
 import KpiCard from "@/components/kpi-card";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { AlertCircle, Clock, Users, AlertTriangle, Pill } from "lucide-react";
-import { useState, useEffect } from "react";
+import { AlertCircle, Clock, Users, AlertTriangle, Pill, X } from "lucide-react";
+import { useState } from "react";
+
+type FilterKey = 'overdue' | 'due_today' | 'at_risk' | 'all' | null;
 
 export default function TBWorklist() {
   const [, navigate] = useLocation();
   const { data: patients = [], isLoading } = useQuery<TBPatient[]>({ queryKey: ['/api/tb-patients'] });
-  const [activeTab, setActiveTab] = useState(() => localStorage.getItem('tb-tab') || 'overdue');
-
-  useEffect(() => {
-    localStorage.setItem('tb-tab', activeTab);
-  }, [activeTab]);
+  const [activeFilter, setActiveFilter] = useState<FilterKey>(null);
 
   const patientsWithStatus = patients.map(p => ({
     ...p,
@@ -32,11 +30,24 @@ export default function TBWorklist() {
   const atRisk = patientsWithStatus.filter(p => p.atRisk || p.referralToRHU);
   const activePatients = patientsWithStatus.filter(p => p.outcomeStatus === 'Ongoing');
 
+  const handleCardClick = (filter: FilterKey) => {
+    setActiveFilter(prev => prev === filter ? null : filter);
+  };
+
   const getFilteredPatients = () => {
-    if (activeTab === 'overdue') return overdue;
-    if (activeTab === 'due_today') return dueToday;
-    if (activeTab === 'at_risk') return atRisk;
+    if (activeFilter === 'overdue') return overdue;
+    if (activeFilter === 'due_today') return dueToday;
+    if (activeFilter === 'at_risk') return atRisk;
+    if (activeFilter === 'all') return activePatients;
     return activePatients;
+  };
+
+  const getFilterLabel = () => {
+    if (activeFilter === 'overdue') return `Missed Visit (${overdue.length})`;
+    if (activeFilter === 'due_today') return `Due Today (${dueToday.length})`;
+    if (activeFilter === 'at_risk') return `At Risk (${atRisk.length})`;
+    if (activeFilter === 'all') return `All Active (${activePatients.length})`;
+    return `All Active (${activePatients.length})`;
   };
 
   const getStatusVariant = (status: string): "default" | "destructive" | "secondary" | "outline" => {
@@ -50,8 +61,8 @@ export default function TBWorklist() {
   };
 
   const renderRow = (p: typeof patientsWithStatus[0]) => (
-    <tr 
-      key={p.id} 
+    <tr
+      key={p.id}
       onClick={() => navigate(`/tb/${p.id}`)}
       className="border-b border-border/50 cursor-pointer hover-elevate"
       data-testid={`row-tb-${p.id}`}
@@ -82,7 +93,7 @@ export default function TBWorklist() {
       </td>
       <td className="py-3 px-3">
         <Badge variant={getStatusVariant(p.overallStatus)}>
-          {p.overallStatus === 'due_today' ? 'Due Today' : 
+          {p.overallStatus === 'due_today' ? 'Due Today' :
            p.overallStatus === 'at_risk' ? 'At Risk' :
            p.overallStatus === 'overdue' ? 'Overdue' :
            p.overallStatus === 'due_soon' ? 'Due Soon' : 'On Track'}
@@ -105,25 +116,59 @@ export default function TBWorklist() {
         <p className="text-muted-foreground">Directly Observed Treatment, Short-course (DOTS) monitoring</p>
       </div>
 
-      <div className="grid grid-cols-4 gap-4">
-        <KpiCard title="Missed Visit" value={overdue.length} icon={AlertCircle} variant="danger" />
-        <KpiCard title="Due Today" value={dueToday.length} icon={Clock} variant="warning" />
-        <KpiCard title="At Risk" value={atRisk.length} icon={AlertTriangle} variant="danger" />
-        <KpiCard title="Active Patients" value={activePatients.length} icon={Users} />
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <KpiCard
+          title="Missed Visit"
+          value={overdue.length}
+          icon={AlertCircle}
+          variant="danger"
+          onClick={() => handleCardClick('overdue')}
+          active={activeFilter === 'overdue'}
+        />
+        <KpiCard
+          title="Due Today"
+          value={dueToday.length}
+          icon={Clock}
+          variant="warning"
+          onClick={() => handleCardClick('due_today')}
+          active={activeFilter === 'due_today'}
+        />
+        <KpiCard
+          title="At Risk"
+          value={atRisk.length}
+          icon={AlertTriangle}
+          variant="danger"
+          onClick={() => handleCardClick('at_risk')}
+          active={activeFilter === 'at_risk'}
+        />
+        <KpiCard
+          title="Active Patients"
+          value={activePatients.length}
+          icon={Users}
+          onClick={() => handleCardClick('all')}
+          active={activeFilter === 'all'}
+        />
       </div>
 
       <Card>
-        <CardHeader className="pb-0">
-          <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList>
-              <TabsTrigger value="overdue" data-testid="tab-overdue">Missed ({overdue.length})</TabsTrigger>
-              <TabsTrigger value="due_today" data-testid="tab-due-today">Due Today ({dueToday.length})</TabsTrigger>
-              <TabsTrigger value="at_risk" data-testid="tab-at-risk">At Risk ({atRisk.length})</TabsTrigger>
-              <TabsTrigger value="all" data-testid="tab-all">All Active ({activePatients.length})</TabsTrigger>
-            </TabsList>
-          </Tabs>
+        <CardHeader className="pb-3 flex-row items-center justify-between space-y-0">
+          <p className="text-sm font-medium text-muted-foreground">
+            Showing: <span className="text-foreground font-semibold">{getFilterLabel()}</span>
+          </p>
+          {activeFilter && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setActiveFilter(null)}
+              className="h-7 text-xs gap-1"
+              data-testid="button-clear-filter"
+            >
+              <X className="w-3 h-3" />
+              Clear filter
+            </Button>
+          )}
         </CardHeader>
-        <CardContent className="pt-4">
+        <CardContent className="pt-0">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>

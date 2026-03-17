@@ -40,7 +40,6 @@ import InventoryPage from "@/pages/inventory";
 import StockoutsPage from "@/pages/stockouts";
 import ReportsPage from "@/pages/reports";
 import AIReporting from "@/pages/ai-reporting";
-import MapPage from "@/pages/map";
 import DiseaseWorklist from "@/pages/disease-worklist";
 import DiseaseProfile from "@/pages/disease-profile";
 import DiseaseRegistry from "@/pages/disease-registry";
@@ -123,7 +122,6 @@ function Router() {
       <Route path="/reports" component={ReportsPage} />
       <Route path="/reports/ai" component={AIReporting} />
       <Route path="/reports/m1" component={M1ReportPage} />
-      <Route path="/map" component={MapPage} />
       <Route path="/disease" component={DiseaseWorklist} />
       <Route path="/disease/registry" component={DiseaseRegistry} />
       <Route path="/disease/map" component={DiseaseMap} />
