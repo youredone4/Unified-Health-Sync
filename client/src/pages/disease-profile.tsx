@@ -1,7 +1,7 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useParams, useLocation } from "wouter";
 import type { DiseaseCase } from "@shared/schema";
-import { formatDate, getDaysSinceReported, TODAY_STR } from "@/lib/healthLogic";
+import { formatDate, getDaysSinceReported } from "@/lib/healthLogic";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -9,21 +9,13 @@ import { ArrowLeft, Phone, MapPin, FileText, Calendar, MessageSquare } from "luc
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import { Textarea } from "@/components/ui/textarea";
+import SmsModal from "@/components/sms-modal";
 
 export default function DiseaseProfile() {
   const params = useParams();
   const [, navigate] = useLocation();
   const { toast } = useToast();
-  const [smsDialogOpen, setSmsDialogOpen] = useState(false);
-  const [smsMessage, setSmsMessage] = useState("");
+  const [smsOpen, setSmsOpen] = useState(false);
 
   const id = Number(params.id);
   const { data: diseaseCase, isLoading } = useQuery<DiseaseCase>({
@@ -39,24 +31,6 @@ export default function DiseaseProfile() {
       queryClient.invalidateQueries({ queryKey: ['/api/disease-cases', id] });
       queryClient.invalidateQueries({ queryKey: ['/api/disease-cases'] });
       toast({ title: "Case updated successfully" });
-    }
-  });
-
-  const sendSmsMutation = useMutation({
-    mutationFn: async () => {
-      return apiRequest('POST', '/api/sms', {
-        recipient: diseaseCase?.patientName || '',
-        recipientPhone: diseaseCase?.phone || '',
-        message: smsMessage,
-        sentAt: TODAY_STR,
-        status: 'Queued (Demo)'
-      });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/sms'] });
-      toast({ title: "SMS queued (Demo mode)", description: "Message added to outbox" });
-      setSmsDialogOpen(false);
-      setSmsMessage("");
     }
   });
 
@@ -78,6 +52,7 @@ export default function DiseaseProfile() {
   }
 
   const daysSince = getDaysSinceReported(diseaseCase);
+  const smsMessage = `Hello ${diseaseCase.patientName}, this is a follow-up reminder regarding your ${diseaseCase.condition} case reported on ${formatDate(diseaseCase.dateReported)}. Please contact your barangay health station for updates.`;
 
   return (
     <div className="space-y-6 max-w-4xl">
@@ -172,44 +147,22 @@ export default function DiseaseProfile() {
                 Close Case
               </Button>
             )}
-
-            {diseaseCase.phone && (
-              <Dialog open={smsDialogOpen} onOpenChange={setSmsDialogOpen}>
-                <DialogTrigger asChild>
-                  <Button variant="outline" data-testid="button-send-sms">
-                    <MessageSquare className="w-4 h-4 mr-2" />
-                    Send SMS
-                  </Button>
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Send SMS (Demo)</DialogTitle>
-                  </DialogHeader>
-                  <div className="space-y-4">
-                    <div className="text-sm">
-                      <span className="text-muted-foreground">To: </span>
-                      <span>{diseaseCase.patientName} ({diseaseCase.phone})</span>
-                    </div>
-                    <Textarea
-                      placeholder="Type your message..."
-                      value={smsMessage}
-                      onChange={(e) => setSmsMessage(e.target.value)}
-                      data-testid="input-sms-message"
-                    />
-                    <Button
-                      onClick={() => sendSmsMutation.mutate()}
-                      disabled={!smsMessage.trim() || sendSmsMutation.isPending}
-                      data-testid="button-confirm-send"
-                    >
-                      Queue SMS
-                    </Button>
-                  </div>
-                </DialogContent>
-              </Dialog>
-            )}
+            <Button variant="outline" onClick={() => setSmsOpen(true)} data-testid="button-send-sms">
+              <MessageSquare className="w-4 h-4 mr-2" />
+              Send SMS
+            </Button>
           </div>
         </CardContent>
       </Card>
+
+      <SmsModal
+        open={smsOpen}
+        onOpenChange={setSmsOpen}
+        recipient={diseaseCase.patientName}
+        phone={diseaseCase.phone || null}
+        defaultMessage={smsMessage}
+        barangay={diseaseCase.barangay}
+      />
     </div>
   );
 }

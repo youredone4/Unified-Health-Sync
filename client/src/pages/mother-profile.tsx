@@ -158,6 +158,10 @@ export default function MotherProfile() {
         recipient={`${mother.firstName} ${mother.lastName}`}
         phone={mother.phone}
         defaultMessage={smsMessage}
+        barangay={mother.barangay}
+        onSavePhone={async (phone) => {
+          await updateMutation.mutateAsync({ phone });
+        }}
       />
     </div>
   );

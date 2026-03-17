@@ -10,22 +10,14 @@ import { ArrowLeft, Phone, MapPin, Calendar, Pill, AlertTriangle, CheckCircle, M
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import { Textarea } from "@/components/ui/textarea";
+import SmsModal from "@/components/sms-modal";
 import { addDays, format } from "date-fns";
 
 export default function TBProfile() {
   const params = useParams();
   const [, navigate] = useLocation();
   const { toast } = useToast();
-  const [smsDialogOpen, setSmsDialogOpen] = useState(false);
-  const [smsMessage, setSmsMessage] = useState("");
+  const [smsOpen, setSmsOpen] = useState(false);
 
   const id = Number(params.id);
   const { data: patient, isLoading } = useQuery<TBPatient>({
@@ -41,24 +33,6 @@ export default function TBProfile() {
       queryClient.invalidateQueries({ queryKey: ['/api/tb-patients', id] });
       queryClient.invalidateQueries({ queryKey: ['/api/tb-patients'] });
       toast({ title: "Patient record updated" });
-    }
-  });
-
-  const sendSmsMutation = useMutation({
-    mutationFn: async () => {
-      return apiRequest('POST', '/api/sms', {
-        recipient: `${patient?.firstName} ${patient?.lastName}`,
-        recipientPhone: patient?.phone || '',
-        message: smsMessage,
-        sentAt: TODAY_STR,
-        status: 'Queued (Demo)'
-      });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/sms'] });
-      toast({ title: "SMS queued (Demo mode)" });
-      setSmsDialogOpen(false);
-      setSmsMessage("");
     }
   });
 
@@ -88,6 +62,8 @@ export default function TBProfile() {
   const progress = getTreatmentProgress(patient);
   const daysRemaining = getTreatmentDaysRemaining(patient);
   const sputumStatus = getTBSputumCheckStatus(patient);
+
+  const smsMessage = `Hello ${patient.firstName}, this is a reminder for your TB DOTS visit scheduled on ${formatDate(patient.nextDotsVisitDate)}. Please come to your barangay health station to receive your observed dose.`;
 
   return (
     <div className="space-y-6 max-w-4xl">
@@ -245,44 +221,22 @@ export default function TBProfile() {
                 Refer to RHU
               </Button>
             )}
-            
-            {patient.phone && (
-              <Dialog open={smsDialogOpen} onOpenChange={setSmsDialogOpen}>
-                <DialogTrigger asChild>
-                  <Button variant="outline" data-testid="button-send-sms">
-                    <MessageSquare className="w-4 h-4 mr-2" />
-                    Send SMS
-                  </Button>
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Send SMS (Demo)</DialogTitle>
-                  </DialogHeader>
-                  <div className="space-y-4">
-                    <div className="text-sm">
-                      <span className="text-muted-foreground">To: </span>
-                      <span>{patient.firstName} {patient.lastName} ({patient.phone})</span>
-                    </div>
-                    <Textarea
-                      placeholder="Type your message..."
-                      value={smsMessage}
-                      onChange={(e) => setSmsMessage(e.target.value)}
-                      data-testid="input-sms-message"
-                    />
-                    <Button
-                      onClick={() => sendSmsMutation.mutate()}
-                      disabled={!smsMessage.trim() || sendSmsMutation.isPending}
-                      data-testid="button-confirm-send"
-                    >
-                      Queue SMS
-                    </Button>
-                  </div>
-                </DialogContent>
-              </Dialog>
-            )}
+            <Button variant="outline" onClick={() => setSmsOpen(true)} data-testid="button-send-sms">
+              <MessageSquare className="w-4 h-4 mr-2" />
+              Send SMS
+            </Button>
           </div>
         </CardContent>
       </Card>
+
+      <SmsModal
+        open={smsOpen}
+        onOpenChange={setSmsOpen}
+        recipient={`${patient.firstName} ${patient.lastName}`}
+        phone={patient.phone || null}
+        defaultMessage={smsMessage}
+        barangay={patient.barangay}
+      />
     </div>
   );
 }

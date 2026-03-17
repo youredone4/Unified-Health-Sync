@@ -200,6 +200,7 @@ export default function ChildProfile() {
         recipient={mother ? `${mother.firstName} ${mother.lastName}` : child.name}
         phone={mother?.phone || null}
         defaultMessage={smsMessage}
+        barangay={child.barangay}
       />
     </div>
   );

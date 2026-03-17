@@ -256,6 +256,10 @@ export default function SeniorProfile() {
         recipient={`${senior.firstName} ${senior.lastName}`}
         phone={senior.phone}
         defaultMessage={smsMessage}
+        barangay={senior.barangay}
+        onSavePhone={async (phone) => {
+          await updateMutation.mutateAsync({ phone });
+        }}
       />
 
       <ConfirmModal
