@@ -57,6 +57,7 @@ import PatientCheckupPage from "@/pages/patient-checkup";
 import M1ReportPage from "@/pages/m1-report";
 import NotificationDrawer from "@/components/notification-drawer";
 import SmsOutbox from "@/components/sms-outbox";
+import MessagesPage from "@/pages/messages";
 
 const roleLabels: Record<string, string> = {
   SYSTEM_ADMIN: "Admin",
@@ -133,6 +134,7 @@ function Router() {
       <Route path="/tb/new" component={TBForm} />
       <Route path="/tb/:id/edit" component={TBForm} />
       <Route path="/tb/:id" component={TBProfile} />
+      <Route path="/messages" component={MessagesPage} />
       <Route path="/settings" component={SettingsPage} />
       <Route path="/patient-checkup" component={PatientCheckupPage} />
       <Route path="/admin/users">

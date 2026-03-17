@@ -590,5 +590,84 @@ export async function registerRoutes(
     }
   });
 
+  // === DIRECT MESSAGES ===
+  app.get("/api/dm/conversations", loadUserInfo, requireAuth, async (req: any, res) => {
+    try {
+      const userId = req.session?.userId as string;
+      const conversations = await storage.getDMConversations(userId);
+      res.json(conversations);
+    } catch (err) {
+      console.error("DM conversations error:", err);
+      res.status(500).json({ message: "Failed to fetch conversations" });
+    }
+  });
+
+  app.get("/api/dm/unread-count", loadUserInfo, requireAuth, async (req: any, res) => {
+    try {
+      const userId = req.session?.userId as string;
+      const count = await storage.getDMUnreadCount(userId);
+      res.json({ count });
+    } catch (err) {
+      res.status(500).json({ message: "Failed to fetch unread count" });
+    }
+  });
+
+  app.get("/api/dm/messages/:userId", loadUserInfo, requireAuth, async (req: any, res) => {
+    try {
+      const currentUserId = req.session?.userId as string;
+      const otherUserId = req.params.userId;
+      const messages = await storage.getDMMessages(currentUserId, otherUserId);
+      res.json(messages);
+    } catch (err) {
+      console.error("DM messages error:", err);
+      res.status(500).json({ message: "Failed to fetch messages" });
+    }
+  });
+
+  app.post("/api/dm/messages", loadUserInfo, requireAuth, async (req: any, res) => {
+    try {
+      const senderId = req.session?.userId as string;
+      const { receiverId, content } = req.body;
+      if (!receiverId || !content?.trim()) {
+        return res.status(400).json({ message: "receiverId and content are required" });
+      }
+      const message = await storage.sendDMMessage(senderId, receiverId, content.trim());
+      res.json(message);
+    } catch (err) {
+      console.error("Send DM error:", err);
+      res.status(500).json({ message: "Failed to send message" });
+    }
+  });
+
+  app.post("/api/dm/read/:userId", loadUserInfo, requireAuth, async (req: any, res) => {
+    try {
+      const currentUserId = req.session?.userId as string;
+      const otherUserId = req.params.userId;
+      await storage.markDMThreadRead(currentUserId, otherUserId);
+      res.json({ ok: true });
+    } catch (err) {
+      res.status(500).json({ message: "Failed to mark as read" });
+    }
+  });
+
+  // User search (for starting new DM conversations)
+  app.get("/api/users/search", loadUserInfo, requireAuth, async (req: any, res) => {
+    try {
+      const currentUserId = req.session?.userId as string;
+      const query = (req.query.q as string) || "";
+      if (!query.trim()) return res.json([]);
+      const results = await storage.searchUsers(query.trim(), currentUserId);
+      res.json(results.map(u => ({
+        id: u.id,
+        username: u.username,
+        firstName: u.firstName,
+        lastName: u.lastName,
+        role: u.role,
+      })));
+    } catch (err) {
+      res.status(500).json({ message: "Failed to search users" });
+    }
+  });
+
   return httpServer;
 }

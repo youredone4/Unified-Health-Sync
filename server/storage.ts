@@ -3,6 +3,7 @@ import {
   mothers, children, seniors, inventory, healthStations, smsOutbox, diseaseCases, tbPatients, themeSettings,
   barangays, users, userBarangays, municipalitySettings, UserRole, consults, seniorMedClaims,
   m1TemplateVersions, m1IndicatorCatalog, m1ReportInstances, m1ReportHeader, m1IndicatorValues, barangaySettings,
+  directMessages,
   type Mother, type InsertMother,
   type Child, type InsertChild,
   type Senior, type InsertSenior,
@@ -17,8 +18,9 @@ import {
   type M1TemplateVersion, type M1IndicatorCatalog, type M1ReportInstance, type M1IndicatorValue,
   type MunicipalitySettings, type BarangaySettings,
   type SeniorMedClaim, type InsertSeniorMedClaim,
+  type DirectMessage,
 } from "@shared/schema";
-import { eq, and, inArray, desc, isNull, gte, sql } from "drizzle-orm";
+import { eq, and, inArray, desc, isNull, gte, sql, or, lt, ne } from "drizzle-orm";
 
 export interface IStorage {
   getMothers(): Promise<Mother[]>;
@@ -78,6 +80,23 @@ export interface IStorage {
   getSeniorMedClaims(seniorId?: number): Promise<SeniorMedClaim[]>;
   checkSeniorEligibility(seniorUniqueId: string): Promise<{ eligible: boolean; reason?: string; lastClaim?: SeniorMedClaim }>;
   createSeniorMedClaim(claim: InsertSeniorMedClaim): Promise<SeniorMedClaim>;
+
+  // Direct Messages
+  getDMConversations(userId: string): Promise<Array<{
+    userId: string;
+    username: string;
+    firstName: string | null;
+    lastName: string | null;
+    lastMessage: string;
+    lastMessageAt: Date;
+    unreadCount: number;
+    isSentByMe: boolean;
+  }>>;
+  getDMMessages(currentUserId: string, otherUserId: string): Promise<DirectMessage[]>;
+  sendDMMessage(senderId: string, receiverId: string, content: string): Promise<DirectMessage>;
+  markDMThreadRead(currentUserId: string, otherUserId: string): Promise<void>;
+  getDMUnreadCount(userId: string): Promise<number>;
+  searchUsers(query: string, excludeUserId: string): Promise<User[]>;
 
   seedData(): Promise<void>;
 }
@@ -422,6 +441,115 @@ export class DatabaseStorage implements IStorage {
   async createSeniorMedClaim(claim: InsertSeniorMedClaim): Promise<SeniorMedClaim> {
     const [created] = await db.insert(seniorMedClaims).values(claim).returning();
     return created;
+  }
+
+  // === DIRECT MESSAGES ===
+  async getDMConversations(userId: string): Promise<Array<{
+    userId: string;
+    username: string;
+    firstName: string | null;
+    lastName: string | null;
+    lastMessage: string;
+    lastMessageAt: Date;
+    unreadCount: number;
+    isSentByMe: boolean;
+  }>> {
+    // Get all unique conversation partners
+    const sentRows = await db
+      .select({ otherId: directMessages.receiverId })
+      .from(directMessages)
+      .where(eq(directMessages.senderId, userId));
+    const receivedRows = await db
+      .select({ otherId: directMessages.senderId })
+      .from(directMessages)
+      .where(eq(directMessages.receiverId, userId));
+
+    const partnerIds = [...new Set([...sentRows.map(r => r.otherId), ...receivedRows.map(r => r.otherId)])];
+    if (partnerIds.length === 0) return [];
+
+    const partnerUsers = await db.select().from(users).where(inArray(users.id, partnerIds));
+
+    const conversations = await Promise.all(partnerUsers.map(async (partner) => {
+      const [lastMsg] = await db.select()
+        .from(directMessages)
+        .where(or(
+          and(eq(directMessages.senderId, userId), eq(directMessages.receiverId, partner.id)),
+          and(eq(directMessages.senderId, partner.id), eq(directMessages.receiverId, userId))
+        ))
+        .orderBy(desc(directMessages.createdAt))
+        .limit(1);
+
+      const unreadRows = await db.select({ id: directMessages.id })
+        .from(directMessages)
+        .where(and(
+          eq(directMessages.senderId, partner.id),
+          eq(directMessages.receiverId, userId),
+          isNull(directMessages.readAt)
+        ));
+
+      return {
+        userId: partner.id,
+        username: partner.username,
+        firstName: partner.firstName ?? null,
+        lastName: partner.lastName ?? null,
+        lastMessage: lastMsg?.content ?? '',
+        lastMessageAt: lastMsg?.createdAt ?? new Date(0),
+        unreadCount: unreadRows.length,
+        isSentByMe: lastMsg?.senderId === userId,
+      };
+    }));
+
+    return conversations.sort((a, b) => b.lastMessageAt.getTime() - a.lastMessageAt.getTime());
+  }
+
+  async getDMMessages(currentUserId: string, otherUserId: string): Promise<DirectMessage[]> {
+    return db.select()
+      .from(directMessages)
+      .where(or(
+        and(eq(directMessages.senderId, currentUserId), eq(directMessages.receiverId, otherUserId)),
+        and(eq(directMessages.senderId, otherUserId), eq(directMessages.receiverId, currentUserId))
+      ))
+      .orderBy(directMessages.createdAt);
+  }
+
+  async sendDMMessage(senderId: string, receiverId: string, content: string): Promise<DirectMessage> {
+    const [created] = await db.insert(directMessages).values({ senderId, receiverId, content }).returning();
+    return created;
+  }
+
+  async markDMThreadRead(currentUserId: string, otherUserId: string): Promise<void> {
+    await db.update(directMessages)
+      .set({ readAt: new Date() })
+      .where(and(
+        eq(directMessages.senderId, otherUserId),
+        eq(directMessages.receiverId, currentUserId),
+        isNull(directMessages.readAt)
+      ));
+  }
+
+  async getDMUnreadCount(userId: string): Promise<number> {
+    const rows = await db.select({ id: directMessages.id })
+      .from(directMessages)
+      .where(and(
+        eq(directMessages.receiverId, userId),
+        isNull(directMessages.readAt)
+      ));
+    return rows.length;
+  }
+
+  async searchUsers(query: string, excludeUserId: string): Promise<User[]> {
+    const q = `%${query.toLowerCase()}%`;
+    return db.select()
+      .from(users)
+      .where(and(
+        ne(users.id, excludeUserId),
+        or(
+          sql`lower(${users.username}) like ${q}`,
+          sql`lower(${users.firstName}) like ${q}`,
+          sql`lower(${users.lastName}) like ${q}`
+        )
+      ))
+      .limit(10);
   }
 
   async seedData(): Promise<void> {

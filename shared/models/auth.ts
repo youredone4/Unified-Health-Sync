@@ -98,6 +98,20 @@ export const municipalitySettings = pgTable("municipality_settings", {
 
 export type MunicipalitySettings = typeof municipalitySettings.$inferSelect;
 
+// === DIRECT MESSAGES ===
+export const directMessages = pgTable("direct_messages", {
+  id: serial("id").primaryKey(),
+  senderId: varchar("sender_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  receiverId: varchar("receiver_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  content: text("content").notNull(),
+  readAt: timestamp("read_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertDirectMessageSchema = createInsertSchema(directMessages).omit({ id: true, readAt: true, createdAt: true });
+export type DirectMessage = typeof directMessages.$inferSelect;
+export type InsertDirectMessage = z.infer<typeof insertDirectMessageSchema>;
+
 // === AUDIT LOGS ===
 export const auditLogs = pgTable("audit_logs", {
   id: serial("id").primaryKey(),

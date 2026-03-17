@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
+import { useQuery } from "@tanstack/react-query";
 import {
   Sidebar,
   SidebarContent,
@@ -12,6 +13,7 @@ import {
   SidebarHeader,
   SidebarFooter,
 } from "@/components/ui/sidebar";
+import { Badge } from "@/components/ui/badge";
 import {
   LayoutDashboard,
   MapPin,
@@ -34,6 +36,7 @@ import {
   Settings,
   Shield,
   ClipboardPlus,
+  MessageCircle,
 } from "lucide-react";
 import { useTheme } from "@/contexts/theme-context";
 import { useAuth } from "@/hooks/use-auth";
@@ -113,8 +116,14 @@ const menuGroups = [
 export function AppSidebar() {
   const [location] = useLocation();
   const { settings } = useTheme();
-  const { canManageUsers, canViewAuditLogs, canAccessPatientCheckup } = useAuth();
+  const { canManageUsers, canViewAuditLogs, canAccessPatientCheckup, isAuthenticated } = useAuth();
   const [logoError, setLogoError] = useState(false);
+
+  const { data: unreadData } = useQuery<{ count: number }>({
+    queryKey: ['/api/dm/unread-count'],
+    refetchInterval: 5000,
+    enabled: isAuthenticated,
+  });
 
   const lguName = settings?.lguName || "HealthSync";
   const lguSubtitle = settings?.lguSubtitle || "Barangay Health System";
@@ -168,6 +177,23 @@ export function AppSidebar() {
       </SidebarContent>
       <SidebarFooter className="p-2 border-t border-sidebar-border">
         <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              asChild
+              data-active={location === "/messages"}
+              className="data-[active=true]:bg-sidebar-accent"
+            >
+              <Link href="/messages" data-testid="nav-messages">
+                <MessageCircle className="w-4 h-4" />
+                <span>Messages</span>
+                {(unreadData?.count ?? 0) > 0 && (
+                  <Badge className="ml-auto h-5 min-w-5 flex items-center justify-center text-xs px-1" data-testid="badge-unread-messages">
+                    {unreadData!.count}
+                  </Badge>
+                )}
+              </Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
           {canAccessPatientCheckup && (
             <SidebarMenuItem>
               <SidebarMenuButton
