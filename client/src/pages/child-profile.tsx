@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useParams, useLocation } from "wouter";
 import type { Child, Mother } from "@shared/schema";
-import { getNextVaccineStatus, getChildVisitStatus, formatDate, getAgeInMonths, isUnderweightRisk, VACCINE_SCHEDULE } from "@/lib/healthLogic";
+import { getNextVaccineStatus, getChildVisitStatus, formatDate, getAgeInMonths, getWeightZScore, VACCINE_SCHEDULE } from "@/lib/healthLogic";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -48,7 +48,8 @@ export default function ChildProfile() {
   const vax = getNextVaccineStatus(child);
   const visit = getChildVisitStatus(child);
   const ageMonths = getAgeInMonths(child.dob);
-  const underweight = isUnderweightRisk(child);
+  const zScoreResult = child ? getWeightZScore(child) : null;
+  const underweight = zScoreResult && (zScoreResult.category === 'SAM' || zScoreResult.category === 'MAM');
   const growth = child.growth || [];
 
   const handleMarkVaccine = () => {
@@ -122,14 +123,18 @@ export default function ChildProfile() {
             </CardContent>
           </Card>
 
-          {underweight && (
-            <Card className="border-orange-500/30 bg-orange-500/5">
+          {underweight && zScoreResult && (
+            <Card className={zScoreResult.category === 'SAM' ? "border-red-500/30 bg-red-500/5" : "border-orange-500/30 bg-orange-500/5"}>
               <CardContent className="pt-4">
-                <div className="flex items-center gap-2 text-orange-400">
+                <div className={`flex items-center gap-2 ${zScoreResult.category === 'SAM' ? 'text-red-400' : 'text-orange-400'}`}>
                   <AlertTriangle className="w-4 h-4" />
-                  <span className="font-medium">Underweight Risk (Demo)</span>
+                  <span className="font-medium">
+                    {zScoreResult.category === 'SAM' ? 'Severe Acute Malnutrition (SAM)' : 'Moderate Acute Malnutrition (MAM)'}
+                  </span>
                 </div>
-                <p className="text-xs text-muted-foreground mt-1">TODO: Replace with WHO Z-score calculation</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  WHO Weight-for-Age Z-score: <strong>{zScoreResult.zScore}</strong> (WHO 2006 standard)
+                </p>
               </CardContent>
             </Card>
           )}

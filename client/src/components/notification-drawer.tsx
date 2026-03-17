@@ -1,7 +1,7 @@
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Badge } from "@/components/ui/badge";
 import { useQuery } from "@tanstack/react-query";
-import { getTTStatus, getNextVaccineStatus, getSeniorPickupStatus, isMedsReadyForPickup, getPrenatalCheckStatus, isUnderweightRisk, hasMissingGrowthCheck } from "@/lib/healthLogic";
+import { getTTStatus, getNextVaccineStatus, getSeniorPickupStatus, isMedsReadyForPickup, getPrenatalCheckStatus, getWeightZScore, hasMissingGrowthCheck } from "@/lib/healthLogic";
 import type { Mother, Child, Senior, InventoryItem } from "@shared/schema";
 import { AlertCircle, Clock, Info } from "lucide-react";
 
@@ -47,8 +47,10 @@ export default function NotificationDrawer({ open, onOpenChange }: NotificationD
     } else if (vax.status === 'due_soon') {
       notifications.push({ id: `c-vax-${c.id}`, type: 'due_soon', message: `${c.name}: ${vax.nextVaccineLabel} due soon`, category: 'Child Health' });
     }
-    if (isUnderweightRisk(c)) {
-      notifications.push({ id: `c-uw-${c.id}`, type: 'overdue', message: `${c.name}: Underweight Risk (Demo)`, category: 'Nutrition' });
+    const zsr = getWeightZScore(c);
+    if (zsr && (zsr.category === 'SAM' || zsr.category === 'MAM')) {
+      const label = zsr.category === 'SAM' ? 'Severe Acute Malnutrition (SAM)' : 'Moderate Acute Malnutrition (MAM)';
+      notifications.push({ id: `c-uw-${c.id}`, type: 'overdue', message: `${c.name}: ${label}`, category: 'Nutrition' });
     }
     if (hasMissingGrowthCheck(c)) {
       notifications.push({ id: `c-gc-${c.id}`, type: 'due_soon', message: `${c.name}: Missing growth check (>60 days)`, category: 'Nutrition' });
