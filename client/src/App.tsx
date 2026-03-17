@@ -82,10 +82,10 @@ function AccessDenied() {
 }
 
 // Generic role-based route guard.
-// Uses permissions.canAccessRoute() which does a longest-prefix match against
-// sidebarPermissions — the single source of truth for both guard logic and
-// sidebar item visibility.
-function RoleRoute({ component: Component }: { component: React.ComponentType }) {
+// allowedRoles derives from sidebarPermissions — the single source of truth.
+// Guard logic uses permissions.canAccessRoute() (longest-prefix match against
+// sidebarPermissions) so sidebar visibility and route access always agree.
+function RoleRoute({ component: Component, allowedRoles }: { component: React.ComponentType; allowedRoles?: readonly string[] }) {
   const { role } = useAuth();
   const [location] = useLocation();
   if (!role || !permissions.canAccessRoute(role, location)) return <AccessDenied />;
