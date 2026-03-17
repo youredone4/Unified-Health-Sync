@@ -60,7 +60,7 @@ export default function DiseaseWorklist() {
     return `All Active (${base})`;
   };
 
-  const getStatusVariant = (status: string) => {
+  const getStatusVariant = (status: string): "destructive" | "secondary" | "outline" | "default" => {
     switch (status) {
       case 'New': return 'destructive';
       case 'Monitoring': return 'secondary';
@@ -89,7 +89,7 @@ export default function DiseaseWorklist() {
       <td className="py-3 px-3">{formatDate(c.dateReported)}</td>
       <td className="py-3 px-3 text-muted-foreground">{c.daysSince} day{c.daysSince !== 1 ? 's' : ''} ago</td>
       <td className="py-3 px-3">
-        <Badge variant={getStatusVariant(c.status || 'New') as any}>{c.status}</Badge>
+        <Badge variant={getStatusVariant(c.status || 'New')}>{c.status}</Badge>
       </td>
     </tr>
   );

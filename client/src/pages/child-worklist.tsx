@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import type { Child, Mother } from "@shared/schema";
 import { getNextVaccineStatus, getChildVisitStatus, formatDate } from "@/lib/healthLogic";
 import StatusBadge from "@/components/status-badge";
@@ -8,6 +8,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AlertTriangle, Clock, CheckCircle, Baby, ChevronRight } from "lucide-react";
+import { usePagination } from "@/hooks/use-pagination";
+import TablePagination from "@/components/table-pagination";
 
 export default function ChildWorklist() {
   const [, navigate] = useLocation();
@@ -41,6 +43,9 @@ export default function ChildWorklist() {
       return true;
     });
   }, [childrenWithStatus, statusFilter, barangayFilter]);
+
+  const pagination = usePagination(filteredChildren);
+  useEffect(() => { pagination.resetPage(); }, [statusFilter, barangayFilter]);
 
   const statusCounts = useMemo(() => {
     const counts = { overdue: 0, dueSoon: 0, upcoming: 0 };
@@ -185,13 +190,13 @@ export default function ChildWorklist() {
             <span className="ml-2 text-muted-foreground font-normal">({filteredChildren.length})</span>
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-2 max-h-[500px] overflow-y-auto">
+        <CardContent className="space-y-2">
           {filteredChildren.length === 0 && (
             <p className="text-muted-foreground text-center py-8" data-testid="text-no-items">
               No items in this list
             </p>
           )}
-          {filteredChildren.map(c => {
+          {pagination.pagedItems.map(c => {
             const worstStatus = c.vaxStatus.status === 'overdue' || c.visitStatus.status === 'overdue' ? 'overdue' :
                                 c.vaxStatus.status === 'due_soon' || c.visitStatus.status === 'due_soon' ? 'due_soon' : 'upcoming';
 
@@ -231,6 +236,7 @@ export default function ChildWorklist() {
               </div>
             );
           })}
+          <TablePagination pagination={pagination} />
         </CardContent>
       </Card>
     </div>
