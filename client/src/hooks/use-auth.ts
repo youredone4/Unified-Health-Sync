@@ -53,11 +53,13 @@ export const UserRole = {
 
 export type UserRoleType = typeof UserRole[keyof typeof UserRole];
 
-// Permission helpers
+// Permission helpers — single source of truth for all role-based access
 export const permissions = {
   canManageUsers: (role?: string) => role === UserRole.SYSTEM_ADMIN,
   canAccessPatientCheckup: (role?: string) => role === UserRole.SYSTEM_ADMIN || role === UserRole.MHO,
   canViewAuditLogs: (role?: string) => role === UserRole.SYSTEM_ADMIN,
+  canAccessSettings: (role?: string) => role === UserRole.SYSTEM_ADMIN || role === UserRole.MHO || role === UserRole.SHA,
+  canAccessManagement: (role?: string) => role === UserRole.SYSTEM_ADMIN || role === UserRole.MHO || role === UserRole.SHA,
   canGenerateReports: (role?: string) => !!role,
   canImportReports: (role?: string) => role === UserRole.SYSTEM_ADMIN || role === UserRole.MHO,
   canCreate: (role?: string) => role === UserRole.SYSTEM_ADMIN || role === UserRole.TL,
@@ -68,6 +70,32 @@ export const permissions = {
   isMHO: (role?: string) => role === UserRole.MHO,
   isSHA: (role?: string) => role === UserRole.SHA,
   isTL: (role?: string) => role === UserRole.TL,
+
+  // Route-level access check used by RoleRoute guard components
+  canAccessRoute: (role: string | undefined, path: string): boolean => {
+    if (!role) return false;
+    // Full admin access
+    if (role === UserRole.SYSTEM_ADMIN) return true;
+    // Routes restricted to ADMIN + MHO only
+    const adminMhoOnly = ["/patient-checkup"];
+    if (adminMhoOnly.some(r => path === r || path.startsWith(r + "/"))) {
+      return role === UserRole.MHO;
+    }
+    // Routes restricted to management roles (ADMIN + MHO + SHA), not TL
+    const mgmtOnly = [
+      "/hotspots",
+      "/inventory",
+      "/reports",
+      "/disease/map",
+      "/settings",
+      "/admin",
+    ];
+    if (mgmtOnly.some(r => path === r || path.startsWith(r + "/"))) {
+      return role === UserRole.MHO || role === UserRole.SHA;
+    }
+    // Everything else is accessible to all authenticated roles
+    return true;
+  },
 };
 
 export function useAuth() {
@@ -111,5 +139,7 @@ export function useAuth() {
     canManageUsers: permissions.canManageUsers(user?.role),
     canAccessPatientCheckup: permissions.canAccessPatientCheckup(user?.role),
     canViewAuditLogs: permissions.canViewAuditLogs(user?.role),
+    canAccessSettings: permissions.canAccessSettings(user?.role),
+    canAccessManagement: permissions.canAccessManagement(user?.role),
   };
 }

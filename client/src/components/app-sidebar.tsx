@@ -11,7 +11,6 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarHeader,
-  SidebarFooter,
 } from "@/components/ui/sidebar";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -21,7 +20,6 @@ import {
   Heart,
   Users,
   Package,
-  FileText,
   Calendar,
   Activity,
   Stethoscope,
@@ -39,76 +37,113 @@ import {
   MessageCircle,
 } from "lucide-react";
 import { useTheme } from "@/contexts/theme-context";
-import { useAuth } from "@/hooks/use-auth";
+import { useAuth, UserRole } from "@/hooks/use-auth";
 
-const menuGroups = [
+// Role shorthand arrays for the nav config
+const ALL = [UserRole.SYSTEM_ADMIN, UserRole.MHO, UserRole.SHA, UserRole.TL] as const;
+const MGMT = [UserRole.SYSTEM_ADMIN, UserRole.MHO, UserRole.SHA] as const;
+const ADMIN_MHO = [UserRole.SYSTEM_ADMIN, UserRole.MHO] as const;
+const ADMIN_ONLY = [UserRole.SYSTEM_ADMIN] as const;
+
+type Role = (typeof ALL)[number];
+
+interface NavItem {
+  title: string;
+  url: string;
+  icon: React.ElementType;
+  roles: readonly Role[];
+  isBadged?: boolean; // special flag — sidebar renders unread badge for Messages
+}
+
+interface NavGroup {
+  label: string;
+  items: NavItem[];
+}
+
+// Central role-to-menu configuration — single source of truth
+const NAV_GROUPS: NavGroup[] = [
   {
     label: "Overview",
     items: [
-      { title: "Municipal Dashboard", url: "/", icon: LayoutDashboard },
-      { title: "Hotspots & Analytics", url: "/hotspots", icon: TrendingUp },
-      { title: "Calendar", url: "/calendar", icon: Calendar },
+      { title: "Municipal Dashboard", url: "/", icon: LayoutDashboard, roles: ALL },
+      { title: "Hotspots & Analytics", url: "/hotspots", icon: TrendingUp, roles: MGMT },
+      { title: "Calendar", url: "/calendar", icon: Calendar, roles: ALL },
     ],
   },
   {
-    label: "Prenatal Module",
+    label: "Maternal and Child Care",
     items: [
-      { title: "TT Reminders", url: "/prenatal", icon: Heart },
-      { title: "Prenatal Dashboard", url: "/prenatal/dashboard", icon: Activity },
-      { title: "Mother Registry", url: "/prenatal/registry", icon: Users },
+      { title: "TT Reminders", url: "/prenatal", icon: Heart, roles: ALL },
+      { title: "Prenatal Dashboard", url: "/prenatal/dashboard", icon: Activity, roles: ALL },
+      { title: "Mother Registry", url: "/prenatal/registry", icon: Users, roles: ALL },
+      { title: "Vaccination Schedule", url: "/child", icon: Baby, roles: ALL },
+      { title: "Child Dashboard", url: "/child/dashboard", icon: Activity, roles: ALL },
+      { title: "Child Registry", url: "/child/registry", icon: Users, roles: ALL },
     ],
   },
   {
-    label: "Child Health Module",
+    label: "Community Nutrition",
     items: [
-      { title: "Vaccination Schedule", url: "/child", icon: Baby },
-      { title: "Child Dashboard", url: "/child/dashboard", icon: Activity },
-      { title: "Child Registry", url: "/child/registry", icon: Users },
+      { title: "Growth Monitoring", url: "/nutrition/growth", icon: TrendingUp, roles: ALL },
+      { title: "Nutrition Dashboard", url: "/nutrition/dashboard", icon: Activity, roles: ALL },
+      { title: "Underweight Follow-ups", url: "/nutrition", icon: Scale, roles: ALL },
     ],
   },
   {
-    label: "Nutrition Module",
+    label: "Senior Care",
     items: [
-      { title: "Underweight Follow-ups", url: "/nutrition", icon: Scale },
-      { title: "Growth Monitoring", url: "/nutrition/growth", icon: TrendingUp },
-      { title: "Nutrition Dashboard", url: "/nutrition/dashboard", icon: Activity },
-    ],
-  },
-  {
-    label: "Senior Care Module",
-    items: [
-      { title: "HTN Meds Pickup", url: "/senior", icon: Pill },
-      { title: "Senior Dashboard", url: "/senior/dashboard", icon: Activity },
-      { title: "Senior Registry", url: "/senior/registry", icon: UserCircle },
+      { title: "HTN Meds Pickup", url: "/senior", icon: Pill, roles: ALL },
+      { title: "Senior Dashboard", url: "/senior/dashboard", icon: Activity, roles: ALL },
+      { title: "Senior Registry", url: "/senior/registry", icon: UserCircle, roles: ALL },
     ],
   },
   {
     label: "Disease Surveillance",
     items: [
-      { title: "Case Worklist", url: "/disease", icon: Siren },
-      { title: "Case Registry", url: "/disease/registry", icon: ClipboardList },
-      { title: "Outbreak Map", url: "/disease/map", icon: MapPin },
+      { title: "Case Worklist", url: "/disease", icon: Siren, roles: ALL },
+      { title: "Case Registry", url: "/disease/registry", icon: ClipboardList, roles: ALL },
+      { title: "Outbreak Map", url: "/disease/map", icon: MapPin, roles: MGMT },
     ],
   },
   {
-    label: "TB DOTS Module",
+    label: "TB DOTS",
     items: [
-      { title: "DOTS Worklist", url: "/tb", icon: Pill },
-      { title: "TB Registry", url: "/tb/registry", icon: ClipboardList },
+      { title: "DOTS Worklist", url: "/tb", icon: Pill, roles: ALL },
+      { title: "TB Registry", url: "/tb/registry", icon: ClipboardList, roles: ALL },
     ],
   },
   {
-    label: "Inventory Module",
+    label: "Inventory and Supply",
     items: [
-      { title: "Availability & Surplus", url: "/inventory", icon: Package },
-      { title: "Stock-outs & Low Stock", url: "/inventory/stockouts", icon: AlertTriangle },
+      { title: "Availability & Surplus", url: "/inventory", icon: Package, roles: MGMT },
+      { title: "Stock-outs & Low Stock", url: "/inventory/stockouts", icon: AlertTriangle, roles: MGMT },
     ],
   },
   {
-    label: "Reporting Module",
+    label: "Reports and Analytics",
     items: [
-      { title: "M1 Report", url: "/reports/m1", icon: ClipboardList },
-      { title: "Health Analytics", url: "/reports/ai", icon: Bot },
+      { title: "M1 Report", url: "/reports/m1", icon: ClipboardList, roles: MGMT },
+      { title: "Health Analytics", url: "/reports/ai", icon: Bot, roles: MGMT },
+    ],
+  },
+  {
+    label: "Communication",
+    items: [
+      { title: "Messages", url: "/messages", icon: MessageCircle, roles: ALL, isBadged: true },
+    ],
+  },
+  {
+    label: "Clinical Services",
+    items: [
+      { title: "Patient Check-up", url: "/patient-checkup", icon: ClipboardPlus, roles: ADMIN_MHO },
+    ],
+  },
+  {
+    label: "Administration",
+    items: [
+      { title: "User Management", url: "/admin/users", icon: Users, roles: ADMIN_ONLY },
+      { title: "Audit Logs", url: "/admin/audit", icon: Shield, roles: ADMIN_ONLY },
+      { title: "Settings", url: "/settings", icon: Settings, roles: MGMT },
     ],
   },
 ];
@@ -116,11 +151,11 @@ const menuGroups = [
 export function AppSidebar() {
   const [location] = useLocation();
   const { settings } = useTheme();
-  const { canManageUsers, canViewAuditLogs, canAccessPatientCheckup, isAuthenticated } = useAuth();
+  const { role, isAuthenticated } = useAuth();
   const [logoError, setLogoError] = useState(false);
 
   const { data: unreadData } = useQuery<{ count: number }>({
-    queryKey: ['/api/dm/unread-count'],
+    queryKey: ["/api/dm/unread-count"],
     refetchInterval: 5000,
     enabled: isAuthenticated,
   });
@@ -130,14 +165,22 @@ export function AppSidebar() {
   const logoUrl = settings?.logoUrl;
   const showLogo = logoUrl && !logoError;
 
+  // Filter items to only those the current user's role can see
+  const visibleGroups = NAV_GROUPS.map((group) => ({
+    ...group,
+    items: group.items.filter((item) =>
+      role ? (item.roles as readonly string[]).includes(role) : false
+    ),
+  })).filter((group) => group.items.length > 0);
+
   return (
     <Sidebar>
       <SidebarHeader className="p-4 border-b border-sidebar-border">
         <div className="flex items-center gap-2">
           {showLogo ? (
-            <img 
-              src={logoUrl} 
-              alt="LGU Logo" 
+            <img
+              src={logoUrl}
+              alt="LGU Logo"
               className="w-8 h-8 object-contain rounded"
               onError={() => setLogoError(true)}
             />
@@ -151,7 +194,7 @@ export function AppSidebar() {
         </div>
       </SidebarHeader>
       <SidebarContent>
-        {menuGroups.map((group) => (
+        {visibleGroups.map((group) => (
           <SidebarGroup key={group.label}>
             <SidebarGroupLabel>{group.label}</SidebarGroupLabel>
             <SidebarGroupContent>
@@ -163,9 +206,17 @@ export function AppSidebar() {
                       data-active={location === item.url}
                       className="data-[active=true]:bg-sidebar-accent"
                     >
-                      <Link href={item.url} data-testid={`nav-${item.url.replace(/\//g, '-')}`}>
+                      <Link href={item.url} data-testid={`nav-${item.url.replace(/\//g, "-")}`}>
                         <item.icon className="w-4 h-4" />
                         <span>{item.title}</span>
+                        {item.isBadged && (unreadData?.count ?? 0) > 0 && (
+                          <Badge
+                            className="ml-auto h-5 min-w-5 flex items-center justify-center text-xs px-1"
+                            data-testid="badge-unread-messages"
+                          >
+                            {unreadData!.count}
+                          </Badge>
+                        )}
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
@@ -175,81 +226,6 @@ export function AppSidebar() {
           </SidebarGroup>
         ))}
       </SidebarContent>
-      <SidebarFooter className="p-2 border-t border-sidebar-border">
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton
-              asChild
-              data-active={location === "/messages"}
-              className="data-[active=true]:bg-sidebar-accent"
-            >
-              <Link href="/messages" data-testid="nav-messages">
-                <MessageCircle className="w-4 h-4" />
-                <span>Messages</span>
-                {(unreadData?.count ?? 0) > 0 && (
-                  <Badge className="ml-auto h-5 min-w-5 flex items-center justify-center text-xs px-1" data-testid="badge-unread-messages">
-                    {unreadData!.count}
-                  </Badge>
-                )}
-              </Link>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-          {canAccessPatientCheckup && (
-            <SidebarMenuItem>
-              <SidebarMenuButton
-                asChild
-                data-active={location === "/patient-checkup"}
-                className="data-[active=true]:bg-sidebar-accent"
-              >
-                <Link href="/patient-checkup" data-testid="nav-patient-checkup">
-                  <ClipboardPlus className="w-4 h-4" />
-                  <span>Patient Check-up</span>
-                </Link>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          )}
-          {canManageUsers && (
-            <SidebarMenuItem>
-              <SidebarMenuButton
-                asChild
-                data-active={location === "/admin/users"}
-                className="data-[active=true]:bg-sidebar-accent"
-              >
-                <Link href="/admin/users" data-testid="nav-admin-users">
-                  <Users className="w-4 h-4" />
-                  <span>User Management</span>
-                </Link>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          )}
-          {canViewAuditLogs && (
-            <SidebarMenuItem>
-              <SidebarMenuButton
-                asChild
-                data-active={location === "/admin/audit"}
-                className="data-[active=true]:bg-sidebar-accent"
-              >
-                <Link href="/admin/audit" data-testid="nav-admin-audit">
-                  <Shield className="w-4 h-4" />
-                  <span>Audit Logs</span>
-                </Link>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          )}
-          <SidebarMenuItem>
-            <SidebarMenuButton
-              asChild
-              data-active={location === "/settings"}
-              className="data-[active=true]:bg-sidebar-accent"
-            >
-              <Link href="/settings" data-testid="nav-settings">
-                <Settings className="w-4 h-4" />
-                <span>Settings</span>
-              </Link>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        </SidebarMenu>
-      </SidebarFooter>
     </Sidebar>
   );
 }

@@ -12,7 +12,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useState } from "react";
 import { ThemeProvider } from "@/contexts/theme-context";
-import { useAuth } from "@/hooks/use-auth";
+import { useAuth, UserRole } from "@/hooks/use-auth";
 
 import LandingPage from "@/pages/landing";
 import Dashboard from "@/pages/dashboard";
@@ -69,23 +69,30 @@ const roleLabels: Record<string, string> = {
 // Demo date per project requirements
 const DEMO_DATE = "December 22, 2025";
 
+// Shared "Access Denied" UI
+function AccessDenied() {
+  return (
+    <div className="flex items-center justify-center h-full">
+      <div className="text-center">
+        <p className="text-lg font-medium mb-2">Access Denied</p>
+        <p className="text-muted-foreground">You don't have permission to access this page.</p>
+      </div>
+    </div>
+  );
+}
+
 // Route guard component for admin pages
 function AdminRoute({ component: Component, permission }: { component: React.ComponentType; permission: "users" | "audit" }) {
   const { canManageUsers, canViewAuditLogs } = useAuth();
-  
   const hasPermission = permission === "users" ? canManageUsers : canViewAuditLogs;
-  
-  if (!hasPermission) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <div className="text-center">
-          <p className="text-lg font-medium mb-2">Access Denied</p>
-          <p className="text-muted-foreground">You don't have permission to access this page.</p>
-        </div>
-      </div>
-    );
-  }
-  
+  if (!hasPermission) return <AccessDenied />;
+  return <Component />;
+}
+
+// Generic role-based route guard
+function RoleRoute({ component: Component, allowedRoles }: { component: React.ComponentType; allowedRoles: string[] }) {
+  const { role } = useAuth();
+  if (!role || !allowedRoles.includes(role)) return <AccessDenied />;
   return <Component />;
 }
 
@@ -93,7 +100,6 @@ function Router() {
   return (
     <Switch>
       <Route path="/" component={Dashboard} />
-      <Route path="/hotspots" component={Hotspots} />
       <Route path="/calendar" component={CalendarPage} />
       <Route path="/prenatal" component={PrenatalWorklist} />
       <Route path="/prenatal/dashboard" component={PrenatalDashboard} />
@@ -116,16 +122,30 @@ function Router() {
       <Route path="/senior/new" component={SeniorForm} />
       <Route path="/senior/:id/edit" component={SeniorForm} />
       <Route path="/senior/:id" component={SeniorProfile} />
-      <Route path="/inventory" component={InventoryPage} />
-      <Route path="/inventory/new" component={InventoryForm} />
-      <Route path="/inventory/:id/edit" component={InventoryForm} />
-      <Route path="/inventory/stockouts" component={StockoutsPage} />
+      <Route path="/inventory">
+        <RoleRoute component={InventoryPage} allowedRoles={[UserRole.SYSTEM_ADMIN, UserRole.MHO, UserRole.SHA]} />
+      </Route>
+      <Route path="/inventory/new">
+        <RoleRoute component={InventoryForm} allowedRoles={[UserRole.SYSTEM_ADMIN, UserRole.MHO, UserRole.SHA]} />
+      </Route>
+      <Route path="/inventory/:id/edit">
+        <RoleRoute component={InventoryForm} allowedRoles={[UserRole.SYSTEM_ADMIN, UserRole.MHO, UserRole.SHA]} />
+      </Route>
+      <Route path="/inventory/stockouts">
+        <RoleRoute component={StockoutsPage} allowedRoles={[UserRole.SYSTEM_ADMIN, UserRole.MHO, UserRole.SHA]} />
+      </Route>
       <Route path="/reports" component={ReportsPage} />
-      <Route path="/reports/ai" component={AIReporting} />
-      <Route path="/reports/m1" component={M1ReportPage} />
+      <Route path="/reports/ai">
+        <RoleRoute component={AIReporting} allowedRoles={[UserRole.SYSTEM_ADMIN, UserRole.MHO, UserRole.SHA]} />
+      </Route>
+      <Route path="/reports/m1">
+        <RoleRoute component={M1ReportPage} allowedRoles={[UserRole.SYSTEM_ADMIN, UserRole.MHO, UserRole.SHA]} />
+      </Route>
       <Route path="/disease" component={DiseaseWorklist} />
       <Route path="/disease/registry" component={DiseaseRegistry} />
-      <Route path="/disease/map" component={DiseaseMap} />
+      <Route path="/disease/map">
+        <RoleRoute component={DiseaseMap} allowedRoles={[UserRole.SYSTEM_ADMIN, UserRole.MHO, UserRole.SHA]} />
+      </Route>
       <Route path="/disease/new" component={DiseaseForm} />
       <Route path="/disease/:id/edit" component={DiseaseForm} />
       <Route path="/disease/:id" component={DiseaseProfile} />
@@ -135,8 +155,15 @@ function Router() {
       <Route path="/tb/:id/edit" component={TBForm} />
       <Route path="/tb/:id" component={TBProfile} />
       <Route path="/messages" component={MessagesPage} />
-      <Route path="/settings" component={SettingsPage} />
-      <Route path="/patient-checkup" component={PatientCheckupPage} />
+      <Route path="/settings">
+        <RoleRoute component={SettingsPage} allowedRoles={[UserRole.SYSTEM_ADMIN, UserRole.MHO, UserRole.SHA]} />
+      </Route>
+      <Route path="/patient-checkup">
+        <RoleRoute component={PatientCheckupPage} allowedRoles={[UserRole.SYSTEM_ADMIN, UserRole.MHO]} />
+      </Route>
+      <Route path="/hotspots">
+        <RoleRoute component={Hotspots} allowedRoles={[UserRole.SYSTEM_ADMIN, UserRole.MHO, UserRole.SHA]} />
+      </Route>
       <Route path="/admin/users">
         <AdminRoute component={UserManagement} permission="users" />
       </Route>
