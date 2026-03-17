@@ -853,9 +853,6 @@ export default function M1ReportPage() {
               <FileText className="h-6 w-6" />
               FHSIS M1 Brgy Report
             </h1>
-            <p className="text-sm text-muted-foreground">
-              DOH Template: {activeTemplate?.templateName} - {activeTemplate?.versionLabel}
-            </p>
           </div>
         </div>
 

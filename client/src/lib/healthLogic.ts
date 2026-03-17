@@ -1,8 +1,8 @@
 import { differenceInDays, parseISO, addDays, format } from 'date-fns';
 import type { Mother, Child, Senior, InventoryItem, DiseaseCase, TBPatient } from '@shared/schema';
 
-export const TODAY = new Date('2025-12-22');
-export const TODAY_STR = '2025-12-22';
+export const TODAY = new Date();
+export const TODAY_STR = TODAY.toISOString().split('T')[0];
 
 export type StatusType = 'overdue' | 'due_soon' | 'upcoming' | 'completed' | 'available';
 

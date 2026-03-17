@@ -54,7 +54,7 @@ export default function ChildProfile() {
 
   const handleMarkVaccine = () => {
     if (vax.nextVaccine) {
-      const today = '2025-12-22';
+      const today = new Date().toISOString().split('T')[0];
       const vaccines = { ...child.vaccines, [vax.nextVaccine]: today };
       updateMutation.mutate({ vaccines });
     }

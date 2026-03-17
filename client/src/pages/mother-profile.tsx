@@ -45,7 +45,7 @@ export default function MotherProfile() {
 
   const handleMarkDone = () => {
     if (confirmAction === 'tt') {
-      const today = '2025-12-22';
+      const today = new Date().toISOString().split('T')[0];
       if (!mother.tt1Date) {
         updateMutation.mutate({ tt1Date: today });
       } else if (!mother.tt2Date) {
