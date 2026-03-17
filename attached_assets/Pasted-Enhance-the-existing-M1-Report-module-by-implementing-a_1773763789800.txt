@@ -1,0 +1,275 @@
+Enhance the existing M1 Report module by implementing a file-aware multi-file import system that supports real-world barangay Excel files, comprehensive M1 reports, and pharmacy datasets.
+
+Also fix related dashboard issues and align inconsistent modules so the system behaves consistently across all health dashboards.
+
+Context
+- The system already has a working M1 Report module.
+- Do NOT rebuild the module.
+- Do NOT break existing reports, dashboards, analytics, or tables.
+- This feature must adapt to real uploaded files, not just fixed CSV templates.
+- Replit should inspect current routes, existing dashboard links, and current role visibility during Planning before applying changes.
+
+Real Data Context (IMPORTANT)
+The system must support files similar to:
+- Barangay-based Excel files (e.g., AMOSLOG.xls, CENTRAL.xls, MAGSAYSAY.xls, etc.)
+- Multi-barangay grouped files
+- Comprehensive report files (e.g., “comprehensive report 2025.xlsx”)
+- Pharmacy records (e.g., “PHARMACY BUGAS-BUGAS.xlsx”)
+
+These files may:
+- have different column names
+- have different layouts
+- contain multiple sheets
+- contain inconsistent formatting
+
+Primary Goals
+1. Add a file-aware multi-file upload/import system to the M1 Report module
+2. Fix broken child and senior dashboard linked actions
+3. Remove remaining DEMO logic from underweight follow-ups and implement actual WHO Z-score computation
+4. Enhance the Nutrition Dashboard so it matches the quality and structure of the other dashboards
+
+Supported File Types
+- .xls
+- .xlsx
+- .csv
+
+M1 Import Feature Requirements
+
+1. Multi-file Upload
+- Allow selecting multiple files at once
+- Display file list before processing
+- Allow mixing barangay files, comprehensive reports, and pharmacy files
+
+2. File-Aware Parsing
+The system must intelligently handle different file formats.
+
+Implement:
+- automatic column detection
+- flexible mapping
+- sheet detection for Excel files
+
+Common mappings:
+- barangay, brgy, barangay_name -> barangay
+- disease, disease_name, category -> disease_name
+- cases, total, count -> cases
+- date, reporting_date, month -> reporting_date
+
+If a required column is not found:
+- attempt best-match detection
+- otherwise flag as validation error
+
+3. Barangay Detection Logic
+Determine barangay using:
+- file name (e.g., AMOSLOG.xls -> barangay = AMOSLOG)
+- column values inside the file
+- mapped barangay field
+
+If a file contains multiple barangays:
+- preserve them correctly
+
+4. Multi-Sheet Handling
+- detect available sheets
+- process relevant sheets automatically
+- ignore empty or irrelevant sheets
+
+5. Data Normalization
+Convert all extracted data into a unified structure:
+
+barangay | disease_name | cases | reporting_date
+
+Ensure:
+- consistent formatting
+- numeric validation for cases
+- clean string values
+
+6. Data Aggregation
+- merge all uploaded files into one dataset
+- group by barangay and disease_name
+- sum case counts
+
+7. Preview Before Import
+Before saving:
+- show combined preview table
+- show total rows
+- show detected barangays
+- show detected diseases
+- allow user confirmation
+
+8. Validation Summary
+Display:
+- Total rows
+- Valid rows
+- Error rows
+
+For invalid rows, show reasons such as:
+- missing barangay
+- missing disease_name
+- invalid case value
+- unmapped columns
+- corrupted row
+
+Display error rows in a separate table if possible.
+
+9. Import Options
+Provide:
+- Append Data
+- Replace Existing Data
+
+Behavior:
+- Append = add to existing M1 dataset
+- Replace = overwrite relevant M1 data
+
+Require confirmation for replace.
+
+10. Import History Log
+Track:
+- date/time
+- user
+- uploaded file names
+- number of rows processed
+- valid rows imported
+- error count
+- import mode (append or replace)
+
+Display as a table, latest first.
+
+11. Download Templates
+Provide:
+- CSV template
+- Excel template
+
+Structure:
+barangay,disease_name,cases,reporting_date
+
+12. Role-Based Access
+Allow only:
+- System Admin
+- Municipal Health Officer
+- Senior Health Admin
+
+Do NOT allow:
+- Team Leader (Barangay Nurse)
+
+Use the existing role system. Do not duplicate role logic.
+
+13. Integration
+Imported data must reflect immediately in:
+- M1 reports
+- dashboards
+- analytics
+- summary cards
+
+Do NOT break existing calculations.
+
+14. Performance
+- handle multiple Excel files efficiently
+- avoid UI freezing
+- process large files safely
+
+15. Table Behavior
+For:
+- preview table
+- validation error table
+- import history log
+
+Use:
+- 10 rows per page by default
+- pagination enabled
+- search if available
+
+Additional Fixes and Enhancements
+
+16. Underweight Follow-ups - remove DEMO logic
+The "Underweight Risk (Demo)" behavior should no longer show DEMO.
+
+Requirements:
+- remove any placeholder/demo label or mock logic
+- implement actual WHO Z-score calculation for underweight assessment
+- use real child data inputs already available in the system
+- classify nutritional risk using proper WHO-based weight-for-age or relevant growth standard logic already appropriate for the module
+- make sure the displayed result is based on actual computation, not static demo output
+
+17. Fix Child Dashboard broken actions
+Currently:
+- "View Worklist" is just loading
+- "Vaccination Schedule" is just loading
+- "Growth Monitoring" shows "page not found"
+
+Fix these issues.
+
+Requirements:
+- inspect current child dashboard action links, routes, and handlers
+- connect "View Worklist" to the correct child-related worklist page or target module
+- connect "Vaccination Schedule" to the correct route/page
+- fix "Growth Monitoring" so it opens the correct page instead of page not found
+- ensure all buttons/cards work properly and stop infinite loading behavior
+
+18. Fix Senior Dashboard broken actions
+Currently:
+- "View Worklist" is just loading
+- "Pick Up Calendar" shows "page not found"
+
+Fix these issues.
+
+Requirements:
+- inspect current senior dashboard action links, routes, and handlers
+- connect "View Worklist" to the correct senior-related worklist page
+- fix "Pick Up Calendar" route so it opens the intended page correctly
+- ensure buttons/cards stop infinite loading and resolve to working pages
+
+19. Enhance Nutrition Dashboard
+The Nutrition Dashboard needs enhancement so it matches the quality and structure of the other dashboards.
+
+Requirements:
+- make Nutrition Dashboard consistent with other dashboard modules
+- improve layout, summary cards, filtering flow, and table/content organization
+- keep nutrition-specific logic intact
+- do not blindly copy another dashboard; adapt the same design quality and user experience pattern
+- ensure it feels complete and not underdeveloped compared to Child, Senior, and Prenatal dashboards
+
+20. Inspect existing routes before refactoring
+Before applying fixes:
+- inspect existing route definitions
+- inspect dashboard button click handlers
+- inspect current linked pages and modules
+- reuse existing correct routes if already present
+- only create missing routes/pages when necessary
+- avoid duplicate pages or duplicate logic
+
+Deliverables
+Provide:
+1. multi-file upload UI
+2. file-aware parser for Excel and CSV
+3. column mapping logic
+4. barangay detection logic
+5. multi-sheet handling
+6. normalization and aggregation logic
+7. preview UI
+8. validation summary and error display
+9. import history log
+10. template download feature
+11. integration with M1 data
+12. WHO Z-score implementation for underweight follow-ups
+13. fixes for Child Dashboard broken actions
+14. fixes for Senior Dashboard broken actions
+15. enhanced Nutrition Dashboard structure and UI consistency
+16. list of routes/pages/files changed
+
+Important Constraints
+- Do NOT redesign the whole system
+- Do NOT remove existing working functionality
+- Do NOT break role-based access
+- Do NOT duplicate existing routes or modules unnecessarily
+- Keep implementation clean, modular, and aligned with the current project structure
+
+Success Criteria
+- users can upload multiple real Excel/CSV files into M1
+- the system correctly extracts data despite format differences
+- preview and validation work correctly
+- import history is recorded
+- imported data reflects correctly in M1 reports
+- Underweight Follow-ups no longer shows DEMO and uses real WHO Z-score calculation
+- Child Dashboard action buttons open working pages
+- Senior Dashboard action buttons open working pages
+- Nutrition Dashboard is improved and consistent with other dashboards
+- no existing working functionality is broken
