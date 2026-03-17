@@ -6,17 +6,27 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Users, Search, Plus } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { usePagination } from "@/hooks/use-pagination";
+import TablePagination from "@/components/table-pagination";
 
 export default function ChildRegistry() {
   const [, navigate] = useLocation();
-  const { data: children = [] } = useQuery<Child[]>({ queryKey: ['/api/children'] });
+  const { data: children = [], isLoading } = useQuery<Child[]>({ queryKey: ['/api/children'] });
   const [search, setSearch] = useState('');
 
-  const filtered = children.filter(c => 
+  const filtered = children.filter(c =>
     c.name.toLowerCase().includes(search.toLowerCase()) ||
     c.barangay.toLowerCase().includes(search.toLowerCase())
   );
+
+  const pagination = usePagination(filtered);
+
+  useEffect(() => { pagination.resetPage(); }, [search]);
+
+  if (isLoading) {
+    return <div className="flex items-center justify-center h-64"><p className="text-muted-foreground">Loading...</p></div>;
+  }
 
   return (
     <div className="space-y-6">
@@ -38,8 +48,8 @@ export default function ChildRegistry() {
 
       <div className="relative max-w-sm">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-        <Input 
-          placeholder="Search by name or barangay..." 
+        <Input
+          placeholder="Search by name or barangay..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="pl-9"
@@ -60,8 +70,13 @@ export default function ChildRegistry() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map(c => (
-                  <tr 
+                {filtered.length === 0 && (
+                  <tr>
+                    <td colSpan={4} className="py-8 text-center text-muted-foreground">No children found</td>
+                  </tr>
+                )}
+                {pagination.pagedItems.map(c => (
+                  <tr
                     key={c.id}
                     onClick={() => navigate(`/child/${c.id}`)}
                     className="border-b border-border/50 cursor-pointer hover-elevate"
@@ -76,6 +91,7 @@ export default function ChildRegistry() {
               </tbody>
             </table>
           </div>
+          <TablePagination pagination={pagination} />
         </CardContent>
       </Card>
     </div>

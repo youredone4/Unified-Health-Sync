@@ -6,9 +6,12 @@ import KpiCard from "@/components/kpi-card";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
-import { AlertCircle, Clock, Users, AlertTriangle, Pill, X } from "lucide-react";
-import { useState } from "react";
+import { AlertCircle, Clock, Users, AlertTriangle, Pill, X, Search } from "lucide-react";
+import { useState, useEffect } from "react";
+import { usePagination } from "@/hooks/use-pagination";
+import TablePagination from "@/components/table-pagination";
 
 type FilterKey = 'overdue' | 'due_today' | 'at_risk' | 'all' | null;
 
@@ -16,6 +19,7 @@ export default function TBWorklist() {
   const [, navigate] = useLocation();
   const { data: patients = [], isLoading } = useQuery<TBPatient[]>({ queryKey: ['/api/tb-patients'] });
   const [activeFilter, setActiveFilter] = useState<FilterKey>(null);
+  const [search, setSearch] = useState('');
 
   const patientsWithStatus = patients.map(p => ({
     ...p,
@@ -34,20 +38,29 @@ export default function TBWorklist() {
     setActiveFilter(prev => prev === filter ? null : filter);
   };
 
-  const getFilteredPatients = () => {
+  const getBaseFilteredPatients = () => {
     if (activeFilter === 'overdue') return overdue;
     if (activeFilter === 'due_today') return dueToday;
     if (activeFilter === 'at_risk') return atRisk;
-    if (activeFilter === 'all') return activePatients;
     return activePatients;
   };
 
+  const filteredPatients = getBaseFilteredPatients().filter(p =>
+    search === '' ||
+    `${p.firstName} ${p.lastName}`.toLowerCase().includes(search.toLowerCase()) ||
+    p.barangay.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const pagination = usePagination(filteredPatients);
+
+  useEffect(() => { pagination.resetPage(); }, [activeFilter, search]);
+
   const getFilterLabel = () => {
-    if (activeFilter === 'overdue') return `Missed Visit (${overdue.length})`;
-    if (activeFilter === 'due_today') return `Due Today (${dueToday.length})`;
-    if (activeFilter === 'at_risk') return `At Risk (${atRisk.length})`;
-    if (activeFilter === 'all') return `All Active (${activePatients.length})`;
-    return `All Active (${activePatients.length})`;
+    const base = getBaseFilteredPatients().length;
+    if (activeFilter === 'overdue') return `Missed Visit (${base})`;
+    if (activeFilter === 'due_today') return `Due Today (${base})`;
+    if (activeFilter === 'at_risk') return `At Risk (${base})`;
+    return `All Active (${base})`;
   };
 
   const getStatusVariant = (status: string): "default" | "destructive" | "secondary" | "outline" => {
@@ -151,22 +164,34 @@ export default function TBWorklist() {
       </div>
 
       <Card>
-        <CardHeader className="pb-3 flex-row items-center justify-between space-y-0">
+        <CardHeader className="pb-3 flex-row items-center justify-between space-y-0 flex-wrap gap-2">
           <p className="text-sm font-medium text-muted-foreground">
             Showing: <span className="text-foreground font-semibold">{getFilterLabel()}</span>
           </p>
-          {activeFilter && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setActiveFilter(null)}
-              className="h-7 text-xs gap-1"
-              data-testid="button-clear-filter"
-            >
-              <X className="w-3 h-3" />
-              Clear filter
-            </Button>
-          )}
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Input
+                placeholder="Search patient or barangay..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-9 h-8 text-sm w-[240px]"
+                data-testid="input-search"
+              />
+            </div>
+            {activeFilter && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setActiveFilter(null)}
+                className="h-8 text-xs gap-1"
+                data-testid="button-clear-filter"
+              >
+                <X className="w-3 h-3" />
+                Clear filter
+              </Button>
+            )}
+          </div>
         </CardHeader>
         <CardContent className="pt-0">
           <div className="overflow-x-auto">
@@ -183,17 +208,18 @@ export default function TBWorklist() {
                 </tr>
               </thead>
               <tbody>
-                {getFilteredPatients().length === 0 && (
+                {filteredPatients.length === 0 && (
                   <tr>
                     <td colSpan={7} className="py-8 text-center text-muted-foreground">
                       No patients in this list
                     </td>
                   </tr>
                 )}
-                {getFilteredPatients().map(renderRow)}
+                {pagination.pagedItems.map(renderRow)}
               </tbody>
             </table>
           </div>
+          <TablePagination pagination={pagination} />
         </CardContent>
       </Card>
     </div>

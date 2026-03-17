@@ -8,7 +8,9 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ClipboardList, Search, Plus } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { usePagination } from "@/hooks/use-pagination";
+import TablePagination from "@/components/table-pagination";
 
 export default function DiseaseRegistry() {
   const [, navigate] = useLocation();
@@ -26,6 +28,10 @@ export default function DiseaseRegistry() {
     const matchesBarangay = barangayFilter === 'all' || c.barangay === barangayFilter;
     return matchesSearch && matchesCondition && matchesBarangay;
   });
+
+  const pagination = usePagination(filteredCases);
+
+  useEffect(() => { pagination.resetPage(); }, [search, conditionFilter, barangayFilter]);
 
   const getStatusVariant = (status: string) => {
     switch (status) {
@@ -122,8 +128,8 @@ export default function DiseaseRegistry() {
                     </td>
                   </tr>
                 )}
-                {filteredCases.map(c => (
-                  <tr 
+                {pagination.pagedItems.map(c => (
+                  <tr
                     key={c.id}
                     onClick={() => navigate(`/disease/${c.id}`)}
                     className="border-b border-border/50 cursor-pointer hover-elevate"
@@ -144,6 +150,7 @@ export default function DiseaseRegistry() {
               </tbody>
             </table>
           </div>
+          <TablePagination pagination={pagination} />
         </CardContent>
       </Card>
     </div>

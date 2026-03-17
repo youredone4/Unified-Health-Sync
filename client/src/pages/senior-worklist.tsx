@@ -6,14 +6,18 @@ import KpiCard from "@/components/kpi-card";
 import StatusBadge from "@/components/status-badge";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { AlertCircle, Clock, Pill, Users, Check } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { AlertCircle, Clock, Pill, Users, Check, Search } from "lucide-react";
 import { useState, useEffect } from "react";
 import { Badge } from "@/components/ui/badge";
+import { usePagination } from "@/hooks/use-pagination";
+import TablePagination from "@/components/table-pagination";
 
 export default function SeniorWorklist() {
   const [, navigate] = useLocation();
   const { data: seniors = [], isLoading } = useQuery<Senior[]>({ queryKey: ['/api/seniors'] });
   const [activeTab, setActiveTab] = useState(() => localStorage.getItem('senior-tab') || 'overdue');
+  const [search, setSearch] = useState('');
 
   useEffect(() => {
     localStorage.setItem('senior-tab', activeTab);
@@ -29,12 +33,22 @@ export default function SeniorWorklist() {
   const dueSoon = seniorsWithStatus.filter(s => s.pickupStatus.status === 'due_soon' && s.pickupStatus.status !== 'overdue');
   const medsReady = seniorsWithStatus.filter(s => s.medsReady);
 
-  const getFilteredSeniors = () => {
+  const getBaseFilteredSeniors = () => {
     if (activeTab === 'overdue') return overdue;
     if (activeTab === 'due_soon') return dueSoon;
     if (activeTab === 'ready') return medsReady;
     return seniorsWithStatus;
   };
+
+  const filteredSeniors = getBaseFilteredSeniors().filter(s =>
+    search === '' ||
+    `${s.firstName} ${s.lastName}`.toLowerCase().includes(search.toLowerCase()) ||
+    s.barangay.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const pagination = usePagination(filteredSeniors);
+
+  useEffect(() => { pagination.resetPage(); }, [activeTab, search]);
 
   if (isLoading) {
     return <div className="flex items-center justify-center h-64"><p className="text-muted-foreground">Loading...</p></div>;
@@ -58,7 +72,7 @@ export default function SeniorWorklist() {
       </div>
 
       <Card>
-        <CardHeader className="pb-0">
+        <CardHeader className="pb-0 space-y-3">
           <Tabs value={activeTab} onValueChange={setActiveTab}>
             <TabsList>
               <TabsTrigger value="overdue" data-testid="tab-overdue">Overdue ({overdue.length})</TabsTrigger>
@@ -67,6 +81,16 @@ export default function SeniorWorklist() {
               <TabsTrigger value="all" data-testid="tab-all">All ({seniors.length})</TabsTrigger>
             </TabsList>
           </Tabs>
+          <div className="relative max-w-xs">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input
+              placeholder="Search senior or barangay..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-9 h-8 text-sm"
+              data-testid="input-search"
+            />
+          </div>
         </CardHeader>
         <CardContent className="pt-4">
           <div className="overflow-x-auto">
@@ -81,15 +105,15 @@ export default function SeniorWorklist() {
                 </tr>
               </thead>
               <tbody>
-                {getFilteredSeniors().length === 0 && (
+                {filteredSeniors.length === 0 && (
                   <tr>
                     <td colSpan={5} className="py-8 text-center text-muted-foreground">
                       No items in this list
                     </td>
                   </tr>
                 )}
-                {getFilteredSeniors().map(s => (
-                  <tr 
+                {pagination.pagedItems.map(s => (
+                  <tr
                     key={s.id}
                     onClick={() => navigate(`/senior/${s.id}`)}
                     className="border-b border-border/50 cursor-pointer hover-elevate"
@@ -116,6 +140,7 @@ export default function SeniorWorklist() {
               </tbody>
             </table>
           </div>
+          <TablePagination pagination={pagination} />
         </CardContent>
       </Card>
     </div>

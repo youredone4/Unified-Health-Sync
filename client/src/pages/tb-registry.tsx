@@ -9,7 +9,9 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ClipboardList, Search, Plus } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { usePagination } from "@/hooks/use-pagination";
+import TablePagination from "@/components/table-pagination";
 
 export default function TBRegistry() {
   const [, navigate] = useLocation();
@@ -27,6 +29,10 @@ export default function TBRegistry() {
     const matchesBarangay = barangayFilter === 'all' || p.barangay === barangayFilter;
     return matchesSearch && matchesPhase && matchesBarangay;
   });
+
+  const pagination = usePagination(filteredPatients);
+
+  useEffect(() => { pagination.resetPage(); }, [search, phaseFilter, barangayFilter]);
 
   if (isLoading) {
     return <div className="flex items-center justify-center h-64"><p className="text-muted-foreground">Loading...</p></div>;
@@ -115,10 +121,10 @@ export default function TBRegistry() {
                     </td>
                   </tr>
                 )}
-                {filteredPatients.map(p => {
+                {pagination.pagedItems.map(p => {
                   const progress = getTreatmentProgress(p);
                   return (
-                    <tr 
+                    <tr
                       key={p.id}
                       onClick={() => navigate(`/tb/${p.id}`)}
                       className="border-b border-border/50 cursor-pointer hover-elevate"
@@ -157,6 +163,7 @@ export default function TBRegistry() {
               </tbody>
             </table>
           </div>
+          <TablePagination pagination={pagination} />
         </CardContent>
       </Card>
     </div>

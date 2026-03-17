@@ -6,8 +6,11 @@ import KpiCard from "@/components/kpi-card";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { AlertCircle, Eye, Activity, AlertTriangle, Siren, X } from "lucide-react";
-import { useState } from "react";
+import { Input } from "@/components/ui/input";
+import { AlertCircle, Eye, Activity, AlertTriangle, Siren, X, Search } from "lucide-react";
+import { useState, useEffect } from "react";
+import { usePagination } from "@/hooks/use-pagination";
+import TablePagination from "@/components/table-pagination";
 
 type FilterKey = 'new' | 'monitoring' | 'all' | null;
 
@@ -15,6 +18,7 @@ export default function DiseaseWorklist() {
   const [, navigate] = useLocation();
   const { data: cases = [], isLoading } = useQuery<DiseaseCase[]>({ queryKey: ['/api/disease-cases'] });
   const [activeFilter, setActiveFilter] = useState<FilterKey>(null);
+  const [search, setSearch] = useState('');
 
   const casesWithStatus = cases.map(c => ({
     ...c,
@@ -32,18 +36,28 @@ export default function DiseaseWorklist() {
     setActiveFilter(prev => prev === filter ? null : filter);
   };
 
-  const getFilteredCases = () => {
+  const getBaseFilteredCases = () => {
     if (activeFilter === 'new') return newCases;
     if (activeFilter === 'monitoring') return monitoringCases;
-    if (activeFilter === 'all') return activeCases;
     return activeCases;
   };
 
+  const filteredCases = getBaseFilteredCases().filter(c =>
+    search === '' ||
+    c.patientName.toLowerCase().includes(search.toLowerCase()) ||
+    c.barangay.toLowerCase().includes(search.toLowerCase()) ||
+    c.condition.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const pagination = usePagination(filteredCases);
+
+  useEffect(() => { pagination.resetPage(); }, [activeFilter, search]);
+
   const getFilterLabel = () => {
-    if (activeFilter === 'new') return `New Cases (${newCases.length})`;
-    if (activeFilter === 'monitoring') return `Monitoring (${monitoringCases.length})`;
-    if (activeFilter === 'all') return `All Active (${activeCases.length})`;
-    return `All Active (${activeCases.length})`;
+    const base = getBaseFilteredCases().length;
+    if (activeFilter === 'new') return `New Cases (${base})`;
+    if (activeFilter === 'monitoring') return `Monitoring (${base})`;
+    return `All Active (${base})`;
   };
 
   const getStatusVariant = (status: string) => {
@@ -135,22 +149,34 @@ export default function DiseaseWorklist() {
       </div>
 
       <Card>
-        <CardHeader className="pb-3 flex-row items-center justify-between space-y-0">
+        <CardHeader className="pb-3 flex-row items-center justify-between space-y-0 flex-wrap gap-2">
           <p className="text-sm font-medium text-muted-foreground">
             Showing: <span className="text-foreground font-semibold">{getFilterLabel()}</span>
           </p>
-          {activeFilter && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setActiveFilter(null)}
-              className="h-7 text-xs gap-1"
-              data-testid="button-clear-filter"
-            >
-              <X className="w-3 h-3" />
-              Clear filter
-            </Button>
-          )}
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Input
+                placeholder="Search patient, barangay, condition..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-9 h-8 text-sm w-[260px]"
+                data-testid="input-search"
+              />
+            </div>
+            {activeFilter && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setActiveFilter(null)}
+                className="h-8 text-xs gap-1"
+                data-testid="button-clear-filter"
+              >
+                <X className="w-3 h-3" />
+                Clear filter
+              </Button>
+            )}
+          </div>
         </CardHeader>
         <CardContent className="pt-0">
           <div className="overflow-x-auto">
@@ -166,17 +192,18 @@ export default function DiseaseWorklist() {
                 </tr>
               </thead>
               <tbody>
-                {getFilteredCases().length === 0 && (
+                {filteredCases.length === 0 && (
                   <tr>
                     <td colSpan={6} className="py-8 text-center text-muted-foreground">
                       No cases in this list
                     </td>
                   </tr>
                 )}
-                {getFilteredCases().map(renderRow)}
+                {pagination.pagedItems.map(renderRow)}
               </tbody>
             </table>
           </div>
+          <TablePagination pagination={pagination} />
         </CardContent>
       </Card>
     </div>

@@ -7,7 +7,9 @@ import StatusBadge from "@/components/status-badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { AlertTriangle, Clock, CheckCircle, Heart, Stethoscope, ChevronRight } from "lucide-react";
+import { AlertTriangle, Clock, CheckCircle, Heart, ChevronRight } from "lucide-react";
+import { usePagination } from "@/hooks/use-pagination";
+import TablePagination from "@/components/table-pagination";
 
 export default function PrenatalWorklist() {
   const [, navigate] = useLocation();
@@ -31,7 +33,7 @@ export default function PrenatalWorklist() {
     return mothersWithStatus.filter(m => {
       const worstStatus = m.ttStatus.status === 'overdue' || m.pcStatus.status === 'overdue' ? 'overdue' :
                           m.ttStatus.status === 'due_soon' || m.pcStatus.status === 'due_soon' ? 'dueSoon' : 'upcoming';
-      
+
       if (statusFilter !== 'all' && worstStatus !== statusFilter) return false;
       if (barangayFilter !== 'all' && m.barangay !== barangayFilter) return false;
       return true;
@@ -50,6 +52,10 @@ export default function PrenatalWorklist() {
     return counts;
   }, [mothersWithStatus]);
 
+  const pagination = usePagination(filteredMothers);
+
+  useEffect(() => { pagination.resetPage(); }, [statusFilter, barangayFilter]);
+
   if (isLoading) {
     return <div className="flex items-center justify-center h-64"><p className="text-muted-foreground">Loading...</p></div>;
   }
@@ -67,7 +73,7 @@ export default function PrenatalWorklist() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4" data-testid="status-summary-cards">
-        <Card 
+        <Card
           className={`border-destructive/50 bg-destructive/10 cursor-pointer hover-elevate ${statusFilter === 'overdue' ? 'ring-2 ring-destructive' : ''}`}
           onClick={() => setStatusFilter(statusFilter === 'overdue' ? 'all' : 'overdue')}
           data-testid="card-overdue-count"
@@ -84,7 +90,7 @@ export default function PrenatalWorklist() {
             </div>
           </CardContent>
         </Card>
-        <Card 
+        <Card
           className={`border-yellow-500/50 dark:border-yellow-400/50 bg-yellow-500/10 dark:bg-yellow-400/10 cursor-pointer hover-elevate ${statusFilter === 'dueSoon' ? 'ring-2 ring-yellow-500 dark:ring-yellow-400' : ''}`}
           onClick={() => setStatusFilter(statusFilter === 'dueSoon' ? 'all' : 'dueSoon')}
           data-testid="card-duesoon-count"
@@ -101,7 +107,7 @@ export default function PrenatalWorklist() {
             </div>
           </CardContent>
         </Card>
-        <Card 
+        <Card
           className={`border-green-500/50 dark:border-green-400/50 bg-green-500/10 dark:bg-green-400/10 cursor-pointer hover-elevate ${statusFilter === 'upcoming' ? 'ring-2 ring-green-500 dark:ring-green-400' : ''}`}
           onClick={() => setStatusFilter(statusFilter === 'upcoming' ? 'all' : 'upcoming')}
           data-testid="card-upcoming-count"
@@ -175,20 +181,20 @@ export default function PrenatalWorklist() {
       <Card data-testid="card-worklist">
         <CardHeader className="flex flex-row items-center justify-between gap-2">
           <CardTitle className="text-base" data-testid="text-list-title">
-            {statusFilter === 'all' ? 'All Mothers' : 
+            {statusFilter === 'all' ? 'All Mothers' :
              statusFilter === 'overdue' ? 'Overdue Items' :
              statusFilter === 'dueSoon' ? 'Due Soon Items' : 'Upcoming Items'}
             <span className="ml-2 text-muted-foreground font-normal">({filteredMothers.length})</span>
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-2 max-h-[500px] overflow-y-auto">
+        <CardContent className="space-y-2">
           {filteredMothers.length === 0 && (
             <p className="text-muted-foreground text-center py-8" data-testid="text-no-items">
               No items in this list
             </p>
           )}
-          {filteredMothers.map(m => {
-            const neededActions = [];
+          {pagination.pagedItems.map(m => {
+            const neededActions: string[] = [];
             if (m.ttStatus.status !== 'completed') neededActions.push(m.ttStatus.nextShotLabel);
             if (m.nextPrenatalCheckDate) neededActions.push('Prenatal Check');
 
@@ -228,6 +234,7 @@ export default function PrenatalWorklist() {
               </div>
             );
           })}
+          <TablePagination pagination={pagination} />
         </CardContent>
       </Card>
     </div>

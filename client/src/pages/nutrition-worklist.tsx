@@ -4,16 +4,31 @@ import type { Child } from "@shared/schema";
 import { isUnderweightRisk, hasMissingGrowthCheck, formatDate, getAgeInMonths } from "@/lib/healthLogic";
 import KpiCard from "@/components/kpi-card";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { AlertCircle, Clock, Scale, Users } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { AlertCircle, Clock, Scale, Users, Search } from "lucide-react";
+import { useState, useEffect } from "react";
 import { Badge } from "@/components/ui/badge";
+import { usePagination } from "@/hooks/use-pagination";
+import TablePagination from "@/components/table-pagination";
 
 export default function NutritionWorklist() {
   const [, navigate] = useLocation();
   const { data: children = [], isLoading } = useQuery<Child[]>({ queryKey: ['/api/children'] });
+  const [search, setSearch] = useState('');
 
   const underweight = children.filter(c => isUnderweightRisk(c));
   const missingGrowth = children.filter(c => hasMissingGrowthCheck(c));
   const atRisk = [...new Set([...underweight, ...missingGrowth])];
+
+  const filteredAtRisk = atRisk.filter(c =>
+    search === '' ||
+    c.name.toLowerCase().includes(search.toLowerCase()) ||
+    c.barangay.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const pagination = usePagination(filteredAtRisk);
+
+  useEffect(() => { pagination.resetPage(); }, [search]);
 
   if (isLoading) {
     return <div className="flex items-center justify-center h-64"><p className="text-muted-foreground">Loading...</p></div>;
@@ -36,8 +51,18 @@ export default function NutritionWorklist() {
       </div>
 
       <Card>
-        <CardHeader>
+        <CardHeader className="space-y-2">
           <p className="text-sm text-muted-foreground">Children flagged for nutritional follow-up</p>
+          <div className="relative max-w-xs">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input
+              placeholder="Search child or barangay..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-9 h-8 text-sm"
+              data-testid="input-search"
+            />
+          </div>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
@@ -53,21 +78,21 @@ export default function NutritionWorklist() {
                 </tr>
               </thead>
               <tbody>
-                {atRisk.length === 0 && (
+                {filteredAtRisk.length === 0 && (
                   <tr>
                     <td colSpan={6} className="py-8 text-center text-muted-foreground">
                       No children at nutritional risk
                     </td>
                   </tr>
                 )}
-                {atRisk.map(c => {
+                {pagination.pagedItems.map(c => {
                   const growth = c.growth || [];
                   const lastGrowth = growth[growth.length - 1];
                   const isUW = isUnderweightRisk(c);
                   const isMG = hasMissingGrowthCheck(c);
-                  
+
                   return (
-                    <tr 
+                    <tr
                       key={c.id}
                       onClick={() => navigate(`/child/${c.id}`)}
                       className="border-b border-border/50 cursor-pointer hover-elevate"
@@ -90,6 +115,7 @@ export default function NutritionWorklist() {
               </tbody>
             </table>
           </div>
+          <TablePagination pagination={pagination} />
           <p className="text-xs text-muted-foreground mt-4">
             Note: Underweight Risk (Demo) uses a simple heuristic. TODO: Replace with WHO Z-score calculation.
           </p>

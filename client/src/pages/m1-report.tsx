@@ -1,4 +1,6 @@
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
+import { usePagination } from "@/hooks/use-pagination";
+import TablePagination from "@/components/table-pagination";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -82,6 +84,9 @@ export default function M1ReportPage() {
   const [importPreview, setImportPreview] = useState<{ rowKey: string; columnKey: string; value: number; }[]>([]);
   const [importErrors, setImportErrors] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const importPagination = usePagination(importPreview, 20);
+  useEffect(() => { importPagination.resetPage(); }, [importPreview]);
 
   const { data: templates = [], isLoading: templatesLoading } = useQuery<M1TemplateVersion[]>({
     queryKey: ["/api/m1/templates"],
@@ -1150,9 +1155,9 @@ export default function M1ReportPage() {
               {importPreview.length > 0 && (
                 <div className="space-y-2">
                   <h4 className="text-sm font-medium">Preview ({importPreview.length} values)</h4>
-                  <div className="max-h-40 overflow-y-auto border rounded-md">
+                  <div className="border rounded-md">
                     <table className="w-full text-xs">
-                      <thead className="bg-muted sticky top-0">
+                      <thead className="bg-muted">
                         <tr>
                           <th className="px-2 py-1 text-left">Row Key</th>
                           <th className="px-2 py-1 text-left">Column</th>
@@ -1160,23 +1165,17 @@ export default function M1ReportPage() {
                         </tr>
                       </thead>
                       <tbody>
-                        {importPreview.slice(0, 20).map((item, i) => (
+                        {importPagination.pagedItems.map((item, i) => (
                           <tr key={i} className="border-t">
                             <td className="px-2 py-1 font-mono">{item.rowKey}</td>
                             <td className="px-2 py-1 font-mono">{item.columnKey}</td>
                             <td className="px-2 py-1 text-right">{item.value}</td>
                           </tr>
                         ))}
-                        {importPreview.length > 20 && (
-                          <tr className="border-t">
-                            <td colSpan={3} className="px-2 py-1 text-center text-muted-foreground">
-                              ... and {importPreview.length - 20} more
-                            </td>
-                          </tr>
-                        )}
                       </tbody>
                     </table>
                   </div>
+                  <TablePagination pagination={importPagination} pageSizeOptions={[10, 20, 50]} />
                 </div>
               )}
             </div>
