@@ -1,0 +1,71 @@
+Enhance the Nutrition Dashboard child profile view so that nutritional classification is clearly shown in the profile, not only in the dashboard/worklist table.
+
+Context
+- The Nutrition Dashboard table currently shows classifications such as SAM and MAM.
+- When drilling down into an individual child profile, the classification is not visible.
+- This creates a consistency and clinical context issue.
+
+Goal
+Make sure the child profile clearly displays the same nutritional classification shown in the Nutrition Dashboard or worklist.
+
+Requirements
+
+1. Show classification in profile
+Add a visible field in the child nutrition profile for:
+- Nutrition Classification
+
+Possible values include:
+- SAM
+- MAM
+- other valid classifications used by the system
+
+2. Keep profile and dashboard consistent
+- the classification shown in the profile must match the current classification shown in the dashboard/worklist
+- do not use separate conflicting logic
+
+3. Recommended placement
+Display the classification near the top of the profile, ideally in the child summary section together with:
+- age
+- date of birth
+- barangay
+- address
+- last weight
+- last visit
+
+4. Show related monitoring status if available
+If the table also shows a related status such as:
+- Missing Check
+- At Risk
+- Under Monitoring
+
+show that in the profile as well.
+
+5. Optional enhancement
+If the system already computes the basis of classification, also show:
+- last assessment date
+- z-score or assessment basis
+- latest growth measurement used for classification
+
+6. UI behavior
+- use a clear badge/chip style similar to the table
+- make SAM and MAM easy to identify visually
+- keep the profile clean and professional
+
+7. Preserve existing functionality
+- do not break profile loading
+- do not break growth chart
+- do not break vaccine timeline
+- do not break edit/delete actions
+- only enhance the profile summary information
+
+Deliverables
+Provide:
+1. profile UI update showing classification
+2. consistent classification data binding
+3. optional monitoring status display
+4. files changed
+
+Success Criteria
+- when a child is marked as SAM or MAM in the nutrition dashboard, the same status appears in the child profile
+- users no longer lose the classification context after drilling down
+- profile remains clean and readable
