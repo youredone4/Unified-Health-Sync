@@ -163,7 +163,7 @@ export default function PrenatalDashboard() {
           onClick={() => navigate("/mother/new")}
         />
         <QuickActionCard
-          title="Mother Registry"
+          title="View Registry"
           subtitle={`${mothers.length} mothers on file`}
           icon={BookOpen}
           onClick={() => navigate("/prenatal/registry")}
