@@ -5,15 +5,21 @@ import { formatDate } from "@/lib/healthLogic";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Users, Search, Plus } from "lucide-react";
+import { Users, Search, Plus, Upload } from "lucide-react";
 import { useState, useEffect } from "react";
 import { usePagination } from "@/hooks/use-pagination";
 import TablePagination from "@/components/table-pagination";
+import SeniorImportDialog from "@/components/senior-import-dialog";
+import { useAuth, permissions } from "@/hooks/use-auth";
 
 export default function SeniorRegistry() {
   const [, navigate] = useLocation();
+  const { user } = useAuth();
   const { data: seniors = [], isLoading } = useQuery<Senior[]>({ queryKey: ['/api/seniors'] });
   const [search, setSearch] = useState('');
+  const [importOpen, setImportOpen] = useState(false);
+
+  const canImport = user ? permissions.canImportReports(user.role) : false;
 
   const filtered = seniors.filter(s =>
     `${s.firstName} ${s.lastName}`.toLowerCase().includes(search.toLowerCase()) ||
@@ -38,13 +44,23 @@ export default function SeniorRegistry() {
           </h1>
           <p className="text-muted-foreground">All registered seniors</p>
         </div>
-        <Link href="/senior/new">
-          <Button data-testid="button-add-senior">
-            <Plus className="w-4 h-4 mr-2" />
-            Add New Senior
-          </Button>
-        </Link>
+        <div className="flex gap-2">
+          {canImport && (
+            <Button variant="outline" onClick={() => setImportOpen(true)} data-testid="button-import-seniors">
+              <Upload className="w-4 h-4 mr-2" />
+              Import AMOS Log
+            </Button>
+          )}
+          <Link href="/senior/new">
+            <Button data-testid="button-add-senior">
+              <Plus className="w-4 h-4 mr-2" />
+              Add New Senior
+            </Button>
+          </Link>
+        </div>
       </div>
+
+      <SeniorImportDialog open={importOpen} onOpenChange={setImportOpen} />
 
       <div className="relative max-w-sm">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />

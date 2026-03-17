@@ -40,6 +40,7 @@ export interface IStorage {
   createSenior(senior: InsertSenior): Promise<Senior>;
   updateSenior(id: number, updates: Partial<InsertSenior>): Promise<Senior>;
   deleteSenior(id: number): Promise<boolean>;
+  bulkImportSeniors(rows: InsertSenior[], replace: boolean): Promise<number>;
 
   getInventory(): Promise<InventoryItem[]>;
   getHealthStations(): Promise<HealthStation[]>;
@@ -184,6 +185,21 @@ export class DatabaseStorage implements IStorage {
   async deleteSenior(id: number): Promise<boolean> {
     await db.delete(seniors).where(eq(seniors.id, id));
     return true;
+  }
+
+  async bulkImportSeniors(rows: InsertSenior[], replace: boolean): Promise<number> {
+    if (replace) {
+      await db.delete(seniors);
+    }
+    if (rows.length === 0) return 0;
+    const CHUNK = 100;
+    let inserted = 0;
+    for (let i = 0; i < rows.length; i += CHUNK) {
+      const chunk = rows.slice(i, i + CHUNK);
+      await db.insert(seniors).values(chunk).onConflictDoNothing();
+      inserted += chunk.length;
+    }
+    return inserted;
   }
 
   async getInventory(): Promise<InventoryItem[]> {

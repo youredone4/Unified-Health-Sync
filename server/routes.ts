@@ -177,6 +177,14 @@ export async function registerRoutes(
     res.json({ success: true });
   }));
 
+  // Senior bulk import from AMOS logs
+  app.post("/api/seniors/bulk-import", loadUserInfo, requireAuth, requireRole(UserRole.SYSTEM_ADMIN, UserRole.MHO), ar(async (req, res) => {
+    const { rows, replace } = req.body;
+    if (!Array.isArray(rows)) return res.status(400).json({ message: "rows must be an array" });
+    const count = await storage.bulkImportSeniors(rows, replace === true);
+    res.json({ imported: count });
+  }));
+
   // === SENIOR MEDICATION CLAIMS (Cross-barangay verification) ===
   app.get("/api/senior-med-claims", async (req, res) => {
     try {
