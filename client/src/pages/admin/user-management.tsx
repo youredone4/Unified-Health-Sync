@@ -625,7 +625,7 @@ export default function UserManagement() {
                 Set a temporary password for <strong>@{resetPwUser.username}</strong>. The user should change it after logging in.
               </p>
               <div className="space-y-2">
-                <Label>New Password (min 6 characters)</Label>
+                <Label>New Password (min 8 characters)</Label>
                 <Input
                   type="password"
                   placeholder="Enter new password"
@@ -656,8 +656,8 @@ export default function UserManagement() {
                 </Button>
                 <Button
                   onClick={() => {
-                    if (!resetPwValue || resetPwValue.length < 6) {
-                      toast({ title: "Password must be at least 6 characters", variant: "destructive" });
+                    if (!resetPwValue || resetPwValue.length < 8) {
+                      toast({ title: "Password must be at least 8 characters", variant: "destructive" });
                       return;
                     }
                     if (resetPwValue !== resetPwConfirm) {
