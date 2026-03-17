@@ -289,7 +289,7 @@ export async function registerRoutes(
     res.json(updated);
   }));
 
-  app.post("/api/disease-cases/bulk", requireAuth, requireRole([UserRole.SYSTEM_ADMIN, UserRole.MHO]), ar(async (req, res) => {
+  app.post("/api/disease-cases/bulk", loadUserInfo, requireAuth, requireRole(UserRole.SYSTEM_ADMIN, UserRole.MHO), ar(async (req, res) => {
     const { rows, replace = false } = req.body;
     if (!Array.isArray(rows)) {
       return res.status(400).json({ message: "rows must be an array" });

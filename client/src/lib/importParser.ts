@@ -106,13 +106,8 @@ function processSheet(
 
   const fileLabel = sheetName !== "Sheet1" ? `${filename} [${sheetName}]` : filename;
 
-  if (diseaseIdx === -1) {
-    errors.push({ file: fileLabel, row: 0, reason: `No disease column found. Headers: ${headers.join(", ")}` });
-    return { valid, errors, totalRows };
-  }
-  if (casesIdx === -1) {
-    errors.push({ file: fileLabel, row: 0, reason: `No cases column found. Headers: ${headers.join(", ")}` });
-    return { valid, errors, totalRows };
+  if (diseaseIdx === -1 || casesIdx === -1) {
+    return { valid, errors, totalRows: 0 };
   }
 
   dataRows.forEach((row, idx) => {
@@ -120,7 +115,10 @@ function processSheet(
     const r = row as unknown[];
 
     const diseaseRaw = String(r[diseaseIdx] ?? "").trim();
-    if (!diseaseRaw) return;
+    if (!diseaseRaw) {
+      errors.push({ file: fileLabel, row: rowNum, reason: "Missing disease name" });
+      return;
+    }
 
     let barangay = "";
     if (brgyIdx !== -1 && r[brgyIdx] != null && String(r[brgyIdx]).trim()) {
@@ -134,7 +132,12 @@ function processSheet(
     }
 
     const casesRaw = r[casesIdx];
-    const cases = parseFloat(String(casesRaw ?? "0").replace(/,/g, ""));
+    const casesStr = String(casesRaw ?? "").trim();
+    if (!casesStr) {
+      errors.push({ file: fileLabel, row: rowNum, reason: "Missing case count" });
+      return;
+    }
+    const cases = parseFloat(casesStr.replace(/,/g, ""));
     if (isNaN(cases) || cases < 0) {
       errors.push({ file: fileLabel, row: rowNum, reason: `Invalid case count: "${casesRaw}"` });
       return;
@@ -142,7 +145,7 @@ function processSheet(
 
     const reporting_date = dateIdx !== -1 ? formatDate(r[dateIdx]) : new Date().toISOString().split("T")[0];
 
-    valid.push({ barangay, disease_name: diseaseRaw, cases: Math.max(1, Math.round(cases)), reporting_date });
+    valid.push({ barangay, disease_name: diseaseRaw, cases: Math.round(cases), reporting_date });
   });
 
   return { valid, errors, totalRows };
