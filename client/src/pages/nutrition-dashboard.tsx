@@ -96,6 +96,13 @@ export default function NutritionDashboard() {
 
   const pagination = usePagination(filteredEnriched);
 
+  const toggleFilter = (key: FilterKey) => {
+    setActiveFilter((prev) => {
+      if (prev !== key) pagination.resetPage();
+      return prev === key ? null : key;
+    });
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -103,9 +110,6 @@ export default function NutritionDashboard() {
       </div>
     );
   }
-
-  const toggleFilter = (key: FilterKey) =>
-    setActiveFilter((prev) => (prev === key ? null : key));
 
   return (
     <div className="space-y-6">
