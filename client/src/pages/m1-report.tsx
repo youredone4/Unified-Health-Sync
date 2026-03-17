@@ -930,6 +930,12 @@ export default function M1ReportPage() {
               )}
             </div>
             <div className="flex gap-2 flex-wrap">
+              {permissions.canImportReports(user?.role) && (
+                <Button size="sm" variant="outline" onClick={() => setDiseaseImportOpen(true)} data-testid="button-import-disease">
+                  <Upload className="h-4 w-4 mr-1" />
+                  Import Disease Data
+                </Button>
+              )}
               {!existingReport && (
                 <Button
                   size="sm"
@@ -966,12 +972,6 @@ export default function M1ReportPage() {
                     <Download className="h-4 w-4 mr-1" />
                     Export PDF
                   </Button>
-                  {permissions.canImportReports(user?.role) && (
-                    <Button size="sm" variant="outline" onClick={() => setDiseaseImportOpen(true)} data-testid="button-import-disease">
-                      <Upload className="h-4 w-4 mr-1" />
-                      Import Disease Data
-                    </Button>
-                  )}
                 </>
               )}
             </div>
