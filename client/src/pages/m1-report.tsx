@@ -933,7 +933,7 @@ export default function M1ReportPage() {
               {permissions.canImportReports(user?.role) && (
                 <Button size="sm" variant="outline" onClick={() => setDiseaseImportOpen(true)} data-testid="button-import-disease">
                   <Upload className="h-4 w-4 mr-1" />
-                  Import Disease Data
+                  Import M1 Data
                 </Button>
               )}
               {!existingReport && (
