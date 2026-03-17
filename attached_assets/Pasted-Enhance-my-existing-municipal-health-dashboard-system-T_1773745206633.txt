@@ -1,0 +1,130 @@
+Enhance my existing municipal health dashboard system. The system is already working, so do not rebuild it from scratch. Apply only the following feature improvements and UI behavior updates.
+
+General Rule
+Do not redesign the whole system.
+Do not break existing working modules.
+Preserve the current layout, navigation, database connections, and backend structure unless changes are required for the features below.
+
+Requested Changes
+
+1. Remove Health Facility Map module
+- Remove the Map module named "Health Facility Map"
+- Remove its menu entry, page route, and related frontend display
+- If there are backend references only used for this module, safely remove or disable them
+- Do not affect other map-based dashboards such as the Disease Heat Index Map unless explicitly related
+
+2. Add messaging feature
+Add a user-to-user messaging feature similar to Facebook Messenger or Instagram direct chat.
+
+Requirements:
+- allow registered users to send and receive private messages
+- show conversation list
+- show chat thread per user
+- allow real-time or near-real-time message updates if possible
+- include message timestamps
+- support unread message indicators
+- support simple user search for starting a conversation
+- clean mobile-friendly chat layout if the system is responsive
+
+Minimum messaging components:
+- inbox / conversations panel
+- active chat panel
+- message input box
+- send button
+- unread badge/count
+
+If real-time sockets are not already available, implement a practical polling-based approach that works reliably in the current stack.
+
+3. Make dashboard cards clickable filters
+Apply this behavior consistently across dashboards and modules that have summary cards.
+
+Required behavior:
+- when a summary card is clicked, automatically filter the related table/list/dashboard content
+- only records matching that card’s category should be shown
+- clicking another card switches the filter
+- clicking the active card again or selecting "All" should reset the filter
+- selected card should have a visible active state
+
+Apply this to the following dashboards:
+
+A. Availability & Surplus Dashboard
+Cards:
+- Barangays with Stock-outs
+- Low Stock Barangays
+- Total Barangays
+
+Expected behavior:
+- clicking each card filters the displayed records accordingly
+
+B. DOTS Worklist Dashboard
+Cards:
+- Missed Visit
+- Due Today
+- At Risk
+- Active Patients
+
+Expected behavior:
+- clicking each card filters the worklist accordingly
+
+C. Case Worklist Dashboard
+Cards:
+- New Cases
+- Monitoring
+- Active Total
+
+Expected behavior:
+- clicking each card filters the case list accordingly
+
+D. HTN Meds Pickup Dashboard
+Cards:
+- Overdue
+- Due Soon
+- Meds Ready
+- Total Seniors
+
+Expected behavior:
+- clicking each card filters the displayed records accordingly
+
+E. Health Calendar card view
+- make calendar summary cards clickable
+- clicking a card filters the visible calendar entries or related event list
+
+F. Apply this pattern globally
+Apply the same clickable-card filtering behavior to all dashboards and modules that contain summary/stat cards where filtering makes sense.
+
+Implementation guidance:
+- reuse existing filtered state logic where possible
+- avoid duplicate filtering code
+- create a reusable card-filter mechanism/component if the project structure supports it
+- preserve existing data loading behavior
+
+4. Enhance Prenatal Dashboard
+Improve the Prenatal Dashboard so it is similar in quality, structure, and usability to the Child Health Dashboard.
+
+Requirements:
+- align layout and visual structure with the Child Health Dashboard
+- use similar summary cards, filtering flow, and content organization
+- improve readability and consistency
+- keep prenatal-specific data and functions intact
+- do not blindly duplicate content; adapt the design pattern appropriately for prenatal care data
+
+Expected result:
+- Prenatal Dashboard should feel consistent with Child Health Dashboard in design and user experience
+
+Technical Expectations
+- inspect the current project structure first before editing
+- identify shared dashboard card components and reuse them
+- avoid full rewrites of stable modules
+- preserve existing APIs and database schema unless a change is necessary for messaging
+- for messaging, add only the minimum backend and frontend changes needed for a working private chat system
+
+Deliverables
+Provide:
+1. exact files/components/modules changed
+2. reusable logic for clickable dashboard card filters
+3. messaging feature implementation
+4. Prenatal Dashboard enhancement aligned with Child Health Dashboard
+5. safe removal of Health Facility Map module without affecting unrelated features
+
+Important
+This is an enhancement of an existing working system. Do not rebuild unrelated modules. Make focused, safe improvements only.
