@@ -4,7 +4,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import type { PaginationResult } from "@/hooks/use-pagination";
 
 interface TablePaginationProps {
-  pagination: PaginationResult<any>;
+  pagination: PaginationResult<unknown>;
   pageSizeOptions?: number[];
 }
 
@@ -56,13 +56,14 @@ export default function TablePagination({
         <Button
           variant="outline"
           size="sm"
-          className="h-7 w-7 p-0"
+          className="h-7 gap-1 px-2 text-xs"
           onClick={prevPage}
           disabled={!canPrev}
           data-testid="button-prev-page"
           aria-label="Previous page"
         >
           <ChevronLeft className="w-3.5 h-3.5" />
+          <span className="hidden sm:inline">Previous</span>
         </Button>
 
         {pageNumbers.map((p, i) =>
@@ -85,12 +86,13 @@ export default function TablePagination({
         <Button
           variant="outline"
           size="sm"
-          className="h-7 w-7 p-0"
+          className="h-7 gap-1 px-2 text-xs"
           onClick={nextPage}
           disabled={!canNext}
           data-testid="button-next-page"
           aria-label="Next page"
         >
+          <span className="hidden sm:inline">Next</span>
           <ChevronRight className="w-3.5 h-3.5" />
         </Button>
       </div>
