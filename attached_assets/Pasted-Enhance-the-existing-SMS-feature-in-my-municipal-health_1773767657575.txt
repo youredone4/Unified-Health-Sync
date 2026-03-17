@@ -1,0 +1,116 @@
+Enhance the existing SMS feature in my municipal health dashboard so that sending SMS works more intelligently and uses patient profile data properly.
+
+Context
+- The system already has a Send SMS feature.
+- Do NOT rebuild the messaging or notification system from scratch.
+- Do NOT break existing SMS-related functionality that is already working.
+- This is an enhancement to improve how recipient phone numbers are handled.
+
+Primary Goal
+Make the SMS feature automatically use the phone number stored in the patient’s profile whenever available, including senior citizens, and only ask for manual input when no phone number exists in the record.
+
+Core Requirements
+
+1. Use profile phone number first
+When sending SMS from any module related to a patient record, the system should first check the patient profile for an existing phone number.
+
+This applies to:
+- mothers
+- children (if applicable through guardian/contact number)
+- seniors
+- other patient-related modules that already use SMS reminders or notifications
+
+If a phone number exists in the record:
+- automatically populate the recipient number field
+- use that number by default when sending SMS
+
+2. Allow manual input only if no phone number exists
+If the patient profile does not have a phone number:
+- allow the user to manually enter a phone number before sending
+- clearly indicate that no saved number exists in the profile
+- allow the user to continue sending after entering a valid number
+
+3. Pull details from the patient profile
+The SMS form should use existing profile details when available.
+
+Auto-fill or display relevant details such as:
+- patient name
+- barangay
+- phone number
+- module/context (e.g. prenatal reminder, HTN meds pickup, follow-up, vaccination reminder)
+
+For seniors, make sure the number comes from the senior profile record.
+
+4. Support profile-based sending across modules
+Apply this behavior consistently wherever Send SMS is triggered, including modules such as:
+- Prenatal
+- Child Health
+- Senior Care
+- HTN Meds Pickup
+- DOTS / case follow-ups
+- other modules where patient reminders are sent
+
+5. Validation
+Before sending:
+- validate phone number format
+- prevent sending if no phone number exists and no manual number is entered
+- show clear error if entered number is invalid
+
+6. Optional save/update behavior (recommended)
+If a manual number is entered because the profile has no number:
+- optionally ask whether to save this phone number back to the patient profile
+OR
+- provide a checkbox like:
+  [ ] Save this number to patient profile
+
+Do this only if it fits the current system flow safely.
+
+7. Keep role and access logic intact
+- preserve current role-based permissions for who can send SMS
+- do not expose SMS actions to unauthorized roles if such restrictions already exist
+
+8. Maintain current SMS workflow
+- preserve existing SMS gateway/service integration
+- preserve existing reminder templates if already implemented
+- only improve recipient number sourcing and fallback behavior
+
+9. UI/UX behavior
+In the SMS modal or form:
+- show recipient name
+- show detected phone number from profile if available
+- if no number is found, show a clear message like:
+  "No saved phone number found in this profile. Please enter a mobile number to continue."
+- keep the form simple and clean
+
+10. Technical expectations
+Before editing:
+- inspect how Send SMS is currently triggered
+- inspect where patient profile data is stored
+- inspect how mothers, children, and seniors store contact details
+- reuse existing profile fields and role logic
+- do not duplicate profile lookup logic unnecessarily
+
+11. Deliverables
+Provide:
+1. updated SMS modal/form behavior
+2. automatic profile-based phone number retrieval
+3. manual fallback input when no number exists
+4. phone validation logic
+5. optional save-to-profile behavior if implemented
+6. list of modules/pages where this enhancement was applied
+7. files changed
+
+Important Constraints
+- Do NOT rebuild the whole SMS system
+- Do NOT break current working SMS integration
+- Do NOT hardcode numbers
+- Do NOT create duplicate patient contact logic if existing profile logic already exists
+- Make sure seniors are included in profile-based SMS handling
+
+Success Criteria
+- if a patient profile has a phone number, SMS uses it automatically
+- if no phone number exists, user can manually enter one
+- patient details are pulled from the profile
+- senior records are included
+- SMS sending flow is smoother and more reliable
+- existing functionality remains intact
