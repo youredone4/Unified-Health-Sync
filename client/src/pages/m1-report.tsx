@@ -85,7 +85,7 @@ export default function M1ReportPage() {
   const [importErrors, setImportErrors] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const importPagination = usePagination(importPreview, 20);
+  const importPagination = usePagination(importPreview);
   useEffect(() => { importPagination.resetPage(); }, [importPreview]);
 
   const { data: templates = [], isLoading: templatesLoading } = useQuery<M1TemplateVersion[]>({
@@ -1175,7 +1175,7 @@ export default function M1ReportPage() {
                       </tbody>
                     </table>
                   </div>
-                  <TablePagination pagination={importPagination} pageSizeOptions={[10, 20, 50]} />
+                  <TablePagination pagination={importPagination} pageSizeOptions={[10, 25, 50]} />
                 </div>
               )}
             </div>
