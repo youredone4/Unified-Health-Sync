@@ -8,9 +8,10 @@ interface KpiCardProps {
   variant?: 'default' | 'danger' | 'warning' | 'success';
   onClick?: () => void;
   active?: boolean;
+  'data-testid'?: string;
 }
 
-export default function KpiCard({ title, value, icon: Icon, variant = 'default', onClick, active }: KpiCardProps) {
+export default function KpiCard({ title, value, icon: Icon, variant = 'default', onClick, active, 'data-testid': testId }: KpiCardProps) {
   const variantClasses = {
     default: 'border-border',
     danger: 'border-red-500/30 bg-red-500/5',
@@ -33,6 +34,7 @@ export default function KpiCard({ title, value, icon: Icon, variant = 'default',
   };
 
   const isClickable = !!onClick;
+  const derivedTestId = testId ?? `kpi-${title.toLowerCase().replace(/\s/g, '-')}`;
 
   return (
     <Card
@@ -41,7 +43,7 @@ export default function KpiCard({ title, value, icon: Icon, variant = 'default',
       role={isClickable ? 'button' : undefined}
       tabIndex={isClickable ? 0 : undefined}
       onKeyDown={isClickable ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick?.(); } } : undefined}
-      data-testid={`kpi-${title.toLowerCase().replace(/\s/g, '-')}`}
+      data-testid={derivedTestId}
     >
       <CardContent className="p-4">
         <div className="flex items-center justify-between gap-2">

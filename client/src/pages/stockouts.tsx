@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import type { InventoryItem } from "@shared/schema";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { AlertTriangle, Package, X } from "lucide-react";
+import { AlertTriangle, Package, MapPin, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import KpiCard from "@/components/kpi-card";
 
@@ -14,7 +14,7 @@ interface StockIssue {
   status: 'out' | 'low';
 }
 
-type FilterKey = 'out' | 'low' | null;
+type FilterKey = 'out' | 'low' | 'barangay' | null;
 
 export default function StockoutsPage() {
   const { data: inventory = [] } = useQuery<InventoryItem[]>({ queryKey: ['/api/inventory'] });
@@ -50,12 +50,31 @@ export default function StockoutsPage() {
   const outOfStock = issues.filter(i => i.status === 'out');
   const lowStock = issues.filter(i => i.status === 'low');
 
+  const affectedBarangays = new Set(issues.map(i => i.barangay));
+  const affectedBarangayList = Array.from(affectedBarangays).sort();
+
   const handleCardClick = (filter: FilterKey) => {
     setActiveFilter(prev => prev === filter ? null : filter);
   };
 
+  const getFilteredIssues = () => {
+    if (activeFilter === 'out') return outOfStock;
+    if (activeFilter === 'low') return lowStock;
+    if (activeFilter === 'barangay') return issues;
+    return issues;
+  };
+
   const showOut = !activeFilter || activeFilter === 'out';
   const showLow = !activeFilter || activeFilter === 'low';
+  const showBarangay = activeFilter === 'barangay';
+
+  const filterLabel = activeFilter === 'out'
+    ? `Stock-outs (${outOfStock.length})`
+    : activeFilter === 'low'
+    ? `Low Stock (${lowStock.length})`
+    : activeFilter === 'barangay'
+    ? `Affected Barangays (${affectedBarangays.size})`
+    : null;
 
   return (
     <div className="space-y-6">
@@ -77,7 +96,7 @@ export default function StockoutsPage() {
           active={activeFilter === 'out'}
         />
         <KpiCard
-          title="Low Stock Items"
+          title="Low Stock"
           value={lowStock.length}
           icon={Package}
           variant="warning"
@@ -85,18 +104,18 @@ export default function StockoutsPage() {
           active={activeFilter === 'low'}
         />
         <KpiCard
-          title="Total Issues"
-          value={issues.length}
-          icon={Package}
+          title="Total Barangays"
+          value={affectedBarangays.size}
+          icon={MapPin}
+          onClick={() => handleCardClick('barangay')}
+          active={activeFilter === 'barangay'}
         />
       </div>
 
-      {activeFilter && (
+      {filterLabel && (
         <div className="flex items-center gap-2">
           <p className="text-sm text-muted-foreground">
-            Showing: <span className="font-semibold text-foreground">
-              {activeFilter === 'out' ? `Stock-outs (${outOfStock.length})` : `Low Stock (${lowStock.length})`}
-            </span>
+            Showing: <span className="font-semibold text-foreground">{filterLabel}</span>
           </p>
           <Button
             variant="ghost"
@@ -109,6 +128,39 @@ export default function StockoutsPage() {
             Show all
           </Button>
         </div>
+      )}
+
+      {showBarangay && (
+        <Card className="border-border">
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <MapPin className="w-4 h-4" />
+              Affected Barangays ({affectedBarangays.size})
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {affectedBarangayList.length === 0 ? (
+              <p className="text-muted-foreground text-center py-4">No affected barangays</p>
+            ) : (
+              <div className="space-y-2">
+                {affectedBarangayList.map(barangay => {
+                  const barangayIssues = issues.filter(i => i.barangay === barangay);
+                  const outCount = barangayIssues.filter(i => i.status === 'out').length;
+                  const lowCount = barangayIssues.filter(i => i.status === 'low').length;
+                  return (
+                    <div key={barangay} className="flex items-center justify-between p-3 rounded-md bg-muted/30 border border-border" data-testid={`barangay-row-${barangay}`}>
+                      <p className="font-medium">{barangay}</p>
+                      <div className="flex gap-2">
+                        {outCount > 0 && <Badge variant="outline" className="bg-red-500/20 text-red-400 border-red-500/30">{outCount} out</Badge>}
+                        {lowCount > 0 && <Badge variant="outline" className="bg-orange-500/20 text-orange-400 border-orange-500/30">{lowCount} low</Badge>}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
       )}
 
       {showOut && (
