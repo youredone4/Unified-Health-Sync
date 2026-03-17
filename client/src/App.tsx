@@ -1,4 +1,4 @@
-import { Switch, Route } from "wouter";
+import { Switch, Route, useLocation } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -12,7 +12,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useState } from "react";
 import { ThemeProvider } from "@/contexts/theme-context";
-import { useAuth, UserRole } from "@/hooks/use-auth";
+import { useAuth, permissions } from "@/hooks/use-auth";
 
 import LandingPage from "@/pages/landing";
 import Dashboard from "@/pages/dashboard";
@@ -89,10 +89,12 @@ function AdminRoute({ component: Component, permission }: { component: React.Com
   return <Component />;
 }
 
-// Generic role-based route guard
-function RoleRoute({ component: Component, allowedRoles }: { component: React.ComponentType; allowedRoles: string[] }) {
+// Generic role-based route guard — derives access from the central ROUTE_PERMISSIONS
+// map in use-auth.ts via permissions.canAccessRoute(). No allowedRoles needed here.
+function RoleRoute({ component: Component }: { component: React.ComponentType }) {
   const { role } = useAuth();
-  if (!role || !allowedRoles.includes(role)) return <AccessDenied />;
+  const [path] = useLocation();
+  if (!permissions.canAccessRoute(role, path)) return <AccessDenied />;
   return <Component />;
 }
 
@@ -123,28 +125,30 @@ function Router() {
       <Route path="/senior/:id/edit" component={SeniorForm} />
       <Route path="/senior/:id" component={SeniorProfile} />
       <Route path="/inventory">
-        <RoleRoute component={InventoryPage} allowedRoles={[UserRole.SYSTEM_ADMIN, UserRole.MHO, UserRole.SHA]} />
+        <RoleRoute component={InventoryPage} />
       </Route>
       <Route path="/inventory/new">
-        <RoleRoute component={InventoryForm} allowedRoles={[UserRole.SYSTEM_ADMIN, UserRole.MHO, UserRole.SHA]} />
+        <RoleRoute component={InventoryForm} />
       </Route>
       <Route path="/inventory/:id/edit">
-        <RoleRoute component={InventoryForm} allowedRoles={[UserRole.SYSTEM_ADMIN, UserRole.MHO, UserRole.SHA]} />
+        <RoleRoute component={InventoryForm} />
       </Route>
       <Route path="/inventory/stockouts">
-        <RoleRoute component={StockoutsPage} allowedRoles={[UserRole.SYSTEM_ADMIN, UserRole.MHO, UserRole.SHA]} />
+        <RoleRoute component={StockoutsPage} />
       </Route>
-      <Route path="/reports" component={ReportsPage} />
+      <Route path="/reports">
+        <RoleRoute component={ReportsPage} />
+      </Route>
       <Route path="/reports/ai">
-        <RoleRoute component={AIReporting} allowedRoles={[UserRole.SYSTEM_ADMIN, UserRole.MHO, UserRole.SHA]} />
+        <RoleRoute component={AIReporting} />
       </Route>
       <Route path="/reports/m1">
-        <RoleRoute component={M1ReportPage} allowedRoles={[UserRole.SYSTEM_ADMIN, UserRole.MHO, UserRole.SHA]} />
+        <RoleRoute component={M1ReportPage} />
       </Route>
       <Route path="/disease" component={DiseaseWorklist} />
       <Route path="/disease/registry" component={DiseaseRegistry} />
       <Route path="/disease/map">
-        <RoleRoute component={DiseaseMap} allowedRoles={[UserRole.SYSTEM_ADMIN, UserRole.MHO, UserRole.SHA]} />
+        <RoleRoute component={DiseaseMap} />
       </Route>
       <Route path="/disease/new" component={DiseaseForm} />
       <Route path="/disease/:id/edit" component={DiseaseForm} />
@@ -156,13 +160,13 @@ function Router() {
       <Route path="/tb/:id" component={TBProfile} />
       <Route path="/messages" component={MessagesPage} />
       <Route path="/settings">
-        <RoleRoute component={SettingsPage} allowedRoles={[UserRole.SYSTEM_ADMIN, UserRole.MHO, UserRole.SHA]} />
+        <RoleRoute component={SettingsPage} />
       </Route>
       <Route path="/patient-checkup">
-        <RoleRoute component={PatientCheckupPage} allowedRoles={[UserRole.SYSTEM_ADMIN, UserRole.MHO]} />
+        <RoleRoute component={PatientCheckupPage} />
       </Route>
       <Route path="/hotspots">
-        <RoleRoute component={Hotspots} allowedRoles={[UserRole.SYSTEM_ADMIN, UserRole.MHO, UserRole.SHA]} />
+        <RoleRoute component={Hotspots} />
       </Route>
       <Route path="/admin/users">
         <AdminRoute component={UserManagement} permission="users" />

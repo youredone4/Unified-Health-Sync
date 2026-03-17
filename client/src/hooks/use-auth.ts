@@ -53,7 +53,25 @@ export const UserRole = {
 
 export type UserRoleType = typeof UserRole[keyof typeof UserRole];
 
-// Permission helpers — single source of truth for all role-based access
+// ─── Central route-permission map ────────────────────────────────────────────
+// Single source of truth used by BOTH the sidebar (item visibility) and route
+// guards (RoleRoute). Routes not listed here are accessible to all authenticated
+// users. SYSTEM_ADMIN always has full access (short-circuited below).
+export const ROUTE_PERMISSIONS: Record<string, readonly string[]> = {
+  "/patient-checkup": [UserRole.SYSTEM_ADMIN, UserRole.MHO],
+  "/settings": [UserRole.SYSTEM_ADMIN, UserRole.MHO, UserRole.SHA],
+  "/hotspots": [UserRole.SYSTEM_ADMIN, UserRole.MHO, UserRole.SHA],
+  "/inventory": [UserRole.SYSTEM_ADMIN, UserRole.MHO, UserRole.SHA],
+  "/inventory/stockouts": [UserRole.SYSTEM_ADMIN, UserRole.MHO, UserRole.SHA],
+  "/reports": [UserRole.SYSTEM_ADMIN, UserRole.MHO, UserRole.SHA],
+  "/reports/ai": [UserRole.SYSTEM_ADMIN, UserRole.MHO, UserRole.SHA],
+  "/reports/m1": [UserRole.SYSTEM_ADMIN, UserRole.MHO, UserRole.SHA],
+  "/disease/map": [UserRole.SYSTEM_ADMIN, UserRole.MHO, UserRole.SHA],
+  "/admin/users": [UserRole.SYSTEM_ADMIN],
+  "/admin/audit": [UserRole.SYSTEM_ADMIN],
+};
+
+// Permission helpers — all role logic lives here
 export const permissions = {
   canManageUsers: (role?: string) => role === UserRole.SYSTEM_ADMIN,
   canAccessPatientCheckup: (role?: string) => role === UserRole.SYSTEM_ADMIN || role === UserRole.MHO,
@@ -71,30 +89,18 @@ export const permissions = {
   isSHA: (role?: string) => role === UserRole.SHA,
   isTL: (role?: string) => role === UserRole.TL,
 
-  // Route-level access check used by RoleRoute guard components
+  // Derived from ROUTE_PERMISSIONS — used by both sidebar item filter and RoleRoute guard
   canAccessRoute: (role: string | undefined, path: string): boolean => {
     if (!role) return false;
-    // Full admin access
+    // SYSTEM_ADMIN has full access to every route
     if (role === UserRole.SYSTEM_ADMIN) return true;
-    // Routes restricted to ADMIN + MHO only
-    const adminMhoOnly = ["/patient-checkup"];
-    if (adminMhoOnly.some(r => path === r || path.startsWith(r + "/"))) {
-      return role === UserRole.MHO;
-    }
-    // Routes restricted to management roles (ADMIN + MHO + SHA), not TL
-    const mgmtOnly = [
-      "/hotspots",
-      "/inventory",
-      "/reports",
-      "/disease/map",
-      "/settings",
-      "/admin",
-    ];
-    if (mgmtOnly.some(r => path === r || path.startsWith(r + "/"))) {
-      return role === UserRole.MHO || role === UserRole.SHA;
-    }
-    // Everything else is accessible to all authenticated roles
-    return true;
+    // Find the most-specific matching permission entry (longest prefix wins)
+    const entry = Object.entries(ROUTE_PERMISSIONS)
+      .filter(([pattern]) => path === pattern || path.startsWith(pattern + "/"))
+      .sort((a, b) => b[0].length - a[0].length)[0];
+    // No entry = unrestricted route, accessible to all authenticated roles
+    if (!entry) return true;
+    return (entry[1] as string[]).includes(role);
   },
 };
 

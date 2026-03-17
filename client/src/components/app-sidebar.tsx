@@ -37,22 +37,13 @@ import {
   MessageCircle,
 } from "lucide-react";
 import { useTheme } from "@/contexts/theme-context";
-import { useAuth, UserRole } from "@/hooks/use-auth";
-
-// Role shorthand arrays for the nav config
-const ALL = [UserRole.SYSTEM_ADMIN, UserRole.MHO, UserRole.SHA, UserRole.TL] as const;
-const MGMT = [UserRole.SYSTEM_ADMIN, UserRole.MHO, UserRole.SHA] as const;
-const ADMIN_MHO = [UserRole.SYSTEM_ADMIN, UserRole.MHO] as const;
-const ADMIN_ONLY = [UserRole.SYSTEM_ADMIN] as const;
-
-type Role = (typeof ALL)[number];
+import { useAuth, permissions } from "@/hooks/use-auth";
 
 interface NavItem {
   title: string;
   url: string;
   icon: React.ElementType;
-  roles: readonly Role[];
-  isBadged?: boolean; // special flag — sidebar renders unread badge for Messages
+  isBadged?: boolean;
 }
 
 interface NavGroup {
@@ -60,90 +51,92 @@ interface NavGroup {
   items: NavItem[];
 }
 
-// Central role-to-menu configuration — single source of truth
+// Navigation config — roles are NOT listed here.
+// Visibility is derived from ROUTE_PERMISSIONS in use-auth.ts via permissions.canAccessRoute(),
+// keeping sidebar display and route guards in sync from a single source of truth.
 const NAV_GROUPS: NavGroup[] = [
   {
     label: "Overview",
     items: [
-      { title: "Municipal Dashboard", url: "/", icon: LayoutDashboard, roles: ALL },
-      { title: "Hotspots & Analytics", url: "/hotspots", icon: TrendingUp, roles: MGMT },
-      { title: "Calendar", url: "/calendar", icon: Calendar, roles: ALL },
+      { title: "Municipal Dashboard", url: "/", icon: LayoutDashboard },
+      { title: "Hotspots & Analytics", url: "/hotspots", icon: TrendingUp },
+      { title: "Calendar", url: "/calendar", icon: Calendar },
     ],
   },
   {
     label: "Maternal and Child Care",
     items: [
-      { title: "TT Reminders", url: "/prenatal", icon: Heart, roles: ALL },
-      { title: "Prenatal Dashboard", url: "/prenatal/dashboard", icon: Activity, roles: ALL },
-      { title: "Mother Registry", url: "/prenatal/registry", icon: Users, roles: ALL },
-      { title: "Vaccination Schedule", url: "/child", icon: Baby, roles: ALL },
-      { title: "Child Dashboard", url: "/child/dashboard", icon: Activity, roles: ALL },
-      { title: "Child Registry", url: "/child/registry", icon: Users, roles: ALL },
+      { title: "TT Reminders", url: "/prenatal", icon: Heart },
+      { title: "Prenatal Dashboard", url: "/prenatal/dashboard", icon: Activity },
+      { title: "Mother Registry", url: "/prenatal/registry", icon: Users },
+      { title: "Vaccination Schedule", url: "/child", icon: Baby },
+      { title: "Child Dashboard", url: "/child/dashboard", icon: Activity },
+      { title: "Child Registry", url: "/child/registry", icon: Users },
     ],
   },
   {
     label: "Community Nutrition",
     items: [
-      { title: "Growth Monitoring", url: "/nutrition/growth", icon: TrendingUp, roles: ALL },
-      { title: "Nutrition Dashboard", url: "/nutrition/dashboard", icon: Activity, roles: ALL },
-      { title: "Underweight Follow-ups", url: "/nutrition", icon: Scale, roles: ALL },
+      { title: "Growth Monitoring", url: "/nutrition/growth", icon: TrendingUp },
+      { title: "Nutrition Dashboard", url: "/nutrition/dashboard", icon: Activity },
+      { title: "Underweight Follow-ups", url: "/nutrition", icon: Scale },
     ],
   },
   {
     label: "Senior Care",
     items: [
-      { title: "HTN Meds Pickup", url: "/senior", icon: Pill, roles: ALL },
-      { title: "Senior Dashboard", url: "/senior/dashboard", icon: Activity, roles: ALL },
-      { title: "Senior Registry", url: "/senior/registry", icon: UserCircle, roles: ALL },
+      { title: "HTN Meds Pickup", url: "/senior", icon: Pill },
+      { title: "Senior Dashboard", url: "/senior/dashboard", icon: Activity },
+      { title: "Senior Registry", url: "/senior/registry", icon: UserCircle },
     ],
   },
   {
     label: "Disease Surveillance",
     items: [
-      { title: "Case Worklist", url: "/disease", icon: Siren, roles: ALL },
-      { title: "Case Registry", url: "/disease/registry", icon: ClipboardList, roles: ALL },
-      { title: "Outbreak Map", url: "/disease/map", icon: MapPin, roles: MGMT },
+      { title: "Case Worklist", url: "/disease", icon: Siren },
+      { title: "Case Registry", url: "/disease/registry", icon: ClipboardList },
+      { title: "Outbreak Map", url: "/disease/map", icon: MapPin },
     ],
   },
   {
     label: "TB DOTS",
     items: [
-      { title: "DOTS Worklist", url: "/tb", icon: Pill, roles: ALL },
-      { title: "TB Registry", url: "/tb/registry", icon: ClipboardList, roles: ALL },
+      { title: "DOTS Worklist", url: "/tb", icon: Pill },
+      { title: "TB Registry", url: "/tb/registry", icon: ClipboardList },
     ],
   },
   {
     label: "Inventory and Supply",
     items: [
-      { title: "Availability & Surplus", url: "/inventory", icon: Package, roles: MGMT },
-      { title: "Stock-outs & Low Stock", url: "/inventory/stockouts", icon: AlertTriangle, roles: MGMT },
+      { title: "Availability & Surplus", url: "/inventory", icon: Package },
+      { title: "Stock-outs & Low Stock", url: "/inventory/stockouts", icon: AlertTriangle },
     ],
   },
   {
     label: "Reports and Analytics",
     items: [
-      { title: "M1 Report", url: "/reports/m1", icon: ClipboardList, roles: MGMT },
-      { title: "Health Analytics", url: "/reports/ai", icon: Bot, roles: MGMT },
+      { title: "M1 Report", url: "/reports/m1", icon: ClipboardList },
+      { title: "Health Analytics", url: "/reports/ai", icon: Bot },
     ],
   },
   {
     label: "Communication",
     items: [
-      { title: "Messages", url: "/messages", icon: MessageCircle, roles: ALL, isBadged: true },
+      { title: "Messages", url: "/messages", icon: MessageCircle, isBadged: true },
     ],
   },
   {
     label: "Clinical Services",
     items: [
-      { title: "Patient Check-up", url: "/patient-checkup", icon: ClipboardPlus, roles: ADMIN_MHO },
+      { title: "Patient Check-up", url: "/patient-checkup", icon: ClipboardPlus },
     ],
   },
   {
     label: "Administration",
     items: [
-      { title: "User Management", url: "/admin/users", icon: Users, roles: ADMIN_ONLY },
-      { title: "Audit Logs", url: "/admin/audit", icon: Shield, roles: ADMIN_ONLY },
-      { title: "Settings", url: "/settings", icon: Settings, roles: MGMT },
+      { title: "User Management", url: "/admin/users", icon: Users },
+      { title: "Audit Logs", url: "/admin/audit", icon: Shield },
+      { title: "Settings", url: "/settings", icon: Settings },
     ],
   },
 ];
@@ -165,12 +158,11 @@ export function AppSidebar() {
   const logoUrl = settings?.logoUrl;
   const showLogo = logoUrl && !logoError;
 
-  // Filter items to only those the current user's role can see
+  // Filter items and groups using the centralized ROUTE_PERMISSIONS via canAccessRoute.
+  // This is the same check the RoleRoute guard uses — one source of truth.
   const visibleGroups = NAV_GROUPS.map((group) => ({
     ...group,
-    items: group.items.filter((item) =>
-      role ? (item.roles as readonly string[]).includes(role) : false
-    ),
+    items: group.items.filter((item) => permissions.canAccessRoute(role, item.url)),
   })).filter((group) => group.items.length > 0);
 
   return (
