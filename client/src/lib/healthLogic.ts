@@ -218,15 +218,64 @@ export function getAgeInMonths(dob: string): number {
   return Math.floor(days / 30);
 }
 
-export function isUnderweightRisk(child: Child): boolean {
+// WHO 2006 Child Growth Standards — Weight-for-Age reference cutoffs (kg)
+// Indexed by age in months (0–60). Source: WHO MGRS, published LMS tables.
+const WHO_WFA = {
+  boys: {
+    sd3neg: [2.1,2.9,3.8,4.4,4.8,5.3,5.7,6.0,6.3,6.6,6.8,7.1,7.3,7.5,7.7,7.9,8.1,8.2,8.4,8.6,8.7,8.9,9.0,9.2,9.3,9.5,9.6,9.8,9.9,10.1,10.2,10.4,10.5,10.7,10.8,10.9,11.1,11.2,11.3,11.5,11.6,11.7,11.9,12.0,12.1,12.3,12.4,12.5,12.7,12.8,12.9,13.1,13.2,13.3,13.5,13.6,13.7,13.9,14.0,14.1,14.3],
+    sd2neg: [2.5,3.4,4.3,5.0,5.6,6.0,6.4,6.8,7.1,7.4,7.7,8.0,8.2,8.4,8.6,8.8,9.1,9.2,9.4,9.6,9.7,9.9,10.1,10.2,10.4,10.6,10.7,10.9,11.1,11.2,11.4,11.6,11.7,11.9,12.0,12.2,12.3,12.5,12.6,12.8,12.9,13.1,13.2,13.4,13.5,13.7,13.8,14.0,14.1,14.3,14.4,14.6,14.7,14.9,15.0,15.2,15.3,15.5,15.6,15.8,15.9],
+  },
+  girls: {
+    sd3neg: [2.0,2.7,3.4,4.0,4.4,4.8,5.1,5.4,5.6,5.8,6.1,6.3,6.5,6.7,6.9,7.0,7.2,7.4,7.5,7.7,7.8,8.0,8.1,8.3,8.4,8.6,8.7,8.9,9.0,9.2,9.3,9.5,9.6,9.7,9.9,10.0,10.2,10.3,10.4,10.6,10.7,10.9,11.0,11.1,11.3,11.4,11.5,11.7,11.8,12.0,12.1,12.2,12.4,12.5,12.6,12.8,12.9,13.0,13.2,13.3,13.4],
+    sd2neg: [2.4,3.2,3.9,4.5,5.0,5.4,5.7,6.0,6.3,6.5,6.8,7.0,7.2,7.4,7.6,7.8,8.0,8.2,8.4,8.6,8.7,8.9,9.1,9.3,9.4,9.6,9.8,10.0,10.1,10.3,10.5,10.7,10.8,11.0,11.1,11.3,11.5,11.6,11.8,12.0,12.1,12.3,12.5,12.6,12.8,13.0,13.1,13.3,13.5,13.6,13.8,14.0,14.1,14.3,14.5,14.6,14.8,15.0,15.1,15.3,15.5],
+  },
+};
+
+export type ZScoreCategory = 'sam' | 'mam' | 'normal';
+
+export interface WeightZScoreResult {
+  category: ZScoreCategory;
+  zScore: number;
+}
+
+/**
+ * Classifies a child's nutritional status using WHO 2006 Weight-for-Age Z-score.
+ * Returns null if insufficient data (no growth records, unknown age, or age > 60 months).
+ * - SAM: Z < -3 (Severe Acute Malnutrition)
+ * - MAM: -3 ≤ Z < -2 (Moderate Acute Malnutrition)
+ * - Normal: Z ≥ -2
+ */
+export function getWeightZScore(child: Child): WeightZScoreResult | null {
   const growth = child.growth || [];
-  if (growth.length === 0) return false;
-  
-  const lastWeight = growth[growth.length - 1];
+  if (growth.length === 0) return null;
+
+  const lastEntry = growth[growth.length - 1];
+  const weightKg = lastEntry.weightKg;
   const ageMonths = getAgeInMonths(child.dob);
-  
-  const expectedWeight = 3 + (ageMonths * 0.5);
-  return lastWeight.weightKg < expectedWeight * 0.8;
+
+  if (ageMonths < 0 || ageMonths > 60) return null;
+
+  const sex = child.sex?.toLowerCase();
+  const table = sex === 'female' ? WHO_WFA.girls : WHO_WFA.boys;
+  const idx = Math.min(Math.round(ageMonths), 60);
+  const sd3 = table.sd3neg[idx];
+  const sd2 = table.sd2neg[idx];
+
+  if (weightKg < sd3) {
+    const approxZ = -3 - Math.max(0, (sd3 - weightKg) / Math.max(sd3 * 0.1, 0.1));
+    return { category: 'sam', zScore: Math.round(approxZ * 10) / 10 };
+  }
+  if (weightKg < sd2) {
+    const approxZ = -3 + ((weightKg - sd3) / (sd2 - sd3));
+    return { category: 'mam', zScore: Math.round(approxZ * 10) / 10 };
+  }
+  const approxZ = -2 + ((weightKg - sd2) / Math.max(sd2 * 0.15, 0.5));
+  return { category: 'normal', zScore: Math.round(Math.min(approxZ, 3) * 10) / 10 };
+}
+
+export function isUnderweightRisk(child: Child): boolean {
+  const result = getWeightZScore(child);
+  return result !== null && (result.category === 'sam' || result.category === 'mam');
 }
 
 export function hasMissingGrowthCheck(child: Child): boolean {

@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import type { Child } from "@shared/schema";
-import { isUnderweightRisk, hasMissingGrowthCheck, formatDate, getAgeInMonths } from "@/lib/healthLogic";
+import { isUnderweightRisk, hasMissingGrowthCheck, getWeightZScore, formatDate, getAgeInMonths } from "@/lib/healthLogic";
 import KpiCard from "@/components/kpi-card";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -90,7 +90,7 @@ export default function NutritionWorklist() {
                 {pagination.pagedItems.map(c => {
                   const growth = c.growth || [];
                   const lastGrowth = growth[growth.length - 1];
-                  const isUW = isUnderweightRisk(c);
+                  const zResult = getWeightZScore(c);
                   const isMG = hasMissingGrowthCheck(c);
 
                   return (
@@ -107,8 +107,9 @@ export default function NutritionWorklist() {
                       <td className="py-3 px-3">{lastGrowth ? formatDate(lastGrowth.date) : '-'}</td>
                       <td className="py-3 px-3">
                         <div className="flex gap-1 flex-wrap">
-                          {isUW && <Badge variant="outline" className="bg-red-500/20 text-red-400 border-red-500/30">Underweight Risk</Badge>}
-                          {isMG && <Badge variant="outline" className="bg-orange-500/20 text-orange-400 border-orange-500/30">Missing Check</Badge>}
+                          {zResult?.category === 'sam' && <Badge variant="outline" className="bg-red-500/20 text-red-400 border-red-500/30">SAM</Badge>}
+                          {zResult?.category === 'mam' && <Badge variant="outline" className="bg-orange-500/20 text-orange-400 border-orange-500/30">MAM</Badge>}
+                          {isMG && <Badge variant="outline" className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30">Missing Check</Badge>}
                         </div>
                       </td>
                     </tr>
@@ -118,9 +119,6 @@ export default function NutritionWorklist() {
             </table>
           </div>
           <TablePagination pagination={pagination} />
-          <p className="text-xs text-muted-foreground mt-4">
-            Note: Underweight Risk (Demo) uses a simple heuristic. TODO: Replace with WHO Z-score calculation.
-          </p>
         </CardContent>
       </Card>
     </div>
