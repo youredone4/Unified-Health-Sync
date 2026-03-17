@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 
 export interface PaginationResult<T> {
   pagedItems: T[];
@@ -54,6 +54,12 @@ export function usePagination<T>(items: T[], initialPageSize = 10): PaginationRe
   const resetPage = useCallback(() => {
     setCurrentPage(1);
   }, []);
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [totalPages, currentPage]);
 
   return {
     pagedItems,
