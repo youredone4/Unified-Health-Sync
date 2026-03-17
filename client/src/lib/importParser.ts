@@ -137,9 +137,14 @@ function processSheet(
       errors.push({ file: fileLabel, row: rowNum, reason: "Missing case count" });
       return;
     }
-    const cases = parseFloat(casesStr.replace(/,/g, ""));
-    if (isNaN(cases) || cases < 0) {
-      errors.push({ file: fileLabel, row: rowNum, reason: `Invalid case count: "${casesRaw}"` });
+    const casesNormalized = casesStr.replace(/,/g, "");
+    if (!/^-?\d+(\.\d+)?$/.test(casesNormalized)) {
+      errors.push({ file: fileLabel, row: rowNum, reason: `Invalid case count: "${casesRaw}" (must be a number)` });
+      return;
+    }
+    const cases = parseFloat(casesNormalized);
+    if (cases < 0) {
+      errors.push({ file: fileLabel, row: rowNum, reason: `Case count cannot be negative: "${casesRaw}"` });
       return;
     }
 
