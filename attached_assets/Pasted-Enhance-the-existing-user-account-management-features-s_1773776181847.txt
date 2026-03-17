@@ -1,0 +1,102 @@
+Enhance the existing user account management features so users can update their own profile information and change or reset their passwords securely.
+
+Context
+- The system already has login and user roles.
+- Users currently cannot update their own profile or reset/change their passwords.
+- Do NOT rebuild the authentication system from scratch.
+- Do NOT break existing login, roles, or user management.
+
+Primary Goal
+Add proper account management features for profile editing and password management.
+
+Feature Requirements
+
+1. User Profile Update
+Allow logged-in users to update their own profile information.
+
+Users should be able to edit fields such as:
+- full name
+- phone number
+- address if applicable
+- profile picture if already supported
+- other non-sensitive personal account fields
+
+Users must NOT be able to change:
+- their role
+- account permissions
+- protected system-managed fields
+
+2. Change Password
+Allow logged-in users to change their password securely.
+
+Requirements:
+- require current password
+- require new password
+- require confirm new password
+- validate password match
+- apply password strength validation if possible
+- hash/store password securely using the current authentication setup
+- show clear success and error messages
+
+3. Reset Password
+Add a password reset capability.
+
+Preferred behavior depends on current system capabilities:
+- if email reset already exists, make it work properly
+- if email reset does not exist, add an admin-controlled reset flow in User Management
+
+Minimum acceptable implementation:
+- authorized admin can reset a user password
+- reset action generates a temporary password or allows setting a new one
+- user is prompted to change password after reset if feasible
+
+4. Role-Based Rules
+- all users can edit their own profile
+- all users can change their own password
+- only authorized admin roles can reset another user’s password
+- do not allow ordinary users to reset other users’ passwords
+
+5. UI/UX
+Add or improve:
+- Edit Profile page or modal
+- Change Password form
+- Reset Password action in User Management for authorized admins
+
+The UI should:
+- be clean and simple
+- show validation errors clearly
+- confirm successful updates
+
+6. Security
+- do not expose passwords in plaintext
+- do not allow password changes without proper validation
+- protect reset actions with role checks
+- follow existing authentication and role logic
+- do not duplicate auth logic if the system already has it
+
+7. Preserve Existing Functionality
+- do not break login
+- do not break role-based access
+- do not break User Management
+- do not rebuild unrelated modules
+
+8. Deliverables
+Provide:
+1. user profile edit feature
+2. change password feature
+3. reset password feature
+4. role-based protection for reset actions
+5. files changed
+6. short explanation of how password security is handled
+
+Important Constraints
+- Do NOT rebuild the whole auth system
+- Do NOT change user roles through profile edit
+- Keep implementation compatible with the existing user and role structure
+
+Success Criteria
+- users can update their own profile
+- users can change their own password securely
+- authorized admins can reset user passwords
+- roles and authentication remain intact
+- no existing login functionality is broken
