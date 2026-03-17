@@ -5,7 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { SidebarProvider, SidebarTrigger, SidebarInset } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
-import { Bell, LogOut, User } from "lucide-react";
+import { Bell, LogOut, User, UserCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -58,6 +58,7 @@ import M1ReportPage from "@/pages/m1-report";
 import NotificationDrawer from "@/components/notification-drawer";
 import SmsOutbox from "@/components/sms-outbox";
 import MessagesPage from "@/pages/messages";
+import AccountPage from "@/pages/account";
 
 const roleLabels: Record<string, string> = {
   SYSTEM_ADMIN: "Admin",
@@ -151,6 +152,7 @@ function Router() {
       <Route path="/tb/:id/edit" component={TBForm} />
       <Route path="/tb/:id" component={TBProfile} />
       <Route path="/messages" component={MessagesPage} />
+      <Route path="/account" component={AccountPage} />
       <Route path="/settings">
         <RoleRoute component={SettingsPage} />
       </Route>
@@ -177,6 +179,7 @@ function Router() {
 
 function AuthenticatedApp() {
   const { user, role, logout, isLoggingOut } = useAuth();
+  const [, navigate] = useLocation();
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [smsOutboxOpen, setSmsOutboxOpen] = useState(false);
   const liveDate = new Date().toLocaleString('en-PH', {
@@ -245,6 +248,14 @@ function AuthenticatedApp() {
                           <span className="text-xs font-normal text-muted-foreground">{user?.email}</span>
                         </div>
                       </DropdownMenuLabel>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        onClick={() => navigate("/account")}
+                        data-testid="button-my-account"
+                      >
+                        <UserCircle className="w-4 h-4 mr-2" />
+                        My Account
+                      </DropdownMenuItem>
                       <DropdownMenuSeparator />
                       <DropdownMenuItem
                         onClick={() => logout()}

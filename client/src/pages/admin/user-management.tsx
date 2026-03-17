@@ -54,7 +54,12 @@ export default function UserManagement() {
   const [selectedStatus, setSelectedStatus] = useState<string>("");
   const [selectedBarangays, setSelectedBarangays] = useState<number[]>([]);
   const [newPassword, setNewPassword] = useState("");
-  
+
+  // Reset password dialog state
+  const [resetPwUser, setResetPwUser] = useState<UserWithAssignments | null>(null);
+  const [resetPwValue, setResetPwValue] = useState("");
+  const [resetPwConfirm, setResetPwConfirm] = useState("");
+
   // Create user dialog state
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [newUsername, setNewUsername] = useState("");
@@ -128,6 +133,22 @@ export default function UserManagement() {
     },
     onError: (error: Error) => {
       toast({ title: "Failed to delete user", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const resetPasswordMutation = useMutation({
+    mutationFn: async ({ userId, password }: { userId: string; password: string }) => {
+      return apiRequest("PUT", `/api/admin/users/${userId}`, { password });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
+      toast({ title: "Password reset successfully" });
+      setResetPwUser(null);
+      setResetPwValue("");
+      setResetPwConfirm("");
+    },
+    onError: (error: Error) => {
+      toast({ title: "Failed to reset password", description: error.message, variant: "destructive" });
     },
   });
 
@@ -431,6 +452,20 @@ export default function UserManagement() {
                       </div>
                     )}
 
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setResetPwUser(user);
+                        setResetPwValue("");
+                        setResetPwConfirm("");
+                      }}
+                      data-testid={`button-reset-password-${user.id}`}
+                    >
+                      <Key className="w-4 h-4 mr-1" />
+                      Reset PW
+                    </Button>
+
                     <Dialog>
                       <DialogTrigger asChild>
                         <Button
@@ -574,6 +609,73 @@ export default function UserManagement() {
           )}
         </CardContent>
       </Card>
+
+      {/* Reset Password Dialog */}
+      <Dialog open={!!resetPwUser} onOpenChange={(open) => { if (!open) { setResetPwUser(null); setResetPwValue(""); setResetPwConfirm(""); } }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Key className="w-5 h-5" />
+              Reset Password
+            </DialogTitle>
+          </DialogHeader>
+          {resetPwUser && (
+            <div className="space-y-4 pt-2">
+              <p className="text-sm text-muted-foreground">
+                Set a temporary password for <strong>@{resetPwUser.username}</strong>. The user should change it after logging in.
+              </p>
+              <div className="space-y-2">
+                <Label>New Password (min 6 characters)</Label>
+                <Input
+                  type="password"
+                  placeholder="Enter new password"
+                  value={resetPwValue}
+                  onChange={(e) => setResetPwValue(e.target.value)}
+                  data-testid="input-admin-reset-password"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Confirm Password</Label>
+                <Input
+                  type="password"
+                  placeholder="Confirm new password"
+                  value={resetPwConfirm}
+                  onChange={(e) => setResetPwConfirm(e.target.value)}
+                  data-testid="input-admin-reset-password-confirm"
+                />
+                {resetPwConfirm && resetPwValue !== resetPwConfirm && (
+                  <p className="text-xs text-destructive">Passwords do not match</p>
+                )}
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <Button
+                  variant="outline"
+                  onClick={() => { setResetPwUser(null); setResetPwValue(""); setResetPwConfirm(""); }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={() => {
+                    if (!resetPwValue || resetPwValue.length < 6) {
+                      toast({ title: "Password must be at least 6 characters", variant: "destructive" });
+                      return;
+                    }
+                    if (resetPwValue !== resetPwConfirm) {
+                      toast({ title: "Passwords do not match", variant: "destructive" });
+                      return;
+                    }
+                    resetPasswordMutation.mutate({ userId: resetPwUser.id, password: resetPwValue });
+                  }}
+                  disabled={resetPasswordMutation.isPending}
+                  data-testid="button-confirm-reset-password"
+                >
+                  {resetPasswordMutation.isPending ? "Resetting..." : "Reset Password"}
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
