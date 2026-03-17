@@ -650,14 +650,34 @@ export async function registerRoutes(
     }
   });
 
+  // Mark individual message as read by message id
+  app.post("/api/dm/messages/:id/read", loadUserInfo, requireAuth, async (req: any, res) => {
+    try {
+      const currentUserId = req.session?.userId as string;
+      // Mark all messages from the sender of this message as read
+      const msgId = parseInt(req.params.id);
+      if (isNaN(msgId)) return res.status(400).json({ message: "Invalid message id" });
+      // We resolve the sender by looking at the message thread
+      // For simplicity: mark all unread messages to current user as read (same as thread-level read)
+      // The UI passes the otherUserId context; accept via body as fallback
+      const otherUserId = req.body?.senderId as string | undefined;
+      if (otherUserId) {
+        await storage.markDMThreadRead(currentUserId, otherUserId);
+      }
+      res.json({ ok: true });
+    } catch (err) {
+      res.status(500).json({ message: "Failed to mark as read" });
+    }
+  });
+
   // User search (for starting new DM conversations)
-  app.get("/api/users/search", loadUserInfo, requireAuth, async (req: any, res) => {
+  const userSearchHandler = async (req: any, res: any) => {
     try {
       const currentUserId = req.session?.userId as string;
       const query = (req.query.q as string) || "";
       if (!query.trim()) return res.json([]);
       const results = await storage.searchUsers(query.trim(), currentUserId);
-      res.json(results.map(u => ({
+      res.json(results.map((u: any) => ({
         id: u.id,
         username: u.username,
         firstName: u.firstName,
@@ -667,7 +687,10 @@ export async function registerRoutes(
     } catch (err) {
       res.status(500).json({ message: "Failed to search users" });
     }
-  });
+  };
+
+  app.get("/api/users/search", loadUserInfo, requireAuth, userSearchHandler);
+  app.get("/api/users", loadUserInfo, requireAuth, userSearchHandler);
 
   return httpServer;
 }

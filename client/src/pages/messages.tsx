@@ -85,9 +85,9 @@ export default function MessagesPage() {
   });
 
   const { data: searchResults = [] } = useQuery<UserResult[]>({
-    queryKey: ['/api/users/search', searchQuery],
+    queryKey: ['/api/users', searchQuery],
     enabled: searchQuery.length >= 2,
-    queryFn: () => fetch(`/api/users/search?q=${encodeURIComponent(searchQuery)}`).then(r => r.json()),
+    queryFn: () => fetch(`/api/users?q=${encodeURIComponent(searchQuery)}`).then(r => r.json()),
   });
 
   const sendMutation = useMutation({
@@ -303,9 +303,13 @@ export default function MessagesPage() {
                 <div className="space-y-3">
                   {messages.map(msg => {
                     const isMe = msg.senderId === user?.id;
+                    const senderName = isMe
+                      ? (user?.firstName ? [user.firstName, user.lastName].filter(Boolean).join(' ') : user?.username ?? 'Me')
+                      : (activeUser ? getDisplayName(activeUser.firstName, activeUser.lastName, activeUser.username) : 'Them');
                     return (
                       <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`} data-testid={`message-${msg.id}`}>
                         <div className={`max-w-[75%] ${isMe ? 'items-end' : 'items-start'} flex flex-col gap-1`}>
+                          <span className="text-xs font-medium text-muted-foreground px-1">{senderName}</span>
                           <div className={`rounded-2xl px-4 py-2 text-sm ${isMe
                             ? 'bg-primary text-primary-foreground rounded-br-sm'
                             : 'bg-muted text-foreground rounded-bl-sm'
