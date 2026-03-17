@@ -231,7 +231,7 @@ export class DatabaseStorage implements IStorage {
     }
     const records: InsertDiseaseCase[] = [];
     for (const row of rows) {
-      const count = Math.min(Math.max(1, Math.round(row.cases)), 100);
+      const count = Math.max(0, Math.round(row.cases));
       for (let i = 0; i < count; i++) {
         records.push({
           patientName: "Imported Patient",

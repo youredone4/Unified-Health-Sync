@@ -45,15 +45,17 @@ function detectColumn(headers: string[], field: string): number {
   return -1;
 }
 
-function matchBarangay(raw: string): string {
+function matchBarangay(raw: string): string | null {
   const normalized = raw.toLowerCase().trim();
+  if (!normalized) return null;
   for (const b of KNOWN_BARANGAYS) {
     if (b.toLowerCase() === normalized) return b;
   }
   for (const b of KNOWN_BARANGAYS) {
-    if (normalized.includes(b.toLowerCase().replace(/[()]/g, "").split(" ")[0])) return b;
+    const token = b.toLowerCase().replace(/[()]/g, "").split(" ")[0];
+    if (token.length >= 4 && normalized.includes(token)) return b;
   }
-  return raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase();
+  return null;
 }
 
 function barangayFromFilename(filename: string): string | null {
@@ -120,9 +122,9 @@ function processSheet(
       return;
     }
 
-    let barangay = "";
+    let barangay: string | null = null;
     if (brgyIdx !== -1 && r[brgyIdx] != null && String(r[brgyIdx]).trim()) {
-      barangay = matchBarangay(String(r[brgyIdx]).trim());
+      barangay = matchBarangay(String(r[brgyIdx]).trim()) ?? String(r[brgyIdx]).trim();
     } else if (filenameBarangay) {
       barangay = filenameBarangay;
     }
@@ -148,9 +150,19 @@ function processSheet(
       return;
     }
 
-    const reporting_date = dateIdx !== -1 ? formatDate(r[dateIdx]) : new Date().toISOString().split("T")[0];
+    let reporting_date: string;
+    if (dateIdx !== -1) {
+      const dateRaw = r[dateIdx];
+      if (dateRaw == null || String(dateRaw).trim() === "") {
+        errors.push({ file: fileLabel, row: rowNum, reason: "Missing reporting date" });
+        return;
+      }
+      reporting_date = formatDate(dateRaw);
+    } else {
+      reporting_date = new Date().toISOString().split("T")[0];
+    }
 
-    valid.push({ barangay, disease_name: diseaseRaw, cases: Math.round(cases), reporting_date });
+    valid.push({ barangay: barangay!, disease_name: diseaseRaw, cases: Math.round(cases), reporting_date });
   });
 
   return { valid, errors, totalRows };
