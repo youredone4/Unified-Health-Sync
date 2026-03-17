@@ -1,15 +1,25 @@
-import { useState } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useEffect } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import { useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { UserCircle, Lock, Save, Eye, EyeOff } from "lucide-react";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import { UserCircle, Lock, Save } from "lucide-react";
 
 const roleLabels: Record<string, string> = {
   SYSTEM_ADMIN: "System Admin",
@@ -18,24 +28,66 @@ const roleLabels: Record<string, string> = {
   TL: "Team Leader (Barangay Nurse)",
 };
 
+const statusLabels: Record<string, string> = {
+  ACTIVE: "Active",
+  DISABLED: "Disabled",
+};
+
+const profileSchema = z.object({
+  firstName: z.string().max(100, "Too long").optional().or(z.literal("")),
+  lastName: z.string().max(100, "Too long").optional().or(z.literal("")),
+  email: z.union([z.string().email("Enter a valid email address"), z.literal("")]).optional(),
+});
+
+const passwordSchema = z
+  .object({
+    currentPassword: z.string().min(1, "Current password is required"),
+    newPassword: z.string().min(8, "New password must be at least 8 characters"),
+    confirmPassword: z.string().min(1, "Please confirm your new password"),
+  })
+  .refine((d) => d.newPassword === d.confirmPassword, {
+    message: "Passwords do not match",
+    path: ["confirmPassword"],
+  });
+
+type ProfileValues = z.infer<typeof profileSchema>;
+type PasswordValues = z.infer<typeof passwordSchema>;
+
 export default function AccountPage() {
   const { user } = useAuth();
   const { toast } = useToast();
 
-  const [firstName, setFirstName] = useState(user?.firstName || "");
-  const [lastName, setLastName] = useState(user?.lastName || "");
-  const [email, setEmail] = useState(user?.email || "");
+  const profileForm = useForm<ProfileValues>({
+    resolver: zodResolver(profileSchema),
+    defaultValues: {
+      firstName: user?.firstName || "",
+      lastName: user?.lastName || "",
+      email: user?.email || "",
+    },
+  });
 
-  const [currentPassword, setCurrentPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [showCurrentPw, setShowCurrentPw] = useState(false);
-  const [showNewPw, setShowNewPw] = useState(false);
-  const [showConfirmPw, setShowConfirmPw] = useState(false);
+  useEffect(() => {
+    if (user) {
+      profileForm.reset({
+        firstName: user.firstName || "",
+        lastName: user.lastName || "",
+        email: user.email || "",
+      });
+    }
+  }, [user?.id]);
+
+  const passwordForm = useForm<PasswordValues>({
+    resolver: zodResolver(passwordSchema),
+    defaultValues: { currentPassword: "", newPassword: "", confirmPassword: "" },
+  });
 
   const profileMutation = useMutation({
-    mutationFn: async (data: { firstName: string; lastName: string; email: string }) => {
-      const res = await apiRequest("PUT", "/api/auth/me/profile", data);
+    mutationFn: async (data: ProfileValues) => {
+      const res = await apiRequest("PUT", "/api/auth/me/profile", {
+        firstName: data.firstName || null,
+        lastName: data.lastName || null,
+        email: data.email || null,
+      });
       return res.json();
     },
     onSuccess: () => {
@@ -48,40 +100,26 @@ export default function AccountPage() {
   });
 
   const passwordMutation = useMutation({
-    mutationFn: async (data: { currentPassword: string; newPassword: string }) => {
-      const res = await apiRequest("PUT", "/api/auth/me/password", data);
+    mutationFn: async (data: PasswordValues) => {
+      const res = await apiRequest("PUT", "/api/auth/me/password", {
+        currentPassword: data.currentPassword,
+        newPassword: data.newPassword,
+      });
       return res.json();
     },
     onSuccess: () => {
       toast({ title: "Password changed successfully" });
-      setCurrentPassword("");
-      setNewPassword("");
-      setConfirmPassword("");
+      passwordForm.reset();
     },
     onError: (error: Error) => {
-      toast({ title: "Failed to change password", description: error.message, variant: "destructive" });
+      const msg = error.message || "Failed to change password";
+      if (msg.toLowerCase().includes("incorrect")) {
+        passwordForm.setError("currentPassword", { message: "Current password is incorrect" });
+      } else {
+        toast({ title: "Failed to change password", description: msg, variant: "destructive" });
+      }
     },
   });
-
-  const handleSaveProfile = () => {
-    profileMutation.mutate({ firstName: firstName.trim(), lastName: lastName.trim(), email: email.trim() });
-  };
-
-  const handleChangePassword = () => {
-    if (!currentPassword) {
-      toast({ title: "Current password is required", variant: "destructive" });
-      return;
-    }
-    if (newPassword.length < 8) {
-      toast({ title: "New password must be at least 8 characters", variant: "destructive" });
-      return;
-    }
-    if (newPassword !== confirmPassword) {
-      toast({ title: "New passwords do not match", variant: "destructive" });
-      return;
-    }
-    passwordMutation.mutate({ currentPassword, newPassword });
-  };
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">
@@ -93,84 +131,132 @@ export default function AccountPage() {
         <p className="text-muted-foreground">Manage your profile information and password</p>
       </div>
 
+      {/* Profile Card */}
       <Card>
         <CardHeader>
           <CardTitle>Profile Information</CardTitle>
           <CardDescription>Update your name and email address</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          {/* Read-only system fields */}
           <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>Username</Label>
+            <div className="space-y-1">
+              <p className="text-sm font-medium text-muted-foreground">User ID</p>
+              <p className="text-sm font-mono bg-muted rounded px-2 py-1 truncate" data-testid="text-user-id">
+                {user?.id || "—"}
+              </p>
+            </div>
+            <div className="space-y-1">
+              <p className="text-sm font-medium text-muted-foreground">Username</p>
               <Input
                 value={user?.username || ""}
                 disabled
-                className="bg-muted cursor-not-allowed"
+                className="bg-muted cursor-not-allowed h-8 text-sm"
                 data-testid="input-username-readonly"
               />
-              <p className="text-xs text-muted-foreground">Username cannot be changed</p>
             </div>
-            <div className="space-y-2">
-              <Label>Role</Label>
-              <div className="flex items-center h-9 px-3 rounded-md border bg-muted">
-                <Badge variant="secondary" className="text-xs">
+            <div className="space-y-1">
+              <p className="text-sm font-medium text-muted-foreground">Role</p>
+              <div className="flex items-center h-8">
+                <Badge variant="secondary" className="text-xs" data-testid="text-user-role">
                   {roleLabels[user?.role || ""] || user?.role || "—"}
                 </Badge>
               </div>
-              <p className="text-xs text-muted-foreground">Role is managed by an administrator</p>
+            </div>
+            <div className="space-y-1">
+              <p className="text-sm font-medium text-muted-foreground">Account Status</p>
+              <div className="flex items-center h-8">
+                <Badge
+                  variant={user?.status === "ACTIVE" ? "default" : "outline"}
+                  className="text-xs"
+                  data-testid="text-user-status"
+                >
+                  {statusLabels[user?.status || ""] || user?.status || "—"}
+                </Badge>
+              </div>
             </div>
           </div>
 
           <Separator />
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="first-name">First Name</Label>
-              <Input
-                id="first-name"
-                placeholder="Your first name"
-                value={firstName}
-                onChange={(e) => setFirstName(e.target.value)}
-                data-testid="input-first-name"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="last-name">Last Name</Label>
-              <Input
-                id="last-name"
-                placeholder="Your last name"
-                value={lastName}
-                onChange={(e) => setLastName(e.target.value)}
-                data-testid="input-last-name"
-              />
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="email">Email Address</Label>
-            <Input
-              id="email"
-              type="email"
-              placeholder="your@email.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              data-testid="input-email"
-            />
-          </div>
-
-          <div className="flex justify-end pt-2">
-            <Button
-              onClick={handleSaveProfile}
-              disabled={profileMutation.isPending}
-              data-testid="button-save-profile"
+          {/* Editable profile fields */}
+          <Form {...profileForm}>
+            <form
+              onSubmit={profileForm.handleSubmit((data) => profileMutation.mutate(data))}
+              className="space-y-4"
             >
-              <Save className="w-4 h-4 mr-2" />
-              {profileMutation.isPending ? "Saving..." : "Save Profile"}
-            </Button>
-          </div>
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={profileForm.control}
+                  name="firstName"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>First Name</FormLabel>
+                      <FormControl>
+                        <Input
+                          placeholder="Your first name"
+                          {...field}
+                          data-testid="input-first-name"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={profileForm.control}
+                  name="lastName"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Last Name</FormLabel>
+                      <FormControl>
+                        <Input
+                          placeholder="Your last name"
+                          {...field}
+                          data-testid="input-last-name"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <FormField
+                control={profileForm.control}
+                name="email"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Email Address</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="email"
+                        placeholder="your@email.com"
+                        {...field}
+                        data-testid="input-email"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <div className="flex justify-end pt-2">
+                <Button
+                  type="submit"
+                  disabled={profileMutation.isPending}
+                  data-testid="button-save-profile"
+                >
+                  <Save className="w-4 h-4 mr-2" />
+                  {profileMutation.isPending ? "Saving..." : "Save Profile"}
+                </Button>
+              </div>
+            </form>
+          </Form>
         </CardContent>
       </Card>
 
+      {/* Change Password Card */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -181,88 +267,81 @@ export default function AccountPage() {
             Enter your current password, then choose a new one (minimum 8 characters)
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="current-password">Current Password</Label>
-            <div className="relative">
-              <Input
-                id="current-password"
-                type={showCurrentPw ? "text" : "password"}
-                placeholder="Your current password"
-                value={currentPassword}
-                onChange={(e) => setCurrentPassword(e.target.value)}
-                data-testid="input-current-password"
-              />
-              <button
-                type="button"
-                onClick={() => setShowCurrentPw((v) => !v)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                data-testid="button-toggle-current-pw"
-              >
-                {showCurrentPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-              </button>
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="new-password">New Password</Label>
-            <div className="relative">
-              <Input
-                id="new-password"
-                type={showNewPw ? "text" : "password"}
-                placeholder="At least 8 characters"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                data-testid="input-new-password"
-              />
-              <button
-                type="button"
-                onClick={() => setShowNewPw((v) => !v)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                data-testid="button-toggle-new-pw"
-              >
-                {showNewPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-              </button>
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="confirm-password">Confirm New Password</Label>
-            <div className="relative">
-              <Input
-                id="confirm-password"
-                type={showConfirmPw ? "text" : "password"}
-                placeholder="Repeat new password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                data-testid="input-confirm-password"
-              />
-              <button
-                type="button"
-                onClick={() => setShowConfirmPw((v) => !v)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                data-testid="button-toggle-confirm-pw"
-              >
-                {showConfirmPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-              </button>
-            </div>
-            {confirmPassword && newPassword !== confirmPassword && (
-              <p className="text-xs text-destructive" data-testid="text-password-mismatch">
-                Passwords do not match
-              </p>
-            )}
-          </div>
-
-          <div className="flex justify-end pt-2">
-            <Button
-              onClick={handleChangePassword}
-              disabled={passwordMutation.isPending}
-              data-testid="button-change-password"
+        <CardContent>
+          <Form {...passwordForm}>
+            <form
+              onSubmit={passwordForm.handleSubmit((data) => passwordMutation.mutate(data))}
+              className="space-y-4"
             >
-              <Lock className="w-4 h-4 mr-2" />
-              {passwordMutation.isPending ? "Changing..." : "Change Password"}
-            </Button>
-          </div>
+              <FormField
+                control={passwordForm.control}
+                name="currentPassword"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Current Password</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="password"
+                        placeholder="Your current password"
+                        {...field}
+                        data-testid="input-current-password"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={passwordForm.control}
+                name="newPassword"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>New Password</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="password"
+                        placeholder="At least 8 characters"
+                        {...field}
+                        data-testid="input-new-password"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={passwordForm.control}
+                name="confirmPassword"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Confirm New Password</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="password"
+                        placeholder="Repeat new password"
+                        {...field}
+                        data-testid="input-confirm-password"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <div className="flex justify-end pt-2">
+                <Button
+                  type="submit"
+                  disabled={passwordMutation.isPending}
+                  data-testid="button-change-password"
+                >
+                  <Lock className="w-4 h-4 mr-2" />
+                  {passwordMutation.isPending ? "Changing..." : "Change Password"}
+                </Button>
+              </div>
+            </form>
+          </Form>
         </CardContent>
       </Card>
     </div>
