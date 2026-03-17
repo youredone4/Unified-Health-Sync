@@ -84,15 +84,23 @@ export default function SmsModal({
         sentAt: new Date().toISOString(),
         status: 'Queued (Demo)',
       });
-
-      if (!hasProfilePhone && saveToProfile && onSavePhone) {
-        await onSavePhone(resolved);
-      }
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       queryClient.invalidateQueries({ queryKey: ['/api/sms'] });
       toast({ title: "SMS queued (Demo)", description: `Message queued for ${recipient}` });
       onOpenChange(false);
+
+      if (!hasProfilePhone && saveToProfile && onSavePhone) {
+        try {
+          await onSavePhone(effectivePhone);
+        } catch {
+          toast({
+            title: "Phone number not saved",
+            description: "SMS was sent but the number could not be saved to the profile.",
+            variant: "destructive",
+          });
+        }
+      }
     },
     onError: (err: any) => {
       toast({ title: "Could not send SMS", description: err.message, variant: "destructive" });
