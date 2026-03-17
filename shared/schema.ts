@@ -126,6 +126,7 @@ export const seniors = pgTable("seniors", {
   nextPickupDate: text("next_pickup_date"), // static for demo
   htnMedsReady: boolean("htn_meds_ready").default(false),
   pickedUp: boolean("picked_up").default(false),
+  civilStatus: text("civil_status"),
   latitude: text("latitude"),
   longitude: text("longitude"),
 });

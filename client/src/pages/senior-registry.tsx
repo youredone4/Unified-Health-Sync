@@ -81,6 +81,7 @@ export default function SeniorRegistry() {
                 <tr className="border-b border-border">
                   <th className="text-left py-2 px-3">Name</th>
                   <th className="text-left py-2 px-3">Age</th>
+                  <th className="text-left py-2 px-3">Sex</th>
                   <th className="text-left py-2 px-3">Barangay</th>
                   <th className="text-left py-2 px-3">Phone</th>
                   <th className="text-left py-2 px-3">Last BP</th>
@@ -89,7 +90,7 @@ export default function SeniorRegistry() {
               <tbody>
                 {filtered.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="py-8 text-center text-muted-foreground">No seniors found</td>
+                    <td colSpan={6} className="py-8 text-center text-muted-foreground">No seniors found</td>
                   </tr>
                 )}
                 {pagination.pagedItems.map(s => (
@@ -101,6 +102,7 @@ export default function SeniorRegistry() {
                   >
                     <td className="py-3 px-3 font-medium">{s.firstName} {s.lastName}</td>
                     <td className="py-3 px-3">{s.age}</td>
+                    <td className="py-3 px-3">{s.sex === "M" ? "Male" : s.sex === "F" ? "Female" : "-"}</td>
                     <td className="py-3 px-3">{s.barangay}</td>
                     <td className="py-3 px-3">{s.phone || '-'}</td>
                     <td className="py-3 px-3">{s.lastBP || '-'}</td>

@@ -10,6 +10,7 @@ export interface SeniorImportRow {
   addressLine: string | null;
   seniorCitizenId: string | null;
   phone: string | null;
+  civilStatus: string | null;
 }
 
 export interface SeniorParseError {
@@ -96,6 +97,7 @@ const COL_SYNONYMS: Record<string, string[]> = {
   seniorCitizenId: ["idno", "id_no", "seniorid", "senior_id", "scid", "controlno", "idnumber"],
   addressLine:     ["purok", "address", "addressline", "address_line", "addr"],
   phone:           ["phone", "cellphone", "mobile", "contact", "phoneno", "tel"],
+  civilStatus:     ["stat", "civilstatus", "civil_status", "maritalstatus", "civilstat", "marital_status"],
 };
 
 function detectCol(headers: string[], field: string): number {
@@ -110,6 +112,18 @@ function normalizeSex(raw: string): string | null {
   const v = raw.trim().toUpperCase();
   if (v === "M" || v === "MALE") return "M";
   if (v === "F" || v === "FEMALE") return "F";
+  return null;
+}
+
+function normalizeCivilStatus(raw: string): string | null {
+  const v = raw.trim().toUpperCase();
+  if (v === "MARRIED" || v === "KASAL") return "Married";
+  if (v === "WIDOW") return "Widow";
+  if (v === "WIDOWER") return "Widower";
+  if (v === "SINGLE" || v === "BINATA" || v === "DALAGA") return "Single";
+  if (v === "SEPARATED" || v === "HIWALAY") return "Separated";
+  if (v === "ANNULLED") return "Annulled";
+  if (v) return raw.trim().charAt(0).toUpperCase() + raw.trim().slice(1).toLowerCase();
   return null;
 }
 
@@ -168,6 +182,7 @@ function processSheet(
   const seniorIdIdx       = detectCol(headers, "seniorCitizenId");
   const addressIdx        = detectCol(headers, "addressLine");
   const phoneIdx          = detectCol(headers, "phone");
+  const civilStatusIdx    = detectCol(headers, "civilStatus");
 
   const fileLabel = `${filename}${sheetName && sheetName !== "Sheet1" ? ` [${sheetName}]` : ""}`;
 
@@ -217,6 +232,9 @@ function processSheet(
 
     const phoneRaw = phoneIdx !== -1 && !isNA(r[phoneIdx]) ? String(r[phoneIdx]).trim() : null;
 
+    const civilStatusRaw = civilStatusIdx !== -1 && !isNA(r[civilStatusIdx]) ? String(r[civilStatusIdx]).trim() : null;
+    const civilStatus = civilStatusRaw ? normalizeCivilStatus(civilStatusRaw) : null;
+
     valid.push({
       firstName: firstName || lastName,
       lastName: lastName || firstName,
@@ -227,6 +245,7 @@ function processSheet(
       addressLine: addressRaw,
       seniorCitizenId,
       phone: phoneRaw,
+      civilStatus,
     });
   });
 

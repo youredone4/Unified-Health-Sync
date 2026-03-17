@@ -124,6 +124,16 @@ export default function SeniorProfile() {
           </CardHeader>
           <CardContent className="space-y-2">
             <p><span className="text-muted-foreground">Age:</span> {senior.age} years old</p>
+            {senior.dob && (
+              <p><span className="text-muted-foreground">Date of Birth:</span> {senior.dob}</p>
+            )}
+            <p><span className="text-muted-foreground">Sex:</span> {senior.sex === "M" ? "Male" : senior.sex === "F" ? "Female" : "-"}</p>
+            {senior.civilStatus && (
+              <p><span className="text-muted-foreground">Civil Status:</span> {senior.civilStatus}</p>
+            )}
+            {senior.seniorCitizenId && (
+              <p><span className="text-muted-foreground">ID #:</span> {senior.seniorCitizenId}</p>
+            )}
             <p><span className="text-muted-foreground">Barangay:</span> {senior.barangay}</p>
             <p><span className="text-muted-foreground">Address:</span> {senior.addressLine || '-'}</p>
             <p><span className="text-muted-foreground">Phone:</span> {senior.phone || '-'}</p>

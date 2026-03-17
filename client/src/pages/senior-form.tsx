@@ -36,6 +36,7 @@ export default function SeniorForm() {
     lastName: "",
     dob: "",
     sex: "",
+    civilStatus: "",
     age: "",
     barangay: "",
     addressLine: "",
@@ -60,6 +61,7 @@ export default function SeniorForm() {
         lastName: existingSenior.lastName || "",
         dob: existingSenior.dob || "",
         sex: existingSenior.sex || "",
+        civilStatus: existingSenior.civilStatus || "",
         age: existingSenior.age?.toString() || "",
         barangay: existingSenior.barangay || "",
         addressLine: existingSenior.addressLine || "",
@@ -111,6 +113,7 @@ export default function SeniorForm() {
       lastName: formData.lastName,
       dob: formData.dob || null,
       sex: formData.sex || null,
+      civilStatus: formData.civilStatus || null,
       age: parseInt(formData.age) || 60,
       barangay: formData.barangay,
       addressLine: formData.addressLine || null,
@@ -214,6 +217,22 @@ export default function SeniorForm() {
                 <SelectContent>
                   <SelectItem value="M">Male</SelectItem>
                   <SelectItem value="F">Female</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="civilStatus">Civil Status</Label>
+              <Select value={formData.civilStatus} onValueChange={(v) => handleChange("civilStatus", v)}>
+                <SelectTrigger data-testid="select-civil-status">
+                  <SelectValue placeholder="Select civil status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Married">Married</SelectItem>
+                  <SelectItem value="Widow">Widow</SelectItem>
+                  <SelectItem value="Widower">Widower</SelectItem>
+                  <SelectItem value="Single">Single</SelectItem>
+                  <SelectItem value="Separated">Separated</SelectItem>
+                  <SelectItem value="Annulled">Annulled</SelectItem>
                 </SelectContent>
               </Select>
             </div>

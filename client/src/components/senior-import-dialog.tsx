@@ -96,6 +96,7 @@ export default function SeniorImportDialog({ open, onOpenChange }: Props) {
         barangay: r.barangay,
         dob: r.dob ?? undefined,
         sex: r.sex ?? undefined,
+        civilStatus: r.civilStatus ?? undefined,
         addressLine: r.addressLine ?? undefined,
         seniorCitizenId: r.seniorCitizenId ?? undefined,
         phone: r.phone ?? undefined,
@@ -229,6 +230,7 @@ export default function SeniorImportDialog({ open, onOpenChange }: Props) {
                           <th className="text-left py-2 px-2">Barangay</th>
                           <th className="text-left py-2 px-2">Age</th>
                           <th className="text-left py-2 px-2">Sex</th>
+                          <th className="text-left py-2 px-2">Civil Status</th>
                           <th className="text-left py-2 px-2">Senior ID</th>
                           <th className="text-left py-2 px-2">Address</th>
                         </tr>
@@ -240,6 +242,7 @@ export default function SeniorImportDialog({ open, onOpenChange }: Props) {
                             <td className="py-1.5 px-2">{r.barangay}</td>
                             <td className="py-1.5 px-2">{r.age}</td>
                             <td className="py-1.5 px-2">{r.sex ?? "-"}</td>
+                            <td className="py-1.5 px-2">{r.civilStatus ?? "-"}</td>
                             <td className="py-1.5 px-2">{r.seniorCitizenId ?? "-"}</td>
                             <td className="py-1.5 px-2">{r.addressLine ?? "-"}</td>
                           </tr>
