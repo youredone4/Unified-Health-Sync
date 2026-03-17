@@ -66,10 +66,6 @@ const roleLabels: Record<string, string> = {
   TL: "Team Leader (Barangay Nurse)",
 };
 
-const LIVE_DATE = new Date().toLocaleString('en-PH', {
-  year: 'numeric', month: 'long', day: 'numeric',
-  hour: '2-digit', minute: '2-digit',
-});
 
 // Shared "Access Denied" UI
 function AccessDenied() {
@@ -183,6 +179,10 @@ function AuthenticatedApp() {
   const { user, role, logout, isLoggingOut } = useAuth();
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [smsOutboxOpen, setSmsOutboxOpen] = useState(false);
+  const liveDate = new Date().toLocaleString('en-PH', {
+    year: 'numeric', month: 'long', day: 'numeric',
+    hour: '2-digit', minute: '2-digit',
+  });
 
   const sidebarStyle = {
     "--sidebar-width": "16rem",
@@ -199,7 +199,7 @@ function AuthenticatedApp() {
               <header className="flex items-center justify-between gap-2 p-3 border-b border-border sticky top-0 z-50 bg-background">
                 <div className="flex items-center gap-2">
                   <SidebarTrigger data-testid="button-sidebar-toggle" />
-                  <span className="text-sm text-muted-foreground">{LIVE_DATE}</span>
+                  <span className="text-sm text-muted-foreground">{liveDate}</span>
                 </div>
                 <div className="flex items-center gap-3">
                   <Button
