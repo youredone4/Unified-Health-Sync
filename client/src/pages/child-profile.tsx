@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useParams, useLocation } from "wouter";
 import type { Child, Mother } from "@shared/schema";
-import { getNextVaccineStatus, getChildVisitStatus, formatDate, getAgeInMonths, getWeightZScore, VACCINE_SCHEDULE } from "@/lib/healthLogic";
+import { getNextVaccineStatus, getChildVisitStatus, formatDate, getAgeInMonths, getWeightZScore, hasMissingGrowthCheck, VACCINE_SCHEDULE } from "@/lib/healthLogic";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -65,9 +65,11 @@ export default function ChildProfile() {
   const vax = getNextVaccineStatus(child);
   const visit = getChildVisitStatus(child);
   const ageMonths = getAgeInMonths(child.dob);
-  const zScoreResult = child ? getWeightZScore(child) : null;
-  const underweight = zScoreResult && (zScoreResult.category === 'SAM' || zScoreResult.category === 'MAM');
+  const zScoreResult = getWeightZScore(child);
+  const missingGrowth = hasMissingGrowthCheck(child);
+  const underweight = zScoreResult && (zScoreResult.category === 'sam' || zScoreResult.category === 'mam');
   const growth = child.growth || [];
+  const lastGrowth = growth.length > 0 ? growth[growth.length - 1] : null;
   const canUpdate = permissions.canUpdate(user?.role);
   const canDelete = permissions.canDelete(user?.role);
 
@@ -116,6 +118,39 @@ export default function ChildProfile() {
             <p><span className="text-muted-foreground">Date of Birth:</span> {formatDate(child.dob)}</p>
             <p><span className="text-muted-foreground">Barangay:</span> {child.barangay}</p>
             <p><span className="text-muted-foreground">Address:</span> {child.addressLine || '-'}</p>
+
+            <div className="pt-2 border-t border-border mt-2 space-y-2">
+              <p className="text-sm font-medium text-muted-foreground flex items-center gap-1">
+                <Scale className="w-3.5 h-3.5" /> Nutrition Status
+              </p>
+              <div className="flex flex-wrap gap-1" data-testid="nutrition-status-badges">
+                {zScoreResult?.category === 'sam' && (
+                  <Badge variant="outline" className="bg-red-500/20 text-red-400 border-red-500/30" data-testid="badge-sam">SAM</Badge>
+                )}
+                {zScoreResult?.category === 'mam' && (
+                  <Badge variant="outline" className="bg-orange-500/20 text-orange-400 border-orange-500/30" data-testid="badge-mam">MAM</Badge>
+                )}
+                {zScoreResult?.category === 'normal' && (
+                  <Badge variant="outline" className="bg-green-500/20 text-green-400 border-green-500/30" data-testid="badge-normal">Normal</Badge>
+                )}
+                {!zScoreResult && (
+                  <Badge variant="outline" className="bg-muted text-muted-foreground" data-testid="badge-no-data">No data</Badge>
+                )}
+                {missingGrowth && (
+                  <Badge variant="outline" className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30" data-testid="badge-missing-check">Missing Check</Badge>
+                )}
+              </div>
+              {lastGrowth && (
+                <div className="text-sm space-y-0.5">
+                  <p><span className="text-muted-foreground">Last Weight:</span> {lastGrowth.weightKg} kg</p>
+                  <p><span className="text-muted-foreground">Last Assessment:</span> {formatDate(lastGrowth.date)}</p>
+                  {zScoreResult && (
+                    <p><span className="text-muted-foreground">WHO Z-score:</span> {zScoreResult.zScore} (WFA 2006)</p>
+                  )}
+                </div>
+              )}
+            </div>
+
             {mother && (
               <div className="pt-2 border-t border-border mt-2">
                 <p className="text-sm text-muted-foreground mb-1">Linked Mother:</p>
@@ -157,12 +192,12 @@ export default function ChildProfile() {
           </Card>
 
           {underweight && zScoreResult && (
-            <Card className={zScoreResult.category === 'SAM' ? "border-red-500/30 bg-red-500/5" : "border-orange-500/30 bg-orange-500/5"}>
+            <Card className={zScoreResult.category === 'sam' ? "border-red-500/30 bg-red-500/5" : "border-orange-500/30 bg-orange-500/5"}>
               <CardContent className="pt-4">
-                <div className={`flex items-center gap-2 ${zScoreResult.category === 'SAM' ? 'text-red-400' : 'text-orange-400'}`}>
+                <div className={`flex items-center gap-2 ${zScoreResult.category === 'sam' ? 'text-red-400' : 'text-orange-400'}`}>
                   <AlertTriangle className="w-4 h-4" />
                   <span className="font-medium">
-                    {zScoreResult.category === 'SAM' ? 'Severe Acute Malnutrition (SAM)' : 'Moderate Acute Malnutrition (MAM)'}
+                    {zScoreResult.category === 'sam' ? 'Severe Acute Malnutrition (SAM)' : 'Moderate Acute Malnutrition (MAM)'}
                   </span>
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">
