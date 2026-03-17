@@ -30,12 +30,26 @@ export async function registerRoutes(
   // Helper to filter data by TL's assigned barangays
   function filterByBarangay<T extends { barangay: string }>(data: T[], userInfo: Express.Request["userInfo"]): T[] {
     if (!userInfo) return [];
-    // TL can only see their assigned barangays
     if (userInfo.role === UserRole.TL) {
       return data.filter(item => userInfo.assignedBarangays.includes(item.barangay));
     }
-    // Other roles see all data
     return data;
+  }
+
+  // Safe integer ID parser — returns the parsed integer or sends 400 and returns null
+  function parseId(raw: string | undefined, res: any): number | null {
+    const n = parseInt(raw ?? "", 10);
+    if (isNaN(n) || n <= 0) {
+      res.status(400).json({ message: "Invalid ID" });
+      return null;
+    }
+    return n;
+  }
+
+  // Wraps async route handlers so uncaught errors are forwarded to Express error handler
+  type AsyncHandler = (req: any, res: any, next: any) => Promise<any>;
+  function ar(fn: AsyncHandler): AsyncHandler {
+    return (req, res, next) => fn(req, res, next).catch(next);
   }
 
   // === MOTHERS ===
@@ -44,17 +58,15 @@ export async function registerRoutes(
     res.json(filterByBarangay(data, req.userInfo));
   });
 
-  app.get(api.mothers.get.path, registryReadRBAC, async (req, res) => {
-    const mother = await storage.getMother(Number(req.params.id));
-    if (!mother) {
-      return res.status(404).json({ message: "Mother not found" });
-    }
-    // Check TL barangay access
+  app.get(api.mothers.get.path, registryReadRBAC, ar(async (req, res) => {
+    const id = parseId(req.params.id, res); if (id === null) return;
+    const mother = await storage.getMother(id);
+    if (!mother) return res.status(404).json({ message: "Mother not found" });
     if (req.userInfo?.role === UserRole.TL && !req.userInfo.assignedBarangays.includes(mother.barangay)) {
       return res.status(403).json({ message: "Access denied to this barangay" });
     }
     res.json(mother);
-  });
+  }));
 
   app.post(api.mothers.create.path, registryRBAC, async (req, res) => {
     try {
@@ -70,28 +82,20 @@ export async function registerRoutes(
     }
   });
 
-  app.put(api.mothers.update.path, registryRBAC, async (req, res) => {
-    try {
-      const input = api.mothers.update.input.parse(req.body);
-      const updated = await storage.updateMother(Number(req.params.id), input);
-      res.json(updated);
-    } catch (err) {
-      res.status(400).json({ message: "Invalid input" });
-    }
-  });
+  app.put(api.mothers.update.path, registryRBAC, ar(async (req, res) => {
+    const id = parseId(req.params.id, res); if (id === null) return;
+    const input = api.mothers.update.input.parse(req.body);
+    const updated = await storage.updateMother(id, input);
+    res.json(updated);
+  }));
 
-  app.delete(api.mothers.delete.path, registryRBAC, async (req, res) => {
-    try {
-      const mother = await storage.getMother(Number(req.params.id));
-      if (!mother) {
-        return res.status(404).json({ message: "Mother not found" });
-      }
-      await storage.deleteMother(Number(req.params.id));
-      res.json({ success: true });
-    } catch (err) {
-      res.status(500).json({ message: "Failed to delete mother" });
-    }
-  });
+  app.delete(api.mothers.delete.path, registryRBAC, ar(async (req, res) => {
+    const id = parseId(req.params.id, res); if (id === null) return;
+    const mother = await storage.getMother(id);
+    if (!mother) return res.status(404).json({ message: "Mother not found" });
+    await storage.deleteMother(id);
+    res.json({ success: true });
+  }));
 
   // === CHILDREN ===
   app.get(api.children.list.path, registryReadRBAC, async (req, res) => {
@@ -99,54 +103,39 @@ export async function registerRoutes(
     res.json(filterByBarangay(data, req.userInfo));
   });
 
-  app.get(api.children.get.path, registryReadRBAC, async (req, res) => {
-    const child = await storage.getChild(Number(req.params.id));
-    if (!child) {
-      return res.status(404).json({ message: "Child not found" });
-    }
-    // Check TL barangay access
+  app.get(api.children.get.path, registryReadRBAC, ar(async (req, res) => {
+    const id = parseId(req.params.id, res); if (id === null) return;
+    const child = await storage.getChild(id);
+    if (!child) return res.status(404).json({ message: "Child not found" });
     if (req.userInfo?.role === UserRole.TL && !req.userInfo.assignedBarangays.includes(child.barangay)) {
       return res.status(403).json({ message: "Access denied to this barangay" });
     }
     res.json(child);
-  });
+  }));
 
-  app.post(api.children.create.path, registryRBAC, async (req, res) => {
-    try {
-      const input = api.children.create.input.parse(req.body);
-      // TL can only create records in their assigned barangays
-      if (req.userInfo?.role === UserRole.TL && !req.userInfo.assignedBarangays.includes(input.barangay)) {
-        return res.status(403).json({ message: "You can only add patients to your assigned barangays" });
-      }
-      const created = await storage.createChild(input);
-      res.status(201).json(created);
-    } catch (err) {
-      res.status(400).json({ message: "Invalid input" });
+  app.post(api.children.create.path, registryRBAC, ar(async (req, res) => {
+    const input = api.children.create.input.parse(req.body);
+    if (req.userInfo?.role === UserRole.TL && !req.userInfo.assignedBarangays.includes(input.barangay)) {
+      return res.status(403).json({ message: "You can only add patients to your assigned barangays" });
     }
-  });
+    const created = await storage.createChild(input);
+    res.status(201).json(created);
+  }));
 
-  app.put(api.children.update.path, registryRBAC, async (req, res) => {
-    try {
-      const input = api.children.update.input.parse(req.body);
-      const updated = await storage.updateChild(Number(req.params.id), input);
-      res.json(updated);
-    } catch (err) {
-      res.status(400).json({ message: "Invalid input" });
-    }
-  });
+  app.put(api.children.update.path, registryRBAC, ar(async (req, res) => {
+    const id = parseId(req.params.id, res); if (id === null) return;
+    const input = api.children.update.input.parse(req.body);
+    const updated = await storage.updateChild(id, input);
+    res.json(updated);
+  }));
 
-  app.delete(api.children.delete.path, registryRBAC, async (req, res) => {
-    try {
-      const child = await storage.getChild(Number(req.params.id));
-      if (!child) {
-        return res.status(404).json({ message: "Child not found" });
-      }
-      await storage.deleteChild(Number(req.params.id));
-      res.json({ success: true });
-    } catch (err) {
-      res.status(500).json({ message: "Failed to delete child" });
-    }
-  });
+  app.delete(api.children.delete.path, registryRBAC, ar(async (req, res) => {
+    const id = parseId(req.params.id, res); if (id === null) return;
+    const child = await storage.getChild(id);
+    if (!child) return res.status(404).json({ message: "Child not found" });
+    await storage.deleteChild(id);
+    res.json({ success: true });
+  }));
 
   // === SENIORS ===
   app.get(api.seniors.list.path, registryReadRBAC, async (req, res) => {
@@ -154,54 +143,39 @@ export async function registerRoutes(
     res.json(filterByBarangay(data, req.userInfo));
   });
 
-  app.get(api.seniors.get.path, registryReadRBAC, async (req, res) => {
-    const senior = await storage.getSenior(Number(req.params.id));
-    if (!senior) {
-      return res.status(404).json({ message: "Senior not found" });
-    }
-    // Check TL barangay access
+  app.get(api.seniors.get.path, registryReadRBAC, ar(async (req, res) => {
+    const id = parseId(req.params.id, res); if (id === null) return;
+    const senior = await storage.getSenior(id);
+    if (!senior) return res.status(404).json({ message: "Senior not found" });
     if (req.userInfo?.role === UserRole.TL && !req.userInfo.assignedBarangays.includes(senior.barangay)) {
       return res.status(403).json({ message: "Access denied to this barangay" });
     }
     res.json(senior);
-  });
+  }));
 
-  app.post(api.seniors.create.path, registryRBAC, async (req, res) => {
-    try {
-      const input = api.seniors.create.input.parse(req.body);
-      // TL can only create records in their assigned barangays
-      if (req.userInfo?.role === UserRole.TL && !req.userInfo.assignedBarangays.includes(input.barangay)) {
-        return res.status(403).json({ message: "You can only add patients to your assigned barangays" });
-      }
-      const created = await storage.createSenior(input);
-      res.status(201).json(created);
-    } catch (err) {
-      res.status(400).json({ message: "Invalid input" });
+  app.post(api.seniors.create.path, registryRBAC, ar(async (req, res) => {
+    const input = api.seniors.create.input.parse(req.body);
+    if (req.userInfo?.role === UserRole.TL && !req.userInfo.assignedBarangays.includes(input.barangay)) {
+      return res.status(403).json({ message: "You can only add patients to your assigned barangays" });
     }
-  });
+    const created = await storage.createSenior(input);
+    res.status(201).json(created);
+  }));
 
-  app.put(api.seniors.update.path, registryRBAC, async (req, res) => {
-    try {
-      const input = api.seniors.update.input.parse(req.body);
-      const updated = await storage.updateSenior(Number(req.params.id), input);
-      res.json(updated);
-    } catch (err) {
-      res.status(400).json({ message: "Invalid input" });
-    }
-  });
+  app.put(api.seniors.update.path, registryRBAC, ar(async (req, res) => {
+    const id = parseId(req.params.id, res); if (id === null) return;
+    const input = api.seniors.update.input.parse(req.body);
+    const updated = await storage.updateSenior(id, input);
+    res.json(updated);
+  }));
 
-  app.delete(api.seniors.delete.path, registryRBAC, async (req, res) => {
-    try {
-      const senior = await storage.getSenior(Number(req.params.id));
-      if (!senior) {
-        return res.status(404).json({ message: "Senior not found" });
-      }
-      await storage.deleteSenior(Number(req.params.id));
-      res.json({ success: true });
-    } catch (err) {
-      res.status(500).json({ message: "Failed to delete senior" });
-    }
-  });
+  app.delete(api.seniors.delete.path, registryRBAC, ar(async (req, res) => {
+    const id = parseId(req.params.id, res); if (id === null) return;
+    const senior = await storage.getSenior(id);
+    if (!senior) return res.status(404).json({ message: "Senior not found" });
+    await storage.deleteSenior(id);
+    res.json({ success: true });
+  }));
 
   // === SENIOR MEDICATION CLAIMS (Cross-barangay verification) ===
   app.get("/api/senior-med-claims", async (req, res) => {
@@ -295,33 +269,25 @@ export async function registerRoutes(
     res.json(data);
   });
 
-  app.get(api.diseaseCases.get.path, async (req, res) => {
-    const diseaseCase = await storage.getDiseaseCase(Number(req.params.id));
-    if (!diseaseCase) {
-      return res.status(404).json({ message: "Disease case not found" });
-    }
+  app.get(api.diseaseCases.get.path, ar(async (req, res) => {
+    const id = parseId(req.params.id, res); if (id === null) return;
+    const diseaseCase = await storage.getDiseaseCase(id);
+    if (!diseaseCase) return res.status(404).json({ message: "Disease case not found" });
     res.json(diseaseCase);
-  });
+  }));
 
-  app.post(api.diseaseCases.create.path, registryRBAC, async (req, res) => {
-    try {
-      const input = api.diseaseCases.create.input.parse(req.body);
-      const created = await storage.createDiseaseCase(input);
-      res.status(201).json(created);
-    } catch (err) {
-      res.status(400).json({ message: "Invalid input" });
-    }
-  });
+  app.post(api.diseaseCases.create.path, registryRBAC, ar(async (req, res) => {
+    const input = api.diseaseCases.create.input.parse(req.body);
+    const created = await storage.createDiseaseCase(input);
+    res.status(201).json(created);
+  }));
 
-  app.put(api.diseaseCases.update.path, registryRBAC, async (req, res) => {
-    try {
-      const input = api.diseaseCases.update.input.parse(req.body);
-      const updated = await storage.updateDiseaseCase(Number(req.params.id), input);
-      res.json(updated);
-    } catch (err) {
-      res.status(400).json({ message: "Invalid input" });
-    }
-  });
+  app.put(api.diseaseCases.update.path, registryRBAC, ar(async (req, res) => {
+    const id = parseId(req.params.id, res); if (id === null) return;
+    const input = api.diseaseCases.update.input.parse(req.body);
+    const updated = await storage.updateDiseaseCase(id, input);
+    res.json(updated);
+  }));
 
   // === TB PATIENTS ===
   app.get(api.tbPatients.list.path, async (req, res) => {
@@ -329,33 +295,25 @@ export async function registerRoutes(
     res.json(data);
   });
 
-  app.get(api.tbPatients.get.path, async (req, res) => {
-    const patient = await storage.getTBPatient(Number(req.params.id));
-    if (!patient) {
-      return res.status(404).json({ message: "TB patient not found" });
-    }
+  app.get(api.tbPatients.get.path, ar(async (req, res) => {
+    const id = parseId(req.params.id, res); if (id === null) return;
+    const patient = await storage.getTBPatient(id);
+    if (!patient) return res.status(404).json({ message: "TB patient not found" });
     res.json(patient);
-  });
+  }));
 
-  app.post(api.tbPatients.create.path, registryRBAC, async (req, res) => {
-    try {
-      const input = api.tbPatients.create.input.parse(req.body);
-      const created = await storage.createTBPatient(input);
-      res.status(201).json(created);
-    } catch (err) {
-      res.status(400).json({ message: "Invalid input" });
-    }
-  });
+  app.post(api.tbPatients.create.path, registryRBAC, ar(async (req, res) => {
+    const input = api.tbPatients.create.input.parse(req.body);
+    const created = await storage.createTBPatient(input);
+    res.status(201).json(created);
+  }));
 
-  app.put(api.tbPatients.update.path, registryRBAC, async (req, res) => {
-    try {
-      const input = api.tbPatients.update.input.parse(req.body);
-      const updated = await storage.updateTBPatient(Number(req.params.id), input);
-      res.json(updated);
-    } catch (err) {
-      res.status(400).json({ message: "Invalid input" });
-    }
-  });
+  app.put(api.tbPatients.update.path, registryRBAC, ar(async (req, res) => {
+    const id = parseId(req.params.id, res); if (id === null) return;
+    const input = api.tbPatients.update.input.parse(req.body);
+    const updated = await storage.updateTBPatient(id, input);
+    res.json(updated);
+  }));
 
   // === THEME SETTINGS ===
   app.get(api.themeSettings.get.path, async (req, res) => {
@@ -391,33 +349,25 @@ export async function registerRoutes(
     res.json(data);
   });
 
-  app.get(api.consults.get.path, patientCheckupRBAC, async (req, res) => {
-    const consult = await storage.getConsult(Number(req.params.id));
-    if (!consult) {
-      return res.status(404).json({ message: "Consult not found" });
-    }
+  app.get(api.consults.get.path, patientCheckupRBAC, ar(async (req, res) => {
+    const id = parseId(req.params.id, res); if (id === null) return;
+    const consult = await storage.getConsult(id);
+    if (!consult) return res.status(404).json({ message: "Consult not found" });
     res.json(consult);
-  });
+  }));
 
-  app.post(api.consults.create.path, patientCheckupRBAC, async (req, res) => {
-    try {
-      const input = api.consults.create.input.parse(req.body);
-      const created = await storage.createConsult(input);
-      res.status(201).json(created);
-    } catch (err) {
-      res.status(400).json({ message: "Invalid input" });
-    }
-  });
+  app.post(api.consults.create.path, patientCheckupRBAC, ar(async (req, res) => {
+    const input = api.consults.create.input.parse(req.body);
+    const created = await storage.createConsult(input);
+    res.status(201).json(created);
+  }));
 
-  app.put(api.consults.update.path, patientCheckupRBAC, async (req, res) => {
-    try {
-      const input = api.consults.update.input.parse(req.body);
-      const updated = await storage.updateConsult(Number(req.params.id), input);
-      res.json(updated);
-    } catch (err) {
-      res.status(400).json({ message: "Invalid input" });
-    }
-  });
+  app.put(api.consults.update.path, patientCheckupRBAC, ar(async (req, res) => {
+    const id = parseId(req.params.id, res); if (id === null) return;
+    const input = api.consults.update.input.parse(req.body);
+    const updated = await storage.updateConsult(id, input);
+    res.json(updated);
+  }));
 
   // === M1 TEMPLATE SYSTEM ===
   
@@ -428,10 +378,11 @@ export async function registerRoutes(
   });
 
   // Get M1 indicator catalog for a template version
-  app.get("/api/m1/templates/:templateId/catalog", async (req, res) => {
-    const catalog = await storage.getM1IndicatorCatalog(Number(req.params.templateId));
+  app.get("/api/m1/templates/:templateId/catalog", ar(async (req, res) => {
+    const id = parseId(req.params.templateId, res); if (id === null) return;
+    const catalog = await storage.getM1IndicatorCatalog(id);
     res.json(catalog);
-  });
+  }));
 
   // Get all barangays
   app.get("/api/barangays", async (req, res) => {
@@ -451,33 +402,25 @@ export async function registerRoutes(
   });
 
   // Get single M1 report instance with values
-  app.get("/api/m1/reports/:id", async (req, res) => {
-    const report = await storage.getM1ReportInstance(Number(req.params.id));
-    if (!report) {
-      return res.status(404).json({ message: "Report not found" });
-    }
+  app.get("/api/m1/reports/:id", ar(async (req, res) => {
+    const id = parseId(req.params.id, res); if (id === null) return;
+    const report = await storage.getM1ReportInstance(id);
+    if (!report) return res.status(404).json({ message: "Report not found" });
     res.json(report);
-  });
+  }));
 
   // Create new M1 report instance
-  app.post("/api/m1/reports", async (req, res) => {
-    try {
-      const report = await storage.createM1ReportInstance(req.body);
-      res.status(201).json(report);
-    } catch (err) {
-      res.status(400).json({ message: "Failed to create report" });
-    }
-  });
+  app.post("/api/m1/reports", ar(async (req, res) => {
+    const report = await storage.createM1ReportInstance(req.body);
+    res.status(201).json(report);
+  }));
 
   // Update M1 indicator values for a report
-  app.put("/api/m1/reports/:id/values", async (req, res) => {
-    try {
-      const updated = await storage.updateM1IndicatorValues(Number(req.params.id), req.body.values);
-      res.json(updated);
-    } catch (err) {
-      res.status(400).json({ message: "Failed to update values" });
-    }
-  });
+  app.put("/api/m1/reports/:id/values", ar(async (req, res) => {
+    const id = parseId(req.params.id, res); if (id === null) return;
+    const updated = await storage.updateM1IndicatorValues(id, req.body.values);
+    res.json(updated);
+  }));
 
   // Get municipality settings
   app.get("/api/municipality-settings", async (req, res) => {
@@ -486,10 +429,11 @@ export async function registerRoutes(
   });
 
   // Get barangay settings
-  app.get("/api/barangay-settings/:barangayId", async (req, res) => {
-    const settings = await storage.getBarangaySettings(Number(req.params.barangayId));
+  app.get("/api/barangay-settings/:barangayId", ar(async (req, res) => {
+    const id = parseId(req.params.barangayId, res); if (id === null) return;
+    const settings = await storage.getBarangaySettings(id);
     res.json(settings || {});
-  });
+  }));
 
   // Bulk import M1 CSV data for a specific barangay and month/year
   app.post("/api/m1/bulk-import", async (req, res) => {
