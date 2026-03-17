@@ -37,106 +37,114 @@ import {
   MessageCircle,
 } from "lucide-react";
 import { useTheme } from "@/contexts/theme-context";
-import { useAuth, permissions } from "@/hooks/use-auth";
+import { useAuth, sidebarPermissions, ALL_ROLES } from "@/hooks/use-auth";
 
 interface NavItem {
   title: string;
   url: string;
   icon: React.ElementType;
+  // Explicit roles list derived from sidebarPermissions (or ALL_ROLES for unrestricted items).
+  // Used to filter items at render time — same data that RoleRoute uses for route guards.
+  roles: readonly string[];
   isBadged?: boolean;
 }
 
 interface NavGroup {
-  label: string;
+  label: string | null; // null = no section label rendered
   items: NavItem[];
 }
 
-// Navigation config — roles are NOT listed here.
-// Visibility is derived from ROUTE_PERMISSIONS in use-auth.ts via permissions.canAccessRoute(),
-// keeping sidebar display and route guards in sync from a single source of truth.
+// Helper: returns the allowed roles for a path from the central sidebarPermissions map,
+// falling back to ALL_ROLES for paths that have no restriction.
+function rolesFor(url: string): readonly string[] {
+  return sidebarPermissions[url] ?? ALL_ROLES;
+}
+
+// Central navigation config — roles on each item come from sidebarPermissions so that
+// sidebar visibility and RoleRoute guards share the same policy data.
 const NAV_GROUPS: NavGroup[] = [
   {
     label: "Overview",
     items: [
-      { title: "Municipal Dashboard", url: "/", icon: LayoutDashboard },
-      { title: "Hotspots & Analytics", url: "/hotspots", icon: TrendingUp },
-      { title: "Calendar", url: "/calendar", icon: Calendar },
+      { title: "Municipal Dashboard", url: "/", icon: LayoutDashboard, roles: rolesFor("/") },
+      { title: "Hotspots & Analytics", url: "/hotspots", icon: TrendingUp, roles: rolesFor("/hotspots") },
+      { title: "Calendar", url: "/calendar", icon: Calendar, roles: rolesFor("/calendar") },
     ],
   },
   {
     label: "Maternal and Child Care",
     items: [
-      { title: "TT Reminders", url: "/prenatal", icon: Heart },
-      { title: "Prenatal Dashboard", url: "/prenatal/dashboard", icon: Activity },
-      { title: "Mother Registry", url: "/prenatal/registry", icon: Users },
-      { title: "Vaccination Schedule", url: "/child", icon: Baby },
-      { title: "Child Dashboard", url: "/child/dashboard", icon: Activity },
-      { title: "Child Registry", url: "/child/registry", icon: Users },
+      { title: "TT Reminders", url: "/prenatal", icon: Heart, roles: rolesFor("/prenatal") },
+      { title: "Prenatal Dashboard", url: "/prenatal/dashboard", icon: Activity, roles: rolesFor("/prenatal/dashboard") },
+      { title: "Mother Registry", url: "/prenatal/registry", icon: Users, roles: rolesFor("/prenatal/registry") },
+      { title: "Vaccination Schedule", url: "/child", icon: Baby, roles: rolesFor("/child") },
+      { title: "Child Dashboard", url: "/child/dashboard", icon: Activity, roles: rolesFor("/child/dashboard") },
+      { title: "Child Registry", url: "/child/registry", icon: Users, roles: rolesFor("/child/registry") },
     ],
   },
   {
     label: "Community Nutrition",
     items: [
-      { title: "Growth Monitoring", url: "/nutrition/growth", icon: TrendingUp },
-      { title: "Nutrition Dashboard", url: "/nutrition/dashboard", icon: Activity },
-      { title: "Underweight Follow-ups", url: "/nutrition", icon: Scale },
+      { title: "Growth Monitoring", url: "/nutrition/growth", icon: TrendingUp, roles: rolesFor("/nutrition/growth") },
+      { title: "Nutrition Dashboard", url: "/nutrition/dashboard", icon: Activity, roles: rolesFor("/nutrition/dashboard") },
+      { title: "Underweight Follow-ups", url: "/nutrition", icon: Scale, roles: rolesFor("/nutrition") },
     ],
   },
   {
     label: "Senior Care",
     items: [
-      { title: "HTN Meds Pickup", url: "/senior", icon: Pill },
-      { title: "Senior Dashboard", url: "/senior/dashboard", icon: Activity },
-      { title: "Senior Registry", url: "/senior/registry", icon: UserCircle },
+      { title: "HTN Meds Pickup", url: "/senior", icon: Pill, roles: rolesFor("/senior") },
+      { title: "Senior Dashboard", url: "/senior/dashboard", icon: Activity, roles: rolesFor("/senior/dashboard") },
+      { title: "Senior Registry", url: "/senior/registry", icon: UserCircle, roles: rolesFor("/senior/registry") },
     ],
   },
   {
     label: "Disease Surveillance",
     items: [
-      { title: "Case Worklist", url: "/disease", icon: Siren },
-      { title: "Case Registry", url: "/disease/registry", icon: ClipboardList },
-      { title: "Outbreak Map", url: "/disease/map", icon: MapPin },
+      { title: "Case Worklist", url: "/disease", icon: Siren, roles: rolesFor("/disease") },
+      { title: "Case Registry", url: "/disease/registry", icon: ClipboardList, roles: rolesFor("/disease/registry") },
+      { title: "Outbreak Map", url: "/disease/map", icon: MapPin, roles: rolesFor("/disease/map") },
     ],
   },
   {
     label: "TB DOTS",
     items: [
-      { title: "DOTS Worklist", url: "/tb", icon: Pill },
-      { title: "TB Registry", url: "/tb/registry", icon: ClipboardList },
+      { title: "DOTS Worklist", url: "/tb", icon: Pill, roles: rolesFor("/tb") },
+      { title: "TB Registry", url: "/tb/registry", icon: ClipboardList, roles: rolesFor("/tb/registry") },
     ],
   },
   {
     label: "Inventory and Supply",
     items: [
-      { title: "Availability & Surplus", url: "/inventory", icon: Package },
-      { title: "Stock-outs & Low Stock", url: "/inventory/stockouts", icon: AlertTriangle },
+      { title: "Availability & Surplus", url: "/inventory", icon: Package, roles: rolesFor("/inventory") },
+      { title: "Stock-outs & Low Stock", url: "/inventory/stockouts", icon: AlertTriangle, roles: rolesFor("/inventory/stockouts") },
     ],
   },
   {
     label: "Reports and Analytics",
     items: [
-      { title: "M1 Report", url: "/reports/m1", icon: ClipboardList },
-      { title: "Health Analytics", url: "/reports/ai", icon: Bot },
+      { title: "M1 Report", url: "/reports/m1", icon: ClipboardList, roles: rolesFor("/reports/m1") },
+      { title: "Health Analytics", url: "/reports/ai", icon: Bot, roles: rolesFor("/reports/ai") },
     ],
   },
   {
     label: "Communication",
     items: [
-      { title: "Messages", url: "/messages", icon: MessageCircle, isBadged: true },
+      { title: "Messages", url: "/messages", icon: MessageCircle, roles: rolesFor("/messages"), isBadged: true },
     ],
   },
   {
     label: "Clinical Services",
     items: [
-      { title: "Patient Check-up", url: "/patient-checkup", icon: ClipboardPlus },
+      { title: "Patient Check-up", url: "/patient-checkup", icon: ClipboardPlus, roles: rolesFor("/patient-checkup") },
     ],
   },
   {
     label: "Administration",
     items: [
-      { title: "User Management", url: "/admin/users", icon: Users },
-      { title: "Audit Logs", url: "/admin/audit", icon: Shield },
-      { title: "Settings", url: "/settings", icon: Settings },
+      { title: "User Management", url: "/admin/users", icon: Users, roles: rolesFor("/admin/users") },
+      { title: "Audit Logs", url: "/admin/audit", icon: Shield, roles: rolesFor("/admin/audit") },
+      { title: "Settings", url: "/settings", icon: Settings, roles: rolesFor("/settings") },
     ],
   },
 ];
@@ -158,11 +166,12 @@ export function AppSidebar() {
   const logoUrl = settings?.logoUrl;
   const showLogo = logoUrl && !logoError;
 
-  // Filter items and groups using the centralized ROUTE_PERMISSIONS via canAccessRoute.
-  // This is the same check the RoleRoute guard uses — one source of truth.
+  // Filter each group to items the current role can see; hide groups with no visible items.
   const visibleGroups = NAV_GROUPS.map((group) => ({
     ...group,
-    items: group.items.filter((item) => permissions.canAccessRoute(role, item.url)),
+    items: group.items.filter((item) =>
+      role ? (item.roles as string[]).includes(role) : false
+    ),
   })).filter((group) => group.items.length > 0);
 
   return (
@@ -187,8 +196,8 @@ export function AppSidebar() {
       </SidebarHeader>
       <SidebarContent>
         {visibleGroups.map((group) => (
-          <SidebarGroup key={group.label}>
-            <SidebarGroupLabel>{group.label}</SidebarGroupLabel>
+          <SidebarGroup key={group.label ?? "top"}>
+            {group.label && <SidebarGroupLabel>{group.label}</SidebarGroupLabel>}
             <SidebarGroupContent>
               <SidebarMenu>
                 {group.items.map((item) => (

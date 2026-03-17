@@ -53,22 +53,28 @@ export const UserRole = {
 
 export type UserRoleType = typeof UserRole[keyof typeof UserRole];
 
-// ─── Central route-permission map ────────────────────────────────────────────
-// Single source of truth used by BOTH the sidebar (item visibility) and route
-// guards (RoleRoute). Routes not listed here are accessible to all authenticated
-// users. SYSTEM_ADMIN always has full access (short-circuited below).
-export const ROUTE_PERMISSIONS: Record<string, readonly string[]> = {
-  "/patient-checkup": [UserRole.SYSTEM_ADMIN, UserRole.MHO],
-  "/settings": [UserRole.SYSTEM_ADMIN, UserRole.MHO, UserRole.SHA],
-  "/hotspots": [UserRole.SYSTEM_ADMIN, UserRole.MHO, UserRole.SHA],
-  "/inventory": [UserRole.SYSTEM_ADMIN, UserRole.MHO, UserRole.SHA],
-  "/inventory/stockouts": [UserRole.SYSTEM_ADMIN, UserRole.MHO, UserRole.SHA],
-  "/reports": [UserRole.SYSTEM_ADMIN, UserRole.MHO, UserRole.SHA],
-  "/reports/ai": [UserRole.SYSTEM_ADMIN, UserRole.MHO, UserRole.SHA],
-  "/reports/m1": [UserRole.SYSTEM_ADMIN, UserRole.MHO, UserRole.SHA],
-  "/disease/map": [UserRole.SYSTEM_ADMIN, UserRole.MHO, UserRole.SHA],
-  "/admin/users": [UserRole.SYSTEM_ADMIN],
-  "/admin/audit": [UserRole.SYSTEM_ADMIN],
+// Reusable role arrays for use in sidebar config and route guard allowedRoles
+export const ALL_ROLES = [UserRole.SYSTEM_ADMIN, UserRole.MHO, UserRole.SHA, UserRole.TL] as const;
+export const MGMT_ROLES = [UserRole.SYSTEM_ADMIN, UserRole.MHO, UserRole.SHA] as const;
+export const ADMIN_MHO_ROLES = [UserRole.SYSTEM_ADMIN, UserRole.MHO] as const;
+export const ADMIN_ONLY_ROLES = [UserRole.SYSTEM_ADMIN] as const;
+
+// ─── Central sidebar / route permission config ────────────────────────────────
+// Single source of truth: a map of path → allowed roles.
+// Used directly in sidebarPermissions config items AND consumed by RoleRoute
+// via allowedRoles props.  Unlisted paths are publicly accessible to all roles.
+export const sidebarPermissions: Record<string, readonly string[]> = {
+  "/hotspots": MGMT_ROLES,
+  "/inventory": MGMT_ROLES,
+  "/inventory/stockouts": MGMT_ROLES,
+  "/reports": MGMT_ROLES,
+  "/reports/ai": MGMT_ROLES,
+  "/reports/m1": MGMT_ROLES,
+  "/disease/map": MGMT_ROLES,
+  "/patient-checkup": ADMIN_MHO_ROLES,
+  "/settings": MGMT_ROLES,
+  "/admin/users": ADMIN_ONLY_ROLES,
+  "/admin/audit": ADMIN_ONLY_ROLES,
 };
 
 // Permission helpers — all role logic lives here
@@ -89,17 +95,16 @@ export const permissions = {
   isSHA: (role?: string) => role === UserRole.SHA,
   isTL: (role?: string) => role === UserRole.TL,
 
-  // Derived from ROUTE_PERMISSIONS — used by both sidebar item filter and RoleRoute guard
+  // Checks if a role can access a given URL path — used by RoleRoute for guard logic.
+  // Derived from sidebarPermissions so sidebar visibility and route access always agree.
   canAccessRoute: (role: string | undefined, path: string): boolean => {
     if (!role) return false;
-    // SYSTEM_ADMIN has full access to every route
     if (role === UserRole.SYSTEM_ADMIN) return true;
-    // Find the most-specific matching permission entry (longest prefix wins)
-    const entry = Object.entries(ROUTE_PERMISSIONS)
+    // Longest-prefix match in sidebarPermissions
+    const entry = Object.entries(sidebarPermissions)
       .filter(([pattern]) => path === pattern || path.startsWith(pattern + "/"))
       .sort((a, b) => b[0].length - a[0].length)[0];
-    // No entry = unrestricted route, accessible to all authenticated roles
-    if (!entry) return true;
+    if (!entry) return true; // unrestricted = accessible to all authenticated roles
     return (entry[1] as string[]).includes(role);
   },
 };
