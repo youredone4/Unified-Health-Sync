@@ -1,0 +1,107 @@
+Enhance registry modules to implement proper role-based data control where only Super Admin can delete records, while other roles can update information but not delete.
+
+Context
+- The system already has working registry modules (Mother, Child, Senior).
+- Do NOT rebuild the modules.
+- Do NOT break existing functionality.
+- This is a role-based permission enhancement.
+
+Goal
+Implement controlled data management:
+- Super Admin → can DELETE and UPDATE
+- Other roles → can UPDATE only (no DELETE)
+
+Applicable Roles
+- Super Admin
+- Municipal Health Officer
+- Senior Health Admin
+- Team Leader (Barangay Nurse)
+
+Core Rules
+
+1. Delete Permission (STRICT)
+- Only Super Admin can delete registry records
+- Other roles must NOT:
+  - see delete buttons
+  - access delete routes
+  - perform delete via API
+
+Apply to:
+- Mother Registry
+- Child Registry
+- Senior Registry
+- any similar registry modules
+
+2. Update Permission (ALL OPERATIONAL ROLES)
+Allow the following roles to UPDATE records:
+- Municipal Health Officer
+- Senior Health Admin
+- Team Leader
+
+They should be able to update:
+- address
+- phone number
+- civil status (e.g., married, widowed)
+- other editable profile fields
+
+Do NOT restrict normal editing workflows.
+
+3. UI Behavior
+- Show Edit button to allowed roles
+- Show Delete button ONLY to Super Admin
+- Keep UI clean and consistent
+
+4. Confirmation for Delete
+When Super Admin deletes:
+- show confirmation modal
+- message: "This action cannot be undone"
+
+5. Audit Logging
+Log all delete actions:
+- user
+- role
+- timestamp
+- module
+- record ID
+
+If possible, also log updates:
+- field changed
+- previous value → new value
+
+6. Backend Enforcement
+- enforce role checks in API/backend
+- do NOT rely only on frontend hiding
+- block unauthorized delete attempts
+
+7. Data Integrity
+- ensure deletion does not break related modules
+- refresh tables after delete/update
+
+8. Preserve Existing Functionality
+- do not break:
+  - search
+  - filters
+  - dashboards
+  - SMS integration
+  - registry relationships
+
+9. Deliverables
+Provide:
+1. role-based delete restriction
+2. update access for all non-admin roles
+3. UI updates (Edit visible, Delete restricted)
+4. confirmation modal for delete
+5. audit log integration
+6. list of modules updated
+
+Important Constraints
+- Only Super Admin can delete
+- All roles can update
+- Do NOT remove existing edit functionality
+- Do NOT expose delete to non-admin roles
+
+Success Criteria
+- Super Admin can delete records
+- Other roles can update but NOT delete
+- Address, phone, and civil status updates work correctly
+- System remains stable and consistent
