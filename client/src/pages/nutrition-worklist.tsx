@@ -18,7 +18,9 @@ export default function NutritionWorklist() {
 
   const underweight = children.filter(c => isUnderweightRisk(c));
   const missingGrowth = children.filter(c => hasMissingGrowthCheck(c));
-  const atRisk = [...new Set([...underweight, ...missingGrowth])];
+  const atRiskMap = new Map<number, typeof children[0]>();
+  [...underweight, ...missingGrowth].forEach(c => atRiskMap.set(c.id, c));
+  const atRisk = Array.from(atRiskMap.values());
 
   const filteredAtRisk = atRisk.filter(c =>
     search === '' ||

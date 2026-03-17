@@ -30,7 +30,7 @@ export default function SeniorWorklist() {
   }));
 
   const overdue = seniorsWithStatus.filter(s => s.pickupStatus.status === 'overdue');
-  const dueSoon = seniorsWithStatus.filter(s => s.pickupStatus.status === 'due_soon' && s.pickupStatus.status !== 'overdue');
+  const dueSoon = seniorsWithStatus.filter(s => s.pickupStatus.status === 'due_soon');
   const medsReady = seniorsWithStatus.filter(s => s.medsReady);
 
   const getBaseFilteredSeniors = () => {
