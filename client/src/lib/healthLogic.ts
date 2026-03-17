@@ -218,16 +218,20 @@ export function getAgeInMonths(dob: string): number {
   return Math.floor(days / 30);
 }
 
-// WHO 2006 Child Growth Standards — Weight-for-Age reference cutoffs (kg)
-// Indexed by age in months (0–60). Source: WHO MGRS, published LMS tables.
-const WHO_WFA = {
+// WHO 2006 Child Growth Standards — Weight-for-Age LMS parameters.
+// Source: WHO MGRS (2006) Acta Paediatrica Supplement; WHO technical tables.
+// Indexed by age in completed months (0–60).
+// L = Box-Cox power (skewness), M = median (kg), S = coefficient of variation.
+const WHO_WFA_LMS = {
   boys: {
-    sd3neg: [2.1,2.9,3.8,4.4,4.8,5.3,5.7,6.0,6.3,6.6,6.8,7.1,7.3,7.5,7.7,7.9,8.1,8.2,8.4,8.6,8.7,8.9,9.0,9.2,9.3,9.5,9.6,9.8,9.9,10.1,10.2,10.4,10.5,10.7,10.8,10.9,11.1,11.2,11.3,11.5,11.6,11.7,11.9,12.0,12.1,12.3,12.4,12.5,12.7,12.8,12.9,13.1,13.2,13.3,13.5,13.6,13.7,13.9,14.0,14.1,14.3],
-    sd2neg: [2.5,3.4,4.3,5.0,5.6,6.0,6.4,6.8,7.1,7.4,7.7,8.0,8.2,8.4,8.6,8.8,9.1,9.2,9.4,9.6,9.7,9.9,10.1,10.2,10.4,10.6,10.7,10.9,11.1,11.2,11.4,11.6,11.7,11.9,12.0,12.2,12.3,12.5,12.6,12.8,12.9,13.1,13.2,13.4,13.5,13.7,13.8,14.0,14.1,14.3,14.4,14.6,14.7,14.9,15.0,15.2,15.3,15.5,15.6,15.8,15.9],
+    L: [0.3487,0.2297,0.1970,0.1738,0.1553,0.1395,0.1257,0.1134,0.1021,0.0917,0.0820,0.0730,0.0646,0.0568,0.0494,0.0425,0.0359,0.0297,0.0239,0.0184,0.0132,0.0083,0.0037,-0.0005,-0.0040,-0.0066,-0.0083,-0.0092,-0.0094,-0.0091,-0.0083,-0.0070,-0.0055,-0.0038,-0.0018,0.0004,0.0027,0.0051,0.0075,0.0100,0.0124,0.0148,0.0172,0.0196,0.0219,0.0242,0.0265,0.0287,0.0309,0.0330,0.0351,0.0372,0.0392,0.0411,0.0430,0.0449,0.0467,0.0485,0.0502,0.0519,0.0536],
+    M: [3.3464,4.4709,5.5675,6.3762,7.0023,7.5105,7.9340,8.2970,8.6151,8.9014,9.1649,9.4122,9.6479,9.8749,10.0952,10.3108,10.5228,10.7319,10.9385,11.1430,11.3462,11.5486,11.7504,11.9521,12.1441,12.3340,12.5205,12.7031,12.8818,13.0570,13.2293,13.3994,13.5679,13.7353,13.9020,14.0682,14.2341,14.3998,14.5653,14.7307,14.8962,15.0618,15.2275,15.3933,15.5591,15.7249,15.8907,16.0565,16.2224,16.3883,16.5543,16.7203,16.8864,17.0526,17.2190,17.3856,17.5524,17.7195,17.8869,18.0548,18.2231],
+    S: [0.14602,0.13395,0.12385,0.11727,0.11316,0.10963,0.10680,0.10441,0.10239,0.10064,0.09910,0.09770,0.09641,0.09524,0.09416,0.09317,0.09225,0.09141,0.09063,0.08991,0.08924,0.08862,0.08804,0.08749,0.08688,0.08620,0.08546,0.08467,0.08382,0.08293,0.08201,0.08106,0.08008,0.07910,0.07810,0.07710,0.07609,0.07508,0.07407,0.07306,0.07205,0.07104,0.07004,0.06905,0.06806,0.06708,0.06611,0.06514,0.06419,0.06325,0.06232,0.06140,0.06050,0.05961,0.05873,0.05787,0.05702,0.05619,0.05537,0.05457,0.05378],
   },
   girls: {
-    sd3neg: [2.0,2.7,3.4,4.0,4.4,4.8,5.1,5.4,5.6,5.8,6.1,6.3,6.5,6.7,6.9,7.0,7.2,7.4,7.5,7.7,7.8,8.0,8.1,8.3,8.4,8.6,8.7,8.9,9.0,9.2,9.3,9.5,9.6,9.7,9.9,10.0,10.2,10.3,10.4,10.6,10.7,10.9,11.0,11.1,11.3,11.4,11.5,11.7,11.8,12.0,12.1,12.2,12.4,12.5,12.6,12.8,12.9,13.0,13.2,13.3,13.4],
-    sd2neg: [2.4,3.2,3.9,4.5,5.0,5.4,5.7,6.0,6.3,6.5,6.8,7.0,7.2,7.4,7.6,7.8,8.0,8.2,8.4,8.6,8.7,8.9,9.1,9.3,9.4,9.6,9.8,10.0,10.1,10.3,10.5,10.7,10.8,11.0,11.1,11.3,11.5,11.6,11.8,12.0,12.1,12.3,12.5,12.6,12.8,13.0,13.1,13.3,13.5,13.6,13.8,14.0,14.1,14.3,14.5,14.6,14.8,15.0,15.1,15.3,15.5],
+    L: [0.3809,0.1714,0.0962,0.0402,-0.0050,-0.0430,-0.0756,-0.1038,-0.1282,-0.1495,-0.1681,-0.1845,-0.1990,-0.2120,-0.2235,-0.2339,-0.2431,-0.2515,-0.2590,-0.2657,-0.2719,-0.2774,-0.2823,-0.2867,-0.2902,-0.2926,-0.2938,-0.2939,-0.2930,-0.2912,-0.2887,-0.2855,-0.2817,-0.2773,-0.2725,-0.2673,-0.2617,-0.2559,-0.2498,-0.2436,-0.2371,-0.2306,-0.2239,-0.2172,-0.2104,-0.2035,-0.1966,-0.1897,-0.1828,-0.1759,-0.1691,-0.1622,-0.1554,-0.1487,-0.1420,-0.1354,-0.1289,-0.1225,-0.1162,-0.1100,-0.1039],
+    M: [3.2322,4.1873,5.1282,5.8458,6.4237,6.8985,7.2970,7.6422,7.9487,8.2254,8.4800,8.7192,8.9481,9.1699,9.3876,9.6029,9.8170,10.0305,10.2441,10.4579,10.6718,10.8856,11.0986,11.3101,11.5149,11.7128,11.9070,12.0985,12.2884,12.4773,12.6653,12.8524,13.0385,13.2236,13.4076,13.5903,13.7716,13.9514,14.1295,14.3058,14.4802,14.6527,14.8234,14.9925,15.1602,15.3265,15.4918,15.6561,15.8197,15.9827,16.1452,16.3073,16.4690,16.6301,16.7905,16.9501,17.1089,17.2670,17.4245,17.5815,17.7385],
+    S: [0.14171,0.13724,0.13000,0.12619,0.12332,0.12094,0.11900,0.11729,0.11582,0.11452,0.11336,0.11231,0.11135,0.11045,0.10963,0.10884,0.10812,0.10743,0.10680,0.10619,0.10561,0.10508,0.10458,0.10412,0.10366,0.10317,0.10263,0.10205,0.10142,0.10074,0.10001,0.09924,0.09843,0.09758,0.09669,0.09577,0.09481,0.09382,0.09280,0.09176,0.09070,0.08962,0.08852,0.08740,0.08628,0.08514,0.08400,0.08284,0.08169,0.08053,0.07937,0.07821,0.07705,0.07590,0.07475,0.07361,0.07248,0.07135,0.07024,0.06914,0.06806],
   },
 };
 
@@ -235,15 +239,22 @@ export type ZScoreCategory = 'sam' | 'mam' | 'normal';
 
 export interface WeightZScoreResult {
   category: ZScoreCategory;
+  /** True WHO 2006 Box-Cox Z-score, rounded to one decimal place. */
   zScore: number;
 }
 
 /**
- * Classifies a child's nutritional status using WHO 2006 Weight-for-Age Z-score.
- * Returns null if insufficient data (no growth records, unknown age, or age > 60 months).
- * - SAM: Z < -3 (Severe Acute Malnutrition)
- * - MAM: -3 ≤ Z < -2 (Moderate Acute Malnutrition)
- * - Normal: Z ≥ -2
+ * Computes a child's WHO 2006 weight-for-age Z-score using the Box-Cox LMS method.
+ *
+ * Formula:  Z = [(X / M)^L − 1] / (L × S)
+ * When |L| < 0.01 (L ≈ 0):  Z = ln(X / M) / S  (limiting case)
+ *
+ * Classification:
+ *   SAM  (Severe Acute Malnutrition):   Z < −3
+ *   MAM  (Moderate Acute Malnutrition): −3 ≤ Z < −2
+ *   Normal:                              Z ≥ −2
+ *
+ * Returns null when: no growth records, weight ≤ 0, or age outside 0–60 months.
  */
 export function getWeightZScore(child: Child): WeightZScoreResult | null {
   const growth = child.growth || [];
@@ -251,26 +262,38 @@ export function getWeightZScore(child: Child): WeightZScoreResult | null {
 
   const lastEntry = growth[growth.length - 1];
   const weightKg = lastEntry.weightKg;
-  const ageMonths = getAgeInMonths(child.dob);
+  if (!weightKg || weightKg <= 0) return null;
 
+  const ageMonths = getAgeInMonths(child.dob);
   if (ageMonths < 0 || ageMonths > 60) return null;
 
-  const sex = child.sex?.toLowerCase();
-  const table = sex === 'female' ? WHO_WFA.girls : WHO_WFA.boys;
+  const isFemale = child.sex?.toLowerCase() === 'female';
+  const lms = isFemale ? WHO_WFA_LMS.girls : WHO_WFA_LMS.boys;
   const idx = Math.min(Math.round(ageMonths), 60);
-  const sd3 = table.sd3neg[idx];
-  const sd2 = table.sd2neg[idx];
 
-  if (weightKg < sd3) {
-    const approxZ = -3 - Math.max(0, (sd3 - weightKg) / Math.max(sd3 * 0.1, 0.1));
-    return { category: 'sam', zScore: Math.round(approxZ * 10) / 10 };
+  const L = lms.L[idx];
+  const M = lms.M[idx];
+  const S = lms.S[idx];
+
+  let z: number;
+  if (Math.abs(L) < 0.01) {
+    z = Math.log(weightKg / M) / S;
+  } else {
+    z = (Math.pow(weightKg / M, L) - 1) / (L * S);
   }
-  if (weightKg < sd2) {
-    const approxZ = -3 + ((weightKg - sd3) / (sd2 - sd3));
-    return { category: 'mam', zScore: Math.round(approxZ * 10) / 10 };
+
+  const zScore = Math.round(z * 10) / 10;
+
+  let category: ZScoreCategory;
+  if (z < -3) {
+    category = 'sam';
+  } else if (z < -2) {
+    category = 'mam';
+  } else {
+    category = 'normal';
   }
-  const approxZ = -2 + ((weightKg - sd2) / Math.max(sd2 * 0.15, 0.5));
-  return { category: 'normal', zScore: Math.round(Math.min(approxZ, 3) * 10) / 10 };
+
+  return { category, zScore };
 }
 
 export function isUnderweightRisk(child: Child): boolean {
