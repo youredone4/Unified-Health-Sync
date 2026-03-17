@@ -1,0 +1,115 @@
+Adjust the existing Senior Registry module based on the uploaded senior/pharmacy file structure.
+
+Important
+- The Senior Registry already exists and is working.
+- Do NOT rebuild the whole module.
+- Do NOT remove existing fields such as:
+  - Phone #
+  - Last BP
+- Only enhance the registry structure and related form/table views to include additional fields found in the uploaded file.
+
+Goal
+Update the Senior Registry so it includes these additional fields:
+- Gender
+- Date of Birth
+- ID #
+- Civil Status
+
+Civil Status should support values such as:
+- Married
+- Widow
+- Widower
+
+Requirements
+
+1. Keep existing fields
+Do NOT remove or break the existing:
+- Phone #
+- Last BP
+
+2. Add new fields to Senior Registry
+Add these fields:
+- Gender
+- Date of Birth
+- ID #
+- Civil Status
+
+3. Map uploaded file columns correctly
+Use the uploaded file structure as reference.
+
+Column mappings:
+- sex -> Gender
+- dob -> Date of Birth
+- id -> ID #
+- civilstatus -> Civil Status
+
+4. Update all relevant Senior Registry areas
+Apply the changes consistently to:
+- add/create senior form
+- edit senior form
+- registry table/list view
+- detail/profile view if one exists
+- import/parsing logic if Senior Registry reads uploaded files
+
+5. Civil Status values
+Normalize and display civil status properly.
+
+Support at minimum:
+- Married
+- Widow
+- Widower
+
+If the uploaded value is inconsistent in casing or spelling, normalize it cleanly in the UI and storage if safe.
+
+6. Date handling
+- Format Date of Birth properly
+- If DOB exists, display it consistently
+- Preserve existing age logic if age is computed elsewhere
+
+7. Preserve current functionality
+- do not break existing search
+- do not break filters
+- do not break SMS logic
+- do not break HTN Meds Pickup integration
+- do not break any existing senior dashboard connections
+
+8. Table behavior
+If these fields are shown in the Senior Registry table:
+- keep the table clean and readable
+- do not overcrowd the view
+- if needed, choose the best visible columns for the main table and keep full details in the profile/view modal
+
+9. Backend / schema handling
+If schema changes are required:
+- add the new fields safely
+- preserve existing records
+- do not delete old data
+- keep backward compatibility where possible
+
+10. Data migration
+If existing senior records do not yet have these fields:
+- allow them to remain blank/null until updated
+- populate from uploaded file data where possible
+
+11. Deliverables
+Provide:
+1. updated Senior Registry fields
+2. updated form inputs
+3. updated table or profile display
+4. mapping from uploaded file columns
+5. any schema/model changes
+6. confirmation that Phone # and Last BP were preserved
+
+Important Constraints
+- Do NOT remove Phone #
+- Do NOT remove Last BP
+- Do NOT redesign unrelated modules
+- Keep the implementation clean and minimal
+- Follow the existing project structure
+
+Success Criteria
+- Senior Registry keeps Phone # and Last BP
+- Senior Registry now includes Gender, Date of Birth, ID #, and Civil Status
+- Civil Status supports Married, Widow, and Widower
+- uploaded file fields map correctly
+- existing senior-related features continue to work
