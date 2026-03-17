@@ -305,7 +305,7 @@ export default function SeniorDashboard() {
           title="View Worklist"
           subtitle={`${overdue + dueSoon} need medication pickup`}
           icon={List}
-          onClick={() => navigate('/senior/worklist')}
+          onClick={() => navigate('/senior')}
           variant="primary"
         />
         <QuickActionCard
@@ -324,7 +324,7 @@ export default function SeniorDashboard() {
           title="Pickup Calendar"
           subtitle="View scheduled pickups"
           icon={Pill}
-          onClick={() => navigate('/pickup-schedule')}
+          onClick={() => navigate('/calendar')}
         />
       </div>
 

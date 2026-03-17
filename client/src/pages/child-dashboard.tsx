@@ -146,7 +146,7 @@ export default function ChildDashboard() {
           title="View Worklist" 
           subtitle={`${overdue + dueSoon} children need vaccines`}
           icon={List}
-          onClick={() => navigate('/child/worklist')}
+          onClick={() => navigate('/child')}
           variant="primary"
         />
         <QuickActionCard 
@@ -159,13 +159,13 @@ export default function ChildDashboard() {
           title="Vaccination Schedule" 
           subtitle="View upcoming vaccines"
           icon={Calendar}
-          onClick={() => navigate('/child/schedule')}
+          onClick={() => navigate('/child')}
         />
         <QuickActionCard 
           title="Growth Monitoring" 
           subtitle={`${children.filter(c => (c.growth || []).length > 0).length} with measurements`}
           icon={TrendingUp}
-          onClick={() => navigate('/growth-monitoring')}
+          onClick={() => navigate('/nutrition/growth')}
         />
       </div>
 
