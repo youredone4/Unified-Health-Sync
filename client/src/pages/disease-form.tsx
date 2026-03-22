@@ -1,9 +1,10 @@
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useLocation, useRoute } from "wouter";
 import { z } from "zod";
-import type { DiseaseCase, Barangay } from "@shared/schema";
+import type { DiseaseCase, Barangay, Mother, Child, Senior } from "@shared/schema";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -12,7 +13,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { ClipboardList, ArrowLeft, Save } from "lucide-react";
+import { ClipboardList, ArrowLeft, Save, Search, Link2, X } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 
 const formSchema = z.object({
   patientName: z.string().min(1, "Patient name is required"),
@@ -24,9 +26,20 @@ const formSchema = z.object({
   dateReported: z.string().min(1, "Date reported is required"),
   status: z.string().default("New"),
   notes: z.string().optional(),
+  linkedPersonType: z.string().optional(),
+  linkedPersonId: z.coerce.number().optional(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
+
+type LinkType = "none" | "Mother" | "Child" | "Senior";
+
+interface SearchCandidate {
+  id: number;
+  name: string;
+  barangay: string;
+  type: string;
+}
 
 export default function DiseaseForm() {
   const [, navigate] = useLocation();
@@ -34,11 +47,18 @@ export default function DiseaseForm() {
   const isEdit = match && params?.id;
   const { toast } = useToast();
 
+  const [linkType, setLinkType] = useState<LinkType>("none");
+  const [linkSearch, setLinkSearch] = useState("");
+  const [linkedPerson, setLinkedPerson] = useState<SearchCandidate | null>(null);
+
   const { data: barangays = [] } = useQuery<Barangay[]>({ queryKey: ['/api/barangays'] });
   const { data: diseaseCase } = useQuery<DiseaseCase>({
     queryKey: ['/api/disease-cases', params?.id],
     enabled: !!isEdit,
   });
+  const { data: mothers = [] } = useQuery<Mother[]>({ queryKey: ['/api/mothers'] });
+  const { data: children = [] } = useQuery<Child[]>({ queryKey: ['/api/children'] });
+  const { data: seniors = [] } = useQuery<Senior[]>({ queryKey: ['/api/seniors'] });
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -52,6 +72,8 @@ export default function DiseaseForm() {
       dateReported: new Date().toISOString().split('T')[0],
       status: "New",
       notes: "",
+      linkedPersonType: undefined,
+      linkedPersonId: undefined,
     },
     values: isEdit && diseaseCase ? {
       patientName: diseaseCase.patientName,
@@ -63,6 +85,8 @@ export default function DiseaseForm() {
       dateReported: diseaseCase.dateReported,
       status: diseaseCase.status || "New",
       notes: diseaseCase.notes || "",
+      linkedPersonType: diseaseCase.linkedPersonType || undefined,
+      linkedPersonId: diseaseCase.linkedPersonId || undefined,
     } : undefined,
   });
 
@@ -95,15 +119,63 @@ export default function DiseaseForm() {
   });
 
   const onSubmit = (data: FormValues) => {
+    const payload = {
+      ...data,
+      linkedPersonType: linkedPerson?.type || (isEdit ? data.linkedPersonType : undefined) || undefined,
+      linkedPersonId: linkedPerson?.id || (isEdit ? data.linkedPersonId : undefined) || undefined,
+    };
     if (isEdit) {
-      updateMutation.mutate(data);
+      updateMutation.mutate(payload);
     } else {
-      createMutation.mutate(data);
+      createMutation.mutate(payload);
     }
+  };
+
+  const getCandidates = (): SearchCandidate[] => {
+    const q = linkSearch.toLowerCase().trim();
+    if (!q || linkType === "none") return [];
+    if (linkType === "Mother") {
+      return mothers
+        .filter(m => `${m.firstName} ${m.lastName}`.toLowerCase().includes(q))
+        .slice(0, 6)
+        .map(m => ({ id: m.id, name: `${m.firstName} ${m.lastName}`, barangay: m.barangay, type: "Mother" }));
+    }
+    if (linkType === "Child") {
+      return children
+        .filter(c => `${c.firstName} ${c.lastName}`.toLowerCase().includes(q))
+        .slice(0, 6)
+        .map(c => ({ id: c.id, name: `${c.firstName} ${c.lastName}`, barangay: c.barangay, type: "Child" }));
+    }
+    if (linkType === "Senior") {
+      return seniors
+        .filter(s => `${s.firstName} ${s.lastName}`.toLowerCase().includes(q))
+        .slice(0, 6)
+        .map(s => ({ id: s.id, name: `${s.firstName} ${s.lastName}`, barangay: s.barangay, type: "Senior" }));
+    }
+    return [];
+  };
+
+  const candidates = getCandidates();
+
+  const handleSelectCandidate = (c: SearchCandidate) => {
+    setLinkedPerson(c);
+    setLinkSearch("");
+    form.setValue("patientName", c.name);
+    form.setValue("barangay", c.barangay);
+  };
+
+  const handleClearLink = () => {
+    setLinkedPerson(null);
+    setLinkType("none");
+    setLinkSearch("");
+    form.setValue("linkedPersonType", undefined);
+    form.setValue("linkedPersonId", undefined);
   };
 
   const conditions = ["Diarrhea", "Chickenpox", "ARI", "Dengue suspected", "Measles suspected", "COVID-19 suspected", "Other"];
   const statuses = ["New", "Monitoring", "Referred", "Closed"];
+
+  const existingLink = isEdit && diseaseCase?.linkedPersonType ? `${diseaseCase.linkedPersonType} #${diseaseCase.linkedPersonId}` : null;
 
   return (
     <div className="space-y-6">
@@ -119,6 +191,89 @@ export default function DiseaseForm() {
           <p className="text-muted-foreground">{isEdit ? "Update case information" : "Add a new disease case report"}</p>
         </div>
       </div>
+
+      {!isEdit && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <Link2 className="w-4 h-4 text-blue-400" />
+              Link to Existing Patient Profile (Optional)
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {linkedPerson ? (
+              <div className="flex items-center justify-between p-3 rounded-md bg-blue-500/10 border border-blue-500/20" data-testid="div-linked-patient">
+                <div>
+                  <p className="font-medium text-sm">{linkedPerson.name}</p>
+                  <p className="text-xs text-muted-foreground">{linkedPerson.type} — {linkedPerson.barangay}</p>
+                </div>
+                <Button variant="ghost" size="sm" onClick={handleClearLink} data-testid="button-clear-link">
+                  <X className="w-4 h-4" />
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div className="flex gap-3">
+                  <Select value={linkType} onValueChange={(v: LinkType) => { setLinkType(v); setLinkSearch(""); }}>
+                    <SelectTrigger className="w-36" data-testid="select-link-type">
+                      <SelectValue placeholder="Person type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">No link</SelectItem>
+                      <SelectItem value="Mother">Mother</SelectItem>
+                      <SelectItem value="Child">Child</SelectItem>
+                      <SelectItem value="Senior">Senior</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {linkType !== "none" && (
+                    <div className="relative flex-1">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                      <Input
+                        className="pl-9"
+                        placeholder={`Search ${linkType} by name...`}
+                        value={linkSearch}
+                        onChange={e => setLinkSearch(e.target.value)}
+                        data-testid="input-link-search"
+                      />
+                    </div>
+                  )}
+                </div>
+                {candidates.length > 0 && (
+                  <div className="border border-border rounded-md overflow-hidden" data-testid="div-link-candidates">
+                    {candidates.map(c => (
+                      <button
+                        key={c.id}
+                        type="button"
+                        className="w-full text-left px-3 py-2 hover:bg-muted/50 border-b last:border-0 border-border flex items-center justify-between text-sm"
+                        onClick={() => handleSelectCandidate(c)}
+                        data-testid={`button-candidate-${c.id}`}
+                      >
+                        <span>{c.name}</span>
+                        <span className="text-xs text-muted-foreground">{c.type} — {c.barangay}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {linkType !== "none" && linkSearch.length > 1 && candidates.length === 0 && (
+                  <p className="text-sm text-muted-foreground">No matching {linkType} found. Fill in the form manually below.</p>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {isEdit && existingLink && (
+        <Card>
+          <CardContent className="pt-4">
+            <div className="flex items-center gap-2 text-sm">
+              <Link2 className="w-4 h-4 text-blue-400" />
+              <span className="text-muted-foreground">Linked profile:</span>
+              <Badge variant="outline">{existingLink}</Badge>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>

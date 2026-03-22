@@ -263,7 +263,7 @@ export async function registerRoutes(
     res.json(data);
   });
 
-  app.get(api.medicineInventory.update.path, async (req, res) => {
+  app.get(api.medicineInventory.get.path, async (req, res) => {
     const id = parseInt(req.params.id, 10);
     if (isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
     const item = await storage.getMedicineInventoryById(id);
@@ -280,6 +280,8 @@ export async function registerRoutes(
   app.put(api.medicineInventory.update.path, registryRBAC, ar(async (req, res) => {
     const id = parseInt(req.params.id, 10);
     if (isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
+    const existing = await storage.getMedicineInventoryById(id);
+    if (!existing) return res.status(404).json({ message: "Medicine inventory item not found" });
     const input = api.medicineInventory.update.input.parse(req.body);
     const updated = await storage.updateMedicineInventory(id, input);
     res.json(updated);
@@ -362,6 +364,15 @@ export async function registerRoutes(
     const input = api.diseaseCases.update.input.parse(req.body);
     const updated = await storage.updateDiseaseCase(id, input);
     res.json(updated);
+  }));
+
+  app.delete(api.diseaseCases.delete.path, adminOnlyRBAC, ar(async (req, res) => {
+    const id = parseId(req.params.id, res); if (id === null) return;
+    const diseaseCase = await storage.getDiseaseCase(id);
+    if (!diseaseCase) return res.status(404).json({ message: "Disease case not found" });
+    await storage.deleteDiseaseCase(id);
+    await createAuditLog(req.userInfo!.id, req.userInfo!.role, "DELETE", "DISEASE_SURVEILLANCE", String(id), undefined, undefined, undefined, req);
+    res.json({ success: true });
   }));
 
   app.post("/api/disease-cases/bulk", loadUserInfo, requireAuth, requireRole(UserRole.SYSTEM_ADMIN, UserRole.MHO), ar(async (req, res) => {

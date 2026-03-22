@@ -61,6 +61,7 @@ export interface IStorage {
   getDiseaseCase(id: number): Promise<DiseaseCase | undefined>;
   createDiseaseCase(data: InsertDiseaseCase): Promise<DiseaseCase>;
   updateDiseaseCase(id: number, updates: Partial<InsertDiseaseCase>): Promise<DiseaseCase>;
+  deleteDiseaseCase(id: number): Promise<void>;
   bulkImportDiseaseCases(rows: Array<{ barangay: string; disease_name: string; cases: number; reporting_date: string }>, replace: boolean): Promise<number>;
 
   getTBPatients(): Promise<TBPatient[]>;
@@ -281,6 +282,10 @@ export class DatabaseStorage implements IStorage {
       .where(eq(diseaseCases.id, id))
       .returning();
     return updated;
+  }
+
+  async deleteDiseaseCase(id: number): Promise<void> {
+    await db.delete(diseaseCases).where(eq(diseaseCases.id, id));
   }
 
   async bulkImportDiseaseCases(rows: Array<{ barangay: string; disease_name: string; cases: number; reporting_date: string }>, replace: boolean): Promise<number> {

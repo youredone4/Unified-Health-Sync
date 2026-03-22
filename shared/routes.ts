@@ -164,6 +164,14 @@ export const api = {
         200: z.array(z.custom<typeof medicineInventory.$inferSelect>()),
       },
     },
+    get: {
+      method: 'GET' as const,
+      path: '/api/medicine-inventory/:id',
+      responses: {
+        200: z.custom<typeof medicineInventory.$inferSelect>(),
+        404: errorSchemas.notFound,
+      },
+    },
     create: {
       method: 'POST' as const,
       path: '/api/medicine-inventory',
@@ -238,6 +246,14 @@ export const api = {
       input: insertDiseaseCaseSchema.partial(),
       responses: {
         200: z.custom<typeof diseaseCases.$inferSelect>(),
+      },
+    },
+    delete: {
+      method: 'DELETE' as const,
+      path: '/api/disease-cases/:id',
+      responses: {
+        200: z.object({ success: z.boolean() }),
+        404: errorSchemas.notFound,
       },
     },
   },
