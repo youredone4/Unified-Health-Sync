@@ -70,7 +70,13 @@ export default function InventoryPage() {
                 </tr>
               </thead>
               <tbody>
-                {inventory.map(inv => {
+                {inventory.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="text-center py-8 text-muted-foreground" data-testid="text-no-vaccine-records">
+                      No inventory records found. Use "Add Inventory" to add stock for a barangay.
+                    </td>
+                  </tr>
+                ) : inventory.map(inv => {
                   const v = (inv.vaccines || {}) as any;
                   return (
                     <tr key={inv.id} className="border-b border-border/50" data-testid={`row-inv-${inv.id}`}>
@@ -113,7 +119,13 @@ export default function InventoryPage() {
                 </tr>
               </thead>
               <tbody>
-                {inventory.map(inv => {
+                {inventory.length === 0 ? (
+                  <tr>
+                    <td colSpan={2} className="text-center py-8 text-muted-foreground" data-testid="text-no-htn-records">
+                      No inventory records found. Use "Add Inventory" to add stock for a barangay.
+                    </td>
+                  </tr>
+                ) : inventory.map(inv => {
                   const h = (inv.htnMeds || []) as Array<{ name: string; doseMg: number; qty: number }>;
                   return (
                     <tr key={inv.id} className="border-b border-border/50">
