@@ -413,7 +413,9 @@ export async function registerRoutes(
   app.get('/api/consults/by-profile', patientCheckupRBAC, ar(async (req, res) => {
     const type = String(req.query.type ?? "").trim();
     const id = parseInt(String(req.query.id ?? ""), 10);
-    if (!type || isNaN(id) || id <= 0) return res.status(400).json({ message: "type and id query params required" });
+    const validTypes = ["Mother", "Child", "Senior"];
+    if (!validTypes.includes(type)) return res.status(400).json({ message: "type must be Mother, Child, or Senior" });
+    if (isNaN(id) || id <= 0) return res.status(400).json({ message: "id must be a positive integer" });
     const data = await storage.getConsultsByProfile(type, id);
     res.json(data);
   }));

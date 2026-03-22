@@ -18,7 +18,7 @@ import {
   ChevronDown, ChevronUp, HeartPulse, FileText, History,
 } from "lucide-react";
 import { format, parseISO, isValid } from "date-fns";
-import type { Consult } from "@shared/schema";
+import type { Consult, Mother, Child, Senior } from "@shared/schema";
 import { TODAY_STR } from "@/lib/healthLogic";
 
 const BARANGAYS = [
@@ -193,6 +193,57 @@ export default function PatientCheckupPage() {
 
   const bmi = calcBmi(newConsult.weightKg, newConsult.heightCm);
 
+  // Registry-link state for New Consult form
+  const [linkType, setLinkType] = useState<"none" | "Mother" | "Child" | "Senior">("none");
+  const [linkSearch, setLinkSearch] = useState("");
+
+  const { data: mothers = [] } = useQuery<Mother[]>({ queryKey: ["/api/mothers"], enabled: canAccessPatientCheckup });
+  const { data: children = [] } = useQuery<Child[]>({ queryKey: ["/api/children"], enabled: canAccessPatientCheckup });
+  const { data: seniors = [] } = useQuery<Senior[]>({ queryKey: ["/api/seniors"], enabled: canAccessPatientCheckup });
+
+  type RegistryCandidate = { id: number; displayName: string; age?: number; sex?: string; barangay: string };
+  const registryCandidates: RegistryCandidate[] = (() => {
+    const q = linkSearch.toLowerCase().trim();
+    if (linkType === "Mother") {
+      return mothers
+        .filter(m => !q || `${m.firstName} ${m.lastName}`.toLowerCase().includes(q))
+        .map(m => ({ id: m.id, displayName: `${m.firstName} ${m.lastName}`, age: m.age, sex: "F", barangay: m.barangay }));
+    }
+    if (linkType === "Child") {
+      return children
+        .filter(c => !q || c.name.toLowerCase().includes(q))
+        .map(c => ({ id: c.id, displayName: c.name, barangay: c.barangay }));
+    }
+    if (linkType === "Senior") {
+      return seniors
+        .filter(s => !q || `${s.firstName} ${s.lastName}`.toLowerCase().includes(q))
+        .map(s => ({ id: s.id, displayName: `${s.firstName} ${s.lastName}`, age: s.age, barangay: s.barangay }));
+    }
+    return [];
+  })().slice(0, 8);
+
+  const handleSelectRegistryProfile = (candidate: RegistryCandidate) => {
+    setNewConsult(prev => ({
+      ...prev,
+      patientName: candidate.displayName,
+      barangay: candidate.barangay,
+      age: candidate.age ? String(candidate.age) : prev.age,
+      sex: candidate.sex ?? prev.sex,
+      linkedPersonType: linkType === "none" ? "" : linkType,
+      linkedPersonId: String(candidate.id),
+    }));
+    setLinkSearch("");
+  };
+
+  const handleOpenAddDialog = (open: boolean) => {
+    setIsAddDialogOpen(open);
+    if (!open) {
+      setLinkType("none");
+      setLinkSearch("");
+      setNewConsult(EMPTY_CONSULT);
+    }
+  };
+
   const { data: consults = [], isLoading } = useQuery<Consult[]>({
     queryKey: ["/api/consults"],
     enabled: canAccessPatientCheckup,
@@ -225,6 +276,8 @@ export default function PatientCheckupPage() {
       toast({ title: "Consult recorded successfully" });
       setIsAddDialogOpen(false);
       setNewConsult(EMPTY_CONSULT);
+      setLinkType("none");
+      setLinkSearch("");
     },
     onError: (error: Error) => {
       toast({ title: "Failed to record consult", description: error.message, variant: "destructive" });
@@ -338,7 +391,7 @@ export default function PatientCheckupPage() {
           </h1>
           <p className="text-muted-foreground">Search and view all patient information across all modules</p>
         </div>
-        <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+        <Dialog open={isAddDialogOpen} onOpenChange={handleOpenAddDialog}>
           <DialogTrigger asChild>
             <Button data-testid="button-add-consult">
               <Plus className="w-4 h-4 mr-2" />
@@ -350,6 +403,68 @@ export default function PatientCheckupPage() {
               <DialogTitle>Record New Consultation</DialogTitle>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4 pt-4">
+
+              {/* Registry Link (optional) */}
+              <div className="rounded-lg border bg-muted/30 p-3 space-y-3">
+                <div className="flex items-center gap-2">
+                  <Stethoscope className="w-4 h-4 text-primary" />
+                  <p className="text-sm font-medium">Link to Registry Profile <span className="text-muted-foreground font-normal">(optional)</span></p>
+                </div>
+                <div className="flex gap-2">
+                  <Select value={linkType} onValueChange={(v) => { setLinkType(v as any); setLinkSearch(""); setNewConsult(prev => ({ ...prev, linkedPersonType: v === "none" ? "" : v, linkedPersonId: "" })); }}>
+                    <SelectTrigger className="w-36" data-testid="select-link-type">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">No link</SelectItem>
+                      <SelectItem value="Mother">Mother</SelectItem>
+                      <SelectItem value="Child">Child</SelectItem>
+                      <SelectItem value="Senior">Senior</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {linkType !== "none" && (
+                    <div className="relative flex-1">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                      <Input
+                        className="pl-8"
+                        placeholder={`Search ${linkType} by name...`}
+                        value={linkSearch}
+                        onChange={(e) => setLinkSearch(e.target.value)}
+                        data-testid="input-link-search"
+                      />
+                    </div>
+                  )}
+                </div>
+                {linkType !== "none" && registryCandidates.length > 0 && (
+                  <div className="border rounded-md bg-background shadow-sm overflow-hidden max-h-48 overflow-y-auto">
+                    {registryCandidates.map((c) => (
+                      <button
+                        key={c.id}
+                        type="button"
+                        className="w-full text-left px-3 py-2 text-sm hover:bg-accent transition-colors flex items-center justify-between gap-2 border-b last:border-b-0"
+                        onClick={() => handleSelectRegistryProfile(c)}
+                        data-testid={`registry-option-${c.id}`}
+                      >
+                        <span className="font-medium">{c.displayName}</span>
+                        <span className="text-xs text-muted-foreground shrink-0">{c.barangay}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {linkType !== "none" && linkSearch && registryCandidates.length === 0 && (
+                  <p className="text-xs text-muted-foreground">No {linkType.toLowerCase()} found matching "{linkSearch}"</p>
+                )}
+                {newConsult.linkedPersonId && (
+                  <div className="flex items-center gap-2">
+                    <Badge variant="secondary" className="text-xs">
+                      Linked: {newConsult.linkedPersonType} #{newConsult.linkedPersonId} — {newConsult.patientName}
+                    </Badge>
+                    <button type="button" className="text-xs text-muted-foreground hover:text-foreground" onClick={() => { setNewConsult(prev => ({ ...prev, linkedPersonType: "", linkedPersonId: "" })); setLinkType("none"); }}>
+                      Remove
+                    </button>
+                  </div>
+                )}
+              </div>
 
               {/* Patient Info */}
               <div className="grid grid-cols-2 gap-4">
