@@ -1,0 +1,89 @@
+Fix and enhance the Patient Check-up module so consultation records are clickable and users can view a patient’s previous medical check-up history.
+
+Context
+- The Patient Check-up module already exists and is working partially.
+- Consultation records are currently displayed, but users cannot click and open them.
+- This prevents staff from reviewing previous medical check-up records when a patient returns.
+- Do NOT rebuild the whole module.
+- Do NOT break existing consultation creation, search, or dashboard logic.
+
+Primary Goal
+Make consultation records clickable and provide a proper patient consultation history view for returning patients.
+
+Required Changes
+
+1. Make consultation records clickable
+- In the Consultation Records list, each patient record/card/row should be clickable
+- Clicking a record should open a consultation detail view or patient consultation history page
+- Keep the UI clean and consistent with the current design
+
+2. Add patient consultation history view
+When a consultation record is opened, show:
+- patient name
+- age / sex if available
+- barangay
+- consultation dates
+- diagnosis
+- blood pressure
+- weight
+- other vitals if available
+- disposition
+- consultation notes
+- doctor/encoder if available
+
+3. Show previous medical check-up records
+- If the patient has multiple consultations, display them as a consultation history list or timeline
+- Sort by most recent first
+- Allow users to review older consultations easily
+
+4. Returning patient workflow
+- If a patient returns for another check-up, users should be able to review previous consultation records before creating a new one
+- Preserve continuity of care by connecting consultations to the same patient profile where applicable
+
+5. Reuse existing patient identity if possible
+- Inspect current patient identification logic
+- If patients from different modules already have profile records, reuse the correct patient reference
+- Avoid creating duplicate patient records unnecessarily
+
+6. Consultation detail layout
+Recommended sections:
+- Patient Summary
+- Latest Consultation
+- Consultation History
+- Vital Signs History
+- Diagnosis / Notes / Disposition
+
+7. Preserve current functionality
+- do not break New Consult
+- do not break existing search
+- do not break barangay filtering
+- do not break current summary cards
+- do not break role-based access
+
+8. Technical expectations
+- inspect how consultation records are currently rendered
+- inspect why the rows/cards are not clickable
+- connect the record item to a proper route, modal, or detail page
+- if a detail page already exists but is not wired correctly, fix the link/handler instead of duplicating logic
+- preserve current project structure
+
+9. Optional enhancement
+If feasible:
+- allow “View Full History” from the patient consultation detail
+- allow starting a new consultation from within the patient history view
+
+10. Deliverables
+Provide:
+1. clickable consultation records
+2. consultation detail/history view
+3. patient previous records display
+4. working routing or modal behavior
+5. files changed
+6. short explanation of how returning patient history is handled
+
+Success Criteria
+- users can click a patient consultation record
+- a patient’s previous medical check-up records can be viewed
+- returning patients can be reviewed properly before new consultation
+- consultation continuity is preserved
+- no existing functionality is broken
