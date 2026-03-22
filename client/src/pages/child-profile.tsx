@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useParams, useLocation } from "wouter";
 import type { Child, Mother } from "@shared/schema";
-import { getNextVaccineStatus, getChildVisitStatus, formatDate, getAgeInMonths, getWeightZScore, hasMissingGrowthCheck, VACCINE_SCHEDULE, getWHOReferenceData } from "@/lib/healthLogic";
+import { getNextVaccineStatus, getChildVisitStatus, formatDate, getAgeInMonths, getAgeInMonthsAt, getWeightZScore, hasMissingGrowthCheck, VACCINE_SCHEDULE, getWHOReferenceData } from "@/lib/healthLogic";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -86,9 +86,7 @@ export default function ChildProfile() {
     const ageMeasurements: Record<number, number> = {};
     for (const g of growthForChart) {
       if (!g.date || !g.weightKg) continue;
-      const birthMs = new Date(child.dob).getTime();
-      const measMs  = new Date(g.date).getTime();
-      const monthsAtMeas = Math.max(0, Math.floor((measMs - birthMs) / (30 * 24 * 60 * 60 * 1000)));
+      const monthsAtMeas = getAgeInMonthsAt(child.dob, g.date);
       if (monthsAtMeas <= 60) {
         ageMeasurements[monthsAtMeas] = g.weightKg; // last measurement wins if same month
       }
@@ -310,7 +308,7 @@ export default function ChildProfile() {
               <Scale className="w-4 h-4" />
               Growth Chart — Weight-for-Age
               <span className="ml-auto text-xs font-normal text-muted-foreground">
-                WHO 2006 · {child.sex === 'female' ? 'Girls' : 'Boys'} standard
+                WHO 2006 · {child.sex === 'female' ? 'Girls standard' : child.sex === 'male' ? 'Boys standard' : 'Sex not recorded'}
               </span>
             </CardTitle>
           </CardHeader>

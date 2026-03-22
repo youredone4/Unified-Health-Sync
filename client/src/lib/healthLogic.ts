@@ -218,6 +218,17 @@ export function getAgeInMonths(dob: string): number {
   return Math.floor(days / 30);
 }
 
+/**
+ * Age in completed months between dob and a specific reference date.
+ * Used to place growth measurements on the WHO age-in-months X-axis.
+ */
+export function getAgeInMonthsAt(dob: string, referenceDate: string): number {
+  const birth = parseISO(dob);
+  const ref   = parseISO(referenceDate);
+  const days  = differenceInDays(ref, birth);
+  return Math.max(0, Math.floor(days / 30));
+}
+
 // WHO 2006 Child Growth Standards — Weight-for-Age LMS parameters.
 // Source: WHO MGRS (2006) Acta Paediatrica Supplement; WHO technical tables.
 // Indexed by age in completed months (0–60).
