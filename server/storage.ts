@@ -49,6 +49,7 @@ export interface IStorage {
 
   getInventory(): Promise<InventoryItem[]>;
   getMedicineInventory(): Promise<MedicineInventoryItem[]>;
+  getMedicineInventoryById(id: number): Promise<MedicineInventoryItem | undefined>;
   createMedicineInventory(item: InsertMedicineInventoryItem): Promise<MedicineInventoryItem>;
   updateMedicineInventory(id: number, updates: Partial<InsertMedicineInventoryItem>): Promise<MedicineInventoryItem>;
   getHealthStations(): Promise<HealthStation[]>;
@@ -227,6 +228,11 @@ export class DatabaseStorage implements IStorage {
 
   async getMedicineInventory(): Promise<MedicineInventoryItem[]> {
     return await db.select().from(medicineInventory).orderBy(desc(medicineInventory.lastUpdated));
+  }
+
+  async getMedicineInventoryById(id: number): Promise<MedicineInventoryItem | undefined> {
+    const [item] = await db.select().from(medicineInventory).where(eq(medicineInventory.id, id));
+    return item;
   }
 
   async createMedicineInventory(item: InsertMedicineInventoryItem): Promise<MedicineInventoryItem> {

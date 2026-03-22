@@ -263,6 +263,14 @@ export async function registerRoutes(
     res.json(data);
   });
 
+  app.get(api.medicineInventory.update.path, async (req, res) => {
+    const id = parseInt(req.params.id, 10);
+    if (isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
+    const item = await storage.getMedicineInventoryById(id);
+    if (!item) return res.status(404).json({ message: "Medicine inventory item not found" });
+    res.json(item);
+  });
+
   app.post(api.medicineInventory.create.path, registryRBAC, ar(async (req, res) => {
     const input = api.medicineInventory.create.input.parse(req.body);
     const created = await storage.createMedicineInventory(input);
