@@ -90,8 +90,13 @@ export default function ChildProfile() {
   const handleMarkVaccine = () => {
     if (vax.nextVaccine) {
       const today = new Date().toISOString().split('T')[0];
-      const vaccines = { ...child.vaccines, [vax.nextVaccine]: today };
-      updateMutation.mutate({ vaccines });
+      const updatedVaccines = { ...child.vaccines, [vax.nextVaccine]: today };
+      // Compute the new next vaccine status using the updated vaccines
+      const newVaxStatus = getNextVaccineStatus({ ...child, vaccines: updatedVaccines });
+      updateMutation.mutate({
+        vaccines: updatedVaccines,
+        nextVisitDate: newVaxStatus.dueDate ?? null,
+      });
     }
   };
 
@@ -191,7 +196,7 @@ export default function ChildProfile() {
         </Card>
 
         <div className="flex-1 space-y-4">
-          <Card className={visit.status === 'overdue' ? 'border-red-500/30' : visit.status === 'due_soon' ? 'border-orange-500/30' : ''}>
+          <Card className={vax.status === 'completed' ? 'border-green-500/30' : visit.status === 'overdue' ? 'border-red-500/30' : visit.status === 'due_soon' ? 'border-orange-500/30' : ''}>
             <CardHeader className="pb-2">
               <CardTitle className="text-base flex items-center gap-2">
                 <Calendar className="w-4 h-4 text-blue-400" />
@@ -199,22 +204,32 @@ export default function ChildProfile() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="flex items-center justify-between gap-4 mb-3">
-                <div>
-                  <p className="font-medium">{formatDate(child.nextVisitDate)}</p>
-                  <p className="text-sm text-muted-foreground">Next Vaccine: {vax.nextVaccineLabel}</p>
+              {vax.status === 'completed' ? (
+                <div className="flex items-center gap-3 py-1" data-testid="status-vaccine-complete">
+                  <Check className="w-5 h-5 text-green-400 shrink-0" />
+                  <div>
+                    <p className="font-medium text-green-400">Vaccination Schedule Complete</p>
+                    <p className="text-sm text-muted-foreground">All required vaccines have been given.</p>
+                  </div>
                 </div>
-                <StatusBadge status={visit.status} />
-              </div>
-              {vax.status !== 'completed' && (
-                <div className="flex gap-2">
-                  <Button size="sm" onClick={() => setSmsOpen(true)} variant="outline" className="gap-1" data-testid="button-send-sms">
-                    <MessageSquare className="w-3 h-3" /> Send SMS
-                  </Button>
-                  <Button size="sm" onClick={() => { setConfirmAction('vaccine'); setConfirmOpen(true); }} className="gap-1" data-testid="button-mark-vaccine">
-                    <Check className="w-3 h-3" /> Mark Vaccine Given
-                  </Button>
-                </div>
+              ) : (
+                <>
+                  <div className="flex items-center justify-between gap-4 mb-3">
+                    <div>
+                      <p className="font-medium">{formatDate(child.nextVisitDate)}</p>
+                      <p className="text-sm text-muted-foreground">Next Vaccine: {vax.nextVaccineLabel}</p>
+                    </div>
+                    <StatusBadge status={visit.status} />
+                  </div>
+                  <div className="flex gap-2">
+                    <Button size="sm" onClick={() => setSmsOpen(true)} variant="outline" className="gap-1" data-testid="button-send-sms">
+                      <MessageSquare className="w-3 h-3" /> Send SMS
+                    </Button>
+                    <Button size="sm" onClick={() => { setConfirmAction('vaccine'); setConfirmOpen(true); }} className="gap-1" data-testid="button-mark-vaccine">
+                      <Check className="w-3 h-3" /> Mark Vaccine Given
+                    </Button>
+                  </div>
+                </>
               )}
             </CardContent>
           </Card>
