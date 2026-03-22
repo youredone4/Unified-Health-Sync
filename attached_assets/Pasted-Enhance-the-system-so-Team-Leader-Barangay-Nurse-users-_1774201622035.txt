@@ -1,0 +1,190 @@
+Enhance the system so Team Leader (Barangay Nurse) users can add and manage structured visit records for Mother, Child, and Senior profiles, similar in purpose to doctor consultations but focused on nurse monitoring and follow-up visits.
+
+Context
+- The system already has profile modules for Mother, Child, and Senior.
+- The system already has a Patient Check-up consultation workflow for doctors.
+- Team Leader (Barangay Nurse) should also have the ability to record regular visits and monitoring data for patients in their assigned modules.
+- Do NOT rebuild the existing modules.
+- Do NOT break current registries, dashboards, or doctor consultation workflows.
+
+Goal
+Allow Team Leader users to create sequential visit records such as Visit 1, Visit 2, Visit 3, etc. for:
+- Mother profiles
+- Child profiles
+- Senior profiles
+
+These visit records should:
+- store module-specific monitoring details
+- update the patient/profile history
+- show the latest visit date and previous measurements
+- preserve longitudinal tracking over time
+
+Core Requirements
+
+1. Add visit-record capability for Team Leader
+Allow Team Leader (Barangay Nurse) to add visit records to:
+- Mother Registry profiles
+- Child Registry profiles
+- Senior Registry profiles
+
+This should be role-based:
+- Team Leader can add and update visit records
+- preserve existing role permissions for other actions
+- do not automatically give delete access unless already intended elsewhere
+
+2. Structured sequential visits
+Each patient/profile should support multiple visit records:
+- Visit 1
+- Visit 2
+- Visit 3
+- etc.
+
+Visits should be tied to the same patient profile using a one-to-many relationship:
+- one mother -> many prenatal visits
+- one child -> many child monitoring visits
+- one senior -> many senior care visits
+
+3. Module-specific visit details
+Use fields appropriate to each module.
+
+A. Mother / Prenatal visit
+Add fields such as:
+- visit number
+- visit date
+- gestational age if applicable
+- weight
+- blood pressure
+- fundal height if already used in the system
+- fetal heart tone if already used
+- notes
+- risk status if applicable
+
+B. Child visit
+Add fields such as:
+- visit number
+- visit date
+- weight
+- height
+- MUAC if applicable
+- nutrition/growth notes
+- immunization-related notes if relevant
+- classification or monitoring notes if already used in the system
+
+C. Senior visit
+Add fields such as:
+- visit number
+- visit date
+- blood pressure
+- weight
+- medication pickup/monitoring notes if relevant
+- symptoms/remarks
+- follow-up notes
+
+4. Similar to doctor consultation, but nurse-focused
+This visit-record feature should be similar in concept to Patient Consultation history, but it is not the same as a doctor consultation.
+
+Requirements:
+- keep nurse visit records separate from doctor consultation records unless the current architecture safely supports shared history sections
+- clearly label them as visits/monitoring records
+- preserve the doctor consultation workflow
+
+5. Update latest visit and previous information in profile
+When a new nurse visit is added:
+- update the profile’s latest visit date
+- show the most recent measurements in the profile summary where appropriate
+- preserve previous historical values
+- allow users to review earlier visits
+
+Examples:
+- Child profile should show latest weight/height and last visit date
+- Senior profile should show latest BP/weight and last visit date
+- Mother profile should show latest prenatal visit information and last visit date
+
+6. Show visit history inside the profile
+In Mother, Child, and Senior profile views, add a visit history section that shows:
+- visit number
+- visit date
+- recorded measurements
+- notes
+- latest first
+
+This should function as longitudinal monitoring, similar to consultation history.
+
+7. Pre-fill previous data when useful
+When creating a new visit:
+- if appropriate, show previous latest values as reference
+- allow nurse to update from prior values without re-entering everything blindly
+- do not overwrite old visits
+
+8. Role-based access
+For Team Leader (Barangay Nurse):
+- allow add visit
+- allow update visit records if permitted by current role policy
+- do not grant delete unless explicitly intended by the existing system rules
+
+For other roles:
+- preserve current access logic
+- doctors/admins can still view as appropriate if already permitted
+
+9. Preserve patient profile continuity
+Visits must be attached to the same patient profile, not created as duplicate patient entries.
+
+Avoid:
+- duplicate child profiles
+- duplicate mother profiles
+- duplicate senior profiles
+
+Use:
+- one patient/profile
+- many visit records
+
+10. Dashboard/profile integration
+Make sure the latest visit data can be reflected in relevant dashboards and profile summaries where appropriate.
+
+Examples:
+- prenatal dashboard can reflect last prenatal visit
+- child dashboard can reflect latest growth monitoring
+- senior dashboard can reflect latest BP/weight monitoring
+
+Do not break existing dashboard logic.
+
+11. Inspect existing module structures first
+Before implementing:
+- inspect current Mother, Child, and Senior profile structure
+- inspect current fields already stored in each module
+- inspect whether visit-like data already exists
+- reuse existing fields and history sections where possible
+- avoid duplicating logic if the system already has partial visit tracking
+
+12. UI/UX expectations
+Add actions such as:
+- Add Visit
+- View Visit History
+- Edit Visit Record
+
+Keep the UI consistent with the current system style.
+Use clean profile sections and tables/cards for visit history.
+
+13. Deliverables
+Provide:
+1. role-based nurse visit recording feature
+2. visit history for Mother, Child, and Senior profiles
+3. module-specific visit fields
+4. latest visit/measurement summary integration
+5. schema/model changes if needed
+6. list of files changed
+
+Important Constraints
+- Do NOT rebuild the entire system
+- Do NOT break doctor consultation workflow
+- Do NOT create duplicate patient profiles
+- Do NOT remove existing profile fields
+- Keep implementation modular and aligned with current role logic
+
+Success Criteria
+- Team Leader can add visit records for mother, child, and senior profiles
+- visit records are sequential and tied to the same profile
+- latest visit date and latest measurements are shown in the profile
+- previous visit information is preserved and viewable
+- nurse monitoring workflow is supported without breaking doctor consultations
+- existing system behavior remains stable
