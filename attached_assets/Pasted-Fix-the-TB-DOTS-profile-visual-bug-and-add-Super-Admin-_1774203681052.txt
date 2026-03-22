@@ -1,0 +1,111 @@
+Fix the TB DOTS profile visual bug and add Super Admin delete capability for TB DOTS records, consistent with other profile modules.
+
+Context
+- The TB DOTS profile page already exists and is working.
+- There is a visual/layout bug in the TB DOTS profile view.
+- Super Admin should also be able to delete TB DOTS records, similar to Mother, Child, Senior, and other profile modules.
+- Do NOT rebuild the entire TB DOTS module.
+- Do NOT break current DOTS workflow, treatment progress, dose recording, referral, or SMS features.
+
+Goals
+1. Fix the visual/layout bug on the TB DOTS profile page
+2. Allow Super Admin to delete TB DOTS records with proper safeguards
+3. Keep non-admin roles limited to update-only if that is the current system rule
+
+Required Fixes
+
+1. Fix TB DOTS profile visual bug
+Inspect the TB DOTS profile page and correct any layout/visual issues such as:
+- excessive empty white space
+- broken spacing between sections
+- oversized or uneven cards
+- misaligned content
+- inconsistent section heights
+- awkward stretching of the DOTS Schedule section
+- poor vertical balance compared to other profile pages
+
+Requirements:
+- make the profile visually consistent with other profile/detail pages
+- keep the page clean and readable
+- preserve current content sections such as:
+  - Patient Information
+  - Treatment Progress
+  - DOTS Schedule
+  - Actions
+
+2. Preserve functional actions
+Do not break:
+- Record Observed Dose
+- Record Missed Dose
+- Refer to RHU
+- Send SMS
+- Back to Worklist
+
+3. Super Admin delete capability
+Add delete capability for TB DOTS records for Super Admin only.
+
+Requirements:
+- only Super Admin can see the Delete action
+- other roles must not see the Delete button
+- other roles must not be able to delete through direct route or API access
+- place the Delete action in a safe and consistent location on the TB DOTS profile page
+
+4. Delete confirmation
+Before deleting a TB DOTS record:
+- show a confirmation modal
+- clearly warn that the record will be removed
+- require explicit confirmation
+
+Example:
+"Are you sure you want to delete this TB DOTS record? This action cannot be undone."
+
+5. Audit logging
+When a TB DOTS record is deleted, log:
+- who deleted it
+- role
+- date/time
+- patient/record identifier
+- module name = TB DOTS
+
+If Audit Logs already exist, integrate with them.
+
+6. Role behavior consistency
+Match the same rule already used in other modules:
+- Super Admin = can delete and update
+- other operational roles = can update only, not delete
+
+7. Preserve data integrity
+Before deleting:
+- inspect whether related DOTS doses, missed doses, referrals, or SMS records are linked
+- handle related data safely based on current system structure
+- do not leave broken references
+
+8. Inspect current implementation before changes
+Before editing:
+- inspect the TB DOTS profile layout/component structure
+- inspect current role-based action visibility
+- inspect delete behavior used in other profile modules
+- reuse existing delete confirmation and permission patterns where possible
+
+9. Deliverables
+Provide:
+1. fix for the TB DOTS profile visual/layout issue
+2. Super Admin-only delete action for TB DOTS records
+3. confirmation modal for delete
+4. backend/API permission enforcement if applicable
+5. audit log integration
+6. files changed
+
+Important Constraints
+- Do NOT redesign the whole TB DOTS module
+- Do NOT break treatment progress or dose recording logic
+- Do NOT expose delete to non-admin roles
+- Keep implementation consistent with other profile modules
+
+Success Criteria
+- TB DOTS profile layout looks clean and consistent
+- visual spacing bug is fixed
+- Super Admin can delete TB DOTS records
+- other roles cannot delete
+- delete action is confirmed and logged
+- existing TB DOTS functions remain intact
