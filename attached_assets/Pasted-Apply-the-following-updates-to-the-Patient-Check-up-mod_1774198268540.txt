@@ -1,0 +1,108 @@
+Apply the following updates to the Patient Check-up module and login UI.
+
+Important
+- The system is already working
+- Do NOT rebuild the system
+- Do NOT break existing consultation, dashboard, or routing logic
+- Only enhance the specified features
+
+------------------------------------
+1. Login: Show Password Toggle
+------------------------------------
+
+Add a "Show Password" feature to the login form.
+
+Requirements:
+- add an eye icon or checkbox to toggle password visibility
+- default state: password hidden
+- toggle switches between hidden and visible
+- do not modify authentication logic
+- ensure it works on desktop and mobile
+
+------------------------------------
+2. Patient Check-up: Record New Consultation Improvements
+------------------------------------
+
+Enhance the consultation form to reflect real clinical workflow.
+
+A. Diagnosis field
+- replace dropdown with a text input or textarea
+- allow doctors to type diagnosis freely
+- remove dependency on predefined list
+
+B. Remove ICD-10 Code
+- remove ICD-10 field from UI and validation
+- ensure consultation still saves correctly
+
+C. Disposition enhancement
+- keep existing options
+- add "Other" option
+- when selected, show a textarea:
+  "Disposition Notes"
+- make notes required when "Other" is selected
+
+------------------------------------
+3. Add Vital Signs (NEW)
+------------------------------------
+
+Add basic clinical inputs to the consultation form.
+
+Required fields:
+- Blood Pressure (BP) → text input (e.g., 120/80)
+- Weight (kg) → numeric input
+
+Recommended fields:
+- Temperature (°C)
+- Pulse Rate (bpm)
+
+Optional enhancements:
+- Height (cm)
+- BMI (auto-calculated if height and weight are provided)
+
+Behavior:
+- all fields should be clearly labeled
+- numeric fields should have proper validation
+- BP should accept standard format (systolic/diastolic)
+
+Data handling:
+- store these values with the consultation record
+- ensure they do not break existing data structure
+- if needed, extend schema safely
+
+------------------------------------
+4. Implementation Requirements
+------------------------------------
+
+- inspect existing consultation form first
+- update only necessary fields and logic
+- preserve:
+  - saving functionality
+  - existing workflows
+  - role-based access
+
+------------------------------------
+5. Deliverables
+------------------------------------
+
+Provide:
+1. login form with show/hide password
+2. updated consultation form UI
+3. diagnosis as free text
+4. ICD-10 removed
+5. disposition "Other" with notes
+6. added vital signs fields
+7. validation updates
+8. backend/schema updates if needed
+9. list of files changed
+
+------------------------------------
+6. Success Criteria
+------------------------------------
+
+- users can toggle password visibility
+- doctors can type diagnosis freely
+- ICD-10 is removed
+- disposition supports custom notes
+- consultation includes BP, weight, and other vitals
+- records save correctly
+- no existing functionality is broken
