@@ -97,18 +97,21 @@ function HistoryCard({ consult, defaultExpanded = false }: { consult: Consult; d
   return (
     <div className="border rounded-lg overflow-hidden" data-testid={`history-card-${consult.id}`}>
       <button
-        className="w-full flex items-center justify-between p-3 hover:bg-accent/50 transition-colors text-left"
+        className="w-full flex items-start justify-between p-3 hover:bg-accent/50 transition-colors text-left"
         onClick={() => setExpanded((v) => !v)}
         aria-expanded={expanded}
       >
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="flex items-center gap-1.5 text-xs text-muted-foreground shrink-0">
-            <Calendar className="w-3.5 h-3.5" />
-            {fmtDate(consult.consultDate)}
+        <div className="flex-1 min-w-0 pr-2">
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground shrink-0">
+              <Calendar className="w-3.5 h-3.5" />
+              {fmtDate(consult.consultDate)}
+            </div>
+            <p className="text-sm font-medium truncate">{consult.diagnosis}</p>
           </div>
-          <p className="text-sm font-medium truncate">{consult.diagnosis}</p>
+          <VitalsRow consult={consult} />
         </div>
-        <div className="flex items-center gap-2 shrink-0 ml-2">
+        <div className="flex items-center gap-2 shrink-0 mt-0.5">
           <Badge className={`text-xs ${dispositionColors[consult.disposition || "Treated"]}`}>
             {consult.disposition}
           </Badge>

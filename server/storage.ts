@@ -20,7 +20,7 @@ import {
   type SeniorMedClaim, type InsertSeniorMedClaim,
   type DirectMessage,
 } from "@shared/schema";
-import { eq, and, inArray, desc, isNull, gte, sql, or, lt, ne } from "drizzle-orm";
+import { eq, and, inArray, desc, isNull, gte, sql, or, lt, ne, ilike } from "drizzle-orm";
 
 export interface IStorage {
   getMothers(): Promise<Mother[]>;
@@ -320,7 +320,6 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getConsultsByPatient(name: string, barangay: string): Promise<Consult[]> {
-    const { ilike } = await import("drizzle-orm");
     return await db.select().from(consults)
       .where(and(ilike(consults.patientName, name), eq(consults.barangay, barangay)))
       .orderBy(desc(consults.consultDate));

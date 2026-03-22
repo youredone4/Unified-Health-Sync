@@ -272,6 +272,14 @@ export const api = {
         200: z.array(z.custom<typeof consults.$inferSelect>()),
       },
     },
+    byPatient: {
+      method: 'GET' as const,
+      path: '/api/consults/by-patient',
+      query: z.object({ name: z.string(), barangay: z.string() }),
+      responses: {
+        200: z.array(z.custom<typeof consults.$inferSelect>()),
+      },
+    },
     get: {
       method: 'GET' as const,
       path: '/api/consults/:id',
