@@ -1,0 +1,196 @@
+Enhance the maternal and child modules by upgrading Growth Monitoring to WHO-standard visualization, improving prenatal and vaccination scheduling workflows, and ensuring gender-based chart selection.
+
+Important
+- The system is already working
+- Do NOT rebuild modules from scratch
+- Do NOT break existing dashboards, registries, or role-based access
+- Reuse existing logic where possible
+- Keep implementation modular and consistent
+
+==================================================
+A. Growth Monitoring Upgrade (WHO-standard visualization)
+==================================================
+
+Goal
+Upgrade the child growth chart from a simple line chart into a clinically meaningful WHO/CDC-style visualization using sex-specific standards.
+
+1. Use sex-specific charts
+- Male child -> use BOYS growth reference
+- Female child -> use GIRLS growth reference
+- Never use the same chart for both sexes
+
+2. Chart behavior
+Upgrade the chart to include:
+- child growth data (weight, height, etc.)
+- reference curves (low, median, high)
+- overlay child data on these curves
+
+3. Keep classification logic separate
+- keep existing WHO Z-score logic for:
+  - SAM
+  - MAM
+  - Normal
+- do NOT replace classification with visual-only interpretation
+
+4. Age handling
+- use correct chart based on child age
+- do not apply wrong age-range standards
+
+5. Visualization improvements
+- clear axes (Age vs Weight/Height)
+- distinguish child line vs reference curves
+- show latest measurement clearly
+- support multiple data points over time
+
+6. Optional enhancements
+- percentile/zone indicator
+- tooltip (date, age, value)
+- multiple chart types:
+  - Weight-for-age
+  - Height-for-age
+  - Weight-for-height
+  - Head circumference (if available)
+
+==================================================
+B. Child Profile Gender Requirement
+==================================================
+
+7. Add Gender to Child Profile
+- add Gender field if not present
+- display Gender in child profile summary
+
+8. Use Gender for chart logic
+- chart selection must depend on Gender:
+  - Male -> boys chart
+  - Female -> girls chart
+
+9. Update forms if needed
+- add Gender to Add/Edit Child form if missing
+- ensure it is stored and used consistently
+
+10. Handle existing data
+- preserve old records
+- allow updating missing gender values
+
+==================================================
+C. Prenatal Nurse Visit Enhancement
+==================================================
+
+Goal
+Support proper prenatal follow-up scheduling.
+
+11. Link visits to Nurse Monitoring Visits
+- each visit saved under same Mother profile
+- maintain visit history (one-to-many)
+
+12. Add Next Scheduled Visit field
+- allow nurse to set next follow-up date
+- store it with visit
+
+13. Auto-update Next Prenatal Check
+- update Next Prenatal Check card automatically
+- always reflect latest visit schedule
+
+14. Overdue support
+- if next visit date has passed → mark as OVERDUE
+- update status dynamically
+
+15. Update profile summary
+- update Last Visit Date
+- update latest values
+- update next visit
+
+16. Preserve visit history
+- show visit details
+- show next scheduled visit
+- latest first
+
+==================================================
+D. Child Vaccination Auto-Scheduling
+==================================================
+
+Goal
+Automate vaccination follow-up after marking vaccines as given.
+
+17. Auto-calculate next vaccine
+When "Mark Vaccine Given":
+- mark current vaccine complete
+- determine next vaccine
+- calculate next schedule
+
+18. Auto-update Next Visit card
+- update:
+  - next date
+  - next vaccine
+  - status
+
+19. Overdue logic
+- show overdue if missed
+- clear overdue after completion
+
+20. Preserve vaccine sequence
+- follow existing immunization logic
+- do not hardcode a new schedule system
+
+21. Maintain continuity
+- update profile
+- preserve timeline history
+- keep linked mother relationship intact
+
+22. Optional enhancements
+- vaccine event history
+- completed schedule status
+- SMS reminder sync
+
+==================================================
+E. Shared Requirements
+==================================================
+
+23. Inspect existing logic first
+- growth chart implementation
+- gender storage
+- visit history structure
+- vaccination scheduling logic
+
+24. Preserve existing modules
+- Child Registry
+- Mother Registry
+- Prenatal Dashboard
+- Child Dashboard
+- Growth Monitoring
+- Nutrition Dashboard
+- Vaccination Schedule
+- Underweight Follow-ups
+
+25. Do NOT break:
+- SAM/MAM classification
+- role-based access
+- dashboards
+- filters
+
+==================================================
+F. Deliverables
+==================================================
+
+Provide:
+1. WHO-style growth chart upgrade
+2. sex-based chart selection logic
+3. gender field integration
+4. prenatal scheduling improvements
+5. vaccination auto-scheduling logic
+6. overdue status handling
+7. updated UI behavior
+8. files changed
+
+==================================================
+G. Success Criteria
+==================================================
+
+- growth charts are sex-specific (boys vs girls)
+- child data overlays on standard curves
+- gender determines chart selection
+- prenatal visits support scheduling and overdue tracking
+- vaccination automatically updates next schedule
+- profiles show accurate latest and next visit data
+- SAM/MAM classification remains correct
+- no existing functionality is broken
