@@ -447,7 +447,7 @@ export type InsertDeathEvent = z.infer<typeof insertDeathEventSchema>;
 // Prenatal / Mother visits
 export const prenatalVisits = pgTable("prenatal_visits", {
   id: serial("id").primaryKey(),
-  motherId: integer("mother_id").notNull(),
+  motherId: integer("mother_id").notNull().references(() => mothers.id, { onDelete: "cascade" }),
   visitNumber: integer("visit_number").notNull(),
   visitDate: text("visit_date").notNull(),
   gaWeeks: integer("ga_weeks"),
@@ -469,7 +469,7 @@ export type InsertPrenatalVisit = z.infer<typeof insertPrenatalVisitSchema>;
 // Child monitoring visits
 export const childVisits = pgTable("child_visits", {
   id: serial("id").primaryKey(),
-  childId: integer("child_id").notNull(),
+  childId: integer("child_id").notNull().references(() => children.id, { onDelete: "cascade" }),
   visitNumber: integer("visit_number").notNull(),
   visitDate: text("visit_date").notNull(),
   weightKg: text("weight_kg"),
@@ -490,7 +490,7 @@ export type InsertChildVisit = z.infer<typeof insertChildVisitSchema>;
 // Senior care visits
 export const seniorVisits = pgTable("senior_visits", {
   id: serial("id").primaryKey(),
-  seniorId: integer("senior_id").notNull(),
+  seniorId: integer("senior_id").notNull().references(() => seniors.id, { onDelete: "cascade" }),
   visitNumber: integer("visit_number").notNull(),
   visitDate: text("visit_date").notNull(),
   bloodPressure: text("blood_pressure"),

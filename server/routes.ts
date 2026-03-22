@@ -1,6 +1,9 @@
 import type { Express } from "express";
 import type { Server } from "http";
 import { storage } from "./storage";
+import { db } from "./db";
+import { max, eq } from "drizzle-orm";
+import { prenatalVisits, childVisits, seniorVisits } from "@shared/schema";
 import { api } from "@shared/routes";
 import { z } from "zod";
 import { setupAuth, registerAuthRoutes } from "./auth";
@@ -708,28 +711,55 @@ export async function registerRoutes(
   app.get("/api/users", loadUserInfo, requireAuth, userSearchHandler);
 
   // === NURSE VISITS (Team Leader / Barangay Nurse monitoring visits) ===
-  // RBAC: GET accessible to all authenticated roles; POST restricted to TL and SYSTEM_ADMIN
+  // RBAC: any authenticated role can read; only SYSTEM_ADMIN and TL can write.
+  // Additionally, TL users are scoped to their assigned barangays via the parent record.
   const nurseVisitReadRBAC = [loadUserInfo, requireAuth];
   const nurseVisitWriteRBAC = [loadUserInfo, requireAuth, requireRole(UserRole.SYSTEM_ADMIN, UserRole.TL)];
+
+  // Helper: resolve next visit number concurrency-safely using DB-level MAX aggregation.
+  // The unique constraint (entity_id, visit_number) is the final guard against concurrent races.
+  async function nextPrenatalVisitNumber(motherId: number): Promise<number> {
+    const [row] = await db.select({ maxNum: max(prenatalVisits.visitNumber) })
+      .from(prenatalVisits).where(eq(prenatalVisits.motherId, motherId));
+    return (row?.maxNum ?? 0) + 1;
+  }
+  async function nextChildVisitNumber(childId: number): Promise<number> {
+    const [row] = await db.select({ maxNum: max(childVisits.visitNumber) })
+      .from(childVisits).where(eq(childVisits.childId, childId));
+    return (row?.maxNum ?? 0) + 1;
+  }
+  async function nextSeniorVisitNumber(seniorId: number): Promise<number> {
+    const [row] = await db.select({ maxNum: max(seniorVisits.visitNumber) })
+      .from(seniorVisits).where(eq(seniorVisits.seniorId, seniorId));
+    return (row?.maxNum ?? 0) + 1;
+  }
 
   // --- Prenatal (Mother) visits ---
   app.get("/api/nurse-visits/mother/:id", nurseVisitReadRBAC, ar(async (req, res) => {
     const id = parseId(req.params.id, res); if (id === null) return;
+    // Load parent to verify existence and enforce TL barangay scoping
+    const mother = await storage.getMother(id);
+    if (!mother) return res.status(404).json({ message: "Mother not found" });
+    if (req.userInfo?.role === UserRole.TL && !req.userInfo.assignedBarangays.includes(mother.barangay)) {
+      return res.status(403).json({ message: "Access denied to this barangay" });
+    }
     const visits = await storage.getPrenatalVisits(id);
     res.json(visits);
   }));
 
   app.post("/api/nurse-visits/mother/:id", nurseVisitWriteRBAC, ar(async (req, res) => {
     const id = parseId(req.params.id, res); if (id === null) return;
-    const now = new Date().toISOString();
-    // Auto-number visit
-    const existing = await storage.getPrenatalVisits(id);
-    const nextNumber = existing.length > 0 ? Math.max(...existing.map(v => v.visitNumber)) + 1 : 1;
+    const mother = await storage.getMother(id);
+    if (!mother) return res.status(404).json({ message: "Mother not found" });
+    if (req.userInfo?.role === UserRole.TL && !req.userInfo.assignedBarangays.includes(mother.barangay)) {
+      return res.status(403).json({ message: "You can only add visits for patients in your assigned barangays" });
+    }
     const { visitDate, gaWeeks, weightKg, bloodPressure, fundalHeight, fetalHeartTone, riskStatus, notes } = req.body;
     if (!visitDate) return res.status(400).json({ message: "visitDate is required" });
+    const visitNumber = await nextPrenatalVisitNumber(id);
     const visit = await storage.createPrenatalVisit({
       motherId: id,
-      visitNumber: nextNumber,
+      visitNumber,
       visitDate,
       gaWeeks: gaWeeks ? Number(gaWeeks) : undefined,
       weightKg: weightKg || undefined,
@@ -739,7 +769,7 @@ export async function registerRoutes(
       riskStatus: riskStatus || undefined,
       notes: notes || undefined,
       recordedBy: req.userInfo?.username || undefined,
-      createdAt: now,
+      createdAt: new Date().toISOString(),
     });
     res.status(201).json(visit);
   }));
@@ -747,20 +777,28 @@ export async function registerRoutes(
   // --- Child visits ---
   app.get("/api/nurse-visits/child/:id", nurseVisitReadRBAC, ar(async (req, res) => {
     const id = parseId(req.params.id, res); if (id === null) return;
+    const child = await storage.getChild(id);
+    if (!child) return res.status(404).json({ message: "Child not found" });
+    if (req.userInfo?.role === UserRole.TL && !req.userInfo.assignedBarangays.includes(child.barangay)) {
+      return res.status(403).json({ message: "Access denied to this barangay" });
+    }
     const visits = await storage.getChildVisits(id);
     res.json(visits);
   }));
 
   app.post("/api/nurse-visits/child/:id", nurseVisitWriteRBAC, ar(async (req, res) => {
     const id = parseId(req.params.id, res); if (id === null) return;
-    const now = new Date().toISOString();
-    const existing = await storage.getChildVisits(id);
-    const nextNumber = existing.length > 0 ? Math.max(...existing.map(v => v.visitNumber)) + 1 : 1;
+    const child = await storage.getChild(id);
+    if (!child) return res.status(404).json({ message: "Child not found" });
+    if (req.userInfo?.role === UserRole.TL && !req.userInfo.assignedBarangays.includes(child.barangay)) {
+      return res.status(403).json({ message: "You can only add visits for patients in your assigned barangays" });
+    }
     const { visitDate, weightKg, heightCm, muac, nutritionNotes, immunizationNotes, monitoringNotes } = req.body;
     if (!visitDate) return res.status(400).json({ message: "visitDate is required" });
+    const visitNumber = await nextChildVisitNumber(id);
     const visit = await storage.createChildVisit({
       childId: id,
-      visitNumber: nextNumber,
+      visitNumber,
       visitDate,
       weightKg: weightKg || undefined,
       heightCm: heightCm || undefined,
@@ -769,7 +807,7 @@ export async function registerRoutes(
       immunizationNotes: immunizationNotes || undefined,
       monitoringNotes: monitoringNotes || undefined,
       recordedBy: req.userInfo?.username || undefined,
-      createdAt: now,
+      createdAt: new Date().toISOString(),
     });
     res.status(201).json(visit);
   }));
@@ -777,20 +815,28 @@ export async function registerRoutes(
   // --- Senior visits ---
   app.get("/api/nurse-visits/senior/:id", nurseVisitReadRBAC, ar(async (req, res) => {
     const id = parseId(req.params.id, res); if (id === null) return;
+    const senior = await storage.getSenior(id);
+    if (!senior) return res.status(404).json({ message: "Senior not found" });
+    if (req.userInfo?.role === UserRole.TL && !req.userInfo.assignedBarangays.includes(senior.barangay)) {
+      return res.status(403).json({ message: "Access denied to this barangay" });
+    }
     const visits = await storage.getSeniorVisits(id);
     res.json(visits);
   }));
 
   app.post("/api/nurse-visits/senior/:id", nurseVisitWriteRBAC, ar(async (req, res) => {
     const id = parseId(req.params.id, res); if (id === null) return;
-    const now = new Date().toISOString();
-    const existing = await storage.getSeniorVisits(id);
-    const nextNumber = existing.length > 0 ? Math.max(...existing.map(v => v.visitNumber)) + 1 : 1;
+    const senior = await storage.getSenior(id);
+    if (!senior) return res.status(404).json({ message: "Senior not found" });
+    if (req.userInfo?.role === UserRole.TL && !req.userInfo.assignedBarangays.includes(senior.barangay)) {
+      return res.status(403).json({ message: "You can only add visits for patients in your assigned barangays" });
+    }
     const { visitDate, bloodPressure, weightKg, medicationPickupNote, symptomsRemarks, followUpNotes } = req.body;
     if (!visitDate) return res.status(400).json({ message: "visitDate is required" });
+    const visitNumber = await nextSeniorVisitNumber(id);
     const visit = await storage.createSeniorVisit({
       seniorId: id,
-      visitNumber: nextNumber,
+      visitNumber,
       visitDate,
       bloodPressure: bloodPressure || undefined,
       weightKg: weightKg || undefined,
@@ -798,7 +844,7 @@ export async function registerRoutes(
       symptomsRemarks: symptomsRemarks || undefined,
       followUpNotes: followUpNotes || undefined,
       recordedBy: req.userInfo?.username || undefined,
-      createdAt: now,
+      createdAt: new Date().toISOString(),
     });
     res.status(201).json(visit);
   }));
