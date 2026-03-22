@@ -201,23 +201,30 @@ export default function PatientCheckupPage() {
   const { data: children = [] } = useQuery<Child[]>({ queryKey: ["/api/children"], enabled: canAccessPatientCheckup });
   const { data: seniors = [] } = useQuery<Senior[]>({ queryKey: ["/api/seniors"], enabled: canAccessPatientCheckup });
 
-  type RegistryCandidate = { id: number; displayName: string; age?: number; sex?: string; barangay: string };
+  type RegistryCandidate = { id: number; displayName: string; age?: number; sex?: string; barangay: string; addressLine?: string | null };
   const registryCandidates: RegistryCandidate[] = (() => {
     const q = linkSearch.toLowerCase().trim();
     if (linkType === "Mother") {
       return mothers
         .filter(m => !q || `${m.firstName} ${m.lastName}`.toLowerCase().includes(q))
-        .map(m => ({ id: m.id, displayName: `${m.firstName} ${m.lastName}`, age: m.age, sex: "F", barangay: m.barangay }));
+        .map(m => ({ id: m.id, displayName: `${m.firstName} ${m.lastName}`, age: m.age, sex: "F", barangay: m.barangay, addressLine: m.addressLine }));
     }
     if (linkType === "Child") {
+      // Derive age from dob if present
+      const deriveAge = (dob: string | null | undefined): number | undefined => {
+        if (!dob) return undefined;
+        const birthYear = new Date(dob).getFullYear();
+        const now = new Date();
+        return now.getFullYear() - birthYear;
+      };
       return children
         .filter(c => !q || c.name.toLowerCase().includes(q))
-        .map(c => ({ id: c.id, displayName: c.name, barangay: c.barangay }));
+        .map(c => ({ id: c.id, displayName: c.name, age: deriveAge(c.dob), sex: c.sex ?? undefined, barangay: c.barangay, addressLine: c.addressLine }));
     }
     if (linkType === "Senior") {
       return seniors
         .filter(s => !q || `${s.firstName} ${s.lastName}`.toLowerCase().includes(q))
-        .map(s => ({ id: s.id, displayName: `${s.firstName} ${s.lastName}`, age: s.age, barangay: s.barangay }));
+        .map(s => ({ id: s.id, displayName: `${s.firstName} ${s.lastName}`, age: s.age, sex: s.sex ?? undefined, barangay: s.barangay, addressLine: s.addressLine }));
     }
     return [];
   })().slice(0, 8);
@@ -227,8 +234,9 @@ export default function PatientCheckupPage() {
       ...prev,
       patientName: candidate.displayName,
       barangay: candidate.barangay,
-      age: candidate.age ? String(candidate.age) : prev.age,
+      age: candidate.age != null ? String(candidate.age) : prev.age,
       sex: candidate.sex ?? prev.sex,
+      addressLine: candidate.addressLine ?? prev.addressLine,
       linkedPersonType: linkType === "none" ? "" : linkType,
       linkedPersonId: String(candidate.id),
     }));
@@ -411,7 +419,7 @@ export default function PatientCheckupPage() {
                   <p className="text-sm font-medium">Link to Registry Profile <span className="text-muted-foreground font-normal">(optional)</span></p>
                 </div>
                 <div className="flex gap-2">
-                  <Select value={linkType} onValueChange={(v) => { setLinkType(v as any); setLinkSearch(""); setNewConsult(prev => ({ ...prev, linkedPersonType: v === "none" ? "" : v, linkedPersonId: "" })); }}>
+                  <Select value={linkType} onValueChange={(v: "none" | "Mother" | "Child" | "Senior") => { setLinkType(v); setLinkSearch(""); setNewConsult(prev => ({ ...prev, linkedPersonType: v === "none" ? "" : v, linkedPersonId: "" })); }}>
                     <SelectTrigger className="w-36" data-testid="select-link-type">
                       <SelectValue />
                     </SelectTrigger>
