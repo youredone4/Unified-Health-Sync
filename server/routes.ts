@@ -716,8 +716,7 @@ export async function registerRoutes(
   const nurseVisitReadRBAC = [loadUserInfo, requireAuth];
   const nurseVisitWriteRBAC = [loadUserInfo, requireAuth, requireRole(UserRole.SYSTEM_ADMIN, UserRole.TL)];
 
-  // Helper: resolve next visit number concurrency-safely using DB-level MAX aggregation.
-  // The unique constraint (entity_id, visit_number) is the final guard against concurrent races.
+  // Helper: resolve next visit number using DB-level MAX aggregation.
   async function nextPrenatalVisitNumber(motherId: number): Promise<number> {
     const [row] = await db.select({ maxNum: max(prenatalVisits.visitNumber) })
       .from(prenatalVisits).where(eq(prenatalVisits.motherId, motherId));
@@ -732,6 +731,11 @@ export async function registerRoutes(
     const [row] = await db.select({ maxNum: max(seniorVisits.visitNumber) })
       .from(seniorVisits).where(eq(seniorVisits.seniorId, seniorId));
     return (row?.maxNum ?? 0) + 1;
+  }
+
+  // Detect PostgreSQL unique-constraint violation (code 23505).
+  function isUniqueViolation(err: unknown): boolean {
+    return typeof err === "object" && err !== null && (err as any).code === "23505";
   }
 
   // --- Prenatal (Mother) visits ---
@@ -756,21 +760,24 @@ export async function registerRoutes(
     }
     const { visitDate, gaWeeks, weightKg, bloodPressure, fundalHeight, fetalHeartTone, riskStatus, notes } = req.body;
     if (!visitDate) return res.status(400).json({ message: "visitDate is required" });
-    const visitNumber = await nextPrenatalVisitNumber(id);
-    const visit = await storage.createPrenatalVisit({
-      motherId: id,
-      visitNumber,
-      visitDate,
-      gaWeeks: gaWeeks ? Number(gaWeeks) : undefined,
-      weightKg: weightKg || undefined,
-      bloodPressure: bloodPressure || undefined,
-      fundalHeight: fundalHeight || undefined,
-      fetalHeartTone: fetalHeartTone || undefined,
-      riskStatus: riskStatus || undefined,
-      notes: notes || undefined,
-      recordedBy: req.userInfo?.username || undefined,
-      createdAt: new Date().toISOString(),
-    });
+    let visit;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const visitNumber = await nextPrenatalVisitNumber(id);
+      try {
+        visit = await storage.createPrenatalVisit({
+          motherId: id, visitNumber, visitDate,
+          gaWeeks: gaWeeks ? Number(gaWeeks) : undefined,
+          weightKg: weightKg || undefined, bloodPressure: bloodPressure || undefined,
+          fundalHeight: fundalHeight || undefined, fetalHeartTone: fetalHeartTone || undefined,
+          riskStatus: riskStatus || undefined, notes: notes || undefined,
+          recordedBy: req.userInfo?.username || undefined, createdAt: new Date().toISOString(),
+        });
+        break;
+      } catch (err) {
+        if (attempt < 2 && isUniqueViolation(err)) continue;
+        throw err;
+      }
+    }
     res.status(201).json(visit);
   }));
 
@@ -795,20 +802,24 @@ export async function registerRoutes(
     }
     const { visitDate, weightKg, heightCm, muac, nutritionNotes, immunizationNotes, monitoringNotes } = req.body;
     if (!visitDate) return res.status(400).json({ message: "visitDate is required" });
-    const visitNumber = await nextChildVisitNumber(id);
-    const visit = await storage.createChildVisit({
-      childId: id,
-      visitNumber,
-      visitDate,
-      weightKg: weightKg || undefined,
-      heightCm: heightCm || undefined,
-      muac: muac || undefined,
-      nutritionNotes: nutritionNotes || undefined,
-      immunizationNotes: immunizationNotes || undefined,
-      monitoringNotes: monitoringNotes || undefined,
-      recordedBy: req.userInfo?.username || undefined,
-      createdAt: new Date().toISOString(),
-    });
+    let visit;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const visitNumber = await nextChildVisitNumber(id);
+      try {
+        visit = await storage.createChildVisit({
+          childId: id, visitNumber, visitDate,
+          weightKg: weightKg || undefined, heightCm: heightCm || undefined,
+          muac: muac || undefined, nutritionNotes: nutritionNotes || undefined,
+          immunizationNotes: immunizationNotes || undefined,
+          monitoringNotes: monitoringNotes || undefined,
+          recordedBy: req.userInfo?.username || undefined, createdAt: new Date().toISOString(),
+        });
+        break;
+      } catch (err) {
+        if (attempt < 2 && isUniqueViolation(err)) continue;
+        throw err;
+      }
+    }
     res.status(201).json(visit);
   }));
 
@@ -833,19 +844,24 @@ export async function registerRoutes(
     }
     const { visitDate, bloodPressure, weightKg, medicationPickupNote, symptomsRemarks, followUpNotes } = req.body;
     if (!visitDate) return res.status(400).json({ message: "visitDate is required" });
-    const visitNumber = await nextSeniorVisitNumber(id);
-    const visit = await storage.createSeniorVisit({
-      seniorId: id,
-      visitNumber,
-      visitDate,
-      bloodPressure: bloodPressure || undefined,
-      weightKg: weightKg || undefined,
-      medicationPickupNote: medicationPickupNote || undefined,
-      symptomsRemarks: symptomsRemarks || undefined,
-      followUpNotes: followUpNotes || undefined,
-      recordedBy: req.userInfo?.username || undefined,
-      createdAt: new Date().toISOString(),
-    });
+    let visit;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const visitNumber = await nextSeniorVisitNumber(id);
+      try {
+        visit = await storage.createSeniorVisit({
+          seniorId: id, visitNumber, visitDate,
+          bloodPressure: bloodPressure || undefined, weightKg: weightKg || undefined,
+          medicationPickupNote: medicationPickupNote || undefined,
+          symptomsRemarks: symptomsRemarks || undefined,
+          followUpNotes: followUpNotes || undefined,
+          recordedBy: req.userInfo?.username || undefined, createdAt: new Date().toISOString(),
+        });
+        break;
+      } catch (err) {
+        if (attempt < 2 && isUniqueViolation(err)) continue;
+        throw err;
+      }
+    }
     res.status(201).json(visit);
   }));
 
