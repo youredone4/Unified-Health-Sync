@@ -1,0 +1,195 @@
+Enhance the maternal and child follow-up workflows so that prenatal nurse visits and child vaccination updates both support automatic scheduling, profile continuity, and overdue tracking.
+
+Context
+- The system already has working Mother and Child profile modules.
+- The Mother profile already has a Nurse Monitoring Visits section and an Add Visit action.
+- The Child profile already shows:
+  - Next Visit
+  - Next Vaccine
+  - Mark Vaccine Given
+  - Vaccine Timeline
+  - Nutrition Status
+- These workflows need stronger continuity and automation.
+- Do NOT rebuild the whole prenatal or child modules.
+- Do NOT break Mother Registry, Child Registry, Prenatal Dashboard, TT Reminders, Child Dashboard, Vaccination Schedule, Growth Monitoring, or Nutrition logic.
+
+Goal
+1. Make each prenatal nurse visit part of the Mother profile’s ongoing Nurse Monitoring Visits history and allow the nurse to record the next scheduled prenatal visit.
+2. Make the child vaccination workflow automatically calculate and update the next vaccine schedule when "Mark Vaccine Given" is used.
+
+==================================================
+A. Prenatal Nurse Visit Enhancement
+==================================================
+
+1. Link prenatal visit to Nurse Monitoring Visits
+When a nurse adds a prenatal visit:
+- save it under the same Mother profile
+- display it in the Nurse Monitoring Visits section/history
+- preserve previous visits
+- use a one-to-many visit history structure
+
+2. Add Next Scheduled Visit field
+In the Add Nurse Visit — Mother form, add:
+- Next Scheduled Visit
+
+Behavior:
+- allow the nurse to select the next follow-up date
+- save it together with the prenatal visit record
+- update the profile with the latest next visit schedule
+
+3. Auto-update Next Prenatal Check
+After saving a prenatal nurse visit:
+- automatically update the Next Prenatal Check section/card using the latest saved next scheduled visit
+- make sure the displayed next prenatal follow-up reflects the most recent nurse-entered schedule
+- avoid stale or hardcoded next-visit values
+
+4. Support overdue status
+If the Next Scheduled Visit date has already passed and the visit has not been completed or updated:
+- mark the prenatal follow-up as overdue
+- show overdue status clearly in the profile and related prenatal tracking views
+- keep the overdue indicator consistent with the rest of the system’s status styling
+
+5. Update profile summary
+After saving a prenatal nurse visit:
+- update Last Visit Date
+- update latest prenatal monitoring values where appropriate
+- update Next Visit Date / Next Prenatal Check
+
+6. Preserve visit history
+In Nurse Monitoring Visits:
+- show visit date
+- show recorded prenatal values
+- show notes
+- show next scheduled visit if available
+- sort latest first
+
+7. Suggested prenatal fields to keep/use
+Keep or support fields such as:
+- Visit Date
+- GA (weeks)
+- Weight
+- Blood Pressure
+- Fundal Height
+- Fetal Heart Tone
+- Risk Status
+- Notes
+- Next Scheduled Visit
+
+8. Optional but recommended prenatal enhancements
+If feasible, also support:
+- visit status (Completed / Missed / Rescheduled)
+- referral needed flag
+- follow-up instructions
+- previous values reference for BP/weight
+- SMS reminder integration based on next scheduled visit
+
+==================================================
+B. Child Vaccination Auto-Scheduling Enhancement
+==================================================
+
+1. Auto-calculate next vaccine schedule
+When the user clicks "Mark Vaccine Given":
+- mark the currently due vaccine as completed
+- update the Vaccine Timeline to reflect the completed status
+- automatically determine the next required vaccine in the sequence
+- automatically calculate the next visit date based on the vaccine schedule logic already used by the system
+- update the Next Visit card immediately
+
+2. Update Next Visit card automatically
+After "Mark Vaccine Given":
+- refresh the Next Visit section/card
+- update:
+  - next scheduled date
+  - next vaccine name
+  - overdue status if applicable
+- remove stale values from the previous visit
+
+3. Preserve vaccine sequence logic
+Use the existing child immunization schedule logic if already present.
+
+Examples:
+- after Pentavalent 2 is marked complete, move to the next expected vaccine
+- after OPV 2 is marked complete, move to the next expected dose
+- if all scheduled vaccines are complete, show a clear completed state instead of an overdue/future reminder
+
+4. Overdue support
+If a next scheduled vaccine date has already passed:
+- show overdue status clearly
+- keep it consistent with the current design
+- clear overdue status automatically when the due vaccine is marked as given and a new future schedule is created
+
+5. Update profile continuity
+After marking a vaccine as given:
+- update the child profile with the latest vaccination event
+- preserve vaccine history in the timeline
+- keep the linked mother relationship intact
+- do not break nutrition status or growth monitoring information
+
+6. Suggested enhancement: vaccine event history
+If feasible, add or improve a vaccination event history section showing:
+- vaccine name
+- date given
+- next scheduled vaccine
+- who recorded it if available
+
+7. Suggested enhancement: completed schedule state
+If all required vaccines are completed:
+- show "Vaccination Schedule Complete" or equivalent status
+- stop showing unnecessary overdue warnings
+- allow viewing full vaccine history
+
+8. Suggested enhancement: SMS/reminder integration
+If the child profile already supports SMS reminders:
+- update the reminder target automatically when the next vaccine schedule changes
+- ensure reminders align with the newly calculated next visit date
+
+==================================================
+C. Shared Workflow/Planning Requirements
+==================================================
+
+1. Preserve existing functionality
+- do not break Mother Registry
+- do not break Child Registry
+- do not break Prenatal Dashboard
+- do not break TT Reminders
+- do not break Child Dashboard
+- do not break Vaccination Schedule module
+- do not break Growth Monitoring
+- do not break nutrition classification/profile display
+- do not break role-based access
+
+2. Inspect current logic first
+Before changing:
+- inspect how Nurse Monitoring Visits are currently stored and displayed
+- inspect how Next Prenatal Check is currently computed
+- inspect whether mother visit history already has partial scheduling support
+- inspect how the child vaccine sequence is currently stored
+- inspect how Next Visit and Next Vaccine are currently computed
+- inspect what happens today when "Mark Vaccine Given" is clicked
+- reuse existing structures and scheduling logic where possible
+- avoid hardcoding a second conflicting scheduling system
+
+3. Deliverables
+Provide:
+1. linked prenatal visit history under Nurse Monitoring Visits
+2. Next Scheduled Visit field in the prenatal nurse visit form
+3. auto-update logic for Next Prenatal Check
+4. overdue status support for prenatal follow-ups
+5. auto-calculation logic after "Mark Vaccine Given"
+6. automatic Next Visit / Next Vaccine update for child vaccination
+7. overdue-state handling for child vaccination
+8. vaccine timeline update behavior
+9. any reminder/schedule integration updates
+10. files changed
+
+4. Success Criteria
+- prenatal nurse visits appear in Nurse Monitoring Visits history
+- nurses can enter the next scheduled prenatal visit
+- Next Prenatal Check updates automatically from the latest saved visit
+- overdue prenatal follow-ups are shown clearly when applicable
+- clicking "Mark Vaccine Given" marks the current vaccine as completed
+- the next required vaccine is automatically determined
+- the next visit date is automatically calculated and shown
+- overdue vaccination status is handled correctly
+- mother and child profile continuity is preserved
+- existing module behavior remains stable
