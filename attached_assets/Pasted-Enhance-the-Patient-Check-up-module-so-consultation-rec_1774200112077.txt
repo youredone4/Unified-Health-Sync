@@ -1,0 +1,145 @@
+Enhance the Patient Check-up module so consultation records can be linked to existing profiles from the Mother Registry, Child Registry, and Senior Registry, and fix the consultation history bug where new consults for the same patient create duplicate dashboard rows instead of extending the same patient history.
+
+Goal
+Make consultations part of the patient’s ongoing profile history instead of storing them as isolated records, while ensuring the Patient Check-up dashboard shows one patient entry with multiple consultations instead of duplicate patient rows.
+
+Context
+- The Patient Check-up module already exists.
+- Consultation history modal/view already exists.
+- There is a "New Consult for This Patient" action.
+- Currently, the module can create duplicate dashboard entries for the same patient instead of grouping consultations correctly.
+- Do NOT rebuild the whole module.
+- Do NOT break existing registries, dashboards, role-based access, filtering, or consultation workflows.
+
+Requirements
+
+1. Link consultations to existing registry profiles
+Allow consultation records to link to:
+- Mother Registry profiles
+- Child Registry profiles
+- Senior Registry profiles
+
+2. Use one-to-many relationship
+Each profile can have multiple consultation records.
+
+Examples:
+- one mother profile -> many consultations
+- one child profile -> many consultations
+- one senior profile -> many consultations
+
+3. Consultation record fields
+Add or use fields such as:
+- patient_type (mother, child, senior)
+- patient_profile_id (ID of linked registry profile)
+
+If another equivalent relationship structure already exists, reuse it instead of duplicating logic.
+
+4. Consultation creation workflow
+When creating a new consultation:
+- allow user to search existing registry profiles
+- allow selecting a patient from Mother, Child, or Senior Registry
+- auto-fill patient details from the selected profile
+- save the consultation under that linked profile
+
+5. Preserve patient identity when creating a new consult
+When "New Consult for This Patient" is clicked:
+- reuse the same patient identity
+- reuse the same linked profile reference
+- do NOT create a new standalone patient entry for the same person
+- do NOT create a duplicate patient row in the Patient Check-up dashboard
+
+6. Save as a new consultation under the same patient
+For returning patients:
+- create a new consultation record
+- attach it to the same patient/profile
+- keep previous consultations intact
+- preserve one continuous consultation history for that patient
+
+7. Group dashboard display by patient
+In the Patient Check-up Consultation Records list:
+- show only one row/card per patient
+- display the latest consultation as the dashboard summary
+- do not show separate duplicate cards for the same patient unless there is an intentional separate visit-log view
+
+The row/card should update using the latest consultation details such as:
+- latest diagnosis
+- latest vitals
+- latest disposition
+- latest timestamp
+
+8. Fix consultation history count
+In the consultation history modal/page:
+- update total consult count correctly
+- if a patient has 2 consultations, show "2 total consults"
+- refresh immediately after saving a new consultation
+- do not leave stale values such as "1 total consult" after a second consult is added
+
+9. Fix latest consultation / timestamp refresh
+After adding a new consult:
+- update the latest consultation date
+- update the latest seen value
+- update dashboard summary details to reflect the most recent consultation
+
+10. Profile integration
+In each linked registry profile, show consultation history for that patient.
+
+Apply this to linked profiles in:
+- Mother Registry
+- Child Registry
+- Senior Registry
+
+11. Preserve standalone flexibility
+If needed, allow consultation for a patient not yet in a registry, but prefer linking to an existing profile whenever possible.
+
+If standalone consults are still supported:
+- avoid creating duplicates when a matching linked profile already exists
+- keep future linkage possible
+
+12. Avoid duplicate patient records
+Reuse existing registry profiles instead of creating duplicate consultation-only entries.
+
+The intended model should be:
+- one patient/profile
+- many consultations
+
+Not:
+- one consultation = one separate patient row
+
+13. Inspect current linking logic before changing
+Before refactoring:
+- inspect how patient identity is currently stored in Patient Check-up
+- inspect whether consultations are linked by patient ID, profile ID, name, or another key
+- inspect the "New Consult for This Patient" button handler
+- inspect dashboard query/render logic
+- inspect whether a profile-linking structure already exists and reuse it if possible
+
+14. Preserve existing functionality
+- do not break current registries
+- do not break Patient Check-up
+- do not break dashboards or filtering
+- do not break role-based access
+- do not break consultation history modal
+- do not break search or barangay filters
+- do not break summary cards
+
+15. Deliverables
+Provide:
+1. consultation-to-profile linking logic
+2. patient search/select flow during consult creation
+3. consultation history shown inside linked profiles
+4. fix for "New Consult for This Patient" linking logic
+5. fix for duplicate patient rows in dashboard
+6. fix for consultation history count
+7. fix for latest consultation/timestamp refresh
+8. any schema/model changes needed
+9. files changed
+
+Success Criteria
+- consultations can be linked to mother, child, or senior profiles
+- returning patients keep one continuous consultation history
+- duplicate patient records are reduced or eliminated
+- adding a new consult for the same patient does not create a duplicate dashboard row
+- the patient keeps one unified consultation history
+- total consult count updates correctly from 1 to 2 and beyond
+- latest consultation summary updates correctly
+- existing system behavior remains stable
