@@ -351,10 +351,14 @@ export default function ChildProfile() {
                     return labels[value] ?? value;
                   }}
                 />
-                <Line type="monotone" dataKey="neg3"   stroke="#ef4444" strokeWidth={1} strokeDasharray="4 3" dot={false} legendType="line" />
-                <Line type="monotone" dataKey="neg2"   stroke="#f97316" strokeWidth={1} strokeDasharray="4 3" dot={false} legendType="line" />
-                <Line type="monotone" dataKey="median" stroke="#22c55e" strokeWidth={1.5} strokeDasharray="4 3" dot={false} legendType="line" />
-                <Line type="monotone" dataKey="plus2"  stroke="#94a3b8" strokeWidth={1} strokeDasharray="4 3" dot={false} legendType="line" />
+                {(child.sex === 'male' || child.sex === 'female') && (
+                  <>
+                    <Line type="monotone" dataKey="neg3"   stroke="#ef4444" strokeWidth={1} strokeDasharray="4 3" dot={false} legendType="line" />
+                    <Line type="monotone" dataKey="neg2"   stroke="#f97316" strokeWidth={1} strokeDasharray="4 3" dot={false} legendType="line" />
+                    <Line type="monotone" dataKey="median" stroke="#22c55e" strokeWidth={1.5} strokeDasharray="4 3" dot={false} legendType="line" />
+                    <Line type="monotone" dataKey="plus2"  stroke="#94a3b8" strokeWidth={1} strokeDasharray="4 3" dot={false} legendType="line" />
+                  </>
+                )}
                 <Line
                   type="monotone"
                   dataKey="childWeight"
@@ -367,9 +371,15 @@ export default function ChildProfile() {
                 />
               </ComposedChart>
             </ResponsiveContainer>
-            <p className="text-xs text-muted-foreground mt-1 text-center">
-              Reference zones: <span className="text-red-400">red = -3 SD</span> · <span className="text-orange-400">orange = -2 SD</span> · <span className="text-green-400">green = median</span>
-            </p>
+            {(child.sex === 'male' || child.sex === 'female') ? (
+              <p className="text-xs text-muted-foreground mt-1 text-center">
+                Reference zones: <span className="text-red-400">red = -3 SD</span> · <span className="text-orange-400">orange = -2 SD</span> · <span className="text-green-400">green = median</span>
+              </p>
+            ) : (
+              <p className="text-xs text-yellow-400 mt-1 text-center">
+                WHO reference curves require a recorded sex. Update the child record to display standard curves.
+              </p>
+            )}
           </CardContent>
         </Card>
       )}
