@@ -1,0 +1,80 @@
+Clear the live database data for the Inventory and Supply module only.
+
+Important
+- This is for the live database.
+- Do NOT rebuild the module.
+- Do NOT delete the Inventory and Supply pages, routes, UI, or logic.
+- Only clear the stored data records used by the Inventory and Supply module.
+- Do NOT affect other modules or unrelated tables.
+
+Scope
+Clear only Inventory and Supply data such as:
+- stock records
+- inventory entries
+- surplus records
+- stock-out / low-stock records
+- related transaction/history records if they belong only to Inventory and Supply
+
+Do NOT delete:
+- users
+- roles
+- mothers
+- children
+- seniors
+- consultations
+- DOTS records
+- M1 reports
+- dashboards from other modules
+- settings or configuration
+
+Requirements
+
+1. Inspect before deleting
+- first inspect which tables/collections are used only by the Inventory and Supply module
+- confirm dependencies before clearing data
+- avoid deleting shared reference data unless it is truly inventory-only
+
+2. Clear live data safely
+- remove all existing Inventory and Supply records from the live database
+- keep table/collection structure intact
+- keep schema intact
+- keep the module functional after data is cleared
+
+3. Preserve the module itself
+After clearing the data:
+- Inventory and Supply pages should still load normally
+- cards, tables, and filters should remain functional
+- the module should simply show no records / empty state until new data is added
+
+4. Reset derived values if needed
+- reset counts, summaries, and dashboard totals for Inventory and Supply
+- make sure stock-out / low-stock cards no longer show old data
+- ensure no stale cached values remain
+
+5. Add safe empty-state behavior
+If not already implemented:
+- show a clean empty state when there is no inventory data
+- do not show broken charts, NaN values, or errors
+
+6. Use caution with live database
+Before executing:
+- identify whether delete should be hard delete or safe truncate for the Inventory and Supply tables
+- if there are foreign key constraints, handle them properly
+- do not break database integrity
+
+7. Optional but recommended
+Before clearing, create a backup/export of the Inventory and Supply data if feasible.
+
+8. Deliverables
+Provide:
+1. the tables/collections cleared
+2. confirmation that only Inventory and Supply data was removed
+3. confirmation that other modules were untouched
+4. any empty-state handling added
+5. files changed if UI cleanup was needed
+
+Success Criteria
+- Inventory and Supply live data is cleared
+- the Inventory and Supply module still works
+- all other modules remain untouched
+- no stale inventory counts remain
