@@ -402,6 +402,14 @@ export async function registerRoutes(
     res.json(data);
   });
 
+  app.get('/api/consults/by-patient', patientCheckupRBAC, ar(async (req, res) => {
+    const name = String(req.query.name ?? "").trim();
+    const barangay = String(req.query.barangay ?? "").trim();
+    if (!name || !barangay) return res.status(400).json({ message: "name and barangay query params required" });
+    const data = await storage.getConsultsByPatient(name, barangay);
+    res.json(data);
+  }));
+
   app.get(api.consults.get.path, patientCheckupRBAC, ar(async (req, res) => {
     const id = parseId(req.params.id, res); if (id === null) return;
     const consult = await storage.getConsult(id);

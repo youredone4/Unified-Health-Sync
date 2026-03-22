@@ -9,10 +9,15 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
-import { ClipboardPlus, Plus, Search, Calendar, User, Stethoscope, MapPin, Activity } from "lucide-react";
-import { format } from "date-fns";
+import {
+  ClipboardPlus, Plus, Search, Calendar, User, Stethoscope, MapPin, Activity,
+  ChevronDown, ChevronUp, HeartPulse, FileText, History,
+} from "lucide-react";
+import { format, parseISO, isValid } from "date-fns";
 import type { Consult } from "@shared/schema";
 import { TODAY_STR } from "@/lib/healthLogic";
 
@@ -52,11 +57,121 @@ const EMPTY_CONSULT = {
   heightCm: "",
 };
 
-function calcBmi(weightKg: string, heightCm: string): string {
-  const w = parseFloat(weightKg);
-  const h = parseFloat(heightCm) / 100;
+function calcBmi(weightKg?: string | null, heightCm?: string | null): string {
+  const w = parseFloat(weightKg ?? "");
+  const h = parseFloat(heightCm ?? "") / 100;
   if (!w || !h || h <= 0) return "";
   return (w / (h * h)).toFixed(1);
+}
+
+function fmtDate(dateStr?: string | null): string {
+  if (!dateStr) return "—";
+  try {
+    const d = parseISO(dateStr);
+    if (isValid(d)) return format(d, "MMM d, yyyy");
+    const d2 = new Date(dateStr);
+    if (isValid(d2)) return format(d2, "MMM d, yyyy");
+    return dateStr;
+  } catch {
+    return dateStr;
+  }
+}
+
+function VitalsRow({ consult }: { consult: Consult }) {
+  const bmi = calcBmi(consult.weightKg, consult.heightCm);
+  const parts: string[] = [];
+  if (consult.bloodPressure) parts.push(`BP ${consult.bloodPressure}`);
+  if (consult.weightKg) parts.push(`Wt ${consult.weightKg} kg`);
+  if (consult.temperatureC) parts.push(`Temp ${consult.temperatureC}°C`);
+  if (consult.pulseRate) parts.push(`PR ${consult.pulseRate} bpm`);
+  if (consult.heightCm) parts.push(`Ht ${consult.heightCm} cm`);
+  if (bmi) parts.push(`BMI ${bmi}`);
+  if (!parts.length) return null;
+  return <p className="text-xs text-muted-foreground mt-0.5">{parts.join(" · ")}</p>;
+}
+
+function HistoryCard({ consult, defaultExpanded = false }: { consult: Consult; defaultExpanded?: boolean }) {
+  const [expanded, setExpanded] = useState(defaultExpanded);
+  const bmi = calcBmi(consult.weightKg, consult.heightCm);
+
+  return (
+    <div className="border rounded-lg overflow-hidden" data-testid={`history-card-${consult.id}`}>
+      <button
+        className="w-full flex items-center justify-between p-3 hover:bg-accent/50 transition-colors text-left"
+        onClick={() => setExpanded((v) => !v)}
+        aria-expanded={expanded}
+      >
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground shrink-0">
+            <Calendar className="w-3.5 h-3.5" />
+            {fmtDate(consult.consultDate)}
+          </div>
+          <p className="text-sm font-medium truncate">{consult.diagnosis}</p>
+        </div>
+        <div className="flex items-center gap-2 shrink-0 ml-2">
+          <Badge className={`text-xs ${dispositionColors[consult.disposition || "Treated"]}`}>
+            {consult.disposition}
+          </Badge>
+          {expanded ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
+        </div>
+      </button>
+
+      {expanded && (
+        <div className="px-3 pb-3 space-y-2 border-t bg-muted/20">
+          {consult.chiefComplaint && (
+            <div className="pt-2">
+              <p className="text-xs font-medium text-muted-foreground">Chief Complaint</p>
+              <p className="text-sm">{consult.chiefComplaint}</p>
+            </div>
+          )}
+          <div>
+            <p className="text-xs font-medium text-muted-foreground">Diagnosis</p>
+            <p className="text-sm">{consult.diagnosis}</p>
+          </div>
+          {consult.treatment && (
+            <div>
+              <p className="text-xs font-medium text-muted-foreground">Treatment</p>
+              <p className="text-sm">{consult.treatment}</p>
+            </div>
+          )}
+          {(consult.bloodPressure || consult.weightKg || consult.temperatureC || consult.pulseRate || consult.heightCm) && (
+            <div>
+              <p className="text-xs font-medium text-muted-foreground">Vital Signs</p>
+              <div className="grid grid-cols-3 gap-x-4 gap-y-1 mt-1">
+                {consult.bloodPressure && <p className="text-sm">BP: {consult.bloodPressure}</p>}
+                {consult.weightKg && <p className="text-sm">Wt: {consult.weightKg} kg</p>}
+                {consult.temperatureC && <p className="text-sm">Temp: {consult.temperatureC}°C</p>}
+                {consult.pulseRate && <p className="text-sm">PR: {consult.pulseRate} bpm</p>}
+                {consult.heightCm && <p className="text-sm">Ht: {consult.heightCm} cm</p>}
+                {bmi && <p className="text-sm">BMI: {bmi}</p>}
+              </div>
+            </div>
+          )}
+          {consult.disposition === "Other" && consult.dispositionNotes && (
+            <div>
+              <p className="text-xs font-medium text-muted-foreground">Disposition Notes</p>
+              <p className="text-sm">{consult.dispositionNotes}</p>
+            </div>
+          )}
+          {consult.disposition === "Referred" && consult.referredTo && (
+            <div>
+              <p className="text-xs font-medium text-muted-foreground">Referred To</p>
+              <p className="text-sm">{consult.referredTo}</p>
+            </div>
+          )}
+          {consult.notes && (
+            <div>
+              <p className="text-xs font-medium text-muted-foreground">Additional Notes</p>
+              <p className="text-sm">{consult.notes}</p>
+            </div>
+          )}
+          {consult.createdBy && (
+            <p className="text-xs text-muted-foreground">Recorded by: {consult.createdBy}</p>
+          )}
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function PatientCheckupPage() {
@@ -67,11 +182,27 @@ export default function PatientCheckupPage() {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [newConsult, setNewConsult] = useState(EMPTY_CONSULT);
 
+  // Sheet state
+  const [historySheetOpen, setHistorySheetOpen] = useState(false);
+  const [selectedPatient, setSelectedPatient] = useState<{ name: string; barangay: string } | null>(null);
+
   const bmi = calcBmi(newConsult.weightKg, newConsult.heightCm);
 
   const { data: consults = [], isLoading } = useQuery<Consult[]>({
     queryKey: ["/api/consults"],
     enabled: canAccessPatientCheckup,
+  });
+
+  const { data: patientHistory = [], isLoading: historyLoading } = useQuery<Consult[]>({
+    queryKey: ["/api/consults/by-patient", selectedPatient?.name, selectedPatient?.barangay],
+    enabled: !!selectedPatient && historySheetOpen,
+    queryFn: async () => {
+      if (!selectedPatient) return [];
+      const params = new URLSearchParams({ name: selectedPatient.name, barangay: selectedPatient.barangay });
+      const res = await fetch(`/api/consults/by-patient?${params}`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to load patient history");
+      return res.json();
+    },
   });
 
   const createMutation = useMutation({
@@ -134,6 +265,26 @@ export default function PatientCheckupPage() {
     createMutation.mutate(newConsult);
   };
 
+  const handleRowClick = (consult: Consult) => {
+    setSelectedPatient({ name: consult.patientName, barangay: consult.barangay });
+    setHistorySheetOpen(true);
+  };
+
+  const handleNewConsultForPatient = () => {
+    if (!selectedPatient) return;
+    const latest = patientHistory[0];
+    setNewConsult({
+      ...EMPTY_CONSULT,
+      patientName: selectedPatient.name,
+      barangay: selectedPatient.barangay,
+      age: latest ? String(latest.age) : "",
+      sex: latest?.sex ?? "M",
+      addressLine: latest?.addressLine ?? "",
+    });
+    setHistorySheetOpen(false);
+    setIsAddDialogOpen(true);
+  };
+
   const stats = {
     total: consults.length,
     treated: consults.filter(c => c.disposition === "Treated").length,
@@ -144,8 +295,12 @@ export default function PatientCheckupPage() {
   const set = (field: keyof typeof EMPTY_CONSULT) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
     setNewConsult(prev => ({ ...prev, [field]: e.target.value }));
 
+  const latestConsult = patientHistory[0] ?? null;
+  const olderConsults = patientHistory.slice(1);
+
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2" data-testid="text-page-title">
@@ -239,7 +394,6 @@ export default function PatientCheckupPage() {
                 />
               </div>
 
-              {/* Diagnosis — free text */}
               <div className="space-y-2">
                 <Label>Diagnosis *</Label>
                 <Textarea
@@ -398,6 +552,7 @@ export default function PatientCheckupPage() {
         </Dialog>
       </div>
 
+      {/* Summary Cards */}
       <div className="grid grid-cols-4 gap-4">
         <Card>
           <CardContent className="pt-6">
@@ -425,6 +580,7 @@ export default function PatientCheckupPage() {
         </Card>
       </div>
 
+      {/* Consult list */}
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between gap-4">
@@ -463,15 +619,20 @@ export default function PatientCheckupPage() {
           ) : filteredConsults.length === 0 ? (
             <p className="text-muted-foreground">No consultation records found</p>
           ) : (
-            <div className="space-y-3">
+            <div className="space-y-2">
               {filteredConsults.map((consult) => (
                 <div
                   key={consult.id}
-                  className="flex items-center justify-between p-4 rounded-lg border bg-card"
+                  className="flex items-center justify-between p-4 rounded-lg border bg-card cursor-pointer hover:bg-accent/50 hover:border-primary/30 transition-colors"
+                  onClick={() => handleRowClick(consult)}
                   data-testid={`consult-row-${consult.id}`}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => e.key === "Enter" && handleRowClick(consult)}
+                  aria-label={`View consultation history for ${consult.patientName}`}
                 >
                   <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center">
+                    <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center shrink-0">
                       <User className="w-5 h-5 text-muted-foreground" />
                     </div>
                     <div>
@@ -497,7 +658,7 @@ export default function PatientCheckupPage() {
                     </div>
                     <div className="flex items-center gap-1 text-sm text-muted-foreground">
                       <Calendar className="w-4 h-4" />
-                      {format(new Date(consult.consultDate), "MMM d, yyyy")}
+                      {fmtDate(consult.consultDate)}
                     </div>
                     <Badge className={dispositionColors[consult.disposition || "Treated"]}>
                       {consult.disposition}
@@ -505,10 +666,211 @@ export default function PatientCheckupPage() {
                   </div>
                 </div>
               ))}
+              <p className="text-xs text-muted-foreground pt-1 pl-1">Click any record to view patient consultation history.</p>
             </div>
           )}
         </CardContent>
       </Card>
+
+      {/* Patient History Sheet */}
+      <Sheet open={historySheetOpen} onOpenChange={setHistorySheetOpen}>
+        <SheetContent className="w-full sm:max-w-2xl overflow-y-auto" aria-describedby={undefined}>
+          <SheetHeader>
+            <SheetTitle className="flex items-center gap-2">
+              <History className="w-5 h-5 text-primary" />
+              Patient Consultation History
+            </SheetTitle>
+          </SheetHeader>
+
+          {historyLoading ? (
+            <div className="flex items-center justify-center h-48">
+              <p className="text-muted-foreground">Loading history...</p>
+            </div>
+          ) : !latestConsult ? (
+            <div className="flex items-center justify-center h-48">
+              <p className="text-muted-foreground">No records found.</p>
+            </div>
+          ) : (
+            <div className="space-y-5 mt-4">
+
+              {/* Patient Summary */}
+              <div className="flex items-start gap-4 p-4 rounded-lg bg-muted/40 border">
+                <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                  <User className="w-6 h-6 text-primary" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-lg font-semibold truncate" data-testid="text-history-patient-name">{latestConsult.patientName}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {latestConsult.age} yrs · {latestConsult.sex === "M" ? "Male" : "Female"} · {latestConsult.barangay}
+                  </p>
+                  {latestConsult.addressLine && (
+                    <p className="text-xs text-muted-foreground">{latestConsult.addressLine}</p>
+                  )}
+                  <div className="flex items-center gap-4 mt-2">
+                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <FileText className="w-3.5 h-3.5" />
+                      {patientHistory.length} consult{patientHistory.length !== 1 ? "s" : ""}
+                    </div>
+                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <Calendar className="w-3.5 h-3.5" />
+                      Last seen: {fmtDate(latestConsult.consultDate)}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Latest Consult */}
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <HeartPulse className="w-4 h-4 text-primary" />
+                  <h3 className="font-semibold text-sm">Latest Consultation</h3>
+                  <Badge variant="secondary" className="text-xs">{fmtDate(latestConsult.consultDate)}</Badge>
+                </div>
+
+                <Card>
+                  <CardContent className="pt-4 space-y-3">
+                    {latestConsult.chiefComplaint && (
+                      <div>
+                        <p className="text-xs font-medium text-muted-foreground">Chief Complaint</p>
+                        <p className="text-sm">{latestConsult.chiefComplaint}</p>
+                      </div>
+                    )}
+                    <div>
+                      <p className="text-xs font-medium text-muted-foreground">Diagnosis</p>
+                      <p className="text-sm font-medium">{latestConsult.diagnosis}</p>
+                    </div>
+                    {latestConsult.treatment && (
+                      <div>
+                        <p className="text-xs font-medium text-muted-foreground">Treatment Given</p>
+                        <p className="text-sm">{latestConsult.treatment}</p>
+                      </div>
+                    )}
+
+                    {/* Vitals */}
+                    {(latestConsult.bloodPressure || latestConsult.weightKg || latestConsult.temperatureC || latestConsult.pulseRate || latestConsult.heightCm) && (
+                      <>
+                        <Separator />
+                        <div>
+                          <div className="flex items-center gap-1.5 mb-2">
+                            <Activity className="w-3.5 h-3.5 text-muted-foreground" />
+                            <p className="text-xs font-medium text-muted-foreground">Vital Signs</p>
+                          </div>
+                          <div className="grid grid-cols-3 gap-2">
+                            {latestConsult.bloodPressure && (
+                              <div className="bg-muted/40 rounded p-2 text-center">
+                                <p className="text-xs text-muted-foreground">Blood Pressure</p>
+                                <p className="text-sm font-semibold">{latestConsult.bloodPressure}</p>
+                                <p className="text-xs text-muted-foreground">mmHg</p>
+                              </div>
+                            )}
+                            {latestConsult.weightKg && (
+                              <div className="bg-muted/40 rounded p-2 text-center">
+                                <p className="text-xs text-muted-foreground">Weight</p>
+                                <p className="text-sm font-semibold">{latestConsult.weightKg}</p>
+                                <p className="text-xs text-muted-foreground">kg</p>
+                              </div>
+                            )}
+                            {latestConsult.temperatureC && (
+                              <div className="bg-muted/40 rounded p-2 text-center">
+                                <p className="text-xs text-muted-foreground">Temperature</p>
+                                <p className="text-sm font-semibold">{latestConsult.temperatureC}</p>
+                                <p className="text-xs text-muted-foreground">°C</p>
+                              </div>
+                            )}
+                            {latestConsult.pulseRate && (
+                              <div className="bg-muted/40 rounded p-2 text-center">
+                                <p className="text-xs text-muted-foreground">Pulse Rate</p>
+                                <p className="text-sm font-semibold">{latestConsult.pulseRate}</p>
+                                <p className="text-xs text-muted-foreground">bpm</p>
+                              </div>
+                            )}
+                            {latestConsult.heightCm && (
+                              <div className="bg-muted/40 rounded p-2 text-center">
+                                <p className="text-xs text-muted-foreground">Height</p>
+                                <p className="text-sm font-semibold">{latestConsult.heightCm}</p>
+                                <p className="text-xs text-muted-foreground">cm</p>
+                              </div>
+                            )}
+                            {calcBmi(latestConsult.weightKg, latestConsult.heightCm) && (
+                              <div className="bg-muted/40 rounded p-2 text-center">
+                                <p className="text-xs text-muted-foreground">BMI</p>
+                                <p className="text-sm font-semibold">{calcBmi(latestConsult.weightKg, latestConsult.heightCm)}</p>
+                                <p className="text-xs text-muted-foreground">kg/m²</p>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </>
+                    )}
+
+                    <Separator />
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-xs font-medium text-muted-foreground">Disposition</p>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <Badge className={dispositionColors[latestConsult.disposition || "Treated"]}>
+                            {latestConsult.disposition}
+                          </Badge>
+                          {latestConsult.disposition === "Referred" && latestConsult.referredTo && (
+                            <span className="text-xs text-muted-foreground">→ {latestConsult.referredTo}</span>
+                          )}
+                        </div>
+                        {latestConsult.disposition === "Other" && latestConsult.dispositionNotes && (
+                          <p className="text-xs text-muted-foreground mt-1">{latestConsult.dispositionNotes}</p>
+                        )}
+                      </div>
+                      {latestConsult.createdBy && (
+                        <p className="text-xs text-muted-foreground">By: {latestConsult.createdBy}</p>
+                      )}
+                    </div>
+
+                    {latestConsult.notes && (
+                      <>
+                        <Separator />
+                        <div>
+                          <p className="text-xs font-medium text-muted-foreground">Additional Notes</p>
+                          <p className="text-sm">{latestConsult.notes}</p>
+                        </div>
+                      </>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* History Timeline */}
+              {olderConsults.length > 0 && (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <History className="w-4 h-4 text-muted-foreground" />
+                    <h3 className="font-semibold text-sm">Previous Consultations</h3>
+                    <Badge variant="outline" className="text-xs">{olderConsults.length} record{olderConsults.length !== 1 ? "s" : ""}</Badge>
+                  </div>
+                  <div className="space-y-2">
+                    {olderConsults.map((c) => (
+                      <HistoryCard key={c.id} consult={c} />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Footer action */}
+              <Separator />
+              <div className="flex justify-between items-center pb-4">
+                <p className="text-xs text-muted-foreground">
+                  {patientHistory.length} total consult{patientHistory.length !== 1 ? "s" : ""} for this patient
+                </p>
+                <Button
+                  onClick={handleNewConsultForPatient}
+                  data-testid="button-new-consult-for-patient"
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  New Consult for This Patient
+                </Button>
+              </div>
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

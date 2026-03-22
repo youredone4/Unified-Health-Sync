@@ -64,6 +64,7 @@ export interface IStorage {
 
   getConsults(): Promise<Consult[]>;
   getConsult(id: number): Promise<Consult | undefined>;
+  getConsultsByPatient(name: string, barangay: string): Promise<Consult[]>;
   createConsult(consult: InsertConsult): Promise<Consult>;
   updateConsult(id: number, updates: Partial<InsertConsult>): Promise<Consult>;
 
@@ -316,6 +317,13 @@ export class DatabaseStorage implements IStorage {
   async getConsult(id: number): Promise<Consult | undefined> {
     const [consult] = await db.select().from(consults).where(eq(consults.id, id));
     return consult;
+  }
+
+  async getConsultsByPatient(name: string, barangay: string): Promise<Consult[]> {
+    const { ilike } = await import("drizzle-orm");
+    return await db.select().from(consults)
+      .where(and(ilike(consults.patientName, name), eq(consults.barangay, barangay)))
+      .orderBy(desc(consults.consultDate));
   }
 
   async createConsult(consult: InsertConsult): Promise<Consult> {
