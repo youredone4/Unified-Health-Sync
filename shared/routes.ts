@@ -4,6 +4,7 @@ import {
   insertChildSchema, children,
   insertSeniorSchema, seniors,
   insertInventorySchema, inventory,
+  insertMedicineInventorySchema, medicineInventory,
   healthStations,
   insertSmsSchema, smsOutbox,
   insertDiseaseCaseSchema, diseaseCases,
@@ -152,6 +153,32 @@ export const api = {
       path: '/api/inventory',
       responses: {
         200: z.array(z.custom<typeof inventory.$inferSelect>()),
+      },
+    },
+  },
+  medicineInventory: {
+    list: {
+      method: 'GET' as const,
+      path: '/api/medicine-inventory',
+      responses: {
+        200: z.array(z.custom<typeof medicineInventory.$inferSelect>()),
+      },
+    },
+    create: {
+      method: 'POST' as const,
+      path: '/api/medicine-inventory',
+      input: insertMedicineInventorySchema,
+      responses: {
+        201: z.custom<typeof medicineInventory.$inferSelect>(),
+      },
+    },
+    update: {
+      method: 'PUT' as const,
+      path: '/api/medicine-inventory/:id',
+      input: insertMedicineInventorySchema.partial(),
+      responses: {
+        200: z.custom<typeof medicineInventory.$inferSelect>(),
+        404: errorSchemas.notFound,
       },
     },
   },

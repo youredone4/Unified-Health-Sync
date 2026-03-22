@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import type { InventoryItem } from "@shared/schema";
+import type { InventoryItem, MedicineInventoryItem } from "@shared/schema";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { AlertTriangle, Package, MapPin, X } from "lucide-react";
@@ -12,12 +12,14 @@ interface StockIssue {
   item: string;
   qty: number;
   status: 'out' | 'low';
+  source: 'vaccine' | 'medicine';
 }
 
 type FilterKey = 'out' | 'low' | 'barangay' | null;
 
 export default function StockoutsPage() {
   const { data: inventory = [] } = useQuery<InventoryItem[]>({ queryKey: ['/api/inventory'] });
+  const { data: medicines = [] } = useQuery<MedicineInventoryItem[]>({ queryKey: ['/api/medicine-inventory'] });
   const [activeFilter, setActiveFilter] = useState<FilterKey>(null);
 
   const issues: StockIssue[] = [];
@@ -26,25 +28,32 @@ export default function StockoutsPage() {
     const v = (inv.vaccines || {}) as any;
     const h = (inv.htnMeds || []) as Array<{ name: string; doseMg: number; qty: number }>;
 
-    if (v.bcgQty === 0) issues.push({ barangay: inv.barangay, item: 'BCG', qty: 0, status: 'out' });
-    else if (v.bcgQty < 10) issues.push({ barangay: inv.barangay, item: 'BCG', qty: v.bcgQty, status: 'low' });
+    if (v.bcgQty === 0) issues.push({ barangay: inv.barangay, item: 'BCG', qty: 0, status: 'out', source: 'vaccine' });
+    else if (v.bcgQty < 10) issues.push({ barangay: inv.barangay, item: 'BCG', qty: v.bcgQty, status: 'low', source: 'vaccine' });
 
-    if (v.pentaQty === 0) issues.push({ barangay: inv.barangay, item: 'Pentavalent', qty: 0, status: 'out' });
-    else if (v.pentaQty < 10) issues.push({ barangay: inv.barangay, item: 'Pentavalent', qty: v.pentaQty, status: 'low' });
+    if (v.pentaQty === 0) issues.push({ barangay: inv.barangay, item: 'Pentavalent', qty: 0, status: 'out', source: 'vaccine' });
+    else if (v.pentaQty < 10) issues.push({ barangay: inv.barangay, item: 'Pentavalent', qty: v.pentaQty, status: 'low', source: 'vaccine' });
 
-    if (v.opvQty === 0) issues.push({ barangay: inv.barangay, item: 'OPV', qty: 0, status: 'out' });
-    else if (v.opvQty < 10) issues.push({ barangay: inv.barangay, item: 'OPV', qty: v.opvQty, status: 'low' });
+    if (v.opvQty === 0) issues.push({ barangay: inv.barangay, item: 'OPV', qty: 0, status: 'out', source: 'vaccine' });
+    else if (v.opvQty < 10) issues.push({ barangay: inv.barangay, item: 'OPV', qty: v.opvQty, status: 'low', source: 'vaccine' });
 
-    if (v.hepBQty === 0) issues.push({ barangay: inv.barangay, item: 'Hepatitis B', qty: 0, status: 'out' });
-    else if (v.hepBQty < 10) issues.push({ barangay: inv.barangay, item: 'Hepatitis B', qty: v.hepBQty, status: 'low' });
+    if (v.hepBQty === 0) issues.push({ barangay: inv.barangay, item: 'Hepatitis B', qty: 0, status: 'out', source: 'vaccine' });
+    else if (v.hepBQty < 10) issues.push({ barangay: inv.barangay, item: 'Hepatitis B', qty: v.hepBQty, status: 'low', source: 'vaccine' });
 
-    if (v.mrQty === 0) issues.push({ barangay: inv.barangay, item: 'MR', qty: 0, status: 'out' });
-    else if (v.mrQty < 10) issues.push({ barangay: inv.barangay, item: 'MR', qty: v.mrQty, status: 'low' });
+    if (v.mrQty === 0) issues.push({ barangay: inv.barangay, item: 'MR', qty: 0, status: 'out', source: 'vaccine' });
+    else if (v.mrQty < 10) issues.push({ barangay: inv.barangay, item: 'MR', qty: v.mrQty, status: 'low', source: 'vaccine' });
 
     h.forEach(med => {
-      if (med.qty === 0) issues.push({ barangay: inv.barangay, item: `${med.name} ${med.doseMg}mg`, qty: 0, status: 'out' });
-      else if (med.qty < 20) issues.push({ barangay: inv.barangay, item: `${med.name} ${med.doseMg}mg`, qty: med.qty, status: 'low' });
+      if (med.qty === 0) issues.push({ barangay: inv.barangay, item: `${med.name} ${med.doseMg}mg`, qty: 0, status: 'out', source: 'vaccine' });
+      else if (med.qty < 20) issues.push({ barangay: inv.barangay, item: `${med.name} ${med.doseMg}mg`, qty: med.qty, status: 'low', source: 'vaccine' });
     });
+  });
+
+  medicines.forEach(med => {
+    const threshold = med.lowStockThreshold ?? 10;
+    const label = `${med.medicineName}${med.strength ? ` ${med.strength}` : ''}${med.unit ? ` (${med.unit})` : ''}`;
+    if (med.qty === 0) issues.push({ barangay: med.barangay, item: label, qty: 0, status: 'out', source: 'medicine' });
+    else if (med.qty < threshold) issues.push({ barangay: med.barangay, item: label, qty: med.qty, status: 'low', source: 'medicine' });
   });
 
   const outOfStock = issues.filter(i => i.status === 'out');
@@ -55,13 +64,6 @@ export default function StockoutsPage() {
 
   const handleCardClick = (filter: FilterKey) => {
     setActiveFilter(prev => prev === filter ? null : filter);
-  };
-
-  const getFilteredIssues = () => {
-    if (activeFilter === 'out') return outOfStock;
-    if (activeFilter === 'low') return lowStock;
-    if (activeFilter === 'barangay') return issues;
-    return issues;
   };
 
   const showOut = !activeFilter || activeFilter === 'out';
@@ -83,7 +85,7 @@ export default function StockoutsPage() {
           <AlertTriangle className="w-6 h-6 text-red-400" />
           Stock-outs & Low Stock
         </h1>
-        <p className="text-muted-foreground">Items that need attention</p>
+        <p className="text-muted-foreground">Items that need attention (vaccines and medicines)</p>
       </div>
 
       <div className="grid grid-cols-3 gap-4">
@@ -180,7 +182,7 @@ export default function StockoutsPage() {
                 <div key={idx} className="flex items-center justify-between p-3 rounded-md bg-red-500/10 border border-red-500/20" data-testid={`stockout-${issue.barangay}-${issue.item}`}>
                   <div>
                     <p className="font-medium">{issue.item}</p>
-                    <p className="text-sm text-muted-foreground">{issue.barangay}</p>
+                    <p className="text-sm text-muted-foreground">{issue.barangay}{issue.source === 'medicine' && <span className="ml-1 text-blue-400">(medicine)</span>}</p>
                   </div>
                   <Badge variant="outline" className="bg-red-500/20 text-red-400 border-red-500/30">OUT</Badge>
                 </div>
@@ -207,7 +209,7 @@ export default function StockoutsPage() {
                 <div key={idx} className="flex items-center justify-between p-3 rounded-md bg-orange-500/10 border border-orange-500/20" data-testid={`lowstock-${issue.barangay}-${issue.item}`}>
                   <div>
                     <p className="font-medium">{issue.item}</p>
-                    <p className="text-sm text-muted-foreground">{issue.barangay}</p>
+                    <p className="text-sm text-muted-foreground">{issue.barangay}{issue.source === 'medicine' && <span className="ml-1 text-blue-400">(medicine)</span>}</p>
                   </div>
                   <Badge variant="outline" className="bg-orange-500/20 text-orange-400 border-orange-500/30">{issue.qty} left</Badge>
                 </div>

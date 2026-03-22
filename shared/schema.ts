@@ -160,6 +160,25 @@ export const insertInventorySchema = createInsertSchema(inventory).omit({ id: tr
 export type InventoryItem = typeof inventory.$inferSelect;
 export type InsertInventoryItem = z.infer<typeof insertInventorySchema>;
 
+// === MEDICINE INVENTORY (per-item medicine/other supply tracking) ===
+export const medicineInventory = pgTable("medicine_inventory", {
+  id: serial("id").primaryKey(),
+  barangay: text("barangay").notNull(),
+  medicineName: text("medicine_name").notNull(),
+  strength: text("strength"),
+  unit: text("unit"),
+  qty: integer("qty").notNull().default(0),
+  expirationDate: text("expiration_date"),
+  category: text("category"),
+  notes: text("notes"),
+  lowStockThreshold: integer("low_stock_threshold").default(10),
+  lastUpdated: text("last_updated").notNull(),
+});
+
+export const insertMedicineInventorySchema = createInsertSchema(medicineInventory).omit({ id: true });
+export type MedicineInventoryItem = typeof medicineInventory.$inferSelect;
+export type InsertMedicineInventoryItem = z.infer<typeof insertMedicineInventorySchema>;
+
 // === HEALTH STATIONS (Map) ===
 export const healthStations = pgTable("health_stations", {
   id: serial("id").primaryKey(),

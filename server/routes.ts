@@ -257,6 +257,26 @@ export async function registerRoutes(
     res.json(data);
   });
 
+  // === MEDICINE INVENTORY ===
+  app.get(api.medicineInventory.list.path, async (req, res) => {
+    const data = await storage.getMedicineInventory();
+    res.json(data);
+  });
+
+  app.post(api.medicineInventory.create.path, registryRBAC, ar(async (req, res) => {
+    const input = api.medicineInventory.create.input.parse(req.body);
+    const created = await storage.createMedicineInventory(input);
+    res.status(201).json(created);
+  }));
+
+  app.put(api.medicineInventory.update.path, registryRBAC, ar(async (req, res) => {
+    const id = parseInt(req.params.id, 10);
+    if (isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
+    const input = api.medicineInventory.update.input.parse(req.body);
+    const updated = await storage.updateMedicineInventory(id, input);
+    res.json(updated);
+  }));
+
   // === HEALTH STATIONS ===
   app.get(api.healthStations.list.path, async (req, res) => {
     const data = await storage.getHealthStations();

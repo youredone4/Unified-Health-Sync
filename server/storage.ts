@@ -1,6 +1,6 @@
 import { db } from "./db";
 import { 
-  mothers, children, seniors, inventory, healthStations, smsOutbox, diseaseCases, tbPatients, themeSettings,
+  mothers, children, seniors, inventory, medicineInventory, healthStations, smsOutbox, diseaseCases, tbPatients, themeSettings,
   barangays, users, userBarangays, municipalitySettings, UserRole, consults, seniorMedClaims,
   m1TemplateVersions, m1IndicatorCatalog, m1ReportInstances, m1ReportHeader, m1IndicatorValues, barangaySettings,
   directMessages,
@@ -9,6 +9,7 @@ import {
   type Child, type InsertChild,
   type Senior, type InsertSenior,
   type InventoryItem,
+  type MedicineInventoryItem, type InsertMedicineInventoryItem,
   type HealthStation,
   type SmsMessage, type InsertSmsMessage,
   type DiseaseCase, type InsertDiseaseCase,
@@ -47,6 +48,9 @@ export interface IStorage {
   bulkImportSeniors(rows: InsertSenior[], replace: boolean): Promise<number>;
 
   getInventory(): Promise<InventoryItem[]>;
+  getMedicineInventory(): Promise<MedicineInventoryItem[]>;
+  createMedicineInventory(item: InsertMedicineInventoryItem): Promise<MedicineInventoryItem>;
+  updateMedicineInventory(id: number, updates: Partial<InsertMedicineInventoryItem>): Promise<MedicineInventoryItem>;
   getHealthStations(): Promise<HealthStation[]>;
 
   getSmsMessages(): Promise<SmsMessage[]>;
@@ -219,6 +223,23 @@ export class DatabaseStorage implements IStorage {
 
   async getInventory(): Promise<InventoryItem[]> {
     return await db.select().from(inventory);
+  }
+
+  async getMedicineInventory(): Promise<MedicineInventoryItem[]> {
+    return await db.select().from(medicineInventory).orderBy(desc(medicineInventory.lastUpdated));
+  }
+
+  async createMedicineInventory(item: InsertMedicineInventoryItem): Promise<MedicineInventoryItem> {
+    const [created] = await db.insert(medicineInventory).values(item).returning();
+    return created;
+  }
+
+  async updateMedicineInventory(id: number, updates: Partial<InsertMedicineInventoryItem>): Promise<MedicineInventoryItem> {
+    const [updated] = await db.update(medicineInventory)
+      .set(updates)
+      .where(eq(medicineInventory.id, id))
+      .returning();
+    return updated;
   }
 
   async getHealthStations(): Promise<HealthStation[]> {

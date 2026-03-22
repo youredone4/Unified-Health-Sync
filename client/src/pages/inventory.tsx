@@ -1,15 +1,18 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
-import type { InventoryItem } from "@shared/schema";
+import type { InventoryItem, MedicineInventoryItem } from "@shared/schema";
 import { getStockStatus } from "@/lib/healthLogic";
 import KpiCard from "@/components/kpi-card";
 import StatusBadge from "@/components/status-badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Package, AlertCircle, CheckCircle, TrendingUp, Plus } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Package, AlertCircle, CheckCircle, TrendingUp, Plus, Pill } from "lucide-react";
+import { formatDate } from "@/lib/healthLogic";
 
 export default function InventoryPage() {
   const { data: inventory = [], isLoading } = useQuery<InventoryItem[]>({ queryKey: ['/api/inventory'] });
+  const { data: medicines = [], isLoading: medLoading } = useQuery<MedicineInventoryItem[]>({ queryKey: ['/api/medicine-inventory'] });
 
   const stockOutBarangays = inventory.filter(inv => {
     const v = inv.vaccines as any;
@@ -24,7 +27,20 @@ export default function InventoryPage() {
     return v && (v.bcgQty < 10 || v.pentaQty < 10 || v.opvQty < 10 || v.hepBQty < 10 || v.mrQty < 10);
   }).length;
 
-  if (isLoading) {
+  const isExpiringSoon = (dateStr: string | null | undefined) => {
+    if (!dateStr) return false;
+    const expiry = new Date(dateStr);
+    const now = new Date();
+    const diffDays = (expiry.getTime() - now.getTime()) / (1000 * 60 * 60 * 24);
+    return diffDays >= 0 && diffDays <= 90;
+  };
+
+  const isExpired = (dateStr: string | null | undefined) => {
+    if (!dateStr) return false;
+    return new Date(dateStr) < new Date();
+  };
+
+  if (isLoading || medLoading) {
     return <div className="flex items-center justify-center h-64"><p className="text-muted-foreground">Loading...</p></div>;
   }
 
@@ -36,7 +52,7 @@ export default function InventoryPage() {
             <Package className="w-6 h-6 text-green-400" />
             Inventory - Availability & Surplus
           </h1>
-          <p className="text-muted-foreground">Vaccine and HTN meds stock by barangay</p>
+          <p className="text-muted-foreground">Vaccine, HTN meds, and medicine stock by barangay</p>
         </div>
         <Link href="/inventory/new">
           <Button data-testid="button-add-inventory">
@@ -134,10 +150,10 @@ export default function InventoryPage() {
                         <div className="flex flex-wrap gap-2">
                           {h.length === 0 && <span className="text-muted-foreground">None</span>}
                           {h.map((med, idx) => (
-                            <StatusBadge 
-                              key={idx} 
-                              status={getStockStatus(med.qty, 20, 100)} 
-                              label={`${med.name} ${med.doseMg}mg: ${med.qty}`} 
+                            <StatusBadge
+                              key={idx}
+                              status={getStockStatus(med.qty, 20, 100)}
+                              label={`${med.name} ${med.doseMg}mg: ${med.qty}`}
                             />
                           ))}
                         </div>
@@ -145,6 +161,79 @@ export default function InventoryPage() {
                     </tr>
                   );
                 })}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <Pill className="w-4 h-4 text-blue-400" />
+            Medicine & Other Supply
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border">
+                  <th className="text-left py-2 px-3">Barangay</th>
+                  <th className="text-left py-2 px-3">Medicine</th>
+                  <th className="text-left py-2 px-3">Strength</th>
+                  <th className="text-left py-2 px-3">Unit</th>
+                  <th className="text-center py-2 px-3">Qty</th>
+                  <th className="text-left py-2 px-3">Expiry</th>
+                  <th className="text-left py-2 px-3">Category</th>
+                  <th className="text-left py-2 px-3">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {medicines.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="text-center py-8 text-muted-foreground" data-testid="text-no-medicine-records">
+                      No medicine records found. Use "Add Inventory" and select "Medicine / Other Supply" to add records.
+                    </td>
+                  </tr>
+                ) : medicines.map(med => (
+                  <tr key={med.id} className="border-b border-border/50" data-testid={`row-med-${med.id}`}>
+                    <td className="py-3 px-3 font-medium">{med.barangay}</td>
+                    <td className="py-3 px-3">{med.medicineName}</td>
+                    <td className="py-3 px-3 text-muted-foreground">{med.strength || '—'}</td>
+                    <td className="py-3 px-3 text-muted-foreground">{med.unit || '—'}</td>
+                    <td className="text-center py-3 px-3">
+                      <StatusBadge status={getStockStatus(med.qty, med.lowStockThreshold || 10, 200)} label={`${med.qty}`} />
+                    </td>
+                    <td className="py-3 px-3">
+                      {med.expirationDate ? (
+                        <Badge variant="outline" className={
+                          isExpired(med.expirationDate)
+                            ? "bg-red-500/20 text-red-400 border-red-500/30"
+                            : isExpiringSoon(med.expirationDate)
+                            ? "bg-orange-500/20 text-orange-400 border-orange-500/30"
+                            : "bg-green-500/20 text-green-400 border-green-500/30"
+                        }>
+                          {isExpired(med.expirationDate) ? "EXPIRED" : isExpiringSoon(med.expirationDate) ? "Expiring Soon" : ""} {formatDate(med.expirationDate)}
+                        </Badge>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </td>
+                    <td className="py-3 px-3">
+                      {med.category ? (
+                        <Badge variant="outline" className="text-xs">{med.category}</Badge>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </td>
+                    <td className="py-3 px-3">
+                      <Link href={`/inventory/medicine/${med.id}/edit`}>
+                        <Button variant="ghost" size="sm" data-testid={`button-edit-med-${med.id}`}>Edit</Button>
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>

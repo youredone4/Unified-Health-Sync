@@ -126,6 +126,9 @@ function Router() {
       <Route path="/inventory/:id/edit">
         <RoleRoute component={InventoryForm} />
       </Route>
+      <Route path="/inventory/medicine/:id/edit">
+        <RoleRoute component={InventoryForm} />
+      </Route>
       <Route path="/inventory/stockouts">
         <RoleRoute component={StockoutsPage} />
       </Route>
