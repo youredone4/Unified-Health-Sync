@@ -362,7 +362,7 @@ export default function ChildProfile() {
                   strokeWidth={2.5}
                   dot={{ fill: 'hsl(var(--primary))', r: 4, strokeWidth: 0 }}
                   activeDot={{ r: 6 }}
-                  connectNulls={false}
+                  connectNulls={true}
                   legendType="circle"
                 />
               </ComposedChart>
