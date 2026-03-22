@@ -82,7 +82,7 @@ export default function ChildProfile() {
   // Each entry: WHO reference bands (-3SD, -2SD, Median, +2SD) + child's weight at that age.
   const chartData = useMemo(() => {
     if (!child) return [];
-    const ref = getWHOReferenceData(child.sex);
+    // Build child measurement map keyed by age in completed months
     const ageMeasurements: Record<number, number> = {};
     for (const g of growthForChart) {
       if (!g.date || !g.weightKg) continue;
@@ -92,6 +92,16 @@ export default function ChildProfile() {
       }
     }
     const maxMonth = Math.min(60, Math.max(ageMonthsForChart, ...Object.keys(ageMeasurements).map(Number), 12));
+    // getWHOReferenceData returns null for unknown sex — fall back to month-only entries
+    const ref = getWHOReferenceData(child.sex);
+    if (!ref) {
+      // No reference data: only include child measurements for display
+      return Array.from({ length: maxMonth + 1 }, (_, month) => ({
+        month,
+        neg3: null, neg2: null, median: null, plus2: null,
+        childWeight: ageMeasurements[month] ?? null,
+      }));
+    }
     return ref.slice(0, maxMonth + 1).map(r => ({
       ...r,
       childWeight: ageMeasurements[r.month] ?? null,

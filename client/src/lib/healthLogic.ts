@@ -265,15 +265,19 @@ export interface WHOReferencePoint {
 /**
  * Returns WHO 2006 Weight-for-Age reference curve values for months 0–60.
  * Each point has -3 SD, -2 SD, Median (0 SD), and +2 SD weight values in kg.
- * Sex-specific: pass "male" for boys table, "female" for girls table.
+ *
+ * Returns null when sex is not explicitly "male" or "female" to prevent
+ * rendering a clinically incorrect standard for records with missing sex.
+ * Callers must guard on null before rendering reference curves.
  *
  * Box-Cox inverse formula:
  *   weight(Z) = M * (1 + L * S * Z)^(1/L)   when |L| >= 0.01
  *   weight(Z) = M * exp(S * Z)               when |L| < 0.01
  */
-export function getWHOReferenceData(sex: string | null | undefined): WHOReferencePoint[] {
-  const isFemale = sex?.toLowerCase() === 'female';
-  const lms = isFemale ? WHO_WFA_LMS.girls : WHO_WFA_LMS.boys;
+export function getWHOReferenceData(sex: string | null | undefined): WHOReferencePoint[] | null {
+  const sexNorm = sex?.toLowerCase();
+  if (sexNorm !== 'male' && sexNorm !== 'female') return null;
+  const lms = sexNorm === 'female' ? WHO_WFA_LMS.girls : WHO_WFA_LMS.boys;
 
   const weightAtZ = (L: number, M: number, S: number, z: number): number => {
     const raw = Math.abs(L) < 0.01 ? M * Math.exp(S * z) : M * Math.pow(1 + L * S * z, 1 / L);
