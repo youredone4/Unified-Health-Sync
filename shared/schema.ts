@@ -476,6 +476,7 @@ export const prenatalVisits = pgTable("prenatal_visits", {
   fetalHeartTone: text("fetal_heart_tone"), // bpm
   riskStatus: text("risk_status"), // low, moderate, high
   notes: text("notes"),
+  nextScheduledVisit: text("next_scheduled_visit"), // nurse-entered next appointment date
   recordedBy: text("recorded_by"),
   createdAt: text("created_at").notNull(),
 }, (t) => ({

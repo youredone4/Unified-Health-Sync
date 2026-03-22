@@ -88,6 +88,12 @@ function PrenatalVisitRow({ visit }: { visit: PrenatalVisit }) {
               <p className="text-sm">{v.notes}</p>
             </div>
           )}
+          {v.nextScheduledVisit && (
+            <div className="flex items-center gap-2 pt-1 border-t border-border/50">
+              <Calendar className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+              <p className="text-sm"><span className="text-muted-foreground font-medium">Next Scheduled Visit:</span> {fmtDate(v.nextScheduledVisit)}</p>
+            </div>
+          )}
           {v.recordedBy && (
             <p className="text-xs text-muted-foreground flex items-center gap-1"><User className="w-3 h-3" />Recorded by: {v.recordedBy}</p>
           )}
@@ -242,6 +248,7 @@ function emptyForm(profileType: ProfileType, prev: AnyVisit | null): FormState {
       fetalHeartTone: p?.fetalHeartTone ?? "",
       riskStatus: p?.riskStatus ?? "",
       notes: "",
+      nextScheduledVisit: "",
     };
   }
   if (profileType === "Child") {
@@ -293,6 +300,10 @@ function AddVisitDialog({
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/nurse-visits", profileType.toLowerCase(), String(profileId)] });
+      // Refresh mother profile so Next Prenatal Check card shows updated date
+      if (profileType === "Mother") {
+        queryClient.invalidateQueries({ queryKey: ["/api/mothers"] });
+      }
       toast({ title: "Visit recorded", description: "The monitoring visit has been saved." });
       onOpenChange(false);
     },
@@ -376,6 +387,17 @@ function AddVisitDialog({
               <div>
                 <Label htmlFor="nv-notes">Notes</Label>
                 <Textarea id="nv-notes" rows={3} value={form.notes} onChange={e => set("notes", e.target.value)} data-testid="textarea-notes" />
+              </div>
+              <div>
+                <Label htmlFor="nv-nextVisit">Next Scheduled Visit</Label>
+                <Input
+                  id="nv-nextVisit"
+                  type="date"
+                  value={form.nextScheduledVisit}
+                  onChange={e => set("nextScheduledVisit", e.target.value)}
+                  data-testid="input-next-scheduled-visit"
+                />
+                <p className="text-xs text-muted-foreground mt-1">Optional — sets the Next Prenatal Check date on the profile.</p>
               </div>
             </>
           )}

@@ -806,7 +806,7 @@ export async function registerRoutes(
     if (req.userInfo?.role === UserRole.TL && !req.userInfo.assignedBarangays.includes(mother.barangay)) {
       return res.status(403).json({ message: "You can only add visits for patients in your assigned barangays" });
     }
-    const { visitDate, gaWeeks, weightKg, bloodPressure, fundalHeight, fetalHeartTone, riskStatus, notes } = req.body;
+    const { visitDate, gaWeeks, weightKg, bloodPressure, fundalHeight, fetalHeartTone, riskStatus, notes, nextScheduledVisit } = req.body;
     if (!visitDate) return res.status(400).json({ message: "visitDate is required" });
     let visit;
     for (let attempt = 0; attempt < 3; attempt++) {
@@ -818,6 +818,7 @@ export async function registerRoutes(
           weightKg: weightKg || undefined, bloodPressure: bloodPressure || undefined,
           fundalHeight: fundalHeight || undefined, fetalHeartTone: fetalHeartTone || undefined,
           riskStatus: riskStatus || undefined, notes: notes || undefined,
+          nextScheduledVisit: nextScheduledVisit || undefined,
           recordedBy: req.userInfo?.username || undefined, createdAt: new Date().toISOString(),
         });
         break;
@@ -825,6 +826,10 @@ export async function registerRoutes(
         if (attempt < 2 && isUniqueViolation(err)) continue;
         throw err;
       }
+    }
+    // Auto-update mother's nextPrenatalCheckDate from the nurse-entered next scheduled visit
+    if (nextScheduledVisit) {
+      await storage.updateMother(id, { nextPrenatalCheckDate: nextScheduledVisit });
     }
     res.status(201).json(visit);
   }));
