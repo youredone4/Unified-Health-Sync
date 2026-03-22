@@ -243,6 +243,45 @@ export interface WeightZScoreResult {
   zScore: number;
 }
 
+export interface WHOReferencePoint {
+  month: number;
+  neg3: number;
+  neg2: number;
+  median: number;
+  plus2: number;
+}
+
+/**
+ * Returns WHO 2006 Weight-for-Age reference curve values for months 0–60.
+ * Each point has -3 SD, -2 SD, Median (0 SD), and +2 SD weight values in kg.
+ * Sex-specific: pass "male" for boys table, "female" for girls table.
+ *
+ * Box-Cox inverse formula:
+ *   weight(Z) = M * (1 + L * S * Z)^(1/L)   when |L| >= 0.01
+ *   weight(Z) = M * exp(S * Z)               when |L| < 0.01
+ */
+export function getWHOReferenceData(sex: string | null | undefined): WHOReferencePoint[] {
+  const isFemale = sex?.toLowerCase() === 'female';
+  const lms = isFemale ? WHO_WFA_LMS.girls : WHO_WFA_LMS.boys;
+
+  const weightAtZ = (L: number, M: number, S: number, z: number): number => {
+    const raw = Math.abs(L) < 0.01 ? M * Math.exp(S * z) : M * Math.pow(1 + L * S * z, 1 / L);
+    return Math.round(raw * 100) / 100;
+  };
+
+  return lms.M.map((M, month) => {
+    const L = lms.L[month];
+    const S = lms.S[month];
+    return {
+      month,
+      neg3:   weightAtZ(L, M, S, -3),
+      neg2:   weightAtZ(L, M, S, -2),
+      median: Math.round(M * 100) / 100,
+      plus2:  weightAtZ(L, M, S, 2),
+    };
+  });
+}
+
 /**
  * Computes a child's WHO 2006 weight-for-age Z-score using the Box-Cox LMS method.
  *

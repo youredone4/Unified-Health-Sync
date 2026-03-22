@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useParams, useLocation } from "wouter";
 import type { Child, Mother } from "@shared/schema";
-import { getNextVaccineStatus, getChildVisitStatus, formatDate, getAgeInMonths, getWeightZScore, hasMissingGrowthCheck, VACCINE_SCHEDULE } from "@/lib/healthLogic";
+import { getNextVaccineStatus, getChildVisitStatus, formatDate, getAgeInMonths, getWeightZScore, hasMissingGrowthCheck, VACCINE_SCHEDULE, getWHOReferenceData } from "@/lib/healthLogic";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -13,9 +13,9 @@ import { useAuth, permissions } from "@/hooks/use-auth";
 import { ArrowLeft, Baby, Calendar, MessageSquare, Check, Scale, AlertTriangle, User, Pencil, Trash2 } from "lucide-react";
 import ConsultationHistoryCard from "@/components/consultation-history-card";
 import VisitHistoryCard from "@/components/visit-history-card";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { apiRequest } from "@/lib/queryClient";
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
+import { ComposedChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import type { ChildVisit } from "@shared/schema";
 
 export default function ChildProfile() {
@@ -71,6 +71,34 @@ export default function ChildProfile() {
       toast({ title: "Error", description: "Could not delete record", variant: "destructive" });
     }
   });
+
+  // Hooks must be called unconditionally (before any early returns).
+  // These values are safe to compute with optional chaining when child is undefined.
+  const growthForChart = child?.growth || [];
+  const ageMonthsForChart = child ? getAgeInMonths(child.dob) : 0;
+
+  // Build WHO reference chart data merged with child's actual measurements.
+  // X-axis: age in completed months (0 – maxMonth).
+  // Each entry: WHO reference bands (-3SD, -2SD, Median, +2SD) + child's weight at that age.
+  const chartData = useMemo(() => {
+    if (!child) return [];
+    const ref = getWHOReferenceData(child.sex);
+    const ageMeasurements: Record<number, number> = {};
+    for (const g of growthForChart) {
+      if (!g.date || !g.weightKg) continue;
+      const birthMs = new Date(child.dob).getTime();
+      const measMs  = new Date(g.date).getTime();
+      const monthsAtMeas = Math.max(0, Math.floor((measMs - birthMs) / (30 * 24 * 60 * 60 * 1000)));
+      if (monthsAtMeas <= 60) {
+        ageMeasurements[monthsAtMeas] = g.weightKg; // last measurement wins if same month
+      }
+    }
+    const maxMonth = Math.min(60, Math.max(ageMonthsForChart, ...Object.keys(ageMeasurements).map(Number), 12));
+    return ref.slice(0, maxMonth + 1).map(r => ({
+      ...r,
+      childWeight: ageMeasurements[r.month] ?? null,
+    }));
+  }, [child, growthForChart, ageMonthsForChart]);
 
   if (isLoading || !child) {
     return <div className="flex items-center justify-center h-64"><p className="text-muted-foreground">Loading...</p></div>;
@@ -135,6 +163,7 @@ export default function ChildProfile() {
           <CardContent className="space-y-2">
             <p><span className="text-muted-foreground">Age:</span> {ageMonths} months</p>
             <p><span className="text-muted-foreground">Date of Birth:</span> {formatDate(child.dob)}</p>
+            <p><span className="text-muted-foreground">Sex:</span> {child.sex === 'female' ? 'Female' : child.sex === 'male' ? 'Male' : '-'}</p>
             <p><span className="text-muted-foreground">Barangay:</span> {child.barangay}</p>
             <p><span className="text-muted-foreground">Address:</span> {child.addressLine || '-'}</p>
 
@@ -276,21 +305,73 @@ export default function ChildProfile() {
 
       {growth.length > 0 && (
         <Card>
-          <CardHeader>
+          <CardHeader className="pb-2">
             <CardTitle className="text-base flex items-center gap-2">
               <Scale className="w-4 h-4" />
-              Growth Chart
+              Growth Chart — Weight-for-Age
+              <span className="ml-auto text-xs font-normal text-muted-foreground">
+                WHO 2006 · {child.sex === 'female' ? 'Girls' : 'Boys'} standard
+              </span>
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={200}>
-              <LineChart data={growth.map(g => ({ date: formatDate(g.date), weight: g.weightKg }))}>
-                <XAxis dataKey="date" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} />
-                <YAxis tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} unit=" kg" />
-                <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }} />
-                <Line type="monotone" dataKey="weight" stroke="hsl(var(--primary))" strokeWidth={2} dot={{ fill: 'hsl(var(--primary))' }} />
-              </LineChart>
+            <ResponsiveContainer width="100%" height={280}>
+              <ComposedChart data={chartData} margin={{ top: 4, right: 8, bottom: 4, left: 0 }}>
+                <XAxis
+                  dataKey="month"
+                  type="number"
+                  domain={[0, chartData.length - 1]}
+                  tickCount={Math.min(chartData.length, 13)}
+                  tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }}
+                  label={{ value: 'Age (months)', position: 'insideBottom', offset: -2, fill: 'hsl(var(--muted-foreground))', fontSize: 11 }}
+                />
+                <YAxis
+                  tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }}
+                  unit=" kg"
+                  width={40}
+                />
+                <Tooltip
+                  contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', fontSize: 12 }}
+                  formatter={(value: number, name: string) => {
+                    const labels: Record<string, string> = {
+                      neg3: '-3 SD (SAM threshold)',
+                      neg2: '-2 SD (MAM threshold)',
+                      median: 'Median',
+                      plus2: '+2 SD',
+                      childWeight: "Child's weight",
+                    };
+                    return value !== null ? [`${value} kg`, labels[name] ?? name] : [null, null];
+                  }}
+                  labelFormatter={(label: number) => `Age: ${label} months`}
+                />
+                <Legend
+                  wrapperStyle={{ fontSize: 11, paddingTop: 8 }}
+                  formatter={(value: string) => {
+                    const labels: Record<string, string> = {
+                      neg3: '-3 SD', neg2: '-2 SD', median: 'Median', plus2: '+2 SD', childWeight: 'Child',
+                    };
+                    return labels[value] ?? value;
+                  }}
+                />
+                <Line type="monotone" dataKey="neg3"   stroke="#ef4444" strokeWidth={1} strokeDasharray="4 3" dot={false} legendType="line" />
+                <Line type="monotone" dataKey="neg2"   stroke="#f97316" strokeWidth={1} strokeDasharray="4 3" dot={false} legendType="line" />
+                <Line type="monotone" dataKey="median" stroke="#22c55e" strokeWidth={1.5} strokeDasharray="4 3" dot={false} legendType="line" />
+                <Line type="monotone" dataKey="plus2"  stroke="#94a3b8" strokeWidth={1} strokeDasharray="4 3" dot={false} legendType="line" />
+                <Line
+                  type="monotone"
+                  dataKey="childWeight"
+                  stroke="hsl(var(--primary))"
+                  strokeWidth={2.5}
+                  dot={{ fill: 'hsl(var(--primary))', r: 4, strokeWidth: 0 }}
+                  activeDot={{ r: 6 }}
+                  connectNulls={false}
+                  legendType="circle"
+                />
+              </ComposedChart>
             </ResponsiveContainer>
+            <p className="text-xs text-muted-foreground mt-1 text-center">
+              Reference zones: <span className="text-red-400">red = -3 SD</span> · <span className="text-orange-400">orange = -2 SD</span> · <span className="text-green-400">green = median</span>
+            </p>
           </CardContent>
         </Card>
       )}
