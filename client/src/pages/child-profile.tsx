@@ -108,7 +108,7 @@ export default function ChildProfile() {
       ...r,
       childWeight: ageMeasurements[r.month] ?? null,
     }));
-  }, [child, growthForChart, ageMonthsForChart]);
+  }, [child, growthForChart, ageMonthsForChart, sexNorm]);
 
   if (isLoading || !child) {
     return <div className="flex items-center justify-center h-64"><p className="text-muted-foreground">Loading...</p></div>;
