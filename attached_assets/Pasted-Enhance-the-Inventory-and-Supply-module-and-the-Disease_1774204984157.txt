@@ -1,0 +1,209 @@
+Enhance the Inventory and Supply module and the Disease Surveillance module with the following improvements. The system is already working, so do NOT rebuild unrelated modules. Inspect the current project structure and existing role/record-linking logic first during Planning before making changes.
+
+Important
+- Do NOT redesign the whole system
+- Do NOT break existing routes, dashboards, filters, or role-based access
+- Reuse existing data structures and linking logic where possible
+- Keep implementation modular and consistent with the current system
+
+==================================================
+A. Inventory and Supply Enhancement
+==================================================
+
+Context
+- The current Add New Inventory form is vaccine-specific and only supports fixed vaccine fields such as BCG, Hep B, Penta, OPV, and MR.
+- This is not enough for real barangay inventory management because senior medications and other medicines also need to be tracked.
+- Do NOT rebuild the whole module.
+- Extend the current inventory design so it can support both vaccines and manually entered medicines.
+
+Goal
+Allow users to add non-vaccine medicines manually by entering the medicine name, dosage/strength, barangay, quantity, and expiration date.
+
+Required Changes
+
+1. Support multiple inventory types
+Add support for at least:
+- Vaccine Inventory
+- Medicine / Other Supply Inventory
+
+2. Inventory type selector
+In the Add New Inventory form, add a selector such as:
+- Inventory Type: Vaccine | Medicine
+
+Behavior:
+- if Vaccine is selected, keep the current vaccine stock input fields
+- if Medicine is selected, show manual medicine entry fields
+
+3. Manual medicine entry fields
+For Medicine inventory, allow users to enter:
+- Barangay
+- Medicine Name
+- Strength / Dosage (e.g. 5 mg, 50 mg, 500 mg)
+- Form / Unit (tablet, capsule, syrup, vial, etc.)
+- Quantity
+- Expiration Date
+- Category (optional, e.g. Senior Meds, HTN, Diabetes, Antibiotic)
+- Notes (optional)
+
+4. Barangay linkage
+Each medicine inventory record must be linked to a selected barangay.
+
+5. Expiration tracking
+Allow expiration date per medicine record.
+This is important for stock monitoring and inventory validity.
+
+6. Preserve vaccine workflow
+Do not remove the current vaccine inventory fields.
+Keep the vaccine-specific workflow intact.
+
+7. Inventory display/update
+Make sure medicine inventory can also appear in the Inventory and Supply module views, summaries, and stock monitoring where appropriate.
+
+8. Optional enhancement
+If feasible:
+- allow autocomplete or selection from previously used medicine names
+- but still allow fully manual entry for new medicines
+
+9. Preserve current functionality
+- do not break Availability & Surplus
+- do not break Stock-outs & Low Stock
+- do not break barangay filtering
+- do not break threshold logic
+
+10. Deliverables for Inventory
+Provide:
+1. updated Add New Inventory form
+2. inventory type selector
+3. manual medicine entry fields
+4. barangay-linked medicine inventory records
+5. expiration date handling
+6. files changed
+
+11. Success Criteria for Inventory
+- users can still add vaccine inventory
+- users can now also manually add medicines such as senior medications
+- medicine records include item name, dosage, barangay, quantity, and expiration date
+- existing inventory functions remain intact
+
+==================================================
+B. Disease Surveillance Integration Enhancement
+==================================================
+
+Context
+Enhance the Disease Surveillance module so that all records under:
+- Case Worklist
+- Case Registry
+- Outbreak Map
+
+are linked to existing patient profiles whenever possible.
+
+Patient profiles to link with:
+- Mother Registry
+- Child Registry
+- Senior Registry
+- Patient Check-up profiles / consultation-linked patients if a profile already exists
+
+Goal
+Make Disease Surveillance part of the same patient-centered data structure so cases are not stored as isolated duplicates when a matching patient profile already exists.
+
+Required Changes
+
+1. Link surveillance records to existing profiles
+When creating or viewing disease surveillance records, the system should first check whether the patient already exists in:
+- Mother Registry
+- Child Registry
+- Senior Registry
+- Patient Check-up linked profiles
+
+If a matching patient/profile exists:
+- link the disease surveillance record to that profile
+- reuse existing patient details where appropriate
+- avoid creating a duplicate patient entry
+
+2. Allow new record creation if no profile exists
+If no existing profile is found:
+- allow users to create a new disease surveillance record
+- preserve the ability to add records even without an existing registry profile
+- if feasible, allow future linking to a registry profile later
+
+3. Apply this across Disease Surveillance components
+This linking behavior should apply to:
+- Case Worklist
+- Case Registry
+- Outbreak Map
+
+4. One patient, many records
+Use a one-to-many relationship where appropriate:
+- one patient/profile -> many case records
+- one patient/profile -> may appear in worklist/history/map views through linked disease records
+
+5. Preserve Outbreak Map functionality
+For Outbreak Map:
+- continue showing mapped case data correctly
+- if linked to a patient profile, use the linked barangay/location data where appropriate
+- do not break filtering or heatmap/map logic
+
+6. Delete capability for top admin role
+Add delete capability for disease surveillance records consistent with other profile modules.
+
+Rules:
+- Super Admin can delete disease surveillance records
+- other roles can update but not delete
+- delete action must be protected in both UI and backend/API
+- show confirmation modal before delete
+- log deletions in Audit Logs if available
+
+7. Preserve update access for non-admin roles
+Operational roles may still update surveillance records if current permissions allow, but they must not be able to delete.
+
+8. Avoid duplicate patient records
+Do not create separate duplicate patient records in Disease Surveillance when the same person already exists in Mother, Child, Senior, or Patient Check-up records.
+
+9. Inspect current logic first
+During Planning:
+- inspect how Case Worklist, Case Registry, and Outbreak Map currently store patient/case data
+- inspect whether patient matching already exists
+- inspect how patient identity is stored across modules
+- reuse existing linking logic if already implemented elsewhere
+
+10. Deliverables for Disease Surveillance
+Provide:
+1. linking logic between Disease Surveillance and existing patient profiles
+2. record creation flow when no profile exists
+3. delete capability for Super Admin only
+4. confirmation and audit logging behavior
+5. files/modules changed
+
+11. Success Criteria for Disease Surveillance
+- disease surveillance records link to existing patient profiles when possible
+- new records can still be added if no profile exists
+- duplicate patient records are reduced
+- Case Worklist, Case Registry, and Outbreak Map remain functional
+- Super Admin can delete surveillance records
+- non-admin roles cannot delete
+
+==================================================
+Overall Planning Instructions
+==================================================
+
+Before implementing:
+- inspect current schema and relationships for Inventory, Disease Surveillance, Mother, Child, Senior, and Patient Check-up modules
+- inspect current role-based permissions, especially Super Admin delete rules
+- reuse existing patient-linking and delete-confirmation patterns where possible
+- avoid duplicate patient identity logic
+- keep all changes compatible with existing dashboards and filters
+
+Overall Deliverables
+Provide:
+1. inventory enhancement changes
+2. disease surveillance profile-linking changes
+3. any schema/model changes needed
+4. role-based delete behavior for disease surveillance
+5. list of files/modules changed
+
+Overall Success Criteria
+- Inventory supports both vaccines and manual medicines
+- Disease Surveillance links to existing patient profiles where possible
+- duplicate records are reduced
+- Super Admin delete behavior is consistent
+- existing system behavior remains stable
