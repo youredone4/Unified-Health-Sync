@@ -16,6 +16,7 @@ import VisitHistoryCard from "@/components/visit-history-card";
 import { useState } from "react";
 import { apiRequest } from "@/lib/queryClient";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
+import type { ChildVisit } from "@shared/schema";
 
 export default function ChildProfile() {
   const { id } = useParams<{ id: string }>();
@@ -26,6 +27,17 @@ export default function ChildProfile() {
 
   const { data: child, isLoading } = useQuery<Child>({ queryKey: ['/api/children', id] });
   const { data: mothers = [] } = useQuery<Mother[]>({ queryKey: ['/api/mothers'] });
+
+  const { data: childVisits = [] } = useQuery<ChildVisit[]>({
+    queryKey: ["/api/nurse-visits", "child", id],
+    queryFn: async () => {
+      const res = await fetch(`/api/nurse-visits/child/${id}`, { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: !!id,
+  });
+  const latestChildVisit = childVisits[0] ?? null;
   
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmAction, setConfirmAction] = useState<'vaccine' | 'weight'>('vaccine');
@@ -148,6 +160,20 @@ export default function ChildProfile() {
                   <p><span className="text-muted-foreground">Last Assessment:</span> {formatDate(lastGrowth.date)}</p>
                   {zScoreResult && (
                     <p><span className="text-muted-foreground">WHO Z-score:</span> {zScoreResult.zScore} (WFA 2006)</p>
+                  )}
+                </div>
+              )}
+              {latestChildVisit && (
+                <div className="text-sm space-y-0.5 pt-1 border-t border-border mt-1">
+                  <p className="text-xs font-medium text-muted-foreground">Latest Nurse Visit ({latestChildVisit.visitDate})</p>
+                  {latestChildVisit.weightKg && (
+                    <p><span className="text-muted-foreground">Weight:</span> {latestChildVisit.weightKg} kg</p>
+                  )}
+                  {latestChildVisit.heightCm && (
+                    <p><span className="text-muted-foreground">Height:</span> {latestChildVisit.heightCm} cm</p>
+                  )}
+                  {latestChildVisit.muac && (
+                    <p><span className="text-muted-foreground">MUAC:</span> {latestChildVisit.muac} cm</p>
                   )}
                 </div>
               )}

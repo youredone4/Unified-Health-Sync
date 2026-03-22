@@ -15,6 +15,7 @@ import ConsultationHistoryCard from "@/components/consultation-history-card";
 import VisitHistoryCard from "@/components/visit-history-card";
 import { useState } from "react";
 import { apiRequest } from "@/lib/queryClient";
+import type { SeniorVisit } from "@shared/schema";
 
 interface EligibilityResult {
   eligible: boolean;
@@ -32,6 +33,17 @@ export default function SeniorProfile() {
   const { data: senior, isLoading } = useQuery<Senior>({ queryKey: ['/api/seniors', id] });
   
   const { data: barangays = [] } = useQuery<Barangay[]>({ queryKey: ['/api/barangays'] });
+
+  const { data: seniorVisits = [] } = useQuery<SeniorVisit[]>({
+    queryKey: ["/api/nurse-visits", "senior", id],
+    queryFn: async () => {
+      const res = await fetch(`/api/nurse-visits/senior/${id}`, { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: !!id,
+  });
+  const latestSeniorVisit = seniorVisits[0] ?? null;
   
   const { data: claims = [] } = useQuery<SeniorMedClaim[]>({
     queryKey: ['/api/senior-med-claims', { seniorId: id }],
@@ -172,6 +184,20 @@ export default function SeniorProfile() {
             <p><span className="text-muted-foreground">Barangay:</span> {senior.barangay}</p>
             <p><span className="text-muted-foreground">Address:</span> {senior.addressLine || '-'}</p>
             <p><span className="text-muted-foreground">Phone:</span> {senior.phone || '-'}</p>
+            {latestSeniorVisit && (
+              <div className="pt-2 border-t border-border mt-2 space-y-1">
+                <p className="text-xs font-medium text-muted-foreground">Latest Nurse Visit ({latestSeniorVisit.visitDate})</p>
+                {latestSeniorVisit.bloodPressure && (
+                  <p className="text-sm"><span className="text-muted-foreground">BP:</span> {latestSeniorVisit.bloodPressure}</p>
+                )}
+                {latestSeniorVisit.weightKg && (
+                  <p className="text-sm"><span className="text-muted-foreground">Weight:</span> {latestSeniorVisit.weightKg} kg</p>
+                )}
+                {latestSeniorVisit.symptomsRemarks && (
+                  <p className="text-sm"><span className="text-muted-foreground">Remarks:</span> {latestSeniorVisit.symptomsRemarks}</p>
+                )}
+              </div>
+            )}
           </CardContent>
         </Card>
 

@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, boolean, timestamp, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, timestamp, jsonb, unique } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -459,7 +459,9 @@ export const prenatalVisits = pgTable("prenatal_visits", {
   notes: text("notes"),
   recordedBy: text("recorded_by"),
   createdAt: text("created_at").notNull(),
-});
+}, (t) => ({
+  uniqMotherVisit: unique("prenatal_visits_mother_id_visit_number_unique").on(t.motherId, t.visitNumber),
+}));
 export const insertPrenatalVisitSchema = createInsertSchema(prenatalVisits).omit({ id: true });
 export type PrenatalVisit = typeof prenatalVisits.$inferSelect;
 export type InsertPrenatalVisit = z.infer<typeof insertPrenatalVisitSchema>;
@@ -478,7 +480,9 @@ export const childVisits = pgTable("child_visits", {
   monitoringNotes: text("monitoring_notes"),
   recordedBy: text("recorded_by"),
   createdAt: text("created_at").notNull(),
-});
+}, (t) => ({
+  uniqChildVisit: unique("child_visits_child_id_visit_number_unique").on(t.childId, t.visitNumber),
+}));
 export const insertChildVisitSchema = createInsertSchema(childVisits).omit({ id: true });
 export type ChildVisit = typeof childVisits.$inferSelect;
 export type InsertChildVisit = z.infer<typeof insertChildVisitSchema>;
@@ -496,7 +500,9 @@ export const seniorVisits = pgTable("senior_visits", {
   followUpNotes: text("follow_up_notes"),
   recordedBy: text("recorded_by"),
   createdAt: text("created_at").notNull(),
-});
+}, (t) => ({
+  uniqSeniorVisit: unique("senior_visits_senior_id_visit_number_unique").on(t.seniorId, t.visitNumber),
+}));
 export const insertSeniorVisitSchema = createInsertSchema(seniorVisits).omit({ id: true });
 export type SeniorVisit = typeof seniorVisits.$inferSelect;
 export type InsertSeniorVisit = z.infer<typeof insertSeniorVisitSchema>;

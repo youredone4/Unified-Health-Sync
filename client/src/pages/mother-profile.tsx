@@ -14,6 +14,7 @@ import ConsultationHistoryCard from "@/components/consultation-history-card";
 import VisitHistoryCard from "@/components/visit-history-card";
 import { useState } from "react";
 import { apiRequest } from "@/lib/queryClient";
+import type { PrenatalVisit } from "@shared/schema";
 
 export default function MotherProfile() {
   const { id } = useParams<{ id: string }>();
@@ -23,6 +24,17 @@ export default function MotherProfile() {
   const { user } = useAuth();
 
   const { data: mother, isLoading } = useQuery<Mother>({ queryKey: ['/api/mothers', id] });
+
+  const { data: prenatalVisits = [] } = useQuery<PrenatalVisit[]>({
+    queryKey: ["/api/nurse-visits", "mother", id],
+    queryFn: async () => {
+      const res = await fetch(`/api/nurse-visits/mother/${id}`, { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: !!id,
+  });
+  const latestPrenatalVisit = prenatalVisits[0] ?? null;
   
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmAction, setConfirmAction] = useState<'tt' | 'prenatal'>('tt');
@@ -111,7 +123,29 @@ export default function MotherProfile() {
             <p><span className="text-muted-foreground">Barangay:</span> {mother.barangay}</p>
             <p><span className="text-muted-foreground">Address:</span> {mother.addressLine || '-'}</p>
             <p><span className="text-muted-foreground">Phone:</span> {mother.phone || '-'}</p>
-            <p><span className="text-muted-foreground">GA:</span> {mother.gaWeeks} weeks</p>
+            <p>
+              <span className="text-muted-foreground">GA:</span>{" "}
+              {latestPrenatalVisit?.gaWeeks
+                ? `${latestPrenatalVisit.gaWeeks} weeks (from visit ${latestPrenatalVisit.visitDate})`
+                : `${mother.gaWeeks} weeks`}
+            </p>
+            {latestPrenatalVisit && (
+              <div className="pt-2 border-t border-border mt-2 space-y-1">
+                <p className="text-xs font-medium text-muted-foreground">Latest Nurse Visit ({latestPrenatalVisit.visitDate})</p>
+                {latestPrenatalVisit.bloodPressure && (
+                  <p className="text-sm"><span className="text-muted-foreground">BP:</span> {latestPrenatalVisit.bloodPressure}</p>
+                )}
+                {latestPrenatalVisit.weightKg && (
+                  <p className="text-sm"><span className="text-muted-foreground">Weight:</span> {latestPrenatalVisit.weightKg} kg</p>
+                )}
+                {latestPrenatalVisit.fundalHeight && (
+                  <p className="text-sm"><span className="text-muted-foreground">Fundal Height:</span> {latestPrenatalVisit.fundalHeight} cm</p>
+                )}
+                {latestPrenatalVisit.riskStatus && (
+                  <p className="text-sm"><span className="text-muted-foreground">Risk:</span> <span className="capitalize">{latestPrenatalVisit.riskStatus}</span></p>
+                )}
+              </div>
+            )}
           </CardContent>
         </Card>
 
