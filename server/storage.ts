@@ -62,6 +62,7 @@ export interface IStorage {
   getTBPatient(id: number): Promise<TBPatient | undefined>;
   createTBPatient(data: InsertTBPatient): Promise<TBPatient>;
   updateTBPatient(id: number, updates: Partial<InsertTBPatient>): Promise<TBPatient>;
+  deleteTBPatient(id: number): Promise<void>;
 
   getThemeSettings(): Promise<ThemeSettings | undefined>;
   updateThemeSettings(updates: Partial<InsertThemeSettings>): Promise<ThemeSettings>;
@@ -300,6 +301,10 @@ export class DatabaseStorage implements IStorage {
       .where(eq(tbPatients.id, id))
       .returning();
     return updated;
+  }
+
+  async deleteTBPatient(id: number): Promise<void> {
+    await db.delete(tbPatients).where(eq(tbPatients.id, id));
   }
 
   async getThemeSettings(): Promise<ThemeSettings | undefined> {

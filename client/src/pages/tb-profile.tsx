@@ -6,18 +6,24 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { ArrowLeft, Phone, MapPin, Calendar, Pill, AlertTriangle, CheckCircle, MessageSquare } from "lucide-react";
+import { ArrowLeft, Phone, MapPin, Calendar, Pill, AlertTriangle, CheckCircle, MessageSquare, Trash2 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
 import SmsModal from "@/components/sms-modal";
+import ConfirmModal from "@/components/confirm-modal";
+import { useAuth, permissions } from "@/hooks/use-auth";
 import { addDays, format } from "date-fns";
 
 export default function TBProfile() {
   const params = useParams();
   const [, navigate] = useLocation();
   const { toast } = useToast();
+  const { user } = useAuth();
   const [smsOpen, setSmsOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+
+  const canDelete = permissions.canDelete(user?.role);
 
   const id = Number(params.id);
   const { data: patient, isLoading } = useQuery<TBPatient>({
@@ -33,6 +39,17 @@ export default function TBProfile() {
       queryClient.invalidateQueries({ queryKey: ['/api/tb-patients', id] });
       queryClient.invalidateQueries({ queryKey: ['/api/tb-patients'] });
       toast({ title: "Patient record updated" });
+    }
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async () => {
+      return apiRequest('DELETE', `/api/tb-patients/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/tb-patients'] });
+      toast({ title: "TB DOTS record deleted" });
+      navigate('/tb');
     }
   });
 
@@ -115,29 +132,29 @@ export default function TBProfile() {
         </Card>
       )}
 
-      <div className="grid md:grid-cols-2 gap-4">
+      <div className="grid md:grid-cols-3 gap-4">
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Patient Information</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="flex items-center gap-2 text-sm">
-              <MapPin className="w-4 h-4 text-muted-foreground" />
+              <MapPin className="w-4 h-4 text-muted-foreground shrink-0" />
               <span>{patient.barangay}{patient.addressLine && `, ${patient.addressLine}`}</span>
             </div>
             {patient.phone && (
               <div className="flex items-center gap-2 text-sm">
-                <Phone className="w-4 h-4 text-muted-foreground" />
+                <Phone className="w-4 h-4 text-muted-foreground shrink-0" />
                 <span>{patient.phone}</span>
               </div>
             )}
             <div className="flex items-center gap-2 text-sm">
-              <Calendar className="w-4 h-4 text-muted-foreground" />
-              <span>Treatment started: {formatDate(patient.treatmentStartDate)}</span>
+              <Calendar className="w-4 h-4 text-muted-foreground shrink-0" />
+              <span>Started: {formatDate(patient.treatmentStartDate)}</span>
             </div>
             {patient.medsRegimenName && (
               <div className="flex items-center gap-2 text-sm">
-                <Pill className="w-4 h-4 text-muted-foreground" />
+                <Pill className="w-4 h-4 text-muted-foreground shrink-0" />
                 <span>{patient.medsRegimenName}</span>
               </div>
             )}
@@ -152,39 +169,37 @@ export default function TBProfile() {
             <div>
               <div className="flex justify-between text-sm mb-2">
                 <span>{patient.treatmentPhase} Phase</span>
-                <span>{Math.round(progress)}% complete</span>
+                <span>{Math.round(progress)}%</span>
               </div>
               <Progress value={progress} className="h-3" />
               <p className="text-xs text-muted-foreground mt-1">{daysRemaining} days remaining</p>
             </div>
-            <div className="grid grid-cols-2 gap-4 text-sm">
+            <div className="grid grid-cols-2 gap-3 text-sm">
               <div>
                 <p className="text-muted-foreground">Last Dose</p>
                 <p className="font-medium">{formatDate(patient.lastObservedDoseDate)}</p>
               </div>
               <div>
-                <p className="text-muted-foreground">Missed Doses</p>
+                <p className="text-muted-foreground">Missed</p>
                 <p className={`font-medium ${(patient.missedDosesCount || 0) >= 3 ? 'text-destructive' : ''}`}>
-                  {patient.missedDosesCount || 0}
+                  {patient.missedDosesCount || 0} doses
                 </p>
               </div>
             </div>
           </CardContent>
         </Card>
-      </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">DOTS Schedule</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid md:grid-cols-2 gap-4">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">DOTS Schedule</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
             <div>
               <p className="text-sm text-muted-foreground">Next DOTS Visit</p>
               <div className="flex items-center gap-2 mt-1">
-                <p className="font-medium">{formatDate(patient.nextDotsVisitDate)}</p>
+                <p className="font-medium text-sm">{formatDate(patient.nextDotsVisitDate)}</p>
                 <Badge variant={visitStatus.status === 'overdue' ? 'destructive' : visitStatus.status === 'due_today' ? 'secondary' : 'outline'}>
-                  {visitStatus.status === 'overdue' ? 'Missed' : visitStatus.status === 'due_today' ? 'Today' : `In ${visitStatus.daysUntil} days`}
+                  {visitStatus.status === 'overdue' ? 'Missed' : visitStatus.status === 'due_today' ? 'Today' : `In ${visitStatus.daysUntil}d`}
                 </Badge>
               </div>
             </div>
@@ -192,16 +207,19 @@ export default function TBProfile() {
               <div>
                 <p className="text-sm text-muted-foreground">Next Sputum Check</p>
                 <div className="flex items-center gap-2 mt-1">
-                  <p className="font-medium">{formatDate(patient.nextSputumCheckDate)}</p>
+                  <p className="font-medium text-sm">{formatDate(patient.nextSputumCheckDate)}</p>
                   <Badge variant={sputumStatus.status === 'overdue' ? 'destructive' : sputumStatus.status === 'due_soon' ? 'secondary' : 'outline'}>
-                    {sputumStatus.status === 'overdue' ? 'Overdue' : sputumStatus.status === 'due_soon' ? 'Due Soon' : 'Upcoming'}
+                    {sputumStatus.status === 'overdue' ? 'Overdue' : sputumStatus.status === 'due_soon' ? 'Soon' : 'Upcoming'}
                   </Badge>
                 </div>
               </div>
             )}
-          </div>
-        </CardContent>
-      </Card>
+            {!patient.nextSputumCheckDate && (
+              <p className="text-sm text-muted-foreground">No sputum check scheduled</p>
+            )}
+          </CardContent>
+        </Card>
+      </div>
 
       <Card>
         <CardHeader>
@@ -209,15 +227,15 @@ export default function TBProfile() {
         </CardHeader>
         <CardContent>
           <div className="flex flex-wrap gap-2">
-            <Button onClick={handleRecordDose} data-testid="button-record-dose">
+            <Button onClick={handleRecordDose} disabled={updateMutation.isPending} data-testid="button-record-dose">
               <CheckCircle className="w-4 h-4 mr-2" />
               Record Observed Dose
             </Button>
-            <Button variant="outline" onClick={handleRecordMissedDose} data-testid="button-record-missed">
+            <Button variant="outline" onClick={handleRecordMissedDose} disabled={updateMutation.isPending} data-testid="button-record-missed">
               Record Missed Dose
             </Button>
             {!patient.referralToRHU && (
-              <Button variant="outline" onClick={handleReferToRHU} data-testid="button-refer">
+              <Button variant="outline" onClick={handleReferToRHU} disabled={updateMutation.isPending} data-testid="button-refer">
                 Refer to RHU
               </Button>
             )}
@@ -225,6 +243,16 @@ export default function TBProfile() {
               <MessageSquare className="w-4 h-4 mr-2" />
               Send SMS
             </Button>
+            {canDelete && (
+              <Button
+                variant="destructive"
+                onClick={() => setDeleteOpen(true)}
+                data-testid="button-delete-tb"
+              >
+                <Trash2 className="w-4 h-4 mr-2" />
+                Delete Record
+              </Button>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -236,6 +264,16 @@ export default function TBProfile() {
         phone={patient.phone || null}
         defaultMessage={smsMessage}
         barangay={patient.barangay}
+      />
+
+      <ConfirmModal
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        title="Delete TB DOTS Record"
+        description={`Are you sure you want to delete the TB DOTS record for ${patient.firstName} ${patient.lastName}? This action cannot be undone.`}
+        confirmText="Delete"
+        isLoading={deleteMutation.isPending}
+        onConfirm={() => deleteMutation.mutate()}
       />
     </div>
   );

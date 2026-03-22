@@ -371,6 +371,15 @@ export async function registerRoutes(
     res.json(updated);
   }));
 
+  app.delete(api.tbPatients.delete.path, adminOnlyRBAC, ar(async (req, res) => {
+    const id = parseId(req.params.id, res); if (id === null) return;
+    const patient = await storage.getTBPatient(id);
+    if (!patient) return res.status(404).json({ message: "TB patient not found" });
+    await storage.deleteTBPatient(id);
+    await createAuditLog(req.userInfo!.id, req.userInfo!.role, "DELETE", "TB_DOTS", String(id), undefined, undefined, undefined, req);
+    res.json({ success: true });
+  }));
+
   // === THEME SETTINGS ===
   app.get(api.themeSettings.get.path, async (req, res) => {
     let settings = await storage.getThemeSettings();

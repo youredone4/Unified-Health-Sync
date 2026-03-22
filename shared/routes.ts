@@ -246,6 +246,14 @@ export const api = {
         200: z.custom<typeof tbPatients.$inferSelect>(),
       },
     },
+    delete: {
+      method: 'DELETE' as const,
+      path: '/api/tb-patients/:id',
+      responses: {
+        200: z.object({ success: z.boolean() }),
+        404: errorSchemas.notFound,
+      },
+    },
   },
   themeSettings: {
     get: {
