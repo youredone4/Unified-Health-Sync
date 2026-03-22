@@ -11,6 +11,7 @@ import SmsModal from "@/components/sms-modal";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth, permissions } from "@/hooks/use-auth";
 import { ArrowLeft, Pill, Heart, MessageSquare, Check, ShieldCheck, AlertTriangle, History, Pencil, Trash2 } from "lucide-react";
+import ConsultationHistoryCard from "@/components/consultation-history-card";
 import { useState } from "react";
 import { apiRequest } from "@/lib/queryClient";
 
@@ -282,6 +283,8 @@ export default function SeniorProfile() {
           )}
         </CardContent>
       </Card>
+
+      <ConsultationHistoryCard profileType="Senior" profileId={senior.id} />
 
       <ConfirmModal
         open={confirmOpen}

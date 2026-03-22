@@ -49,6 +49,8 @@ const EMPTY_CONSULT = {
   referredTo: "",
   dispositionNotes: "",
   consultType: "General",
+  linkedPersonType: "",
+  linkedPersonId: "",
   notes: "",
   bloodPressure: "",
   weightKg: "",
@@ -213,6 +215,8 @@ export default function PatientCheckupPage() {
       return apiRequest("POST", "/api/consults", {
         ...data,
         age: Number(data.age),
+        linkedPersonId: data.linkedPersonId ? Number(data.linkedPersonId) : undefined,
+        linkedPersonType: data.linkedPersonType || undefined,
         createdAt: new Date().toISOString(),
       });
     },
@@ -232,6 +236,25 @@ export default function PatientCheckupPage() {
       consult.diagnosis.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesBarangay = filterBarangay === "all" || consult.barangay === filterBarangay;
     return matchesSearch && matchesBarangay;
+  });
+
+  // Group consults by patient — prefer linkedPersonType+linkedPersonId, fallback to name+barangay
+  type PatientGroup = {
+    key: string;
+    latest: Consult;
+    visitCount: number;
+  };
+  const patientGroupMap = new Map<string, { consults: Consult[] }>();
+  for (const c of filteredConsults) {
+    const key = c.linkedPersonType && c.linkedPersonId
+      ? `${c.linkedPersonType}:${c.linkedPersonId}`
+      : `${c.patientName.toLowerCase()}|${c.barangay}`;
+    if (!patientGroupMap.has(key)) patientGroupMap.set(key, { consults: [] });
+    patientGroupMap.get(key)!.consults.push(c);
+  }
+  const patientGroups: PatientGroup[] = Array.from(patientGroupMap.entries()).map(([key, g]) => {
+    const sorted = [...g.consults].sort((a, b) => b.consultDate.localeCompare(a.consultDate));
+    return { key, latest: sorted[0], visitCount: sorted.length };
   });
 
   if (!canAccessPatientCheckup) {
@@ -268,8 +291,8 @@ export default function PatientCheckupPage() {
     createMutation.mutate(newConsult);
   };
 
-  const handleRowClick = (consult: Consult) => {
-    setSelectedPatient({ name: consult.patientName, barangay: consult.barangay });
+  const handleRowClick = (group: PatientGroup) => {
+    setSelectedPatient({ name: group.latest.patientName, barangay: group.latest.barangay });
     setHistorySheetOpen(true);
   };
 
@@ -283,6 +306,8 @@ export default function PatientCheckupPage() {
       age: latest ? String(latest.age) : "",
       sex: latest?.sex ?? "M",
       addressLine: latest?.addressLine ?? "",
+      linkedPersonType: latest?.linkedPersonType ?? "",
+      linkedPersonId: latest?.linkedPersonId ? String(latest.linkedPersonId) : "",
     });
     setHistorySheetOpen(false);
     setIsAddDialogOpen(true);
@@ -293,6 +318,7 @@ export default function PatientCheckupPage() {
     treated: consults.filter(c => c.disposition === "Treated").length,
     referred: consults.filter(c => c.disposition === "Referred").length,
     admitted: consults.filter(c => c.disposition === "Admitted").length,
+    patients: patientGroups.length,
   };
 
   const set = (field: keyof typeof EMPTY_CONSULT) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
@@ -582,6 +608,10 @@ export default function PatientCheckupPage() {
           </CardContent>
         </Card>
       </div>
+      {/* Unique patients note */}
+      {stats.patients > 0 && stats.patients < stats.total && (
+        <p className="text-sm text-muted-foreground -mt-2">Showing {stats.patients} unique patient{stats.patients !== 1 ? "s" : ""} across {stats.total} consultations.</p>
+      )}
 
       {/* Consult list */}
       <Card>
@@ -619,57 +649,68 @@ export default function PatientCheckupPage() {
         <CardContent>
           {isLoading ? (
             <p className="text-muted-foreground">Loading consults...</p>
-          ) : filteredConsults.length === 0 ? (
+          ) : patientGroups.length === 0 ? (
             <p className="text-muted-foreground">No consultation records found</p>
           ) : (
             <div className="space-y-2">
-              {filteredConsults.map((consult) => (
-                <div
-                  key={consult.id}
-                  className="flex items-center justify-between p-4 rounded-lg border bg-card cursor-pointer hover:bg-accent/50 hover:border-primary/30 transition-colors"
-                  onClick={() => handleRowClick(consult)}
-                  data-testid={`consult-row-${consult.id}`}
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={(e) => e.key === "Enter" && handleRowClick(consult)}
-                  aria-label={`View consultation history for ${consult.patientName}`}
-                >
-                  <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center shrink-0">
-                      <User className="w-5 h-5 text-muted-foreground" />
+              {patientGroups.map((group) => {
+                const c = group.latest;
+                return (
+                  <div
+                    key={group.key}
+                    className="flex items-center justify-between p-4 rounded-lg border bg-card cursor-pointer hover:bg-accent/50 hover:border-primary/30 transition-colors"
+                    onClick={() => handleRowClick(group)}
+                    data-testid={`consult-row-${group.key}`}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => e.key === "Enter" && handleRowClick(group)}
+                    aria-label={`View consultation history for ${c.patientName}`}
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center shrink-0">
+                        <User className="w-5 h-5 text-muted-foreground" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <p className="font-medium">
+                            {c.patientName}
+                            <span className="text-muted-foreground ml-2">({c.age} · {c.sex === "M" ? "Male" : "Female"})</span>
+                          </p>
+                          {group.visitCount > 1 && (
+                            <Badge variant="secondary" className="text-xs">{group.visitCount} visits</Badge>
+                          )}
+                          {c.linkedPersonType && (
+                            <Badge variant="outline" className="text-xs">{c.linkedPersonType}</Badge>
+                          )}
+                        </div>
+                        <p className="text-sm text-muted-foreground">{c.diagnosis}</p>
+                        {(c.bloodPressure || c.weightKg) && (
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            {c.bloodPressure && <span>BP: {c.bloodPressure}</span>}
+                            {c.bloodPressure && c.weightKg && <span className="mx-1">·</span>}
+                            {c.weightKg && <span>Wt: {c.weightKg} kg</span>}
+                          </p>
+                        )}
+                      </div>
                     </div>
-                    <div>
-                      <p className="font-medium">
-                        {consult.patientName}
-                        <span className="text-muted-foreground ml-2">({consult.age} {consult.sex})</span>
-                      </p>
-                      <p className="text-sm text-muted-foreground">{consult.diagnosis}</p>
-                      {(consult.bloodPressure || consult.weightKg) && (
-                        <p className="text-xs text-muted-foreground mt-0.5">
-                          {consult.bloodPressure && <span>BP: {consult.bloodPressure}</span>}
-                          {consult.bloodPressure && consult.weightKg && <span className="mx-1">·</span>}
-                          {consult.weightKg && <span>Wt: {consult.weightKg} kg</span>}
-                        </p>
-                      )}
-                    </div>
-                  </div>
 
-                  <div className="flex items-center gap-4">
-                    <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                      <MapPin className="w-4 h-4" />
-                      {consult.barangay}
+                    <div className="flex items-center gap-4">
+                      <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                        <MapPin className="w-4 h-4" />
+                        {c.barangay}
+                      </div>
+                      <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                        <Calendar className="w-4 h-4" />
+                        {fmtDate(c.consultDate)}
+                      </div>
+                      <Badge className={dispositionColors[c.disposition || "Treated"]}>
+                        {c.disposition}
+                      </Badge>
                     </div>
-                    <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                      <Calendar className="w-4 h-4" />
-                      {fmtDate(consult.consultDate)}
-                    </div>
-                    <Badge className={dispositionColors[consult.disposition || "Treated"]}>
-                      {consult.disposition}
-                    </Badge>
                   </div>
-                </div>
-              ))}
-              <p className="text-xs text-muted-foreground pt-1 pl-1">Click any record to view patient consultation history.</p>
+                );
+              })}
+              <p className="text-xs text-muted-foreground pt-1 pl-1">Click any row to view the patient's full consultation history.</p>
             </div>
           )}
         </CardContent>

@@ -65,6 +65,7 @@ export interface IStorage {
   getConsults(): Promise<Consult[]>;
   getConsult(id: number): Promise<Consult | undefined>;
   getConsultsByPatient(name: string, barangay: string): Promise<Consult[]>;
+  getConsultsByProfile(type: string, profileId: number): Promise<Consult[]>;
   createConsult(consult: InsertConsult): Promise<Consult>;
   updateConsult(id: number, updates: Partial<InsertConsult>): Promise<Consult>;
 
@@ -322,6 +323,12 @@ export class DatabaseStorage implements IStorage {
   async getConsultsByPatient(name: string, barangay: string): Promise<Consult[]> {
     return await db.select().from(consults)
       .where(and(ilike(consults.patientName, name), eq(consults.barangay, barangay)))
+      .orderBy(desc(consults.consultDate));
+  }
+
+  async getConsultsByProfile(type: string, profileId: number): Promise<Consult[]> {
+    return await db.select().from(consults)
+      .where(and(eq(consults.linkedPersonType, type), eq(consults.linkedPersonId, profileId)))
       .orderBy(desc(consults.consultDate));
   }
 

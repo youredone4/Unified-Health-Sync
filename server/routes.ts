@@ -410,6 +410,14 @@ export async function registerRoutes(
     res.json(data);
   }));
 
+  app.get('/api/consults/by-profile', patientCheckupRBAC, ar(async (req, res) => {
+    const type = String(req.query.type ?? "").trim();
+    const id = parseInt(String(req.query.id ?? ""), 10);
+    if (!type || isNaN(id) || id <= 0) return res.status(400).json({ message: "type and id query params required" });
+    const data = await storage.getConsultsByProfile(type, id);
+    res.json(data);
+  }));
+
   app.get(api.consults.get.path, patientCheckupRBAC, ar(async (req, res) => {
     const id = parseId(req.params.id, res); if (id === null) return;
     const consult = await storage.getConsult(id);

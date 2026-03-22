@@ -280,6 +280,14 @@ export const api = {
         200: z.array(z.custom<typeof consults.$inferSelect>()),
       },
     },
+    byProfile: {
+      method: 'GET' as const,
+      path: '/api/consults/by-profile',
+      query: z.object({ type: z.string(), id: z.string() }),
+      responses: {
+        200: z.array(z.custom<typeof consults.$inferSelect>()),
+      },
+    },
     get: {
       method: 'GET' as const,
       path: '/api/consults/:id',
