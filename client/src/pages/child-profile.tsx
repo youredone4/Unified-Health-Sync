@@ -76,6 +76,8 @@ export default function ChildProfile() {
   // These values are safe to compute with optional chaining when child is undefined.
   const growthForChart = child?.growth || [];
   const ageMonthsForChart = child ? getAgeInMonths(child.dob) : 0;
+  // Normalize sex once — used in useMemo below and in JSX after early return
+  const sexNorm = child?.sex?.toLowerCase() as 'male' | 'female' | undefined;
 
   // Build WHO reference chart data merged with child's actual measurements.
   // X-axis: age in completed months (0 – maxMonth).
@@ -93,7 +95,7 @@ export default function ChildProfile() {
     }
     const maxMonth = Math.min(60, Math.max(ageMonthsForChart, ...Object.keys(ageMeasurements).map(Number), 12));
     // getWHOReferenceData returns null for unknown sex — fall back to month-only entries
-    const ref = getWHOReferenceData(child.sex);
+    const ref = getWHOReferenceData(sexNorm);
     if (!ref) {
       // No reference data: only include child measurements for display
       return Array.from({ length: maxMonth + 1 }, (_, month) => ({
@@ -171,7 +173,7 @@ export default function ChildProfile() {
           <CardContent className="space-y-2">
             <p><span className="text-muted-foreground">Age:</span> {ageMonths} months</p>
             <p><span className="text-muted-foreground">Date of Birth:</span> {formatDate(child.dob)}</p>
-            <p><span className="text-muted-foreground">Sex:</span> {child.sex === 'female' ? 'Female' : child.sex === 'male' ? 'Male' : '-'}</p>
+            <p><span className="text-muted-foreground">Sex:</span> {sexNorm === 'female' ? 'Female' : sexNorm === 'male' ? 'Male' : '-'}</p>
             <p><span className="text-muted-foreground">Barangay:</span> {child.barangay}</p>
             <p><span className="text-muted-foreground">Address:</span> {child.addressLine || '-'}</p>
 
@@ -318,7 +320,7 @@ export default function ChildProfile() {
               <Scale className="w-4 h-4" />
               Growth Chart — Weight-for-Age
               <span className="ml-auto text-xs font-normal text-muted-foreground">
-                WHO 2006 · {child.sex === 'female' ? 'Girls standard' : child.sex === 'male' ? 'Boys standard' : 'Sex not recorded'}
+                WHO 2006 · {sexNorm === 'female' ? 'Girls standard' : sexNorm === 'male' ? 'Boys standard' : 'Sex not recorded'}
               </span>
             </CardTitle>
           </CardHeader>
@@ -361,7 +363,7 @@ export default function ChildProfile() {
                     return labels[value] ?? value;
                   }}
                 />
-                {(child.sex === 'male' || child.sex === 'female') && (
+                {(sexNorm === 'male' || sexNorm === 'female') && (
                   <>
                     <Line type="monotone" dataKey="neg3"   stroke="#ef4444" strokeWidth={1} strokeDasharray="4 3" dot={false} legendType="line" />
                     <Line type="monotone" dataKey="neg2"   stroke="#f97316" strokeWidth={1} strokeDasharray="4 3" dot={false} legendType="line" />
@@ -381,7 +383,7 @@ export default function ChildProfile() {
                 />
               </ComposedChart>
             </ResponsiveContainer>
-            {(child.sex === 'male' || child.sex === 'female') ? (
+            {(sexNorm === 'male' || sexNorm === 'female') ? (
               <p className="text-xs text-muted-foreground mt-1 text-center">
                 Reference zones: <span className="text-red-400">red = -3 SD</span> · <span className="text-orange-400">orange = -2 SD</span> · <span className="text-green-400">green = median</span>
               </p>

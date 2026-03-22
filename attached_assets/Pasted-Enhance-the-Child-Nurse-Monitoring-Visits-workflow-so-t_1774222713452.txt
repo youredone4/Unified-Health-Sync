@@ -1,0 +1,69 @@
+Enhance the Child Nurse Monitoring Visits workflow so that weight recorded during a child nurse visit is automatically linked to the child’s Growth Monitoring history and appears on the Growth Chart.
+
+Context
+- The system already has:
+  - Child profiles
+  - Nurse Monitoring Visits
+  - Growth Monitoring
+  - Growth Chart
+- Currently, the nurse visit workflow and growth chart appear to be separated.
+- If a nurse records a child’s weight during a visit, that value should also feed the growth monitoring data used by the chart.
+- Do NOT rebuild the whole child module.
+- Do NOT break Child Registry, Child Dashboard, Growth Monitoring, Nutrition Dashboard, or existing SAM/MAM logic.
+
+Goal
+Make child nurse visit measurements, especially weight, part of the child’s longitudinal growth record so the Growth Chart updates automatically from nurse-entered visits.
+
+Required Changes
+
+1. Link child nurse visit weight to growth monitoring
+When a nurse adds or updates a Child Nurse Monitoring Visit and enters weight:
+- save the weight in the visit record
+- also register that measurement in the child’s Growth Monitoring history
+- ensure the Growth Chart uses that measurement automatically
+
+2. Use one continuous growth history
+Do not keep separate disconnected weight histories.
+
+The intended behavior should be:
+- one child profile
+- many nurse monitoring visits
+- all valid growth measurements contribute to one continuous Growth Monitoring trend
+
+3. Include visit date in growth points
+Each growth measurement added from Nurse Monitoring Visits must carry:
+- visit date
+- child age at time of visit (if computed by the system)
+- weight value
+- optionally height/length if captured
+
+This ensures the Growth Chart plots the point correctly over time.
+
+4. Support other growth-related fields if present
+If Child Nurse Monitoring Visits already capture or will capture:
+- height/length
+- MUAC
+- head circumference
+
+then link those to Growth Monitoring as well where appropriate.
+
+At minimum, weight must be linked.
+
+5. Update chart automatically
+After saving a Child Nurse Monitoring Visit with weight:
+- refresh the Growth Chart data
+- show the new measurement point
+- update latest measurement if applicable
+- do not require manual re-entry into a separate Growth Monitoring form
+
+6. Preserve nutrition classification logic
+Do not break:
+- SAM / MAM classification
+- WHO Z-score logic
+- Nutrition Dashboard
+- Underweight Follow-ups
+
+If the new weight affects classification, allow the system to use the updated measurement in the existing nutrition logic if that is how the current system is designed.
+
+7. Avoid duplicate measurement records
+If the system already stores growth records separately:
