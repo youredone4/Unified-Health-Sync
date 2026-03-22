@@ -272,6 +272,14 @@ export const consults = pgTable("consults", {
   notes: text("notes"),
   createdBy: text("created_by"), // User ID who created
   createdAt: text("created_at").notNull(),
+  // Vital signs
+  bloodPressure: text("blood_pressure"), // e.g. "120/80"
+  weightKg: text("weight_kg"), // numeric string, kg
+  temperatureC: text("temperature_c"), // numeric string, °C
+  pulseRate: text("pulse_rate"), // numeric string, bpm
+  heightCm: text("height_cm"), // numeric string, cm
+  // Disposition details
+  dispositionNotes: text("disposition_notes"), // required when disposition = "Other"
 });
 
 export const insertConsultSchema = createInsertSchema(consults).omit({ id: true });

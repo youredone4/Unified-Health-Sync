@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
-import { ClipboardPlus, Plus, Search, Calendar, User, Stethoscope, MapPin } from "lucide-react";
+import { ClipboardPlus, Plus, Search, Calendar, User, Stethoscope, MapPin, Activity } from "lucide-react";
 import { format } from "date-fns";
 import type { Consult } from "@shared/schema";
 import { TODAY_STR } from "@/lib/healthLogic";
@@ -23,24 +23,41 @@ const BARANGAYS = [
   "San Isidro", "Sani-sani", "Santa Cruz", "Suyoc", "Tagbongabong"
 ];
 
-const COMMON_DIAGNOSES = [
-  "Acute Upper Respiratory Infection",
-  "Acute Gastroenteritis",
-  "Urinary Tract Infection",
-  "Hypertension",
-  "Diabetes Mellitus Type 2",
-  "Pneumonia",
-  "Bronchitis",
-  "Skin Infection",
-  "Dengue Fever",
-  "Other"
-];
-
 const dispositionColors: Record<string, string> = {
   Treated: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
   Referred: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
   Admitted: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
+  Other: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200",
 };
+
+const EMPTY_CONSULT = {
+  patientName: "",
+  age: "",
+  sex: "M",
+  barangay: "",
+  addressLine: "",
+  consultDate: TODAY_STR,
+  chiefComplaint: "",
+  diagnosis: "",
+  treatment: "",
+  disposition: "Treated",
+  referredTo: "",
+  dispositionNotes: "",
+  consultType: "General",
+  notes: "",
+  bloodPressure: "",
+  weightKg: "",
+  temperatureC: "",
+  pulseRate: "",
+  heightCm: "",
+};
+
+function calcBmi(weightKg: string, heightCm: string): string {
+  const w = parseFloat(weightKg);
+  const h = parseFloat(heightCm) / 100;
+  if (!w || !h || h <= 0) return "";
+  return (w / (h * h)).toFixed(1);
+}
 
 export default function PatientCheckupPage() {
   const { canAccessPatientCheckup } = useAuth();
@@ -48,22 +65,9 @@ export default function PatientCheckupPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [filterBarangay, setFilterBarangay] = useState("all");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
-  const [newConsult, setNewConsult] = useState({
-    patientName: "",
-    age: "",
-    sex: "M",
-    barangay: "",
-    addressLine: "",
-    consultDate: TODAY_STR,
-    chiefComplaint: "",
-    diagnosis: "",
-    icdCode: "",
-    treatment: "",
-    disposition: "Treated",
-    referredTo: "",
-    consultType: "General",
-    notes: "",
-  });
+  const [newConsult, setNewConsult] = useState(EMPTY_CONSULT);
+
+  const bmi = calcBmi(newConsult.weightKg, newConsult.heightCm);
 
   const { data: consults = [], isLoading } = useQuery<Consult[]>({
     queryKey: ["/api/consults"],
@@ -82,22 +86,7 @@ export default function PatientCheckupPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/consults"] });
       toast({ title: "Consult recorded successfully" });
       setIsAddDialogOpen(false);
-      setNewConsult({
-        patientName: "",
-        age: "",
-        sex: "M",
-        barangay: "",
-        addressLine: "",
-        consultDate: TODAY_STR,
-        chiefComplaint: "",
-        diagnosis: "",
-        icdCode: "",
-        treatment: "",
-        disposition: "Treated",
-        referredTo: "",
-        consultType: "General",
-        notes: "",
-      });
+      setNewConsult(EMPTY_CONSULT);
     },
     onError: (error: Error) => {
       toast({ title: "Failed to record consult", description: error.message, variant: "destructive" });
@@ -130,6 +119,18 @@ export default function PatientCheckupPage() {
       toast({ title: "Please fill in all required fields", variant: "destructive" });
       return;
     }
+    if (!newConsult.bloodPressure) {
+      toast({ title: "Blood pressure is required", variant: "destructive" });
+      return;
+    }
+    if (!newConsult.weightKg) {
+      toast({ title: "Weight is required", variant: "destructive" });
+      return;
+    }
+    if (newConsult.disposition === "Other" && !newConsult.dispositionNotes.trim()) {
+      toast({ title: "Disposition notes are required when selecting 'Other'", variant: "destructive" });
+      return;
+    }
     createMutation.mutate(newConsult);
   };
 
@@ -139,6 +140,9 @@ export default function PatientCheckupPage() {
     referred: consults.filter(c => c.disposition === "Referred").length,
     admitted: consults.filter(c => c.disposition === "Admitted").length,
   };
+
+  const set = (field: keyof typeof EMPTY_CONSULT) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+    setNewConsult(prev => ({ ...prev, [field]: e.target.value }));
 
   return (
     <div className="space-y-6">
@@ -162,12 +166,14 @@ export default function PatientCheckupPage() {
               <DialogTitle>Record New Consultation</DialogTitle>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4 pt-4">
+
+              {/* Patient Info */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Patient Name *</Label>
                   <Input
                     value={newConsult.patientName}
-                    onChange={(e) => setNewConsult(prev => ({ ...prev, patientName: e.target.value }))}
+                    onChange={set("patientName")}
                     placeholder="Full name"
                     data-testid="input-patient-name"
                   />
@@ -178,7 +184,7 @@ export default function PatientCheckupPage() {
                     <Input
                       type="number"
                       value={newConsult.age}
-                      onChange={(e) => setNewConsult(prev => ({ ...prev, age: e.target.value }))}
+                      onChange={set("age")}
                       placeholder="Age"
                       data-testid="input-age"
                     />
@@ -217,7 +223,7 @@ export default function PatientCheckupPage() {
                   <Input
                     type="date"
                     value={newConsult.consultDate}
-                    onChange={(e) => setNewConsult(prev => ({ ...prev, consultDate: e.target.value }))}
+                    onChange={set("consultDate")}
                     data-testid="input-consult-date"
                   />
                 </div>
@@ -227,72 +233,156 @@ export default function PatientCheckupPage() {
                 <Label>Chief Complaint *</Label>
                 <Textarea
                   value={newConsult.chiefComplaint}
-                  onChange={(e) => setNewConsult(prev => ({ ...prev, chiefComplaint: e.target.value }))}
+                  onChange={set("chiefComplaint")}
                   placeholder="Patient's main complaint"
                   data-testid="input-chief-complaint"
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Diagnosis *</Label>
-                  <Select value={newConsult.diagnosis} onValueChange={(v) => setNewConsult(prev => ({ ...prev, diagnosis: v }))}>
-                    <SelectTrigger data-testid="select-diagnosis">
-                      <SelectValue placeholder="Select diagnosis" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {COMMON_DIAGNOSES.map(d => (
-                        <SelectItem key={d} value={d}>{d}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>ICD-10 Code</Label>
-                  <Input
-                    value={newConsult.icdCode}
-                    onChange={(e) => setNewConsult(prev => ({ ...prev, icdCode: e.target.value }))}
-                    placeholder="e.g. J06.9"
-                    data-testid="input-icd-code"
-                  />
-                </div>
+              {/* Diagnosis — free text */}
+              <div className="space-y-2">
+                <Label>Diagnosis *</Label>
+                <Textarea
+                  value={newConsult.diagnosis}
+                  onChange={set("diagnosis")}
+                  placeholder="Type diagnosis freely (e.g. Acute Upper Respiratory Infection)"
+                  rows={2}
+                  data-testid="input-diagnosis"
+                />
               </div>
 
               <div className="space-y-2">
                 <Label>Treatment Given</Label>
                 <Textarea
                   value={newConsult.treatment}
-                  onChange={(e) => setNewConsult(prev => ({ ...prev, treatment: e.target.value }))}
+                  onChange={set("treatment")}
                   placeholder="Medications and instructions given"
                   data-testid="input-treatment"
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Disposition</Label>
-                  <Select value={newConsult.disposition} onValueChange={(v) => setNewConsult(prev => ({ ...prev, disposition: v }))}>
-                    <SelectTrigger data-testid="select-disposition">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Treated">Treated (sent home)</SelectItem>
-                      <SelectItem value="Referred">Referred to RHU/Hospital</SelectItem>
-                      <SelectItem value="Admitted">Admitted</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                {newConsult.disposition === "Referred" && (
+              {/* Disposition */}
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label>Referred To</Label>
-                    <Input
-                      value={newConsult.referredTo}
-                      onChange={(e) => setNewConsult(prev => ({ ...prev, referredTo: e.target.value }))}
-                      placeholder="Facility name"
-                      data-testid="input-referred-to"
+                    <Label>Disposition</Label>
+                    <Select value={newConsult.disposition} onValueChange={(v) => setNewConsult(prev => ({ ...prev, disposition: v, dispositionNotes: "" }))}>
+                      <SelectTrigger data-testid="select-disposition">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Treated">Treated (sent home)</SelectItem>
+                        <SelectItem value="Referred">Referred to RHU/Hospital</SelectItem>
+                        <SelectItem value="Admitted">Admitted</SelectItem>
+                        <SelectItem value="Other">Other (specify)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {newConsult.disposition === "Referred" && (
+                    <div className="space-y-2">
+                      <Label>Referred To</Label>
+                      <Input
+                        value={newConsult.referredTo}
+                        onChange={set("referredTo")}
+                        placeholder="Facility name"
+                        data-testid="input-referred-to"
+                      />
+                    </div>
+                  )}
+                </div>
+                {newConsult.disposition === "Other" && (
+                  <div className="space-y-2">
+                    <Label>Disposition Notes *</Label>
+                    <Textarea
+                      value={newConsult.dispositionNotes}
+                      onChange={set("dispositionNotes")}
+                      placeholder="Describe the disposition in detail"
+                      rows={2}
+                      data-testid="input-disposition-notes"
                     />
                   </div>
                 )}
+              </div>
+
+              {/* Vital Signs */}
+              <div className="space-y-3 pt-1">
+                <div className="flex items-center gap-2">
+                  <Activity className="w-4 h-4 text-primary" />
+                  <h3 className="font-medium text-sm">Vital Signs</h3>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Blood Pressure * <span className="text-muted-foreground font-normal">(mmHg)</span></Label>
+                    <Input
+                      value={newConsult.bloodPressure}
+                      onChange={set("bloodPressure")}
+                      placeholder="e.g. 120/80"
+                      data-testid="input-blood-pressure"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Weight * <span className="text-muted-foreground font-normal">(kg)</span></Label>
+                    <Input
+                      type="number"
+                      step="0.1"
+                      value={newConsult.weightKg}
+                      onChange={set("weightKg")}
+                      placeholder="e.g. 65.5"
+                      data-testid="input-weight"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Temperature <span className="text-muted-foreground font-normal">(°C)</span></Label>
+                    <Input
+                      type="number"
+                      step="0.1"
+                      value={newConsult.temperatureC}
+                      onChange={set("temperatureC")}
+                      placeholder="e.g. 37.0"
+                      data-testid="input-temperature"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Pulse Rate <span className="text-muted-foreground font-normal">(bpm)</span></Label>
+                    <Input
+                      type="number"
+                      value={newConsult.pulseRate}
+                      onChange={set("pulseRate")}
+                      placeholder="e.g. 80"
+                      data-testid="input-pulse-rate"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Height <span className="text-muted-foreground font-normal">(cm)</span></Label>
+                    <Input
+                      type="number"
+                      step="0.1"
+                      value={newConsult.heightCm}
+                      onChange={set("heightCm")}
+                      placeholder="e.g. 160"
+                      data-testid="input-height"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>BMI <span className="text-muted-foreground font-normal">(auto-calculated)</span></Label>
+                    <Input
+                      value={bmi ? `${bmi} kg/m²` : "—"}
+                      disabled
+                      className="bg-muted cursor-default"
+                      data-testid="text-bmi"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Additional Notes</Label>
+                <Textarea
+                  value={newConsult.notes}
+                  onChange={set("notes")}
+                  placeholder="Any other observations"
+                  data-testid="input-notes"
+                />
               </div>
 
               <div className="flex justify-end gap-2 pt-4">
@@ -390,6 +480,13 @@ export default function PatientCheckupPage() {
                         <span className="text-muted-foreground ml-2">({consult.age} {consult.sex})</span>
                       </p>
                       <p className="text-sm text-muted-foreground">{consult.diagnosis}</p>
+                      {(consult.bloodPressure || consult.weightKg) && (
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          {consult.bloodPressure && <span>BP: {consult.bloodPressure}</span>}
+                          {consult.bloodPressure && consult.weightKg && <span className="mx-1">·</span>}
+                          {consult.weightKg && <span>Wt: {consult.weightKg} kg</span>}
+                        </p>
+                      )}
                     </div>
                   </div>
 
