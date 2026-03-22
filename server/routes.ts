@@ -707,5 +707,101 @@ export async function registerRoutes(
   app.get("/api/users/search", loadUserInfo, requireAuth, userSearchHandler);
   app.get("/api/users", loadUserInfo, requireAuth, userSearchHandler);
 
+  // === NURSE VISITS (Team Leader / Barangay Nurse monitoring visits) ===
+  // RBAC: GET accessible to all authenticated roles; POST restricted to TL and SYSTEM_ADMIN
+  const nurseVisitReadRBAC = [loadUserInfo, requireAuth];
+  const nurseVisitWriteRBAC = [loadUserInfo, requireAuth, requireRole(UserRole.SYSTEM_ADMIN, UserRole.TL)];
+
+  // --- Prenatal (Mother) visits ---
+  app.get("/api/nurse-visits/mother/:id", nurseVisitReadRBAC, ar(async (req, res) => {
+    const id = parseId(req.params.id, res); if (id === null) return;
+    const visits = await storage.getPrenatalVisits(id);
+    res.json(visits);
+  }));
+
+  app.post("/api/nurse-visits/mother/:id", nurseVisitWriteRBAC, ar(async (req, res) => {
+    const id = parseId(req.params.id, res); if (id === null) return;
+    const now = new Date().toISOString();
+    // Auto-number visit
+    const existing = await storage.getPrenatalVisits(id);
+    const nextNumber = existing.length > 0 ? Math.max(...existing.map(v => v.visitNumber)) + 1 : 1;
+    const { visitDate, gaWeeks, weightKg, bloodPressure, fundalHeight, fetalHeartTone, riskStatus, notes } = req.body;
+    if (!visitDate) return res.status(400).json({ message: "visitDate is required" });
+    const visit = await storage.createPrenatalVisit({
+      motherId: id,
+      visitNumber: nextNumber,
+      visitDate,
+      gaWeeks: gaWeeks ? Number(gaWeeks) : undefined,
+      weightKg: weightKg || undefined,
+      bloodPressure: bloodPressure || undefined,
+      fundalHeight: fundalHeight || undefined,
+      fetalHeartTone: fetalHeartTone || undefined,
+      riskStatus: riskStatus || undefined,
+      notes: notes || undefined,
+      recordedBy: req.userInfo?.username || undefined,
+      createdAt: now,
+    });
+    res.status(201).json(visit);
+  }));
+
+  // --- Child visits ---
+  app.get("/api/nurse-visits/child/:id", nurseVisitReadRBAC, ar(async (req, res) => {
+    const id = parseId(req.params.id, res); if (id === null) return;
+    const visits = await storage.getChildVisits(id);
+    res.json(visits);
+  }));
+
+  app.post("/api/nurse-visits/child/:id", nurseVisitWriteRBAC, ar(async (req, res) => {
+    const id = parseId(req.params.id, res); if (id === null) return;
+    const now = new Date().toISOString();
+    const existing = await storage.getChildVisits(id);
+    const nextNumber = existing.length > 0 ? Math.max(...existing.map(v => v.visitNumber)) + 1 : 1;
+    const { visitDate, weightKg, heightCm, muac, nutritionNotes, immunizationNotes, monitoringNotes } = req.body;
+    if (!visitDate) return res.status(400).json({ message: "visitDate is required" });
+    const visit = await storage.createChildVisit({
+      childId: id,
+      visitNumber: nextNumber,
+      visitDate,
+      weightKg: weightKg || undefined,
+      heightCm: heightCm || undefined,
+      muac: muac || undefined,
+      nutritionNotes: nutritionNotes || undefined,
+      immunizationNotes: immunizationNotes || undefined,
+      monitoringNotes: monitoringNotes || undefined,
+      recordedBy: req.userInfo?.username || undefined,
+      createdAt: now,
+    });
+    res.status(201).json(visit);
+  }));
+
+  // --- Senior visits ---
+  app.get("/api/nurse-visits/senior/:id", nurseVisitReadRBAC, ar(async (req, res) => {
+    const id = parseId(req.params.id, res); if (id === null) return;
+    const visits = await storage.getSeniorVisits(id);
+    res.json(visits);
+  }));
+
+  app.post("/api/nurse-visits/senior/:id", nurseVisitWriteRBAC, ar(async (req, res) => {
+    const id = parseId(req.params.id, res); if (id === null) return;
+    const now = new Date().toISOString();
+    const existing = await storage.getSeniorVisits(id);
+    const nextNumber = existing.length > 0 ? Math.max(...existing.map(v => v.visitNumber)) + 1 : 1;
+    const { visitDate, bloodPressure, weightKg, medicationPickupNote, symptomsRemarks, followUpNotes } = req.body;
+    if (!visitDate) return res.status(400).json({ message: "visitDate is required" });
+    const visit = await storage.createSeniorVisit({
+      seniorId: id,
+      visitNumber: nextNumber,
+      visitDate,
+      bloodPressure: bloodPressure || undefined,
+      weightKg: weightKg || undefined,
+      medicationPickupNote: medicationPickupNote || undefined,
+      symptomsRemarks: symptomsRemarks || undefined,
+      followUpNotes: followUpNotes || undefined,
+      recordedBy: req.userInfo?.username || undefined,
+      createdAt: now,
+    });
+    res.status(201).json(visit);
+  }));
+
   return httpServer;
 }

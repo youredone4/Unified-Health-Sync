@@ -4,6 +4,7 @@ import {
   barangays, users, userBarangays, municipalitySettings, UserRole, consults, seniorMedClaims,
   m1TemplateVersions, m1IndicatorCatalog, m1ReportInstances, m1ReportHeader, m1IndicatorValues, barangaySettings,
   directMessages,
+  prenatalVisits, childVisits, seniorVisits,
   type Mother, type InsertMother,
   type Child, type InsertChild,
   type Senior, type InsertSenior,
@@ -19,6 +20,9 @@ import {
   type MunicipalitySettings, type BarangaySettings,
   type SeniorMedClaim, type InsertSeniorMedClaim,
   type DirectMessage,
+  type PrenatalVisit, type InsertPrenatalVisit,
+  type ChildVisit, type InsertChildVisit,
+  type SeniorVisit, type InsertSeniorVisit,
 } from "@shared/schema";
 import { eq, and, inArray, desc, isNull, gte, sql, or, lt, ne, ilike } from "drizzle-orm";
 
@@ -103,6 +107,14 @@ export interface IStorage {
   getDMMessageSender(messageId: number): Promise<string | null>;
   getDMUnreadCount(userId: string): Promise<number>;
   searchUsers(query: string, excludeUserId: string): Promise<User[]>;
+
+  // Nurse Visits
+  getPrenatalVisits(motherId: number): Promise<PrenatalVisit[]>;
+  createPrenatalVisit(visit: InsertPrenatalVisit): Promise<PrenatalVisit>;
+  getChildVisits(childId: number): Promise<ChildVisit[]>;
+  createChildVisit(visit: InsertChildVisit): Promise<ChildVisit>;
+  getSeniorVisits(seniorId: number): Promise<SeniorVisit[]>;
+  createSeniorVisit(visit: InsertSeniorVisit): Promise<SeniorVisit>;
 
   seedData(): Promise<void>;
 }
@@ -1175,6 +1187,41 @@ export class DatabaseStorage implements IStorage {
     
     console.log(`Historical M1 data seeded: ${reportsCreated} reports, ${valuesCreated} indicator values`);
     return { reportsCreated, valuesCreated };
+  }
+
+  // === NURSE VISITS ===
+
+  async getPrenatalVisits(motherId: number): Promise<PrenatalVisit[]> {
+    return await db.select().from(prenatalVisits)
+      .where(eq(prenatalVisits.motherId, motherId))
+      .orderBy(desc(prenatalVisits.visitNumber));
+  }
+
+  async createPrenatalVisit(visit: InsertPrenatalVisit): Promise<PrenatalVisit> {
+    const [created] = await db.insert(prenatalVisits).values(visit).returning();
+    return created;
+  }
+
+  async getChildVisits(childId: number): Promise<ChildVisit[]> {
+    return await db.select().from(childVisits)
+      .where(eq(childVisits.childId, childId))
+      .orderBy(desc(childVisits.visitNumber));
+  }
+
+  async createChildVisit(visit: InsertChildVisit): Promise<ChildVisit> {
+    const [created] = await db.insert(childVisits).values(visit).returning();
+    return created;
+  }
+
+  async getSeniorVisits(seniorId: number): Promise<SeniorVisit[]> {
+    return await db.select().from(seniorVisits)
+      .where(eq(seniorVisits.seniorId, seniorId))
+      .orderBy(desc(seniorVisits.visitNumber));
+  }
+
+  async createSeniorVisit(visit: InsertSeniorVisit): Promise<SeniorVisit> {
+    const [created] = await db.insert(seniorVisits).values(visit).returning();
+    return created;
   }
 }
 

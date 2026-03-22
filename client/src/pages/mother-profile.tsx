@@ -11,6 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth, permissions } from "@/hooks/use-auth";
 import { ArrowLeft, Heart, Stethoscope, MessageSquare, Check, Pencil, Trash2 } from "lucide-react";
 import ConsultationHistoryCard from "@/components/consultation-history-card";
+import VisitHistoryCard from "@/components/visit-history-card";
 import { useState } from "react";
 import { apiRequest } from "@/lib/queryClient";
 
@@ -177,6 +178,8 @@ export default function MotherProfile() {
       </Card>
 
       <ConsultationHistoryCard profileType="Mother" profileId={mother.id} />
+
+      <VisitHistoryCard profileType="Mother" profileId={mother.id} />
 
       <ConfirmModal
         open={confirmOpen}

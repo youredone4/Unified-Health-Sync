@@ -442,6 +442,65 @@ export const insertDeathEventSchema = createInsertSchema(deathEvents).omit({ id:
 export type DeathEvent = typeof deathEvents.$inferSelect;
 export type InsertDeathEvent = z.infer<typeof insertDeathEventSchema>;
 
+// === NURSE VISITS (Barangay Nurse / Team Leader monitoring visits) ===
+
+// Prenatal / Mother visits
+export const prenatalVisits = pgTable("prenatal_visits", {
+  id: serial("id").primaryKey(),
+  motherId: integer("mother_id").notNull(),
+  visitNumber: integer("visit_number").notNull(),
+  visitDate: text("visit_date").notNull(),
+  gaWeeks: integer("ga_weeks"),
+  weightKg: text("weight_kg"),
+  bloodPressure: text("blood_pressure"),
+  fundalHeight: text("fundal_height"), // cm
+  fetalHeartTone: text("fetal_heart_tone"), // bpm
+  riskStatus: text("risk_status"), // low, moderate, high
+  notes: text("notes"),
+  recordedBy: text("recorded_by"),
+  createdAt: text("created_at").notNull(),
+});
+export const insertPrenatalVisitSchema = createInsertSchema(prenatalVisits).omit({ id: true });
+export type PrenatalVisit = typeof prenatalVisits.$inferSelect;
+export type InsertPrenatalVisit = z.infer<typeof insertPrenatalVisitSchema>;
+
+// Child monitoring visits
+export const childVisits = pgTable("child_visits", {
+  id: serial("id").primaryKey(),
+  childId: integer("child_id").notNull(),
+  visitNumber: integer("visit_number").notNull(),
+  visitDate: text("visit_date").notNull(),
+  weightKg: text("weight_kg"),
+  heightCm: text("height_cm"),
+  muac: text("muac"), // mid-upper arm circumference in cm
+  nutritionNotes: text("nutrition_notes"),
+  immunizationNotes: text("immunization_notes"),
+  monitoringNotes: text("monitoring_notes"),
+  recordedBy: text("recorded_by"),
+  createdAt: text("created_at").notNull(),
+});
+export const insertChildVisitSchema = createInsertSchema(childVisits).omit({ id: true });
+export type ChildVisit = typeof childVisits.$inferSelect;
+export type InsertChildVisit = z.infer<typeof insertChildVisitSchema>;
+
+// Senior care visits
+export const seniorVisits = pgTable("senior_visits", {
+  id: serial("id").primaryKey(),
+  seniorId: integer("senior_id").notNull(),
+  visitNumber: integer("visit_number").notNull(),
+  visitDate: text("visit_date").notNull(),
+  bloodPressure: text("blood_pressure"),
+  weightKg: text("weight_kg"),
+  medicationPickupNote: text("medication_pickup_note"),
+  symptomsRemarks: text("symptoms_remarks"),
+  followUpNotes: text("follow_up_notes"),
+  recordedBy: text("recorded_by"),
+  createdAt: text("created_at").notNull(),
+});
+export const insertSeniorVisitSchema = createInsertSchema(seniorVisits).omit({ id: true });
+export type SeniorVisit = typeof seniorVisits.$inferSelect;
+export type InsertSeniorVisit = z.infer<typeof insertSeniorVisitSchema>;
+
 // === AUTH & RBAC (from Replit Auth integration + extensions) ===
 // Note: barangays, userBarangays, auditLogs, users, sessions are defined in ./models/auth.ts
 export * from "./models/auth";
