@@ -316,7 +316,7 @@ export default function PatientCheckupPage() {
   const patientGroups: PatientGroup[] = Array.from(patientGroupMap.entries()).map(([key, g]) => {
     const sorted = [...g.consults].sort((a, b) => b.consultDate.localeCompare(a.consultDate));
     return { key, latest: sorted[0], visitCount: sorted.length };
-  });
+  }).sort((a, b) => b.latest.consultDate.localeCompare(a.latest.consultDate));
 
   if (!canAccessPatientCheckup) {
     return (
@@ -360,6 +360,8 @@ export default function PatientCheckupPage() {
   const handleNewConsultForPatient = () => {
     if (!selectedPatient) return;
     const latest = patientHistory[0];
+    const lt = (latest?.linkedPersonType ?? "") as "none" | "Mother" | "Child" | "Senior";
+    setLinkType(lt || "none");
     setNewConsult({
       ...EMPTY_CONSULT,
       patientName: selectedPatient.name,
