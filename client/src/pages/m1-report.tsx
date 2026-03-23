@@ -146,6 +146,17 @@ export default function M1ReportPage() {
 
   const selectedBarangay = barangays.find(b => b.id === selectedBarangayId);
 
+  // Extract a clean message from apiRequest errors (format: "STATUS: raw-text-or-json")
+  const extractApiError = (err: any, fallback: string): string => {
+    const raw = err?.message || "";
+    const colonIdx = raw.indexOf(": ");
+    if (colonIdx >= 0) {
+      const body = raw.substring(colonIdx + 2);
+      try { return (JSON.parse(body) as { message?: string }).message || body; } catch { return body; }
+    }
+    return raw || fallback;
+  };
+
   const createReportMutation = useMutation({
     mutationFn: async (data: any) => {
       const res = await apiRequest("POST", "/api/m1/reports", data);
@@ -179,7 +190,7 @@ export default function M1ReportPage() {
       setEditedValues({});
     },
     onError: (err: any) => {
-      toast({ title: "Error", description: err?.message || "Failed to save values.", variant: "destructive" });
+      toast({ title: "Error", description: extractApiError(err, "Failed to save values."), variant: "destructive" });
     },
   });
 
@@ -199,7 +210,7 @@ export default function M1ReportPage() {
       }
     },
     onError: (err: any) => {
-      toast({ title: "Error", description: err?.message || "Failed to update report status.", variant: "destructive" });
+      toast({ title: "Error", description: extractApiError(err, "Failed to update report status."), variant: "destructive" });
     },
   });
 
