@@ -94,14 +94,18 @@ export default function MotherProfile() {
   });
 
   const fpEnrollMutation = useMutation({
-    mutationFn: (data: QuickEnrollValues) =>
-      apiRequest("POST", "/api/fp-records", {
+    mutationFn: (data: QuickEnrollValues) => {
+      // Derive reportingMonth from dateStarted (YYYY-MM) for M1 computation scoping
+      const reportingMonth = data.dateStarted ? data.dateStarted.substring(0, 7) : format(new Date(), "yyyy-MM");
+      return apiRequest("POST", "/api/fp-records", {
         ...data,
         barangay: mother?.barangay,
         patientName: `${mother?.firstName} ${mother?.lastName}`,
         linkedPersonType: "MOTHER",
         linkedPersonId: Number(id),
-      }),
+        reportingMonth,
+      });
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/fp-records"] });
       toast({ title: "Enrolled in FP program" });

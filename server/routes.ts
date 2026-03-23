@@ -1168,6 +1168,10 @@ export async function registerRoutes(
     }
     const parsed = insertFpServiceRecordSchema.partial().safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message || "Invalid data" });
+    // For TL: also validate the target barangay (if changed) is within their scope
+    if (req.userInfo?.role === UserRole.TL && parsed.data.barangay && !req.userInfo.assignedBarangays.includes(parsed.data.barangay)) {
+      return res.status(403).json({ message: "Not authorized to move record to this barangay" });
+    }
     const updated = await storage.updateFpServiceRecord(id, parsed.data);
     res.json(updated);
   }));

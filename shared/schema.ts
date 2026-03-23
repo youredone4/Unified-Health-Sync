@@ -569,7 +569,12 @@ export const fpServiceRecords = pgTable("fp_service_records", {
   createdAt: text("created_at").notNull(),
 });
 
-export const insertFpServiceRecordSchema = createInsertSchema(fpServiceRecords).omit({ id: true });
+export const insertFpServiceRecordSchema = createInsertSchema(fpServiceRecords)
+  .omit({ id: true })
+  .extend({
+    fpMethod: z.enum(FP_METHODS),
+    fpStatus: z.enum(FP_STATUSES),
+  });
 export type FpServiceRecord = typeof fpServiceRecords.$inferSelect;
 export type InsertFpServiceRecord = z.infer<typeof insertFpServiceRecordSchema>;
 
