@@ -123,8 +123,6 @@ async function main() {
 
   console.log(`Loaded ${allBarangays.length} barangays from DB\n`);
 
-  const passwordHash = await hashPassword(DEFAULT_PASSWORD);
-
   let created = 0;
   let skipped = 0;
   const errors: string[] = [];
@@ -155,26 +153,31 @@ async function main() {
         resolvedNames.push(`${bName} (ID ${bId})`);
       }
 
-      // Insert user
-      const [newUser] = await db
-        .insert(users)
-        .values({
-          username: spec.username,
-          passwordHash,
-          firstName: spec.firstName,
-          lastName: spec.lastName,
-          role: "TL",
-          status: "ACTIVE",
-        })
-        .returning({ id: users.id });
+      // Hash per-user (unique salt per account even with the same plaintext)
+      const passwordHash = await hashPassword(DEFAULT_PASSWORD);
 
-      // Assign barangays
-      await db.insert(userBarangays).values(
-        barangayIds.map((bId) => ({
-          userId: newUser.id,
-          barangayId: bId,
-        }))
-      );
+      // Wrap user insert + barangay assignment in a transaction so partial
+      // failures don't leave orphaned users without assignments
+      await db.transaction(async (tx) => {
+        const [newUser] = await tx
+          .insert(users)
+          .values({
+            username: spec.username,
+            passwordHash,
+            firstName: spec.firstName,
+            lastName: spec.lastName,
+            role: "TL",
+            status: "ACTIVE",
+          })
+          .returning({ id: users.id });
+
+        await tx.insert(userBarangays).values(
+          barangayIds.map((bId) => ({
+            userId: newUser.id,
+            barangayId: bId,
+          }))
+        );
+      });
 
       console.log(
         `CREATED: ${spec.username} (${spec.firstName} ${spec.lastName}) → ${resolvedNames.join(", ")}`
