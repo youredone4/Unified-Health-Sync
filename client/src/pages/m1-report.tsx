@@ -485,6 +485,27 @@ export default function M1ReportPage() {
     saveValuesMutation.mutate({ reportId: activeReportId, values: valuesToSave });
   };
 
+  // Auto-save unsaved edits before submitting to avoid data loss
+  const handleSubmitReport = async () => {
+    if (!activeReportId) return;
+    if (Object.keys(editedValues).length > 0) {
+      const valuesToSave = Object.entries(editedValues).map(([key, val]) => {
+        const [rowKey, columnKey] = key.includes(":") ? key.split(":") : [key, null];
+        return { rowKey, columnKey, valueNumber: val.valueNumber, valueText: val.valueText, valueSource: val.valueSource || "ENCODED" };
+      });
+      try {
+        await apiRequest("PUT", `/api/m1/reports/${activeReportId}/values`, { values: valuesToSave });
+        setEditedValues({});
+        queryClient.invalidateQueries({ queryKey: [`/api/m1/reports/${activeReportId}`] });
+        toast({ title: "Changes auto-saved", description: "Your edits were saved before submitting." });
+      } catch {
+        toast({ title: "Failed to save changes", description: "Please save your changes manually before submitting.", variant: "destructive" });
+        return;
+      }
+    }
+    updateStatusMutation.mutate({ reportId: activeReportId, action: "submit" });
+  };
+
   const handleExportPDF = async () => {
     const doc = new jsPDF();
     const barangayName = selectedBarangay?.name || "All Barangays (Consolidated)";
@@ -1108,7 +1129,7 @@ export default function M1ReportPage() {
                     <Button
                       size="sm"
                       variant="default"
-                      onClick={() => updateStatusMutation.mutate({ reportId: activeReportId, action: "submit" })}
+                      onClick={handleSubmitReport}
                       disabled={updateStatusMutation.isPending}
                       data-testid="button-submit-report"
                     >
