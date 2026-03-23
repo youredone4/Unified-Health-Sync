@@ -6,6 +6,28 @@ import { db } from "./db";
 import { users, userBarangays, barangays, UserRole, UserStatus } from "@shared/schema";
 import { eq } from "drizzle-orm";
 
+interface TLUserSeed {
+  username: string;
+  firstName: string;
+  lastName: string;
+  barangayNames: string[];
+}
+
+const PLACER_TL_USERS: TLUserSeed[] = [
+  { username: "CHapa",      firstName: "Carespin",       lastName: "Hapa",      barangayNames: ["Mabini"] },
+  { username: "ADeramaso",  firstName: "April",          lastName: "Deramaso",  barangayNames: ["Ellaperal (Nonok)"] },
+  { username: "RPolestico", firstName: "Ranibeth",       lastName: "Polestico", barangayNames: ["Central (Poblacion)"] },
+  { username: "BBarcos",    firstName: "Wilgen",         lastName: "Barcos",    barangayNames: ["Boyongan", "Macalaya"] },
+  { username: "PPagobo",    firstName: "Princess Jackie",lastName: "Pagobo",    barangayNames: ["San Isidro", "Magupange"] },
+  { username: "CGalvez",    firstName: "Charlito",       lastName: "Galvez",    barangayNames: ["Sani-sani"] },
+  { username: "RRivera",    firstName: "Ruth",           lastName: "Rivera",    barangayNames: ["Magupange"] },
+  { username: "RJamiel",    firstName: "Rennie",         lastName: "Jamiel",    barangayNames: ["Amoslog"] },
+  { username: "BBullas",    firstName: "Jensen",         lastName: "Bullas",    barangayNames: ["Panhutongan"] },
+  { username: "RDalgume",   firstName: "Meljay",         lastName: "Dalgume",   barangayNames: ["Tagbongabong"] },
+  { username: "LLlado",     firstName: "Risha Ann",      lastName: "Llado",     barangayNames: ["Anislagan"] },
+  { username: "DOcol",      firstName: "Dulce Mae",      lastName: "Ocol",      barangayNames: ["Suyoc", "Bugas-bugas"] },
+];
+
 const SALT_ROUNDS = 10;
 
 // Password utilities
@@ -58,6 +80,9 @@ export async function setupAuth(app: Express) {
   
   // Seed the 20 Placer barangays if not present
   await seedPlacerBarangays();
+
+  // Seed the 12 Placer TL (Barangay Nurse) accounts if not present
+  await seedTLUsers();
 }
 
 // Seed initial SYSTEM_ADMIN
@@ -112,6 +137,54 @@ async function seedPlacerBarangays() {
     }
   } catch (error) {
     console.error("Error seeding barangays:", error);
+  }
+}
+
+// Seed the 12 Placer TL (Barangay Nurse) accounts — idempotent, skips existing usernames
+async function seedTLUsers() {
+  try {
+    const allBarangays = await db.select().from(barangays);
+    const barangayMap = new Map<string, number>(allBarangays.map(b => [b.name, b.id]));
+
+    let created = 0;
+    for (const spec of PLACER_TL_USERS) {
+      const [existing] = await db.select({ id: users.id }).from(users).where(eq(users.username, spec.username));
+      if (existing) continue;
+
+      // Resolve barangay names to IDs — warn and skip if a name is missing
+      const barangayIds: number[] = [];
+      let valid = true;
+      for (const bName of spec.barangayNames) {
+        const bId = barangayMap.get(bName);
+        if (!bId) { console.warn(`seedTLUsers: barangay not found: "${bName}" for ${spec.username}`); valid = false; break; }
+        barangayIds.push(bId);
+      }
+      if (!valid) continue;
+
+      const passwordHash = await hashPassword("123456");
+      await db.transaction(async (tx) => {
+        const [newUser] = await tx.insert(users).values({
+          username: spec.username,
+          passwordHash,
+          firstName: spec.firstName,
+          lastName: spec.lastName,
+          role: UserRole.TL,
+          status: UserStatus.ACTIVE,
+        }).returning({ id: users.id });
+
+        await tx.insert(userBarangays).values(
+          barangayIds.map(bId => ({ userId: newUser.id, barangayId: bId }))
+        );
+      });
+      created++;
+    }
+    if (created > 0) {
+      console.log(`Seeded ${created} Placer TL user accounts`);
+    } else {
+      console.log("All Placer TL accounts already exist");
+    }
+  } catch (error) {
+    console.error("Error seeding TL users:", error);
   }
 }
 
