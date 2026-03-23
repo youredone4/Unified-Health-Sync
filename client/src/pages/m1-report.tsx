@@ -415,28 +415,24 @@ export default function M1ReportPage() {
     return false;
   };
 
-  // Completeness: filled/total cells on current page — includes computed and manually entered values
+  // Completeness: filled/total INDICATORS on current page — an indicator is "filled" when its primary summary cell has a value
   const completeness = useMemo(() => {
     const inds = catalog.filter(ind => ind.pageNumber === currentPage);
     if (inds.length === 0) return { filled: 0, total: 0, pct: 100 };
     let filled = 0;
-    let total = 0;
+    const total = inds.length;
     inds.forEach(ind => {
       const colType = ind.columnGroupType || "SINGLE";
-      let pairs: [string, string][];
-      if (colType === "AGE_GROUP") {
-        pairs = ["10-14", "15-19", "20-49", "TOTAL"].map(c => [ind.rowKey, c] as [string, string]);
-      } else if (colType === "SEX_RATE" || colType === "SEX") {
-        pairs = ["M", "F", "TOTAL"].map(c => [ind.rowKey, c] as [string, string]);
+      // Use the primary summary column to determine if the indicator is filled
+      let primaryCol: string;
+      if (colType === "AGE_GROUP" || colType === "SEX_RATE" || colType === "SEX") {
+        primaryCol = "TOTAL";
       } else if (colType === "FP_DUAL") {
-        pairs = ["CU_10-14","CU_15-19","CU_20-49","CU_TOTAL","NA_10-14","NA_15-19","NA_20-49","NA_TOTAL"].map(c => [ind.rowKey, c] as [string, string]);
+        primaryCol = "CU_TOTAL";
       } else {
-        pairs = [[ind.rowKey, "VALUE"]];
+        primaryCol = "VALUE";
       }
-      pairs.forEach(([rk, ck]) => {
-        total++;
-        if (hasCellValue(rk, ck)) filled++;
-      });
+      if (hasCellValue(ind.rowKey, primaryCol)) filled++;
     });
     return { filled, total, pct: total === 0 ? 100 : Math.round((filled / total) * 100) };
   }, [catalog, currentPage, editedValues, savedValuesMap, computedValues]);
@@ -1155,7 +1151,7 @@ export default function M1ReportPage() {
               {activeReportId && (
                 <div className="mb-2 space-y-1">
                   <div className="flex items-center justify-between text-xs text-muted-foreground">
-                    <span>Page {currentPage} completeness — <span className="font-medium">{completeness.filled} / {completeness.total} cells filled</span></span>
+                    <span>Page {currentPage} completeness — <span className="font-medium">{completeness.filled} / {completeness.total} indicators filled</span></span>
                     <span className={completeness.pct === 100 ? "text-green-600 font-medium" : completeness.pct >= 70 ? "text-yellow-600" : "text-red-500"}>{completeness.pct}%</span>
                   </div>
                   <Progress value={completeness.pct} className="h-1.5" data-testid="progress-completeness" />
