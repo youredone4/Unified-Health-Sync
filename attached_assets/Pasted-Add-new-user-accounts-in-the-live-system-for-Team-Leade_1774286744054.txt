@@ -1,0 +1,132 @@
+Add new user accounts in the live system for Team Leaders (Barangay Nurses) based on the provided list.
+
+Important
+- These users are real accounts and will be used in the live system.
+- Do NOT overwrite or delete existing users.
+- Ensure no duplicate usernames are created.
+- Use proper role assignment and barangay linkage.
+- Default password is temporary and must be changed by users after first login.
+
+Goal
+Create user accounts for all listed Team Leaders (TL - Nurse) with:
+- standardized username format
+- assigned barangay
+- correct role
+- temporary password
+
+Username Format Rule
+- Username = First letter of first name (uppercase) + last name
+- Example:
+  - Carespin V. Hapa → CHapa
+- No spaces
+- Preserve capitalization exactly as described
+
+Password
+- Set default password for all users: 123456
+- Mark or enforce password change on first login if supported
+
+Role
+- Assign role: Team Leader (Barangay Nurse)
+
+Users to Create
+
+1. Name: Carespin V. Hapa  
+   Username: CHapa  
+   Barangay: Mabini  
+
+2. Name: April T. Deramaso  
+   Username: ADeramaso  
+   Barangay: Ellaperal  
+
+3. Name: Ranibeth P. Polestico  
+   Username: RPolestico  
+   Barangay: Central  
+
+4. Name: Wilgen C. Barcos  
+   Username: BBarcos  
+   Barangay: Boyongan / Macalaya  
+
+5. Name: Princess Jackie B. Pagobo  
+   Username: PPagobo  
+   Barangay: San Isidro / Mabuhay  
+
+6. Name: Charlito D. Galvez  
+   Username: CGalvez  
+   Barangay: San Jose  
+
+7. Name: Ruth E. Rivera  
+   Username: RRivera  
+   Barangay: Magpayang  
+
+8. Name: Rennie M. Jamiel  
+   Username: RJamiel  
+   Barangay: Amogis  
+
+9. Name: Jensen B. Bullas  
+   Username: BBullas  
+   Barangay: Panhutongan  
+
+10. Name: Meljay R. Dalgume  
+    Username: RDalgume  
+    Barangay: Tagbongabong  
+
+11. Name: Risha Ann C. Llado  
+    Username: LLlado  
+    Barangay: Anislagan  
+
+12. Name: Dulce Mae D. Ocol  
+    Username: DOcol  
+    Barangay: Suyoc / Bugas-bugas  
+
+Requirements
+
+1. Assign correct barangay
+- If multiple barangays are listed:
+  - support multi-barangay assignment if the system allows
+  - otherwise assign primary barangay and document limitation
+
+2. Ensure uniqueness
+- check if username already exists
+- if conflict occurs:
+  - append a number or adjust slightly
+  - log the change
+
+3. Store user details
+Each user should have:
+- full name
+- username
+- role = Team Leader
+- assigned barangay(s)
+- active status
+
+4. Enforce password update
+- if system supports:
+  - require password change on first login
+- otherwise:
+  - ensure users can update password in profile
+
+5. Verify access
+After creation:
+- confirm each user can log in
+- confirm they only see their assigned barangay data
+- confirm role permissions match Team Leader access
+
+6. Do NOT break existing users
+- do not modify or remove existing accounts
+- do not affect admin or other roles
+
+Deliverables
+Provide:
+1. confirmation of all users created
+2. any username adjustments due to conflicts
+3. barangay assignment confirmation
+4. any system limitations encountered
+5. files/modules updated
+
+Success Criteria
+- all 12 Team Leader users are created successfully
+- usernames follow the required format
+- all users have default password 123456
+- users are linked to correct barangay(s)
+- login works for each account
+- system remains stable
