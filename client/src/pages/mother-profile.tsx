@@ -97,10 +97,15 @@ export default function MotherProfile() {
     mutationFn: (data: QuickEnrollValues) => {
       // Derive reportingMonth from dateStarted (YYYY-MM) for M1 computation scoping
       const reportingMonth = data.dateStarted ? data.dateStarted.substring(0, 7) : format(new Date(), "yyyy-MM");
-      // Approximate DOB from mother's age for FP M1 age-bucket computation
+      // Approximate DOB from mother's age for FP M1 age-bucket computation.
+      // Use the year from dateStarted (not current year) so historical enrollments
+      // produce the correct age-group bucket relative to the enrollment date.
       // (mothers table lacks dob; approximate as July 1 of birth year)
+      const enrollYear = data.dateStarted
+        ? parseInt(data.dateStarted.substring(0, 4), 10)
+        : new Date().getFullYear();
       const approxDob = mother?.age
-        ? `${new Date().getFullYear() - mother.age}-07-01`
+        ? `${enrollYear - mother.age}-07-01`
         : undefined;
       return apiRequest("POST", "/api/fp-records", {
         ...data,

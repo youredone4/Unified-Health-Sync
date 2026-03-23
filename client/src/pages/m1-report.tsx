@@ -412,12 +412,18 @@ export default function M1ReportPage() {
     const newAcceptors = fpRecords.filter(r => r.fpStatus === "NEW_ACCEPTOR");
 
     // Helper to count by age group for a set of fp records filtered to a method
-    const fpCountByAgeGroup = (list: FpServiceRecord[]) => ({
-      "10-14": list.filter(r => getFpAgeGroup(r.dob, r.dateStarted) === "10-14").length,
-      "15-19": list.filter(r => getFpAgeGroup(r.dob, r.dateStarted) === "15-19").length,
-      "20-49": list.filter(r => getFpAgeGroup(r.dob, r.dateStarted) === "20-49").length,
-      "TOTAL": list.length,
-    });
+    // TOTAL is the sum of age buckets only (records without valid DOB/age are excluded from all columns)
+    const fpCountByAgeGroup = (list: FpServiceRecord[]) => {
+      const g1014 = list.filter(r => getFpAgeGroup(r.dob, r.dateStarted) === "10-14").length;
+      const g1519 = list.filter(r => getFpAgeGroup(r.dob, r.dateStarted) === "15-19").length;
+      const g2049 = list.filter(r => getFpAgeGroup(r.dob, r.dateStarted) === "20-49").length;
+      return {
+        "10-14": g1014,
+        "15-19": g1519,
+        "20-49": g2049,
+        "TOTAL": g1014 + g1519 + g2049, // consistent: total = sum of age buckets
+      };
+    };
 
     // Per-method computed values
     const fpMethodsUsed = new Set<string>();
