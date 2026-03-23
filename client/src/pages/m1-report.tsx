@@ -91,10 +91,11 @@ export default function M1ReportPage() {
     queryKey: ["/api/barangays"],
   });
 
-  // TL auto-lock: when TL logs in, auto-select their first assigned barangay
+  // TL auto-lock: when TL logs in, auto-select their first assigned barangay (deterministic: assignedBarangays[0])
   useEffect(() => {
     if (isTL && assignedBarangays.length > 0 && barangays.length > 0 && selectedBarangayId === null) {
-      const firstAssigned = barangays.find(b => assignedBarangays.includes(b.name));
+      const firstAssignedName = assignedBarangays[0];
+      const firstAssigned = barangays.find(b => b.name === firstAssignedName);
       if (firstAssigned) setSelectedBarangayId(firstAssigned.id);
     }
   }, [isTL, assignedBarangays, barangays, selectedBarangayId]);
