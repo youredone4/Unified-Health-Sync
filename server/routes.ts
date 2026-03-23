@@ -534,9 +534,12 @@ export async function registerRoutes(
         }
       }
       const requestedId = barangayId ? Number(barangayId) : undefined;
-      // Default to first allowed barangay (assignedBarangays[0] ordering) when no barangayId given
+      // Default to first assigned barangay by assignedBarangays[0] name order (deterministic for multi-assigned TL)
+      const firstAssignedName = assignedNames[0];
+      const firstAssignedBarangay = allBarangays.find(b => b.name === firstAssignedName);
+      const defaultId = firstAssignedBarangay?.id ?? allowedIds[0];
       const reports = await storage.getM1ReportInstances({
-        barangayId: requestedId ?? allowedIds[0],
+        barangayId: requestedId ?? defaultId,
         month: month ? Number(month) : undefined,
         year: year ? Number(year) : undefined,
       });
