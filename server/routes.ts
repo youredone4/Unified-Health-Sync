@@ -667,7 +667,8 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Only SUBMITTED_LOCKED reports can be reopened" });
       }
       // Only MHO and SYSTEM_ADMIN can reopen
-      if (![UserRole.MHO, UserRole.SYSTEM_ADMIN].includes(req.userInfo!.role as any)) {
+      const reopenAllowedRoles: string[] = [UserRole.MHO, UserRole.SYSTEM_ADMIN];
+      if (!reopenAllowedRoles.includes(req.userInfo!.role)) {
         return res.status(403).json({ message: "Only MHO or System Admin can reopen a submitted report" });
       }
     }

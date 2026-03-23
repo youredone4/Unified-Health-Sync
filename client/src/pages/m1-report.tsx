@@ -396,6 +396,24 @@ export default function M1ReportPage() {
     return undefined;
   };
 
+  // Check if a cell has an actual recorded value (not the default-0 fallback)
+  const hasCellValue = (rowKey: string, columnKey: string): boolean => {
+    const key = columnKey ? `${rowKey}:${columnKey}` : rowKey;
+    if (editedValues[key] !== undefined) {
+      const v = editedValues[key];
+      return v.valueNumber !== null && v.valueNumber !== undefined || (v.valueText !== null && v.valueText !== undefined);
+    }
+    if (savedValuesMap[key] !== undefined) {
+      const v = savedValuesMap[key];
+      return v.valueNumber !== null && v.valueNumber !== undefined || (v.valueText !== null && v.valueText !== undefined);
+    }
+    if (computedValues[key] !== undefined) {
+      const v = computedValues[key];
+      return v.valueNumber !== null && v.valueNumber !== undefined;
+    }
+    return false;
+  };
+
   // Completeness: filled/total cells on current page — includes computed and manually entered values
   const completeness = useMemo(() => {
     const inds = catalog.filter(ind => ind.pageNumber === currentPage);
@@ -416,8 +434,7 @@ export default function M1ReportPage() {
       }
       pairs.forEach(([rk, ck]) => {
         total++;
-        const v = getValue(rk, ck);
-        if (v !== "" && v !== null && v !== undefined) filled++;
+        if (hasCellValue(rk, ck)) filled++;
       });
     });
     return total === 0 ? 100 : Math.round((filled / total) * 100);
@@ -454,6 +471,10 @@ export default function M1ReportPage() {
 
   const handleSaveValues = () => {
     if (!activeReportId) return;
+    if (isLocked) {
+      toast({ title: "Report is Locked", description: "Reopen the report to make changes.", variant: "destructive" });
+      return;
+    }
     const valuesToSave = Object.entries(editedValues).map(([key, val]) => {
       const [rowKey, columnKey] = key.includes(":") ? key.split(":") : [key, null];
       return {
@@ -604,12 +625,20 @@ export default function M1ReportPage() {
   const existingReport = reportInstances.find(r => r.month === selectedMonth && r.year === selectedYear);
 
   const SourceBadge = ({ source, showMissing = false }: { source?: string; showMissing?: boolean }) => {
-    if (source === "COMPUTED") return <span className="ml-1 text-[10px] px-1 rounded bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-200">Auto</span>;
-    if (source === "ENCODED") return <span className="ml-1 text-[10px] px-1 rounded bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200">Manual</span>;
-    if (source === "IMPORTED") return <span className="ml-1 text-[10px] px-1 rounded bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-200">Imported</span>;
-    if (showMissing) return <span className="ml-1 text-[10px] px-1 rounded bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400">Missing</span>;
+    if (source === "COMPUTED") return <span className="text-[9px] px-1 rounded bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-200">Auto</span>;
+    if (source === "ENCODED") return <span className="text-[9px] px-1 rounded bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200">Manual</span>;
+    if (source === "IMPORTED") return <span className="text-[9px] px-1 rounded bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-200">Imported</span>;
+    if (showMissing) return <span className="text-[9px] px-1 rounded bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400">Missing</span>;
     return null;
   };
+
+  // Cell content: value + source badge stacked, shown in every value cell
+  const CellValue = ({ rowKey, col, isInput = false, children }: { rowKey: string; col: string; isInput?: boolean; children: React.ReactNode }) => (
+    <div className="flex flex-col items-center gap-0.5">
+      {children}
+      <SourceBadge source={getValueSource(rowKey, col)} showMissing={!hasCellValue(rowKey, col)} />
+    </div>
+  );
 
   const renderIndicatorTable = (sectionCode: string, indicators: M1IndicatorCatalog[]) => {
     if (!indicators || indicators.length === 0) return null;
@@ -667,22 +696,23 @@ export default function M1ReportPage() {
             {indicators.map(ind => (
               <tr key={ind.rowKey} className={ind.indentLevel ? "bg-muted/20" : ""}>
                 <td className="border p-2" style={{ paddingLeft: (ind.indentLevel || 0) * 16 + 8 }}>
-                  <span>{ind.officialLabel}</span>
-                  <SourceBadge source={getValueSource(ind.rowKey, "CU_TOTAL")} showMissing={!getValueSource(ind.rowKey, "CU_TOTAL")} />
+                  {ind.officialLabel}
                 </td>
                 {["CU_10-14", "CU_15-19", "CU_20-49", "CU_TOTAL", "NA_10-14", "NA_15-19", "NA_20-49", "NA_TOTAL"].map(col => (
                   <td key={col} className="border p-1 text-center">
-                    {reportMode === "encode" && !ind.isComputed && !isLocked ? (
-                      <Input
-                        type="number"
-                        className="w-14 h-7 text-center text-xs"
-                        value={getValue(ind.rowKey, col)}
-                        onChange={(e) => handleValueChange(ind.rowKey, col, e.target.value)}
-                        data-testid={`input-${ind.rowKey}-${col}`}
-                      />
-                    ) : (
-                      <span className="text-sm">{getValue(ind.rowKey, col)}</span>
-                    )}
+                    <CellValue rowKey={ind.rowKey} col={col}>
+                      {reportMode === "encode" && !ind.isComputed && !isLocked ? (
+                        <Input
+                          type="number"
+                          className="w-14 h-7 text-center text-xs"
+                          value={getValue(ind.rowKey, col)}
+                          onChange={(e) => handleValueChange(ind.rowKey, col, e.target.value)}
+                          data-testid={`input-${ind.rowKey}-${col}`}
+                        />
+                      ) : (
+                        <span className="text-sm">{getValue(ind.rowKey, col)}</span>
+                      )}
+                    </CellValue>
                   </td>
                 ))}
                 <td className="border p-1 text-center">
@@ -722,22 +752,23 @@ export default function M1ReportPage() {
             {indicators.map(ind => (
               <tr key={ind.rowKey} className={ind.indentLevel ? "bg-muted/20" : ""}>
                 <td className="border p-2" style={{ paddingLeft: (ind.indentLevel || 0) * 16 + 8 }}>
-                  <span>{ind.officialLabel}</span>
-                  <SourceBadge source={getValueSource(ind.rowKey, "TOTAL")} showMissing={!getValueSource(ind.rowKey, "TOTAL")} />
+                  {ind.officialLabel}
                 </td>
                 {["10-14", "15-19", "20-49", "TOTAL"].map(col => (
                   <td key={col} className="border p-1 text-center">
-                    {reportMode === "encode" && !ind.isComputed && !isLocked ? (
-                      <Input
-                        type="number"
-                        className="w-14 h-7 text-center text-xs"
-                        value={getValue(ind.rowKey, col)}
-                        onChange={(e) => handleValueChange(ind.rowKey, col, e.target.value)}
-                        data-testid={`input-${ind.rowKey}-${col}`}
-                      />
-                    ) : (
-                      <span className="text-sm">{getValue(ind.rowKey, col)}</span>
-                    )}
+                    <CellValue rowKey={ind.rowKey} col={col}>
+                      {reportMode === "encode" && !ind.isComputed && !isLocked ? (
+                        <Input
+                          type="number"
+                          className="w-14 h-7 text-center text-xs"
+                          value={getValue(ind.rowKey, col)}
+                          onChange={(e) => handleValueChange(ind.rowKey, col, e.target.value)}
+                          data-testid={`input-${ind.rowKey}-${col}`}
+                        />
+                      ) : (
+                        <span className="text-sm">{getValue(ind.rowKey, col)}</span>
+                      )}
+                    </CellValue>
                   </td>
                 ))}
                 <td className="border p-1 text-center">
@@ -786,55 +817,60 @@ export default function M1ReportPage() {
               return (
                 <tr key={ind.rowKey} className={ind.indentLevel ? "bg-muted/20" : ""}>
                   <td className="border p-2" style={{ paddingLeft: (ind.indentLevel || 0) * 16 + 8 }}>
-                    <span>{ind.officialLabel}</span>
-                    <SourceBadge source={getValueSource(ind.rowKey, "TOTAL")} showMissing={!getValueSource(ind.rowKey, "TOTAL")} />
+                    {ind.officialLabel}
                   </td>
                   {hasM && (
                     <td className="border p-1 text-center">
                       {rowHasM ? (
-                        reportMode === "encode" && !ind.isComputed && !isLocked ? (
-                          <Input
-                            type="number"
-                            className="w-14 h-7 text-center text-xs"
-                            value={getValue(ind.rowKey, "M")}
-                            onChange={(e) => handleValueChange(ind.rowKey, "M", e.target.value)}
-                            data-testid={`input-${ind.rowKey}-M`}
-                          />
-                        ) : (
-                          <span className="text-sm">{getValue(ind.rowKey, "M")}</span>
-                        )
+                        <CellValue rowKey={ind.rowKey} col="M">
+                          {reportMode === "encode" && !ind.isComputed && !isLocked ? (
+                            <Input
+                              type="number"
+                              className="w-14 h-7 text-center text-xs"
+                              value={getValue(ind.rowKey, "M")}
+                              onChange={(e) => handleValueChange(ind.rowKey, "M", e.target.value)}
+                              data-testid={`input-${ind.rowKey}-M`}
+                            />
+                          ) : (
+                            <span className="text-sm">{getValue(ind.rowKey, "M")}</span>
+                          )}
+                        </CellValue>
                       ) : <span className="text-muted-foreground">-</span>}
                     </td>
                   )}
                   {hasF && (
                     <td className="border p-1 text-center">
                       {rowHasF ? (
-                        reportMode === "encode" && !ind.isComputed && !isLocked ? (
-                          <Input
-                            type="number"
-                            className="w-14 h-7 text-center text-xs"
-                            value={getValue(ind.rowKey, "F")}
-                            onChange={(e) => handleValueChange(ind.rowKey, "F", e.target.value)}
-                            data-testid={`input-${ind.rowKey}-F`}
-                          />
-                        ) : (
-                          <span className="text-sm">{getValue(ind.rowKey, "F")}</span>
-                        )
+                        <CellValue rowKey={ind.rowKey} col="F">
+                          {reportMode === "encode" && !ind.isComputed && !isLocked ? (
+                            <Input
+                              type="number"
+                              className="w-14 h-7 text-center text-xs"
+                              value={getValue(ind.rowKey, "F")}
+                              onChange={(e) => handleValueChange(ind.rowKey, "F", e.target.value)}
+                              data-testid={`input-${ind.rowKey}-F`}
+                            />
+                          ) : (
+                            <span className="text-sm">{getValue(ind.rowKey, "F")}</span>
+                          )}
+                        </CellValue>
                       ) : <span className="text-muted-foreground">-</span>}
                     </td>
                   )}
                   <td className="border p-1 text-center">
-                    {reportMode === "encode" && !ind.isComputed && !isLocked ? (
-                      <Input
-                        type="number"
-                        className="w-14 h-7 text-center text-xs"
-                        value={getValue(ind.rowKey, "TOTAL")}
-                        onChange={(e) => handleValueChange(ind.rowKey, "TOTAL", e.target.value)}
-                        data-testid={`input-${ind.rowKey}-TOTAL`}
-                      />
-                    ) : (
-                      <span className="text-sm">{getValue(ind.rowKey, "TOTAL")}</span>
-                    )}
+                    <CellValue rowKey={ind.rowKey} col="TOTAL">
+                      {reportMode === "encode" && !ind.isComputed && !isLocked ? (
+                        <Input
+                          type="number"
+                          className="w-14 h-7 text-center text-xs"
+                          value={getValue(ind.rowKey, "TOTAL")}
+                          onChange={(e) => handleValueChange(ind.rowKey, "TOTAL", e.target.value)}
+                          data-testid={`input-${ind.rowKey}-TOTAL`}
+                        />
+                      ) : (
+                        <span className="text-sm">{getValue(ind.rowKey, "TOTAL")}</span>
+                      )}
+                    </CellValue>
                   </td>
                   {showRate && (
                     <td className="border p-1 text-center text-muted-foreground">
@@ -875,21 +911,22 @@ export default function M1ReportPage() {
           {indicators.map(ind => (
             <tr key={ind.rowKey} className={ind.indentLevel ? "bg-muted/20" : ""}>
               <td className="border p-2" style={{ paddingLeft: (ind.indentLevel || 0) * 16 + 8 }}>
-                <span>{ind.officialLabel}</span>
-                <SourceBadge source={getValueSource(ind.rowKey, "VALUE")} showMissing={!getValueSource(ind.rowKey, "VALUE")} />
+                {ind.officialLabel}
               </td>
               <td className="border p-1 text-center">
-                {reportMode === "encode" && !ind.isComputed && !isLocked ? (
-                  <Input
-                    type="number"
-                    className="w-20 h-7 text-center text-xs"
-                    value={getValue(ind.rowKey, "VALUE")}
-                    onChange={(e) => handleValueChange(ind.rowKey, "VALUE", e.target.value)}
-                    data-testid={`input-${ind.rowKey}`}
-                  />
-                ) : (
-                  <span className="text-sm">{getValue(ind.rowKey, "VALUE")}</span>
-                )}
+                <CellValue rowKey={ind.rowKey} col="VALUE">
+                  {reportMode === "encode" && !ind.isComputed && !isLocked ? (
+                    <Input
+                      type="number"
+                      className="w-20 h-7 text-center text-xs"
+                      value={getValue(ind.rowKey, "VALUE")}
+                      onChange={(e) => handleValueChange(ind.rowKey, "VALUE", e.target.value)}
+                      data-testid={`input-${ind.rowKey}`}
+                    />
+                  ) : (
+                    <span className="text-sm">{getValue(ind.rowKey, "VALUE")}</span>
+                  )}
+                </CellValue>
               </td>
               <td className="border p-1 text-center">
                 {reportMode === "encode" && !isLocked ? (
