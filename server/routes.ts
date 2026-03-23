@@ -63,6 +63,26 @@ export async function registerRoutes(
     res.json(filterByBarangay(data, req.userInfo));
   });
 
+  // Mother search for FP registry linking
+  app.get("/api/mothers/search", registryReadRBAC, async (req, res) => {
+    const q = String(req.query.q || "").trim().toLowerCase();
+    if (q.length < 2) return res.json([]);
+    const data = await storage.getMothers();
+    const scoped = filterByBarangay(data, req.userInfo);
+    const currentYear = new Date().getFullYear();
+    const results = scoped
+      .filter(m => `${m.firstName} ${m.lastName}`.toLowerCase().includes(q))
+      .slice(0, 10)
+      .map(m => ({
+        id: m.id,
+        name: `${m.firstName} ${m.lastName}`,
+        barangay: m.barangay,
+        // Approximate DOB from age (mid-year) so FP age-group bucketing has a reference
+        dob: m.age ? `${currentYear - m.age}-07-01` : undefined,
+      }));
+    res.json(results);
+  });
+
   app.get(api.mothers.get.path, registryReadRBAC, ar(async (req, res) => {
     const id = parseId(req.params.id, res); if (id === null) return;
     const mother = await storage.getMother(id);

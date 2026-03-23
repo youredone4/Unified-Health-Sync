@@ -395,10 +395,12 @@ export default function M1ReportPage() {
     // Age is computed relative to end of reporting month to keep historical M1 counts stable
     const reportMonthEnd = new Date(selectedYear, selectedMonth - 1 + 1, 0); // last day of report month
 
-    const getFpAgeGroup = (dob: string | null | undefined): string => {
+    // Age at dateStarted (or reportMonthEnd fallback) — per M1 spec age group is at enrollment
+    const getFpAgeGroup = (dob: string | null | undefined, dateStarted: string | null | undefined): string => {
       if (!dob) return "other";
       try {
-        const age = differenceInYears(reportMonthEnd, parseISO(dob));
+        const refDate = dateStarted ? parseISO(dateStarted) : reportMonthEnd;
+        const age = differenceInYears(refDate, parseISO(dob));
         if (age >= 10 && age <= 14) return "10-14";
         if (age >= 15 && age <= 19) return "15-19";
         if (age >= 20 && age <= 49) return "20-49";
@@ -411,9 +413,9 @@ export default function M1ReportPage() {
 
     // Helper to count by age group for a set of fp records filtered to a method
     const fpCountByAgeGroup = (list: FpServiceRecord[]) => ({
-      "10-14": list.filter(r => getFpAgeGroup(r.dob) === "10-14").length,
-      "15-19": list.filter(r => getFpAgeGroup(r.dob) === "15-19").length,
-      "20-49": list.filter(r => getFpAgeGroup(r.dob) === "20-49").length,
+      "10-14": list.filter(r => getFpAgeGroup(r.dob, r.dateStarted) === "10-14").length,
+      "15-19": list.filter(r => getFpAgeGroup(r.dob, r.dateStarted) === "15-19").length,
+      "20-49": list.filter(r => getFpAgeGroup(r.dob, r.dateStarted) === "20-49").length,
       "TOTAL": list.length,
     });
 

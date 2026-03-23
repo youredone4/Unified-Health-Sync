@@ -1,11 +1,11 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { format, differenceInYears, parseISO } from "date-fns";
 import {
-  HeartHandshake, Plus, Search, Pencil, Trash2, X, ChevronDown, ChevronUp,
+  HeartHandshake, Plus, Search, Pencil, Trash2, X, ChevronDown, ChevronUp, Link2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -60,10 +60,11 @@ const FP_STATUS_COLORS: Record<string, string> = {
   DROPOUT: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
 };
 
-function getAgeGroup(dob: string | null | undefined): string {
+function getAgeGroup(dob: string | null | undefined, dateStarted?: string | null): string {
   if (!dob) return "—";
   try {
-    const age = differenceInYears(new Date(), parseISO(dob));
+    const refDate = dateStarted ? parseISO(dateStarted) : new Date();
+    const age = differenceInYears(refDate, parseISO(dob));
     if (age < 10) return "<10";
     if (age <= 14) return "10–14";
     if (age <= 19) return "15–19";
@@ -72,10 +73,11 @@ function getAgeGroup(dob: string | null | undefined): string {
   } catch { return "—"; }
 }
 
-function getAge(dob: string | null | undefined): string {
+function getAgeAtStart(dob: string | null | undefined, dateStarted: string | null | undefined): string {
   if (!dob) return "—";
   try {
-    return String(differenceInYears(new Date(), parseISO(dob)));
+    const refDate = dateStarted ? parseISO(dateStarted) : new Date();
+    return String(differenceInYears(refDate, parseISO(dob)));
   } catch { return "—"; }
 }
 
@@ -110,12 +112,29 @@ interface FpFormDialogProps {
 function FpFormDialog({ open, onClose, record, defaultBarangay }: FpFormDialogProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const { assignedBarangays, isTL } = useAuth();
+  const { assignedBarangays, isTL, isLoading: authLoading } = useAuth();
   const isEdit = !!record;
 
-  const availableBarangays = isTL
-    ? BARANGAYS.filter(b => assignedBarangays.includes(b))
-    : BARANGAYS;
+  // Mother search/link state
+  const [motherSearch, setMotherSearch] = useState("");
+  const [linkedMotherId, setLinkedMotherId] = useState<number | null>(record?.linkedPersonId ?? null);
+  // Show patient name as linked name only when there's an actual link (linkedPersonType=MOTHER)
+  const [linkedMotherName, setLinkedMotherName] = useState<string>(
+    record?.linkedPersonId && record?.linkedPersonType === "MOTHER" ? (record?.patientName ?? "") : ""
+  );
+
+  const { data: motherResults } = useQuery<{ id: number; name: string; barangay: string; dob?: string }[]>({
+    queryKey: ["/api/mothers/search", motherSearch],
+    queryFn: () => fetch(`/api/mothers/search?q=${encodeURIComponent(motherSearch)}`).then(r => r.json()),
+    enabled: motherSearch.length >= 2,
+  });
+
+  // Wait for auth to load before filtering barangays (prevents TL seeing all barangays on initial render)
+  const availableBarangays = authLoading
+    ? (defaultBarangay ? [defaultBarangay] : [])
+    : isTL
+      ? BARANGAYS.filter(b => assignedBarangays.includes(b))
+      : BARANGAYS;
 
   const form = useForm<FpFormValues>({
     resolver: zodResolver(fpFormSchema),
@@ -131,6 +150,16 @@ function FpFormDialog({ open, onClose, record, defaultBarangay }: FpFormDialogPr
       notes: record?.notes || "",
     },
   });
+
+  // When auth loads and we're TL, ensure barangay field is scoped to assigned barangay
+  useEffect(() => {
+    if (!authLoading && isTL && availableBarangays.length > 0 && !isEdit) {
+      const currentBarangay = form.getValues("barangay");
+      if (!availableBarangays.includes(currentBarangay)) {
+        form.setValue("barangay", availableBarangays[0]);
+      }
+    }
+  }, [authLoading, isTL, availableBarangays.length]); // eslint-disable-line
 
   const createMutation = useMutation({
     mutationFn: (data: FpFormValues) => apiRequest("POST", "/api/fp-records", data),
@@ -153,14 +182,18 @@ function FpFormDialog({ open, onClose, record, defaultBarangay }: FpFormDialogPr
   });
 
   const onSubmit = (data: FpFormValues) => {
-    const payload = {
+    const payload: Record<string, unknown> = {
       ...data,
       dob: data.dob || undefined,
       dateStopped: data.dateStopped || undefined,
       notes: data.notes || undefined,
     };
-    if (isEdit) updateMutation.mutate(payload);
-    else createMutation.mutate(payload);
+    if (linkedMotherId) {
+      payload.linkedPersonType = "MOTHER";
+      payload.linkedPersonId = linkedMotherId;
+    }
+    if (isEdit) updateMutation.mutate(payload as FpFormValues);
+    else createMutation.mutate(payload as FpFormValues);
   };
 
   const isPending = createMutation.isPending || updateMutation.isPending;
@@ -281,6 +314,65 @@ function FpFormDialog({ open, onClose, record, defaultBarangay }: FpFormDialogPr
                 <FormMessage />
               </FormItem>
             )} />
+            {/* Mother Linkage (optional) */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Link to Registered Mother (optional)</label>
+              {linkedMotherId ? (
+                <div className="flex items-center gap-2 p-2 bg-green-50 dark:bg-green-900/20 rounded border border-green-200 dark:border-green-800">
+                  <Link2 className="h-4 w-4 text-green-600" />
+                  <span className="text-sm text-green-800 dark:text-green-200" data-testid="text-linked-mother">{linkedMotherName}</span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="ml-auto h-6 px-2"
+                    onClick={() => { setLinkedMotherId(null); setLinkedMotherName(""); setMotherSearch(""); }}
+                    data-testid="button-unlink-mother"
+                  >
+                    <X className="h-3 w-3" />
+                  </Button>
+                </div>
+              ) : (
+                <div className="relative">
+                  <Input
+                    placeholder="Search by mother name…"
+                    value={motherSearch}
+                    onChange={e => setMotherSearch(e.target.value)}
+                    data-testid="input-mother-search"
+                    className="pr-8"
+                  />
+                  <Search className="absolute right-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                  {motherResults && motherResults.length > 0 && (
+                    <div className="absolute z-50 w-full mt-1 bg-popover border rounded shadow-lg max-h-40 overflow-y-auto" data-testid="list-mother-results">
+                      {motherResults.map(m => (
+                        <button
+                          key={m.id}
+                          type="button"
+                          className="w-full text-left px-3 py-2 text-sm hover:bg-accent"
+                          data-testid={`option-mother-${m.id}`}
+                          onClick={() => {
+                            setLinkedMotherId(m.id);
+                            setLinkedMotherName(`${m.name} (${m.barangay})`);
+                            setMotherSearch("");
+                            if (m.dob) form.setValue("dob", m.dob);
+                            form.setValue("patientName", m.name);
+                          }}
+                        >
+                          <span className="font-medium">{m.name}</span>
+                          <span className="text-muted-foreground ml-2">{m.barangay}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {motherSearch.length >= 2 && (!motherResults || motherResults.length === 0) && (
+                    <div className="absolute z-50 w-full mt-1 bg-popover border rounded shadow-lg px-3 py-2 text-sm text-muted-foreground">
+                      No mothers found. Leave blank to register as general patient.
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
             <FormField control={form.control} name="notes" render={({ field }) => (
               <FormItem>
                 <FormLabel>Notes</FormLabel>
@@ -511,8 +603,8 @@ export default function FpRegistry() {
                     >
                       <TableCell className="font-medium" data-testid={`text-name-${record.id}`}>{record.patientName}</TableCell>
                       <TableCell data-testid={`text-barangay-${record.id}`}>{record.barangay}</TableCell>
-                      <TableCell data-testid={`text-age-${record.id}`}>{getAge(record.dob)}</TableCell>
-                      <TableCell data-testid={`text-agegroup-${record.id}`}>{getAgeGroup(record.dob)}</TableCell>
+                      <TableCell data-testid={`text-age-${record.id}`}>{getAgeAtStart(record.dob, record.dateStarted)}</TableCell>
+                      <TableCell data-testid={`text-agegroup-${record.id}`}>{getAgeGroup(record.dob, record.dateStarted)}</TableCell>
                       <TableCell>
                         <span className="text-sm">{FP_METHOD_LABELS[record.fpMethod] || record.fpMethod}</span>
                       </TableCell>
