@@ -417,7 +417,7 @@ export default function M1ReportPage() {
   // Completeness: filled/total cells on current page — includes computed and manually entered values
   const completeness = useMemo(() => {
     const inds = catalog.filter(ind => ind.pageNumber === currentPage);
-    if (inds.length === 0) return 100;
+    if (inds.length === 0) return { filled: 0, total: 0, pct: 100 };
     let filled = 0;
     let total = 0;
     inds.forEach(ind => {
@@ -437,7 +437,7 @@ export default function M1ReportPage() {
         if (hasCellValue(rk, ck)) filled++;
       });
     });
-    return total === 0 ? 100 : Math.round((filled / total) * 100);
+    return { filled, total, pct: total === 0 ? 100 : Math.round((filled / total) * 100) };
   }, [catalog, currentPage, editedValues, savedValuesMap, computedValues]);
 
   const isLocked = activeReport?.instance?.status === "SUBMITTED_LOCKED";
@@ -628,7 +628,7 @@ export default function M1ReportPage() {
     if (source === "COMPUTED") return <span className="text-[9px] px-1 rounded bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-200">Auto</span>;
     if (source === "ENCODED") return <span className="text-[9px] px-1 rounded bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200">Manual</span>;
     if (source === "IMPORTED") return <span className="text-[9px] px-1 rounded bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-200">Imported</span>;
-    if (showMissing) return <span className="text-[9px] px-1 rounded bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400">Missing</span>;
+    if (showMissing) return <span className="text-[9px] px-1 rounded bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-400">Missing</span>;
     return null;
   };
 
@@ -1154,10 +1154,10 @@ export default function M1ReportPage() {
               {activeReportId && (
                 <div className="mb-2 space-y-1">
                   <div className="flex items-center justify-between text-xs text-muted-foreground">
-                    <span>Page {currentPage} completeness</span>
-                    <span className={completeness === 100 ? "text-green-600 font-medium" : completeness >= 70 ? "text-yellow-600" : "text-red-500"}>{completeness}%</span>
+                    <span>Page {currentPage} completeness — <span className="font-medium">{completeness.filled} / {completeness.total} cells filled</span></span>
+                    <span className={completeness.pct === 100 ? "text-green-600 font-medium" : completeness.pct >= 70 ? "text-yellow-600" : "text-red-500"}>{completeness.pct}%</span>
                   </div>
-                  <Progress value={completeness} className="h-1.5" data-testid="progress-completeness" />
+                  <Progress value={completeness.pct} className="h-1.5" data-testid="progress-completeness" />
                 </div>
               )}
 
