@@ -304,6 +304,10 @@ function AddVisitDialog({
       if (profileType === "Mother") {
         queryClient.invalidateQueries({ queryKey: ["/api/mothers"] });
       }
+      // Refresh child profile so WHO growth chart picks up the new measurement
+      if (profileType === "Child") {
+        queryClient.invalidateQueries({ queryKey: ["/api/children", String(profileId)] });
+      }
       toast({ title: "Visit recorded", description: "The monitoring visit has been saved." });
       onOpenChange(false);
     },

@@ -873,6 +873,32 @@ export async function registerRoutes(
         throw err;
       }
     }
+    // Sync weight (and optional height/muac) from the nurse visit into children.growth JSONB
+    if (weightKg) {
+      const weightNum = parseFloat(weightKg);
+      if (!isNaN(weightNum)) {
+        const currentChild = await storage.getChild(id);
+        if (currentChild) {
+          const existingGrowth: Array<{ date: string; weightKg: number; heightCm?: number; muac?: number }> =
+            Array.isArray(currentChild.growth) ? (currentChild.growth as any[]) : [];
+          const idx = existingGrowth.findIndex(g => g.date === visitDate);
+          const newEntry: { date: string; weightKg: number; heightCm?: number; muac?: number } = {
+            date: visitDate,
+            weightKg: weightNum,
+          };
+          if (heightCm) { const h = parseFloat(heightCm); if (!isNaN(h)) newEntry.heightCm = h; }
+          if (muac) { const m = parseFloat(muac); if (!isNaN(m)) newEntry.muac = m; }
+          if (idx >= 0) {
+            existingGrowth[idx] = { ...existingGrowth[idx], ...newEntry };
+          } else {
+            existingGrowth.push(newEntry);
+          }
+          // Sort chronologically so the growth chart renders in order
+          existingGrowth.sort((a, b) => a.date.localeCompare(b.date));
+          await storage.updateChild(id, { growth: existingGrowth });
+        }
+      }
+    }
     res.status(201).json(visit);
   }));
 
