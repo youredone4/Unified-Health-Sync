@@ -1283,6 +1283,8 @@ export class DatabaseStorage implements IStorage {
 
   // === FP SERVICE RECORDS ===
   async getFpServiceRecords(filters?: { barangay?: string; barangays?: string[]; month?: string }): Promise<FpServiceRecord[]> {
+    // TL with no assigned barangays gets empty result (least-privilege)
+    if (filters?.barangays !== undefined && filters.barangays.length === 0) return [];
     const conditions = [];
     if (filters?.barangay) conditions.push(eq(fpServiceRecords.barangay, filters.barangay));
     if (filters?.barangays && filters.barangays.length > 0) conditions.push(inArray(fpServiceRecords.barangay, filters.barangays));
