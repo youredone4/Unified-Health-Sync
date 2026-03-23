@@ -494,27 +494,46 @@ export async function registerRoutes(
   // === M1 TEMPLATE SYSTEM ===
   
   // Get active M1 template version
-  app.get("/api/m1/templates", async (req, res) => {
+  app.get("/api/m1/templates", loadUserInfo, requireAuth, async (req, res) => {
     const templates = await storage.getM1TemplateVersions();
     res.json(templates);
   });
 
   // Get M1 indicator catalog for a template version
-  app.get("/api/m1/templates/:templateId/catalog", ar(async (req, res) => {
+  app.get("/api/m1/templates/:templateId/catalog", loadUserInfo, requireAuth, ar(async (req, res) => {
     const id = parseId(req.params.templateId, res); if (id === null) return;
     const catalog = await storage.getM1IndicatorCatalog(id);
     res.json(catalog);
   }));
 
   // Get all barangays
-  app.get("/api/barangays", async (req, res) => {
+  app.get("/api/barangays", loadUserInfo, requireAuth, async (req, res) => {
     const data = await storage.getBarangays();
     res.json(data);
   });
 
-  // Get M1 report instances
-  app.get("/api/m1/reports", async (req, res) => {
+  // Get M1 report instances (TL scoped to their assigned barangays)
+  app.get("/api/m1/reports", loadUserInfo, requireAuth, async (req, res) => {
     const { barangayId, month, year } = req.query;
+    // TL users may only access reports from their assigned barangays
+    if (req.userInfo?.role === UserRole.TL) {
+      const assignedNames = req.userInfo.assignedBarangays;
+      if (assignedNames.length === 0) return res.json([]);
+      const allBarangays = await storage.getBarangays();
+      const allowedIds = allBarangays
+        .filter(b => assignedNames.includes(b.name))
+        .map(b => b.id);
+      const requestedId = barangayId ? Number(barangayId) : undefined;
+      if (requestedId && !allowedIds.includes(requestedId)) {
+        return res.status(403).json({ message: "Access denied to this barangay" });
+      }
+      const reports = await storage.getM1ReportInstances({
+        barangayId: requestedId || allowedIds[0],
+        month: month ? Number(month) : undefined,
+        year: year ? Number(year) : undefined,
+      });
+      return res.json(reports);
+    }
     const reports = await storage.getM1ReportInstances({
       barangayId: barangayId ? Number(barangayId) : undefined,
       month: month ? Number(month) : undefined,
@@ -524,23 +543,112 @@ export async function registerRoutes(
   });
 
   // Get single M1 report instance with values
-  app.get("/api/m1/reports/:id", ar(async (req, res) => {
+  app.get("/api/m1/reports/:id", loadUserInfo, requireAuth, ar(async (req, res) => {
     const id = parseId(req.params.id, res); if (id === null) return;
     const report = await storage.getM1ReportInstance(id);
     if (!report) return res.status(404).json({ message: "Report not found" });
+    // TL scoping: verify barangay ownership
+    if (req.userInfo?.role === UserRole.TL) {
+      const allBarangays = await storage.getBarangays();
+      const allowed = allBarangays
+        .filter(b => req.userInfo!.assignedBarangays.includes(b.name))
+        .map(b => b.id);
+      if (report.instance.barangayId && !allowed.includes(report.instance.barangayId)) {
+        return res.status(403).json({ message: "Access denied to this barangay" });
+      }
+    }
     res.json(report);
   }));
 
   // Create new M1 report instance
-  app.post("/api/m1/reports", ar(async (req, res) => {
-    const report = await storage.createM1ReportInstance(req.body);
+  app.post("/api/m1/reports", loadUserInfo, requireAuth, ar(async (req, res) => {
+    // TL can only create for their assigned barangays
+    if (req.userInfo?.role === UserRole.TL) {
+      const { barangayName } = req.body;
+      if (barangayName && !req.userInfo.assignedBarangays.includes(barangayName)) {
+        return res.status(403).json({ message: "You can only create reports for your assigned barangays" });
+      }
+    }
+    const report = await storage.createM1ReportInstance({
+      ...req.body,
+      createdByUserId: req.userInfo?.id || null,
+    });
+    await createAuditLog(
+      req.userInfo!.id, req.userInfo!.role,
+      "CREATE", "M1_REPORT", report.id,
+      report.barangayName || undefined, undefined, { barangayId: report.barangayId, month: report.month, year: report.year }, req
+    );
     res.status(201).json(report);
   }));
 
-  // Update M1 indicator values for a report
-  app.put("/api/m1/reports/:id/values", ar(async (req, res) => {
+  // Update M1 indicator values for a report — audit each ENCODED save
+  app.put("/api/m1/reports/:id/values", loadUserInfo, requireAuth, ar(async (req, res) => {
     const id = parseId(req.params.id, res); if (id === null) return;
-    const updated = await storage.updateM1IndicatorValues(id, req.body.values);
+    // Verify report exists and TL scoping
+    const existing = await storage.getM1ReportInstance(id);
+    if (!existing) return res.status(404).json({ message: "Report not found" });
+    if (req.userInfo?.role === UserRole.TL) {
+      const allBarangays = await storage.getBarangays();
+      const allowed = allBarangays
+        .filter(b => req.userInfo!.assignedBarangays.includes(b.name))
+        .map(b => b.id);
+      if (existing.instance.barangayId && !allowed.includes(existing.instance.barangayId)) {
+        return res.status(403).json({ message: "Access denied to this barangay" });
+      }
+    }
+    // Prevent editing SUBMITTED_LOCKED reports
+    if (existing.instance.status === "SUBMITTED_LOCKED") {
+      return res.status(403).json({ message: "Cannot edit a submitted report. Reopen it first." });
+    }
+    // req.body can be an array (values directly) or { values: [...] }
+    const values: any[] = Array.isArray(req.body) ? req.body : (req.body.values || []);
+    const updated = await storage.updateM1IndicatorValues(id, values);
+    // Audit ENCODED saves
+    const encodedCount = values.filter((v: any) => v.valueSource === "ENCODED").length;
+    if (encodedCount > 0) {
+      await createAuditLog(
+        req.userInfo!.id, req.userInfo!.role,
+        "UPDATE", "M1_INDICATOR_VALUES", id,
+        existing.instance.barangayName || undefined,
+        { previousSavedCount: existing.values.length },
+        { updatedCount: encodedCount, reportId: id }, req
+      );
+    }
+    res.json(updated);
+  }));
+
+  // Update M1 report status (Submit / Reopen)
+  app.post("/api/m1/reports/:id/status", loadUserInfo, requireAuth, ar(async (req, res) => {
+    const id = parseId(req.params.id, res); if (id === null) return;
+    const { status } = req.body;
+    const allowed = ["DRAFT", "READY_FOR_REVIEW", "SUBMITTED_LOCKED"];
+    if (!allowed.includes(status)) {
+      return res.status(400).json({ message: `Invalid status. Must be one of: ${allowed.join(", ")}` });
+    }
+    const existing = await storage.getM1ReportInstance(id);
+    if (!existing) return res.status(404).json({ message: "Report not found" });
+    // TL scoping
+    if (req.userInfo?.role === UserRole.TL) {
+      const allBarangays = await storage.getBarangays();
+      const allowedIds = allBarangays
+        .filter(b => req.userInfo!.assignedBarangays.includes(b.name))
+        .map(b => b.id);
+      if (existing.instance.barangayId && !allowedIds.includes(existing.instance.barangayId)) {
+        return res.status(403).json({ message: "Access denied to this barangay" });
+      }
+      // TL cannot reopen a SUBMITTED_LOCKED report
+      if (existing.instance.status === "SUBMITTED_LOCKED" && status !== "SUBMITTED_LOCKED") {
+        return res.status(403).json({ message: "Only MHO or Admin can reopen a submitted report" });
+      }
+    }
+    const updated = await storage.updateM1ReportStatus(id, status);
+    await createAuditLog(
+      req.userInfo!.id, req.userInfo!.role,
+      "UPDATE", "M1_REPORT_STATUS", id,
+      existing.instance.barangayName || undefined,
+      { previousStatus: existing.instance.status },
+      { newStatus: status }, req
+    );
     res.json(updated);
   }));
 
@@ -558,7 +666,7 @@ export async function registerRoutes(
   }));
 
   // Bulk import M1 CSV data for a specific barangay and month/year
-  app.post("/api/m1/bulk-import", async (req, res) => {
+  app.post("/api/m1/bulk-import", loadUserInfo, requireAuth, async (req, res) => {
     try {
       const { barangayId, barangayName, month, year, values, templateVersionId } = req.body;
       
@@ -580,7 +688,7 @@ export async function registerRoutes(
           barangayName,
           month,
           year,
-          createdByUserId: null,
+          createdByUserId: req.userInfo?.id || null,
         });
         reportId = newReport.id;
       }
@@ -598,8 +706,8 @@ export async function registerRoutes(
     }
   });
 
-  // Seed historical M1 data for all barangays
-  app.post("/api/m1/seed-historical", async (req, res) => {
+  // Seed historical M1 data for all barangays (admin only)
+  app.post("/api/m1/seed-historical", loadUserInfo, requireAuth, requireRole(UserRole.SYSTEM_ADMIN, UserRole.MHO), async (req, res) => {
     try {
       const result = await storage.seedHistoricalM1Data();
       res.json(result);

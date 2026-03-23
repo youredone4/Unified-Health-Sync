@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -7,10 +7,11 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { FileText, Download, Save, Plus, ChevronLeft, ChevronRight, RefreshCw, Building2, Upload, Database, Loader2 } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
+import { FileText, Download, Save, Plus, ChevronLeft, ChevronRight, RefreshCw, Building2, Upload, Database, Loader2, Lock, Unlock, Send } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useTheme } from "@/contexts/theme-context";
-import { useAuth, permissions } from "@/hooks/use-auth";
+import { useAuth, permissions, UserRole } from "@/hooks/use-auth";
 import DiseaseImportDialog from "@/components/disease-import-dialog";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { M1TemplateVersion, M1IndicatorCatalog, Barangay, M1ReportInstance, M1IndicatorValue, Mother, Child, Senior, MunicipalitySettings, BarangaySettings } from "@shared/schema";
@@ -80,21 +81,29 @@ export default function M1ReportPage() {
   const [editedValues, setEditedValues] = useState<IndicatorValueMap>({});
   const [activeReportId, setActiveReportId] = useState<number | null>(null);
   const [diseaseImportOpen, setDiseaseImportOpen] = useState(false);
-  const { user } = useAuth();
+  const { user, isTL, assignedBarangays } = useAuth();
 
   const { data: templates = [], isLoading: templatesLoading } = useQuery<M1TemplateVersion[]>({
     queryKey: ["/api/m1/templates"],
   });
+
+  const { data: barangays = [] } = useQuery<Barangay[]>({
+    queryKey: ["/api/barangays"],
+  });
+
+  // TL auto-lock: when TL logs in, auto-select their first assigned barangay
+  useEffect(() => {
+    if (isTL && assignedBarangays.length > 0 && barangays.length > 0 && selectedBarangayId === null) {
+      const firstAssigned = barangays.find(b => assignedBarangays.includes(b.name));
+      if (firstAssigned) setSelectedBarangayId(firstAssigned.id);
+    }
+  }, [isTL, assignedBarangays, barangays, selectedBarangayId]);
 
   const activeTemplate = templates.find(t => t.isActive) || templates[0];
 
   const { data: catalog = [], isLoading: catalogLoading } = useQuery<M1IndicatorCatalog[]>({
     queryKey: [`/api/m1/templates/${activeTemplate?.id}/catalog`],
     enabled: !!activeTemplate?.id,
-  });
-
-  const { data: barangays = [] } = useQuery<Barangay[]>({
-    queryKey: ["/api/barangays"],
   });
 
   const { data: municipalitySettings } = useQuery<MunicipalitySettings>({
@@ -163,10 +172,33 @@ export default function M1ReportPage() {
       if (activeReportId) {
         queryClient.invalidateQueries({ queryKey: [`/api/m1/reports/${activeReportId}`] });
       }
+      if (reportInstancesQueryKey) {
+        queryClient.invalidateQueries({ queryKey: [reportInstancesQueryKey] });
+      }
       setEditedValues({});
     },
-    onError: () => {
-      toast({ title: "Error", description: "Failed to save values.", variant: "destructive" });
+    onError: (err: any) => {
+      toast({ title: "Error", description: err?.message || "Failed to save values.", variant: "destructive" });
+    },
+  });
+
+  const updateStatusMutation = useMutation({
+    mutationFn: async ({ reportId, status }: { reportId: number; status: string }) => {
+      const res = await apiRequest("POST", `/api/m1/reports/${reportId}/status`, { status });
+      return res.json();
+    },
+    onSuccess: (_data, variables) => {
+      const label = variables.status === "SUBMITTED_LOCKED" ? "submitted and locked" : "reopened as draft";
+      toast({ title: "Report Status Updated", description: `Report has been ${label}.` });
+      if (activeReportId) {
+        queryClient.invalidateQueries({ queryKey: [`/api/m1/reports/${activeReportId}`] });
+      }
+      if (reportInstancesQueryKey) {
+        queryClient.invalidateQueries({ queryKey: [reportInstancesQueryKey] });
+      }
+    },
+    onError: (err: any) => {
+      toast({ title: "Error", description: err?.message || "Failed to update report status.", variant: "destructive" });
     },
   });
 
@@ -355,6 +387,45 @@ export default function M1ReportPage() {
     return 0;
   };
 
+  // Returns the value source for a given cell key (for badge display)
+  const getValueSource = (rowKey: string, columnKey?: string): string | undefined => {
+    const key = columnKey ? `${rowKey}:${columnKey}` : rowKey;
+    if (editedValues[key] !== undefined) return "ENCODED";
+    if (savedValuesMap[key] !== undefined) return savedValuesMap[key].valueSource;
+    if (computedValues[key] !== undefined) return "COMPUTED";
+    return undefined;
+  };
+
+  // Completeness: % of encodeable indicator cells on the current page that have a non-zero value
+  const completeness = useMemo(() => {
+    const inds = catalog.filter(ind => ind.pageNumber === currentPage && !ind.isComputed);
+    if (inds.length === 0) return 100;
+    let filled = 0;
+    let total = 0;
+    inds.forEach(ind => {
+      const colType = ind.columnGroupType || "SINGLE";
+      let keys: string[];
+      if (colType === "AGE_GROUP") {
+        keys = ["10-14", "15-19", "20-49", "TOTAL"].map(c => `${ind.rowKey}:${c}`);
+      } else if (colType === "SEX_RATE" || colType === "SEX") {
+        keys = ["M", "F", "TOTAL"].map(c => `${ind.rowKey}:${c}`);
+      } else if (colType === "FP_DUAL") {
+        keys = ["CU_10-14","CU_15-19","CU_20-49","CU_TOTAL","NA_10-14","NA_15-19","NA_20-49","NA_TOTAL"].map(c => `${ind.rowKey}:${c}`);
+      } else {
+        keys = [`${ind.rowKey}:VALUE`];
+      }
+      keys.forEach(k => {
+        total++;
+        const [rk, ck] = k.split(":");
+        const v = getValue(rk, ck);
+        if (v !== 0 && v !== "" && v !== null && v !== undefined) filled++;
+      });
+    });
+    return total === 0 ? 100 : Math.round((filled / total) * 100);
+  }, [catalog, currentPage, editedValues, savedValuesMap, computedValues]);
+
+  const isLocked = activeReport?.instance?.status === "SUBMITTED_LOCKED";
+
   const handleValueChange = (rowKey: string, columnKey: string, value: string) => {
     const key = columnKey ? `${rowKey}:${columnKey}` : rowKey;
     if (columnKey === "REMARKS") {
@@ -532,6 +603,14 @@ export default function M1ReportPage() {
   };
 
   const existingReport = reportInstances.find(r => r.month === selectedMonth && r.year === selectedYear);
+
+  const SourceBadge = ({ source }: { source?: string }) => {
+    if (!source) return null;
+    if (source === "COMPUTED") return <span className="ml-1 text-[10px] px-1 rounded bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-200">Auto</span>;
+    if (source === "ENCODED") return <span className="ml-1 text-[10px] px-1 rounded bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200">Manual</span>;
+    if (source === "IMPORTED") return <span className="ml-1 text-[10px] px-1 rounded bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-200">Import</span>;
+    return null;
+  };
 
   const renderIndicatorTable = (sectionCode: string, indicators: M1IndicatorCatalog[]) => {
     if (!indicators || indicators.length === 0) return null;
@@ -794,10 +873,11 @@ export default function M1ReportPage() {
           {indicators.map(ind => (
             <tr key={ind.rowKey} className={ind.indentLevel ? "bg-muted/20" : ""}>
               <td className="border p-2" style={{ paddingLeft: (ind.indentLevel || 0) * 16 + 8 }}>
-                {ind.officialLabel}
+                <span>{ind.officialLabel}</span>
+                {reportMode === "view" && <SourceBadge source={getValueSource(ind.rowKey, "VALUE")} />}
               </td>
               <td className="border p-1 text-center">
-                {reportMode === "encode" && !ind.isComputed ? (
+                {reportMode === "encode" && !ind.isComputed && !isLocked ? (
                   <Input
                     type="number"
                     className="w-20 h-7 text-center text-xs"
@@ -810,7 +890,7 @@ export default function M1ReportPage() {
                 )}
               </td>
               <td className="border p-1 text-center">
-                {reportMode === "encode" ? (
+                {reportMode === "encode" && !isLocked ? (
                   <Input
                     type="text"
                     className="w-full h-7 text-xs"
@@ -858,25 +938,34 @@ export default function M1ReportPage() {
 
         <div className="flex items-center gap-2 flex-wrap">
           <div className="flex flex-col gap-1">
-            <Label className="text-xs">Barangay</Label>
-            <Select
-              value={selectedBarangayId === null ? "all" : selectedBarangayId.toString()}
-              onValueChange={(v) => {
-                setSelectedBarangayId(v === "all" ? null : parseInt(v, 10));
-                setActiveReportId(null);
-                setEditedValues({});
-              }}
-            >
-              <SelectTrigger className="w-[180px]" data-testid="select-barangay">
-                <SelectValue placeholder="Select Barangay" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Barangays (Consolidated)</SelectItem>
-                {barangays.map(b => (
-                  <SelectItem key={b.id} value={b.id.toString()}>{b.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Label className="text-xs">
+              Barangay {isTL && <span className="text-xs text-muted-foreground ml-1">(locked)</span>}
+            </Label>
+            {isTL ? (
+              <div className="flex items-center gap-1 px-3 py-2 border rounded-md bg-muted text-sm w-[180px]" data-testid="select-barangay-locked">
+                <Lock className="h-3 w-3 text-muted-foreground" />
+                <span className="truncate">{selectedBarangay?.name || assignedBarangays[0] || "None assigned"}</span>
+              </div>
+            ) : (
+              <Select
+                value={selectedBarangayId === null ? "all" : selectedBarangayId.toString()}
+                onValueChange={(v) => {
+                  setSelectedBarangayId(v === "all" ? null : parseInt(v, 10));
+                  setActiveReportId(null);
+                  setEditedValues({});
+                }}
+              >
+                <SelectTrigger className="w-[180px]" data-testid="select-barangay">
+                  <SelectValue placeholder="Select Barangay" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Barangays (Consolidated)</SelectItem>
+                  {barangays.map(b => (
+                    <SelectItem key={b.id} value={b.id.toString()}>{b.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
           </div>
 
           <div className="flex flex-col gap-1">
@@ -917,10 +1006,17 @@ export default function M1ReportPage() {
       <Card>
         <CardHeader className="pb-2 flex flex-row items-center justify-between gap-2">
           <div>
-            <CardTitle className="text-lg">{selectedBarangay?.name || "All Barangays (Consolidated)"} - {MONTHS.find(m => m.value === selectedMonth)?.label} {selectedYear}</CardTitle>
+            <CardTitle className="text-lg flex items-center gap-2">
+              {selectedBarangay?.name || "All Barangays (Consolidated)"} — {MONTHS.find(m => m.value === selectedMonth)?.label} {selectedYear}
+              {isLocked && <Lock className="h-4 w-4 text-muted-foreground" />}
+            </CardTitle>
               {existingReport ? (
-                <Badge variant={existingReport.status === "SUBMITTED_LOCKED" ? "default" : "secondary"} className="mt-1">
-                  {existingReport.status}
+                <Badge
+                  variant={existingReport.status === "SUBMITTED_LOCKED" ? "default" : "secondary"}
+                  className="mt-1"
+                  data-testid="badge-report-status"
+                >
+                  {existingReport.status === "SUBMITTED_LOCKED" ? "Submitted & Locked" : existingReport.status === "READY_FOR_REVIEW" ? "Ready for Review" : "Draft"}
                 </Badge>
               ) : (
                 <Badge variant="outline" className="mt-1">No report yet</Badge>
@@ -933,7 +1029,7 @@ export default function M1ReportPage() {
                   Import M1 Data
                 </Button>
               )}
-              {!existingReport && (
+              {!existingReport && selectedBarangayId && (
                 <Button
                   size="sm"
                   onClick={handleCreateReport}
@@ -951,24 +1047,49 @@ export default function M1ReportPage() {
               )}
               {activeReportId && (
                 <>
-                  <Button
-                    size="sm"
-                    variant={reportMode === "encode" ? "default" : "outline"}
-                    onClick={() => setReportMode(reportMode === "encode" ? "view" : "encode")}
-                    data-testid="button-toggle-mode"
-                  >
-                    {reportMode === "encode" ? "View Mode" : "Encode Mode"}
-                  </Button>
-                  {reportMode === "encode" && Object.keys(editedValues).length > 0 && (
+                  {!isLocked && (
+                    <Button
+                      size="sm"
+                      variant={reportMode === "encode" ? "default" : "outline"}
+                      onClick={() => setReportMode(reportMode === "encode" ? "view" : "encode")}
+                      data-testid="button-toggle-mode"
+                    >
+                      {reportMode === "encode" ? "View Mode" : "Encode Mode"}
+                    </Button>
+                  )}
+                  {reportMode === "encode" && !isLocked && Object.keys(editedValues).length > 0 && (
                     <Button size="sm" onClick={handleSaveValues} disabled={saveValuesMutation.isPending} data-testid="button-save">
-                      <Save className="h-4 w-4 mr-1" />
-                      Save
+                      {saveValuesMutation.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Save className="h-4 w-4 mr-1" />}
+                      Save Draft
                     </Button>
                   )}
                   <Button size="sm" variant="outline" onClick={handleExportPDF} data-testid="button-export-pdf">
                     <Download className="h-4 w-4 mr-1" />
                     Export PDF
                   </Button>
+                  {!isLocked ? (
+                    <Button
+                      size="sm"
+                      variant="default"
+                      onClick={() => updateStatusMutation.mutate({ reportId: activeReportId, status: "SUBMITTED_LOCKED" })}
+                      disabled={updateStatusMutation.isPending}
+                      data-testid="button-submit-report"
+                    >
+                      {updateStatusMutation.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Send className="h-4 w-4 mr-1" />}
+                      Submit Report
+                    </Button>
+                  ) : !isTL && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => updateStatusMutation.mutate({ reportId: activeReportId, status: "DRAFT" })}
+                      disabled={updateStatusMutation.isPending}
+                      data-testid="button-reopen-report"
+                    >
+                      {updateStatusMutation.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Unlock className="h-4 w-4 mr-1" />}
+                      Reopen
+                    </Button>
+                  )}
                 </>
               )}
             </div>
@@ -990,6 +1111,23 @@ export default function M1ReportPage() {
                   </Button>
                 </div>
               </div>
+
+              {activeReportId && (
+                <div className="mb-2 space-y-1">
+                  <div className="flex items-center justify-between text-xs text-muted-foreground">
+                    <span>Page {currentPage} completeness</span>
+                    <span className={completeness === 100 ? "text-green-600 font-medium" : completeness >= 70 ? "text-yellow-600" : "text-red-500"}>{completeness}%</span>
+                  </div>
+                  <Progress value={completeness} className="h-1.5" data-testid="progress-completeness" />
+                </div>
+              )}
+
+              {isLocked && (
+                <div className="mb-2 flex items-center gap-2 rounded-md bg-muted px-3 py-2 text-sm text-muted-foreground" data-testid="locked-notice">
+                  <Lock className="h-4 w-4 shrink-0" />
+                  This report is submitted and locked. Reopen it to make changes.
+                </div>
+              )}
 
               {[1, 2, 3].map(page => (
                 <TabsContent key={page} value={page.toString()} className="space-y-6">

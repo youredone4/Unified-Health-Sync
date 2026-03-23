@@ -90,6 +90,12 @@ Team Leaders can only access data from their assigned barangays. The `user_baran
 - `requireAuth` - Requires authentication
 - `requireRole` - Requires specific roles
 
+**M1 Report Access:**
+- TL role now has access to `/reports/m1` (previously MGMT only)
+- TL is auto-locked to their assigned barangay (dropdown replaced with locked display)
+- TL cannot reopen SUBMITTED_LOCKED reports (only MHO/Admin can)
+- All M1 API routes now require authentication (`[loadUserInfo, requireAuth]`)
+
 ### User Management
 System Admins can manage users at `/admin/users`:
 - Create users with username, password, role, barangay assignments

@@ -88,6 +88,7 @@ export interface IStorage {
   getM1ReportInstance(id: number): Promise<{ instance: M1ReportInstance; values: M1IndicatorValue[] } | undefined>;
   createM1ReportInstance(data: any): Promise<M1ReportInstance>;
   updateM1IndicatorValues(reportId: number, values: any[]): Promise<M1IndicatorValue[]>;
+  updateM1ReportStatus(id: number, status: string): Promise<M1ReportInstance>;
   getMunicipalitySettings(): Promise<MunicipalitySettings | undefined>;
   getBarangaySettings(barangayId: number): Promise<BarangaySettings | undefined>;
 
@@ -497,6 +498,16 @@ export class DatabaseStorage implements IStorage {
       .where(eq(m1ReportInstances.id, reportId));
     
     return results;
+  }
+
+  async updateM1ReportStatus(id: number, status: string): Promise<M1ReportInstance> {
+    const now = new Date().toISOString();
+    const [updated] = await db.update(m1ReportInstances)
+      .set({ status, updatedAt: now })
+      .where(eq(m1ReportInstances.id, id))
+      .returning();
+    if (!updated) throw new Error(`Report ${id} not found`);
+    return updated;
   }
 
   async getMunicipalitySettings(): Promise<MunicipalitySettings | undefined> {
