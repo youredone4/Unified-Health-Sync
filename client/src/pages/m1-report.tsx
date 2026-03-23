@@ -698,7 +698,7 @@ export default function M1ReportPage() {
                 </td>
                 {["CU_10-14", "CU_15-19", "CU_20-49", "CU_TOTAL", "NA_10-14", "NA_15-19", "NA_20-49", "NA_TOTAL"].map(col => (
                   <td key={col} className="border p-1 text-center">
-                    <CellValue rowKey={ind.rowKey} col={col} isPrimary={col === "CU_TOTAL" || col === "NA_TOTAL"}>
+                    <CellValue rowKey={ind.rowKey} col={col} isPrimary={ind.isRequired && (col === "CU_TOTAL" || col === "NA_TOTAL")}>
                       {reportMode === "encode" && !ind.isComputed && !isLocked ? (
                         <Input
                           type="number"
@@ -754,7 +754,7 @@ export default function M1ReportPage() {
                 </td>
                 {["10-14", "15-19", "20-49", "TOTAL"].map(col => (
                   <td key={col} className="border p-1 text-center">
-                    <CellValue rowKey={ind.rowKey} col={col} isPrimary={col === "TOTAL"}>
+                    <CellValue rowKey={ind.rowKey} col={col} isPrimary={ind.isRequired && col === "TOTAL"}>
                       {reportMode === "encode" && !ind.isComputed && !isLocked ? (
                         <Input
                           type="number"
@@ -856,7 +856,7 @@ export default function M1ReportPage() {
                     </td>
                   )}
                   <td className="border p-1 text-center">
-                    <CellValue rowKey={ind.rowKey} col="TOTAL" isPrimary>
+                    <CellValue rowKey={ind.rowKey} col="TOTAL" isPrimary={ind.isRequired}>
                       {reportMode === "encode" && !ind.isComputed && !isLocked ? (
                         <Input
                           type="number"
@@ -912,7 +912,7 @@ export default function M1ReportPage() {
                 {ind.officialLabel}
               </td>
               <td className="border p-1 text-center">
-                <CellValue rowKey={ind.rowKey} col="VALUE" isPrimary>
+                <CellValue rowKey={ind.rowKey} col="VALUE" isPrimary={ind.isRequired}>
                   {reportMode === "encode" && !ind.isComputed && !isLocked ? (
                     <Input
                       type="number"
