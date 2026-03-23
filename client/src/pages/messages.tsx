@@ -10,7 +10,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { MessageCircle, Send, Search, ArrowLeft, Users, Globe } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
-import { useAuth } from "@/hooks/use-auth";
+import { useAuth, type AuthUser } from "@/hooks/use-auth";
 import { formatDistanceToNow } from "date-fns";
 
 interface Conversation {
@@ -93,7 +93,7 @@ function roleBadgeColor(role: string) {
 // ============================================================
 // General Chat Tab
 // ============================================================
-function GeneralChatTab({ user }: { user: any }) {
+function GeneralChatTab({ user }: { user: AuthUser | null }) {
   const queryClient = useQueryClient();
   const [messageText, setMessageText] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -202,7 +202,7 @@ function GeneralChatTab({ user }: { user: any }) {
 // ============================================================
 // Direct Messages Tab
 // ============================================================
-function DirectMessagesTab({ user }: { user: any }) {
+function DirectMessagesTab({ user }: { user: AuthUser | null }) {
   const queryClient = useQueryClient();
   const [activeUserId, setActiveUserId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");

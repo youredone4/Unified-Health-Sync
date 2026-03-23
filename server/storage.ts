@@ -1326,9 +1326,11 @@ export class DatabaseStorage implements IStorage {
 
   // === GLOBAL CHAT ===
   async getGlobalChatMessages(): Promise<GlobalChatMessage[]> {
-    return await db.select().from(globalChatMessages)
-      .orderBy(globalChatMessages.createdAt)
+    // Fetch the most-recent 100 rows (DESC), then re-sort oldest-first for display
+    const rows = await db.select().from(globalChatMessages)
+      .orderBy(desc(globalChatMessages.createdAt))
       .limit(100);
+    return rows.reverse();
   }
 
   async sendGlobalChatMessage(senderId: string, senderName: string, senderRole: string, content: string): Promise<GlobalChatMessage> {
