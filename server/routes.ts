@@ -879,8 +879,8 @@ export async function registerRoutes(
       if (!isNaN(weightNum)) {
         const currentChild = await storage.getChild(id);
         if (currentChild) {
-          const existingGrowth: Array<{ date: string; weightKg: number; heightCm?: number; muac?: number }> =
-            Array.isArray(currentChild.growth) ? (currentChild.growth as any[]) : [];
+          const existingGrowth: NonNullable<typeof currentChild.growth> =
+            Array.isArray(currentChild.growth) ? [...currentChild.growth] : [];
           const idx = existingGrowth.findIndex(g => g.date === visitDate);
           const newEntry: { date: string; weightKg: number; heightCm?: number; muac?: number } = {
             date: visitDate,
