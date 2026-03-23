@@ -1204,5 +1204,25 @@ export async function registerRoutes(
     res.json({ success: true });
   }));
 
+  // === GENERAL CHAT (Global shared internal chat room) ===
+  app.get("/api/general-chat/messages", [loadUserInfo, requireAuth], ar(async (req, res) => {
+    const messages = await storage.getGlobalChatMessages();
+    res.json(messages);
+  }));
+
+  app.post("/api/general-chat/messages", [loadUserInfo, requireAuth], ar(async (req, res) => {
+    const { content } = req.body;
+    if (!content || typeof content !== "string" || content.trim().length === 0) {
+      return res.status(400).json({ message: "Message content is required" });
+    }
+    if (content.trim().length > 2000) {
+      return res.status(400).json({ message: "Message is too long (max 2000 characters)" });
+    }
+    const ui = req.userInfo!;
+    const senderName = [ui.firstName, ui.lastName].filter(Boolean).join(" ") || ui.username;
+    const created = await storage.sendGlobalChatMessage(ui.id, senderName, ui.role, content.trim());
+    res.status(201).json(created);
+  }));
+
   return httpServer;
 }

@@ -578,6 +578,20 @@ export const insertFpServiceRecordSchema = createInsertSchema(fpServiceRecords)
 export type FpServiceRecord = typeof fpServiceRecords.$inferSelect;
 export type InsertFpServiceRecord = z.infer<typeof insertFpServiceRecordSchema>;
 
+// === GLOBAL CHAT MESSAGES (Internal shared chat room for all staff) ===
+export const globalChatMessages = pgTable("global_chat_messages", {
+  id: serial("id").primaryKey(),
+  senderId: text("sender_id").notNull(),
+  senderName: text("sender_name").notNull(),
+  senderRole: text("sender_role").notNull(),
+  content: text("content").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertGlobalChatMessageSchema = createInsertSchema(globalChatMessages).omit({ id: true, createdAt: true });
+export type GlobalChatMessage = typeof globalChatMessages.$inferSelect;
+export type InsertGlobalChatMessage = z.infer<typeof insertGlobalChatMessageSchema>;
+
 // === AUTH & RBAC (from Replit Auth integration + extensions) ===
 // Note: barangays, userBarangays, auditLogs, users, sessions are defined in ./models/auth.ts
 export * from "./models/auth";

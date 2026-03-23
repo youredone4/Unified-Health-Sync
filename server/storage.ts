@@ -6,6 +6,7 @@ import {
   directMessages,
   prenatalVisits, childVisits, seniorVisits,
   fpServiceRecords,
+  globalChatMessages,
   type Mother, type InsertMother,
   type Child, type InsertChild,
   type Senior, type InsertSenior,
@@ -26,6 +27,7 @@ import {
   type ChildVisit, type InsertChildVisit,
   type SeniorVisit, type InsertSeniorVisit,
   type FpServiceRecord, type InsertFpServiceRecord,
+  type GlobalChatMessage,
 } from "@shared/schema";
 import { eq, and, inArray, desc, isNull, gte, sql, or, lt, ne, ilike } from "drizzle-orm";
 
@@ -132,6 +134,10 @@ export interface IStorage {
   createFpServiceRecord(record: InsertFpServiceRecord): Promise<FpServiceRecord>;
   updateFpServiceRecord(id: number, updates: Partial<InsertFpServiceRecord>): Promise<FpServiceRecord>;
   deleteFpServiceRecord(id: number): Promise<boolean>;
+
+  // General Chat (global shared room)
+  getGlobalChatMessages(): Promise<GlobalChatMessage[]>;
+  sendGlobalChatMessage(senderId: string, senderName: string, senderRole: string, content: string): Promise<GlobalChatMessage>;
 
   seedData(): Promise<void>;
 }
@@ -1316,6 +1322,23 @@ export class DatabaseStorage implements IStorage {
   async deleteFpServiceRecord(id: number): Promise<boolean> {
     await db.delete(fpServiceRecords).where(eq(fpServiceRecords.id, id));
     return true;
+  }
+
+  // === GLOBAL CHAT ===
+  async getGlobalChatMessages(): Promise<GlobalChatMessage[]> {
+    return await db.select().from(globalChatMessages)
+      .orderBy(globalChatMessages.createdAt)
+      .limit(100);
+  }
+
+  async sendGlobalChatMessage(senderId: string, senderName: string, senderRole: string, content: string): Promise<GlobalChatMessage> {
+    const [created] = await db.insert(globalChatMessages).values({
+      senderId,
+      senderName,
+      senderRole,
+      content,
+    }).returning();
+    return created;
   }
 }
 
