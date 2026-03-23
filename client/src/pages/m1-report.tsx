@@ -850,7 +850,7 @@ export default function M1ReportPage() {
                           data-testid={`input-${ind.rowKey}-${col}`}
                         />
                       ) : (
-                        <span className="text-sm">{getValue(ind.rowKey, col)}</span>
+                        <span className="text-sm" data-testid={`cell-${ind.rowKey}-${col}`}>{getValue(ind.rowKey, col)}</span>
                       )}
                     </CellValue>
                   </td>

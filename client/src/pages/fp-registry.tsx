@@ -191,6 +191,10 @@ function FpFormDialog({ open, onClose, record, defaultBarangay }: FpFormDialogPr
     if (linkedMotherId) {
       payload.linkedPersonType = "MOTHER";
       payload.linkedPersonId = linkedMotherId;
+    } else if (isEdit) {
+      // Explicitly null out linkage when user unlinkd a mother in edit mode
+      payload.linkedPersonType = null;
+      payload.linkedPersonId = null;
     }
     if (isEdit) updateMutation.mutate(payload as FpFormValues);
     else createMutation.mutate(payload as FpFormValues);
