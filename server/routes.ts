@@ -631,9 +631,9 @@ export async function registerRoutes(
       oldValueMap[key] = v.valueNumber ?? v.valueText ?? null;
     });
     const updated = await storage.updateM1IndicatorValues(id, values);
-    // One audit row per changed ENCODED field
+    // One audit row per changed ENCODED field — treat missing valueSource as ENCODED
     const auditPromises = values
-      .filter((v: any) => v.valueSource === "ENCODED")
+      .filter((v: any) => !v.valueSource || v.valueSource === "ENCODED")
       .map(async (v: any) => {
         const fieldKey = v.columnKey ? `${v.rowKey}:${v.columnKey}` : v.rowKey;
         const newVal = v.valueNumber ?? v.valueText ?? null;
