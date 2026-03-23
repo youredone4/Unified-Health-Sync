@@ -630,10 +630,11 @@ export default function M1ReportPage() {
   };
 
   // Cell content: value + source badge stacked, shown in every value cell
-  const CellValue = ({ rowKey, col, isInput = false, children }: { rowKey: string; col: string; isInput?: boolean; children: React.ReactNode }) => (
+  // isPrimary: only primary/summary columns show the red "Missing" badge (gates to required indicator cells)
+  const CellValue = ({ rowKey, col, isPrimary = false, children }: { rowKey: string; col: string; isPrimary?: boolean; children: React.ReactNode }) => (
     <div className="flex flex-col items-center gap-0.5">
       {children}
-      <SourceBadge source={getValueSource(rowKey, col)} showMissing={!hasCellValue(rowKey, col)} />
+      <SourceBadge source={getValueSource(rowKey, col)} showMissing={isPrimary && !hasCellValue(rowKey, col)} />
     </div>
   );
 
@@ -697,7 +698,7 @@ export default function M1ReportPage() {
                 </td>
                 {["CU_10-14", "CU_15-19", "CU_20-49", "CU_TOTAL", "NA_10-14", "NA_15-19", "NA_20-49", "NA_TOTAL"].map(col => (
                   <td key={col} className="border p-1 text-center">
-                    <CellValue rowKey={ind.rowKey} col={col}>
+                    <CellValue rowKey={ind.rowKey} col={col} isPrimary={col === "CU_TOTAL" || col === "NA_TOTAL"}>
                       {reportMode === "encode" && !ind.isComputed && !isLocked ? (
                         <Input
                           type="number"
@@ -753,7 +754,7 @@ export default function M1ReportPage() {
                 </td>
                 {["10-14", "15-19", "20-49", "TOTAL"].map(col => (
                   <td key={col} className="border p-1 text-center">
-                    <CellValue rowKey={ind.rowKey} col={col}>
+                    <CellValue rowKey={ind.rowKey} col={col} isPrimary={col === "TOTAL"}>
                       {reportMode === "encode" && !ind.isComputed && !isLocked ? (
                         <Input
                           type="number"
@@ -855,7 +856,7 @@ export default function M1ReportPage() {
                     </td>
                   )}
                   <td className="border p-1 text-center">
-                    <CellValue rowKey={ind.rowKey} col="TOTAL">
+                    <CellValue rowKey={ind.rowKey} col="TOTAL" isPrimary>
                       {reportMode === "encode" && !ind.isComputed && !isLocked ? (
                         <Input
                           type="number"
@@ -911,7 +912,7 @@ export default function M1ReportPage() {
                 {ind.officialLabel}
               </td>
               <td className="border p-1 text-center">
-                <CellValue rowKey={ind.rowKey} col="VALUE">
+                <CellValue rowKey={ind.rowKey} col="VALUE" isPrimary>
                   {reportMode === "encode" && !ind.isComputed && !isLocked ? (
                     <Input
                       type="number"
