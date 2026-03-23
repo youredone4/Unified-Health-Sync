@@ -1,0 +1,202 @@
+Enhance the M1 Brgy Report module so the system can generate a full barangay-level M1 report based on the attached scanned sample, while using a hybrid workflow: auto-fill where system data already exists, and allow Team Leaders (Barangay Nurses) to manually complete or correct their own barangay’s report with audit logging.
+
+Important Context
+- The system already has an M1 Report module.
+- A scanned sample of the M1 Brgy report has been provided and should be used as the structure and content reference.
+- The report is barangay-specific.
+- Do NOT rebuild the whole system.
+- Do NOT break existing registries, dashboards, imports, reporting logic, role-based access, or UI workflows.
+- Replit should inspect the current M1 generation logic, current database fields, and existing UI forms during Planning before changing anything.
+
+Primary Goal
+Build a reliable barangay-level M1 reporting workflow where:
+- one M1 report is generated per barangay
+- all important details required by the M1 report are either:
+  - auto-filled from existing system data, or
+  - manually editable in the M1 report UI
+- Team Leaders can view and edit only their own barangay’s report
+- all manual edits are tracked through audit logging
+
+Core Workflow Requirement
+Use a hybrid model:
+- auto-fill report values where source data already exists in the system
+- allow Team Leaders (Barangay Nurses) to manually complete missing fields
+- allow Team Leaders to manually correct their own barangay M1 values when necessary
+- restrict Team Leaders to their assigned barangay only
+- track all manual edits using audit logging
+
+Audit logging must record:
+- user
+- role
+- barangay
+- field changed
+- old value
+- new value
+- timestamp
+
+Higher-level roles such as Super Admin / municipal-level users should be able to review all barangay M1 reports and manage finalization if needed.
+
+Requirements
+
+1. Use the scanned M1 sample as the report structure reference
+Inspect the attached scanned M1Brgy report carefully and use it as the basis for:
+- report sections
+- indicator groupings
+- field labels/categories
+- barangay-level report scope
+- month/year/barangay header requirements
+
+2. Generate one M1 report per barangay
+The report must support generation by:
+- month
+- year
+- barangay
+
+Output should be one M1 report per barangay.
+
+3. Audit all M1-required sections and indicators
+Check the scanned report and identify all sections/indicators that must be supported by the system.
+
+At minimum, inspect support for sections such as:
+- Family Planning
+- Maternal Care and Services
+- Intrapartum and Newborn Care
+- Postpartum Care
+- Child Care and Services
+- Immunization
+- Nutrition
+- Management of Sick Children
+- Oral Health
+- Non-Communicable Diseases
+- Blindness Prevention
+- Cervical Cancer Prevention
+- Breast Cancer Prevention
+- Mental Health
+- Environmental Health and Sanitation
+- Infectious Disease Prevention and Control
+- Vital Statistics
+
+4. Check source-to-report mapping
+For every M1 field/indicator:
+- identify the source module, table, form, or workflow if it already exists
+- identify whether the value can be auto-filled
+- identify whether the value is currently missing from system data
+- identify whether it needs manual completion in the M1 UI
+- identify broken or inconsistent mappings
+
+5. Align UI requirements with M1 requirements
+All important details required by the M1 report must also be represented somewhere in the system UI.
+
+That means:
+- if M1 depends on a field, the field should exist in the relevant form/module/profile
+- if a field is not currently captured anywhere, either:
+  - add it to the correct UI workflow, or
+  - make it manually editable in the M1 report screen
+
+Do not leave required report data with no source or no input path.
+
+6. Build hybrid auto-fill + manual edit behavior
+Implement the M1 Brgy report so that:
+- values from system modules are auto-filled when available
+- Team Leaders can manually enter missing values
+- Team Leaders can manually correct values for their own barangay when necessary
+- manually edited values are clearly distinguishable from auto-filled values
+
+If feasible, give each field a simple status such as:
+- auto-filled
+- manually entered
+- adjusted
+- missing
+
+7. Team Leader visibility and editing
+Allow Team Leader (Barangay Nurse) users to:
+- view the M1 report for their assigned barangay only
+- edit their barangay’s M1 report
+- save progress/draft if applicable
+
+Do NOT allow Team Leaders to edit all barangays unless explicitly intended by the existing permission model.
+
+8. Higher-level role access
+Allow Super Admin / municipal-level roles to:
+- view all barangay M1 reports
+- review edits
+- edit if permitted
+- finalize or lock reports if that workflow is implemented
+- reopen reports if corrections are needed and current policy allows it
+
+9. Audit logging for manual edits
+Every manual change to an M1 value must be logged.
+
+Audit log must capture:
+- user
+- role
+- barangay
+- field changed
+- old value
+- new value
+- timestamp
+
+If the system already has Audit Logs, integrate with that instead of creating a separate conflicting log structure.
+
+10. Draft, submit, and finalize flow
+If feasible, support:
+- Save Draft
+- Submit / Finalize
+- Locked finalized report
+- Reopen by authorized higher role
+
+The goal is to make the M1 process usable in a real barangay-to-municipal workflow.
+
+11. M1 report UI requirements
+Create or improve a dedicated M1 Brgy report screen that supports:
+- month selection
+- year selection
+- barangay selection
+- sectioned report layout based on the scanned sample
+- editable fields where the user has permission
+- clear display of auto-filled vs manually edited values
+- clean print/export-ready structure if feasible
+
+12. Preserve existing functionality
+Do NOT break:
+- current M1 import/upload logic
+- dashboards
+- registries
+- role-based access
+- existing reporting logic that is already correct
+- any currently working module that feeds report values
+
+13. Inspect first before changing
+During Planning:
+- inspect the scanned sample carefully
+- inspect current M1 generation logic
+- inspect all existing modules that may feed M1 values
+- inspect current field names and data structures
+- identify what is already mapped correctly
+- identify what is missing
+- reuse current correct logic wherever possible
+- avoid duplicating data models or creating parallel conflicting report logic
+
+Deliverables
+Provide:
+1. a full list of M1 sections and indicators derived from the scanned sample
+2. a mapping of each indicator to:
+   - source module/form/table, or
+   - manual-entry requirement
+3. updated M1 Brgy report UI plan/implementation
+4. Team Leader barangay-based visibility/edit access
+5. audit logging logic for manual changes
+6. draft/finalize workflow if implemented
+7. files/modules changed
+8. a short explanation of how per-barangay M1 generation now works
+
+Success Criteria
+- the system generates one M1 report per barangay
+- the report structure follows the scanned sample closely
+- important M1 details are reflected in the system UI or editable in the report screen
+- existing data is auto-filled where available
+- Team Leaders can manually complete and correct their own barangay M1 report
+- Team Leaders are restricted to their assigned barangay
+- manual edits are audit logged
+- higher roles can review/manage barangay reports appropriately
+- existing system behavior remains stable

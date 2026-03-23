@@ -1,0 +1,177 @@
+Revamp the Patient Check-up workflow so that patient intake starts with Triage before doctor consultation, and ensure child nurse monitoring visit measurements update the Growth Monitoring chart.
+
+Context
+- The system already has Patient Check-up, Mother, Child, and Senior modules.
+- Child profiles already have Nurse Monitoring Visits and Growth Monitoring.
+- The current Patient Check-up workflow starts too directly at consultation.
+- We want to add a proper triage-first workflow similar to actual municipal health center operations.
+- Do NOT rebuild the whole system.
+- Do NOT break registries, dashboards, growth monitoring, or doctor consultation workflows.
+
+Primary Goals
+1. Make Triage the first step before Patient Check-up consultation
+2. Link triage to existing patient profiles whenever possible
+3. Ensure child nurse monitoring visit measurements feed the Growth Chart
+4. Add proper role handling for triage staff
+
+==================================================
+A. Child Nurse Monitoring Visit -> Growth Chart Integration
+==================================================
+
+1. Link child visit measurements to growth history
+When a nurse adds a child monitoring visit, any recorded:
+- weight
+- height/length
+- MUAC if applicable
+- visit date
+
+should be saved both as:
+- Nurse Monitoring Visit record
+- Growth Monitoring measurement record
+
+2. Auto-update growth chart
+After saving a child visit:
+- update the child’s Growth Chart
+- update latest measurement values
+- update Last Weight / Last Assessment Date if used in the profile
+- allow nutrition classification to refresh if the system already recalculates from latest measurements
+
+3. Preserve longitudinal history
+Do not overwrite older measurements.
+Keep all prior growth records and plot them over time.
+
+==================================================
+B. Triage-First Patient Check-up Workflow
+==================================================
+
+4. Add triage as first step
+Refactor the workflow so Patient Check-up begins with:
+- Triage intake
+- then doctor consultation
+
+5. Triage workflow
+The triage nurse should:
+- search existing patient profile first
+- if profile exists, pull and link it
+- if no profile exists, create a new patient intake/profile entry
+- record triage details
+- send the patient to consultation queue
+
+6. Link triage to existing profiles
+Search and reuse profiles from:
+- Mother Registry
+- Child Registry
+- Senior Registry
+- existing Patient Check-up / consultation-linked profiles
+
+Avoid duplicate patient creation whenever possible.
+
+7. Triage data fields
+Support triage capture fields based on the intake form, including:
+- Name
+- Sex
+- Birthdate
+- Address
+- Civil Status
+- Religion
+- Occupation
+- Educational Attainment
+- Contact No.
+- Head of Family
+- PhilHealth No.
+- Name of Husband/Wife
+- Name of Father
+- Mother’s Maiden Name
+- Date
+- Age
+- Weight
+- Blood Pressure
+- Respiratory Rate
+- Waist Circumference
+- Chief Complaint
+- MUAC
+- Height
+- Pulse Rate
+- Temperature
+- Heart Rate
+- Head Circumference
+- Diagnostic/Laboratory or initial notes
+
+8. Doctor consultation should use triage data
+When a doctor opens a patient for consultation:
+- show linked triage information first
+- preserve triage vitals and complaint
+- then allow doctor to add consultation-specific diagnosis, disposition, and treatment
+
+==================================================
+C. Role Recommendation
+==================================================
+
+9. Add a Triage Nurse role
+Recommended implementation:
+- create a dedicated role: Triage Nurse
+
+Reason:
+- triage workflow is different from Team Leader barangay workflow
+- triage is facility-based intake for the municipal health center
+- easier role separation and auditing
+
+10. Triage Nurse permissions
+Allow Triage Nurse to:
+- search patient profiles
+- create new triage records
+- create patient intake if no profile exists
+- update triage details
+- send patient to consultation queue
+
+Do NOT allow:
+- admin-only deletion
+- full system admin access
+
+11. Preserve Team Leader role
+Keep Team Leader focused on:
+- barangay monitoring visits
+- prenatal/child/senior visits
+- registry updates
+- outreach/follow-up workflows
+
+If the current system cannot safely add a new role immediately, use a temporary permission-based approach, but the preferred design is a dedicated Triage Nurse role.
+
+==================================================
+D. Shared Requirements
+==================================================
+
+12. Preserve existing functionality
+Do not break:
+- Patient Check-up
+- Child Growth Monitoring
+- Mother / Child / Senior Registries
+- dashboards
+- role-based access
+- consultation history
+
+13. Inspect current logic first
+Before implementing:
+- inspect how Patient Check-up records are currently created
+- inspect how child growth measurements are stored
+- inspect how nurse visits are stored
+- inspect current profile linking logic
+- inspect existing role model and permissions
+
+14. Deliverables
+Provide:
+1. child visit-to-growth-chart integration
+2. triage intake workflow
+3. profile search/linking behavior for triage
+4. recommendation implemented for Triage Nurse role or permission model
+5. consultation flow updated to use triage first
+6. files changed
+
+15. Success Criteria
+- child nurse visit weight/height updates the Growth Chart
+- triage happens before consultation
+- triage can pull existing profiles or create new intake records
+- doctor consultation uses triage data
+- duplicate patient records are reduced
+- role separation is clean and realistic
+- existing system behavior remains stable
