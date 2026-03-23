@@ -37,6 +37,7 @@ import {
   ClipboardPlus,
   MessageCircle,
   User,
+  HeartHandshake,
 } from "lucide-react";
 import { useTheme } from "@/contexts/theme-context";
 import { useAuth, sidebarPermissions, ALL_ROLES } from "@/hooks/use-auth";
@@ -82,6 +83,12 @@ const NAV_GROUPS: NavGroup[] = [
       { title: "Vaccination Schedule", url: "/child", icon: Baby, roles: rolesFor("/child") },
       { title: "Child Dashboard", url: "/child/dashboard", icon: Activity, roles: rolesFor("/child/dashboard") },
       { title: "Child Registry", url: "/child/registry", icon: Users, roles: rolesFor("/child/registry") },
+    ],
+  },
+  {
+    label: "Family Planning",
+    items: [
+      { title: "FP Registry", url: "/fp", icon: HeartHandshake, roles: rolesFor("/fp") },
     ],
   },
   {

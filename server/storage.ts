@@ -5,6 +5,7 @@ import {
   m1TemplateVersions, m1IndicatorCatalog, m1ReportInstances, m1ReportHeader, m1IndicatorValues, barangaySettings,
   directMessages,
   prenatalVisits, childVisits, seniorVisits,
+  fpServiceRecords,
   type Mother, type InsertMother,
   type Child, type InsertChild,
   type Senior, type InsertSenior,
@@ -24,6 +25,7 @@ import {
   type PrenatalVisit, type InsertPrenatalVisit,
   type ChildVisit, type InsertChildVisit,
   type SeniorVisit, type InsertSeniorVisit,
+  type FpServiceRecord, type InsertFpServiceRecord,
 } from "@shared/schema";
 import { eq, and, inArray, desc, isNull, gte, sql, or, lt, ne, ilike } from "drizzle-orm";
 
@@ -123,6 +125,13 @@ export interface IStorage {
   createChildVisit(visit: InsertChildVisit): Promise<ChildVisit>;
   getSeniorVisits(seniorId: number): Promise<SeniorVisit[]>;
   createSeniorVisit(visit: InsertSeniorVisit): Promise<SeniorVisit>;
+
+  // FP Service Records
+  getFpServiceRecords(filters?: { barangay?: string; barangays?: string[] }): Promise<FpServiceRecord[]>;
+  getFpServiceRecord(id: number): Promise<FpServiceRecord | undefined>;
+  createFpServiceRecord(record: InsertFpServiceRecord): Promise<FpServiceRecord>;
+  updateFpServiceRecord(id: number, updates: Partial<InsertFpServiceRecord>): Promise<FpServiceRecord>;
+  deleteFpServiceRecord(id: number): Promise<boolean>;
 
   seedData(): Promise<void>;
 }
@@ -1270,6 +1279,44 @@ export class DatabaseStorage implements IStorage {
   async createSeniorVisit(visit: InsertSeniorVisit): Promise<SeniorVisit> {
     const [created] = await db.insert(seniorVisits).values(visit).returning();
     return created;
+  }
+
+  // === FP SERVICE RECORDS ===
+  async getFpServiceRecords(filters?: { barangay?: string; barangays?: string[] }): Promise<FpServiceRecord[]> {
+    if (filters?.barangay) {
+      return await db.select().from(fpServiceRecords)
+        .where(eq(fpServiceRecords.barangay, filters.barangay))
+        .orderBy(desc(fpServiceRecords.createdAt));
+    }
+    if (filters?.barangays && filters.barangays.length > 0) {
+      return await db.select().from(fpServiceRecords)
+        .where(inArray(fpServiceRecords.barangay, filters.barangays))
+        .orderBy(desc(fpServiceRecords.createdAt));
+    }
+    return await db.select().from(fpServiceRecords).orderBy(desc(fpServiceRecords.createdAt));
+  }
+
+  async getFpServiceRecord(id: number): Promise<FpServiceRecord | undefined> {
+    const [record] = await db.select().from(fpServiceRecords).where(eq(fpServiceRecords.id, id));
+    return record;
+  }
+
+  async createFpServiceRecord(record: InsertFpServiceRecord): Promise<FpServiceRecord> {
+    const [created] = await db.insert(fpServiceRecords).values(record).returning();
+    return created;
+  }
+
+  async updateFpServiceRecord(id: number, updates: Partial<InsertFpServiceRecord>): Promise<FpServiceRecord> {
+    const [updated] = await db.update(fpServiceRecords)
+      .set(updates)
+      .where(eq(fpServiceRecords.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteFpServiceRecord(id: number): Promise<boolean> {
+    await db.delete(fpServiceRecords).where(eq(fpServiceRecords.id, id));
+    return true;
   }
 }
 

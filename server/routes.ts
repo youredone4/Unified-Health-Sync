@@ -3,7 +3,7 @@ import type { Server } from "http";
 import { storage } from "./storage";
 import { db } from "./db";
 import { max, eq } from "drizzle-orm";
-import { prenatalVisits, childVisits, seniorVisits } from "@shared/schema";
+import { prenatalVisits, childVisits, seniorVisits, insertFpServiceRecordSchema } from "@shared/schema";
 import { api } from "@shared/routes";
 import { z } from "zod";
 import { setupAuth, registerAuthRoutes } from "./auth";
@@ -1112,6 +1112,69 @@ export async function registerRoutes(
       }
     }
     res.status(201).json(visit);
+  }));
+
+  // === FP SERVICE RECORDS ===
+  const fpRBAC = [loadUserInfo, requireAuth];
+
+  app.get("/api/fp-records", fpRBAC, ar(async (req, res) => {
+    const { barangay } = req.query as { barangay?: string };
+    const user = req.userInfo!;
+    if (user.role === UserRole.TL) {
+      if (barangay && !user.assignedBarangays.includes(barangay)) {
+        return res.status(403).json({ message: "Not authorized for this barangay" });
+      }
+      const records = await storage.getFpServiceRecords({
+        barangays: barangay ? [barangay] : user.assignedBarangays
+      });
+      return res.json(records);
+    }
+    const records = await storage.getFpServiceRecords(barangay ? { barangay } : undefined);
+    res.json(records);
+  }));
+
+  app.get("/api/fp-records/:id", fpRBAC, ar(async (req, res) => {
+    const id = parseId(req.params.id, res); if (id === null) return;
+    const record = await storage.getFpServiceRecord(id);
+    if (!record) return res.status(404).json({ message: "FP record not found" });
+    if (req.userInfo?.role === UserRole.TL && !req.userInfo.assignedBarangays.includes(record.barangay)) {
+      return res.status(403).json({ message: "Not authorized for this barangay" });
+    }
+    res.json(record);
+  }));
+
+  app.post("/api/fp-records", fpRBAC, ar(async (req, res) => {
+    const user = req.userInfo!;
+    const parsed = insertFpServiceRecordSchema.safeParse({
+      ...req.body,
+      recordedBy: user.username,
+      createdAt: new Date().toISOString(),
+    });
+    if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message || "Invalid data" });
+    if (user.role === UserRole.TL && !user.assignedBarangays.includes(parsed.data.barangay)) {
+      return res.status(403).json({ message: "Not authorized for this barangay" });
+    }
+    const record = await storage.createFpServiceRecord(parsed.data);
+    res.status(201).json(record);
+  }));
+
+  app.put("/api/fp-records/:id", fpRBAC, ar(async (req, res) => {
+    const id = parseId(req.params.id, res); if (id === null) return;
+    const existing = await storage.getFpServiceRecord(id);
+    if (!existing) return res.status(404).json({ message: "FP record not found" });
+    if (req.userInfo?.role === UserRole.TL && !req.userInfo.assignedBarangays.includes(existing.barangay)) {
+      return res.status(403).json({ message: "Not authorized for this barangay" });
+    }
+    const updated = await storage.updateFpServiceRecord(id, req.body);
+    res.json(updated);
+  }));
+
+  app.delete("/api/fp-records/:id", [loadUserInfo, requireAuth, requireRole(UserRole.SYSTEM_ADMIN, UserRole.MHO)], ar(async (req, res) => {
+    const id = parseId(req.params.id, res); if (id === null) return;
+    const existing = await storage.getFpServiceRecord(id);
+    if (!existing) return res.status(404).json({ message: "FP record not found" });
+    await storage.deleteFpServiceRecord(id);
+    res.json({ success: true });
   }));
 
   return httpServer;

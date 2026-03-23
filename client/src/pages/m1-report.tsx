@@ -14,8 +14,9 @@ import { useTheme } from "@/contexts/theme-context";
 import { useAuth, permissions, UserRole } from "@/hooks/use-auth";
 import DiseaseImportDialog from "@/components/disease-import-dialog";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import type { M1TemplateVersion, M1IndicatorCatalog, Barangay, M1ReportInstance, M1IndicatorValue, Mother, Child, Senior, MunicipalitySettings, BarangaySettings } from "@shared/schema";
-import { differenceInMonths, parseISO } from "date-fns";
+import type { M1TemplateVersion, M1IndicatorCatalog, Barangay, M1ReportInstance, M1IndicatorValue, Mother, Child, Senior, MunicipalitySettings, BarangaySettings, FpServiceRecord } from "@shared/schema";
+import { FP_METHOD_ROW_KEY } from "@shared/schema";
+import { differenceInMonths, differenceInYears, parseISO } from "date-fns";
 import { TODAY } from "@/lib/healthLogic";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -143,6 +144,7 @@ export default function M1ReportPage() {
   const { data: mothers = [] } = useQuery<Mother[]>({ queryKey: ["/api/mothers"] });
   const { data: children = [] } = useQuery<Child[]>({ queryKey: ["/api/children"] });
   const { data: seniors = [] } = useQuery<Senior[]>({ queryKey: ["/api/seniors"] });
+  const { data: fpRecords = [] } = useQuery<FpServiceRecord[]>({ queryKey: ["/api/fp-records"] });
 
   const selectedBarangay = barangays.find(b => b.id === selectedBarangayId);
 
@@ -382,8 +384,102 @@ export default function M1ReportPage() {
     computed["G2-04:F"] = { valueNumber: seniorsWithMeds["F"], valueSource: "COMPUTED" };
     computed["G2-04:TOTAL"] = { valueNumber: seniorsWithMeds["TOTAL"], valueSource: "COMPUTED" };
 
+    // === FP Section: compute from fp_service_records ===
+    const filteredFp = barangayName
+      ? fpRecords.filter(r => r.barangay === barangayName)
+      : fpRecords;
+
+    const getFpAgeGroup = (dob: string | null | undefined): string => {
+      if (!dob) return "other";
+      try {
+        const age = differenceInYears(new Date(), parseISO(dob));
+        if (age >= 10 && age <= 14) return "10-14";
+        if (age >= 15 && age <= 19) return "15-19";
+        if (age >= 20 && age <= 49) return "20-49";
+        return "other";
+      } catch { return "other"; }
+    };
+
+    const currentUsers = filteredFp.filter(r => r.fpStatus === "CURRENT_USER");
+    const newAcceptors = filteredFp.filter(r => r.fpStatus === "NEW_ACCEPTOR");
+
+    // Helper to count by age group for a set of fp records filtered to a method
+    const fpCountByAgeGroup = (list: FpServiceRecord[]) => ({
+      "10-14": list.filter(r => getFpAgeGroup(r.dob) === "10-14").length,
+      "15-19": list.filter(r => getFpAgeGroup(r.dob) === "15-19").length,
+      "20-49": list.filter(r => getFpAgeGroup(r.dob) === "20-49").length,
+      "TOTAL": list.length,
+    });
+
+    // Per-method computed values
+    const fpMethodsUsed = new Set<string>();
+    for (const [method, rowKey] of Object.entries(FP_METHOD_ROW_KEY)) {
+      if (!rowKey) continue;
+      const cuForMethod = currentUsers.filter(r => r.fpMethod === method);
+      const naForMethod = newAcceptors.filter(r => r.fpMethod === method);
+      if (cuForMethod.length === 0 && naForMethod.length === 0) continue;
+      fpMethodsUsed.add(rowKey);
+      const cu = fpCountByAgeGroup(cuForMethod);
+      const na = fpCountByAgeGroup(naForMethod);
+      computed[`${rowKey}:CU_10-14`] = { valueNumber: cu["10-14"], valueSource: "COMPUTED" };
+      computed[`${rowKey}:CU_15-19`] = { valueNumber: cu["15-19"], valueSource: "COMPUTED" };
+      computed[`${rowKey}:CU_20-49`] = { valueNumber: cu["20-49"], valueSource: "COMPUTED" };
+      computed[`${rowKey}:CU_TOTAL`] = { valueNumber: cu["TOTAL"], valueSource: "COMPUTED" };
+      computed[`${rowKey}:NA_10-14`] = { valueNumber: na["10-14"], valueSource: "COMPUTED" };
+      computed[`${rowKey}:NA_15-19`] = { valueNumber: na["15-19"], valueSource: "COMPUTED" };
+      computed[`${rowKey}:NA_20-49`] = { valueNumber: na["20-49"], valueSource: "COMPUTED" };
+      computed[`${rowKey}:NA_TOTAL`] = { valueNumber: na["TOTAL"], valueSource: "COMPUTED" };
+    }
+
+    // FP-04: aggregate Pills (POP + COC)
+    const cuPills = currentUsers.filter(r => r.fpMethod === "PILLS_POP" || r.fpMethod === "PILLS_COC");
+    const naPills = newAcceptors.filter(r => r.fpMethod === "PILLS_POP" || r.fpMethod === "PILLS_COC");
+    const cuPillsAg = fpCountByAgeGroup(cuPills);
+    const naPillsAg = fpCountByAgeGroup(naPills);
+    computed["FP-04:CU_10-14"] = { valueNumber: cuPillsAg["10-14"], valueSource: "COMPUTED" };
+    computed["FP-04:CU_15-19"] = { valueNumber: cuPillsAg["15-19"], valueSource: "COMPUTED" };
+    computed["FP-04:CU_20-49"] = { valueNumber: cuPillsAg["20-49"], valueSource: "COMPUTED" };
+    computed["FP-04:CU_TOTAL"] = { valueNumber: cuPillsAg["TOTAL"], valueSource: "COMPUTED" };
+    computed["FP-04:NA_10-14"] = { valueNumber: naPillsAg["10-14"], valueSource: "COMPUTED" };
+    computed["FP-04:NA_15-19"] = { valueNumber: naPillsAg["15-19"], valueSource: "COMPUTED" };
+    computed["FP-04:NA_20-49"] = { valueNumber: naPillsAg["20-49"], valueSource: "COMPUTED" };
+    computed["FP-04:NA_TOTAL"] = { valueNumber: naPillsAg["TOTAL"], valueSource: "COMPUTED" };
+
+    // FP-07: aggregate IUD (Interval + PP)
+    const cuIUD = currentUsers.filter(r => r.fpMethod === "IUD_INTERVAL" || r.fpMethod === "IUD_PP");
+    const naIUD = newAcceptors.filter(r => r.fpMethod === "IUD_INTERVAL" || r.fpMethod === "IUD_PP");
+    const cuIUDAg = fpCountByAgeGroup(cuIUD);
+    const naIUDAg = fpCountByAgeGroup(naIUD);
+    computed["FP-07:CU_10-14"] = { valueNumber: cuIUDAg["10-14"], valueSource: "COMPUTED" };
+    computed["FP-07:CU_15-19"] = { valueNumber: cuIUDAg["15-19"], valueSource: "COMPUTED" };
+    computed["FP-07:CU_20-49"] = { valueNumber: cuIUDAg["20-49"], valueSource: "COMPUTED" };
+    computed["FP-07:CU_TOTAL"] = { valueNumber: cuIUDAg["TOTAL"], valueSource: "COMPUTED" };
+    computed["FP-07:NA_10-14"] = { valueNumber: naIUDAg["10-14"], valueSource: "COMPUTED" };
+    computed["FP-07:NA_15-19"] = { valueNumber: naIUDAg["15-19"], valueSource: "COMPUTED" };
+    computed["FP-07:NA_20-49"] = { valueNumber: naIUDAg["20-49"], valueSource: "COMPUTED" };
+    computed["FP-07:NA_TOTAL"] = { valueNumber: naIUDAg["TOTAL"], valueSource: "COMPUTED" };
+
+    // FP-TOTAL: all current users
+    const cuAll = fpCountByAgeGroup(currentUsers);
+    const naAll = fpCountByAgeGroup(newAcceptors);
+    computed["FP-TOTAL:CU_10-14"] = { valueNumber: cuAll["10-14"], valueSource: "COMPUTED" };
+    computed["FP-TOTAL:CU_15-19"] = { valueNumber: cuAll["15-19"], valueSource: "COMPUTED" };
+    computed["FP-TOTAL:CU_20-49"] = { valueNumber: cuAll["20-49"], valueSource: "COMPUTED" };
+    computed["FP-TOTAL:CU_TOTAL"] = { valueNumber: cuAll["TOTAL"], valueSource: "COMPUTED" };
+    computed["FP-TOTAL:NA_10-14"] = { valueNumber: naAll["10-14"], valueSource: "COMPUTED" };
+    computed["FP-TOTAL:NA_15-19"] = { valueNumber: naAll["15-19"], valueSource: "COMPUTED" };
+    computed["FP-TOTAL:NA_20-49"] = { valueNumber: naAll["20-49"], valueSource: "COMPUTED" };
+    computed["FP-TOTAL:NA_TOTAL"] = { valueNumber: naAll["TOTAL"], valueSource: "COMPUTED" };
+
+    // FP-00: WRA 15-49 using modern FP (current users with age 15-49)
+    const wra1549 = currentUsers.filter(r => {
+      const ag = getFpAgeGroup(r.dob);
+      return ag === "15-19" || ag === "20-49";
+    });
+    computed["FP-00:VALUE"] = { valueNumber: wra1549.length, valueSource: "COMPUTED" };
+
     return computed;
-  }, [selectedBarangay, mothers, children, seniors]);
+  }, [selectedBarangay, mothers, children, seniors, fpRecords]);
 
   const getValue = (rowKey: string, columnKey?: string): number | string => {
     const key = columnKey ? `${rowKey}:${columnKey}` : rowKey;

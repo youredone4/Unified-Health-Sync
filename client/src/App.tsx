@@ -59,6 +59,7 @@ import NotificationDrawer from "@/components/notification-drawer";
 import SmsOutbox from "@/components/sms-outbox";
 import MessagesPage from "@/pages/messages";
 import AccountPage from "@/pages/account";
+import FpRegistry from "@/pages/fp-registry";
 
 const roleLabels: Record<string, string> = {
   SYSTEM_ADMIN: "Admin",
@@ -154,6 +155,7 @@ function Router() {
       <Route path="/tb/new" component={TBForm} />
       <Route path="/tb/:id/edit" component={TBForm} />
       <Route path="/tb/:id" component={TBProfile} />
+      <Route path="/fp" component={FpRegistry} />
       <Route path="/messages" component={MessagesPage} />
       <Route path="/account" component={AccountPage} />
       <Route path="/settings">

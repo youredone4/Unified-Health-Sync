@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useParams, useLocation } from "wouter";
-import type { Mother } from "@shared/schema";
+import type { Mother, FpServiceRecord } from "@shared/schema";
+import { FP_METHODS, FP_STATUSES } from "@shared/schema";
 import { getTTStatus, getPrenatalCheckStatus, formatDate } from "@/lib/healthLogic";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -9,12 +10,49 @@ import ConfirmModal from "@/components/confirm-modal";
 import SmsModal from "@/components/sms-modal";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth, permissions } from "@/hooks/use-auth";
-import { ArrowLeft, Heart, Stethoscope, MessageSquare, Check, Pencil, Trash2 } from "lucide-react";
+import { ArrowLeft, Heart, Stethoscope, MessageSquare, Check, Pencil, Trash2, HeartHandshake, Plus, ExternalLink } from "lucide-react";
 import ConsultationHistoryCard from "@/components/consultation-history-card";
 import VisitHistoryCard from "@/components/visit-history-card";
 import { useState } from "react";
 import { apiRequest } from "@/lib/queryClient";
 import type { PrenatalVisit } from "@shared/schema";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  Form, FormControl, FormField, FormItem, FormLabel, FormMessage,
+} from "@/components/ui/form";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import { format } from "date-fns";
+import { Badge } from "@/components/ui/badge";
+
+const FP_METHOD_LABELS: Record<string, string> = {
+  BTL: "BTL", NSV: "NSV", CONDOM: "Condom", PILLS_POP: "Pills-POP",
+  PILLS_COC: "Pills-COC", DMPA: "Injectables (DMPA)", IMPLANT: "Implant",
+  IUD_INTERVAL: "IUD-Interval", IUD_PP: "IUD-PP", LAM: "LAM",
+  BBT: "NFP-BBT", CMM: "NFP-CMM", STM: "NFP-STM", SDM: "NFP-SDM", OTHERS: "Others",
+};
+const FP_STATUS_LABELS: Record<string, string> = {
+  CURRENT_USER: "Current User", NEW_ACCEPTOR: "New Acceptor", DROPOUT: "Dropout",
+};
+const FP_STATUS_COLORS: Record<string, string> = {
+  CURRENT_USER: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
+  NEW_ACCEPTOR: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
+  DROPOUT: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
+};
+
+const quickEnrollSchema = z.object({
+  fpMethod: z.enum(FP_METHODS, { required_error: "FP Method is required" }),
+  fpStatus: z.enum(FP_STATUSES, { required_error: "Status is required" }),
+  dateStarted: z.string().min(1, "Date Started is required"),
+});
+type QuickEnrollValues = z.infer<typeof quickEnrollSchema>;
 
 export default function MotherProfile() {
   const { id } = useParams<{ id: string }>();
@@ -40,6 +78,38 @@ export default function MotherProfile() {
   const [confirmAction, setConfirmAction] = useState<'tt' | 'prenatal'>('tt');
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [smsOpen, setSmsOpen] = useState(false);
+  const [fpDialogOpen, setFpDialogOpen] = useState(false);
+
+  const { data: fpRecords = [] } = useQuery<FpServiceRecord[]>({
+    queryKey: ["/api/fp-records"],
+    select: (records) => records.filter(r => r.linkedPersonId === Number(id) && r.linkedPersonType === "MOTHER"),
+    enabled: !!id,
+  });
+
+  const fpEnrollForm = useForm<QuickEnrollValues>({
+    resolver: zodResolver(quickEnrollSchema),
+    defaultValues: {
+      dateStarted: format(new Date(), "yyyy-MM-dd"),
+    },
+  });
+
+  const fpEnrollMutation = useMutation({
+    mutationFn: (data: QuickEnrollValues) =>
+      apiRequest("POST", "/api/fp-records", {
+        ...data,
+        barangay: mother?.barangay,
+        patientName: `${mother?.firstName} ${mother?.lastName}`,
+        linkedPersonType: "MOTHER",
+        linkedPersonId: Number(id),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/fp-records"] });
+      toast({ title: "Enrolled in FP program" });
+      setFpDialogOpen(false);
+      fpEnrollForm.reset({ dateStarted: format(new Date(), "yyyy-MM-dd") });
+    },
+    onError: (err: any) => toast({ title: "Error", description: err.message, variant: "destructive" }),
+  });
 
   const updateMutation = useMutation({
     mutationFn: async (updates: Partial<Mother>) => {
@@ -211,9 +281,110 @@ export default function MotherProfile() {
         </CardContent>
       </Card>
 
+      {/* Family Planning Card */}
+      <Card data-testid="card-fp-enrollment">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base flex items-center justify-between">
+            <span className="flex items-center gap-2">
+              <HeartHandshake className="w-4 h-4 text-pink-400" />
+              Family Planning
+            </span>
+            <div className="flex gap-2">
+              {canUpdate && (
+                <Button size="sm" variant="outline" onClick={() => setFpDialogOpen(true)} className="gap-1" data-testid="button-enroll-fp">
+                  <Plus className="w-3 h-3" /> Enroll
+                </Button>
+              )}
+              <Button size="sm" variant="ghost" onClick={() => navigate("/fp")} className="gap-1 text-muted-foreground" data-testid="button-go-fp-registry">
+                <ExternalLink className="w-3 h-3" /> Registry
+              </Button>
+            </div>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {fpRecords.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No FP records linked to this patient.</p>
+          ) : (
+            <div className="space-y-2">
+              {fpRecords.map(r => (
+                <div key={r.id} className="flex items-center justify-between text-sm" data-testid={`row-linked-fp-${r.id}`}>
+                  <span>{FP_METHOD_LABELS[r.fpMethod] || r.fpMethod}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-muted-foreground">{r.dateStarted}</span>
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${FP_STATUS_COLORS[r.fpStatus] || ""}`}>
+                      {FP_STATUS_LABELS[r.fpStatus] || r.fpStatus}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       <ConsultationHistoryCard profileType="Mother" profileId={mother.id} />
 
       <VisitHistoryCard profileType="Mother" profileId={mother.id} />
+
+      {/* FP Quick-Enroll Dialog */}
+      <Dialog open={fpDialogOpen} onOpenChange={v => !v && setFpDialogOpen(false)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Enroll in Family Planning</DialogTitle>
+          </DialogHeader>
+          <Form {...fpEnrollForm}>
+            <form onSubmit={fpEnrollForm.handleSubmit(d => fpEnrollMutation.mutate(d))} className="space-y-4">
+              <FormField control={fpEnrollForm.control} name="fpMethod" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>FP Method</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <FormControl>
+                      <SelectTrigger data-testid="select-fp-method-quick">
+                        <SelectValue placeholder="Select method" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {FP_METHODS.map(m => <SelectItem key={m} value={m}>{FP_METHOD_LABELS[m]}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )} />
+              <FormField control={fpEnrollForm.control} name="fpStatus" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Status</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <FormControl>
+                      <SelectTrigger data-testid="select-fp-status-quick">
+                        <SelectValue placeholder="Select status" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {FP_STATUSES.map(s => <SelectItem key={s} value={s}>{FP_STATUS_LABELS[s]}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )} />
+              <FormField control={fpEnrollForm.control} name="dateStarted" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Date Started</FormLabel>
+                  <FormControl>
+                    <Input {...field} type="date" data-testid="input-fp-date-started-quick" />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setFpDialogOpen(false)} data-testid="button-cancel-fp-enroll">Cancel</Button>
+                <Button type="submit" disabled={fpEnrollMutation.isPending} data-testid="button-submit-fp-enroll">
+                  {fpEnrollMutation.isPending ? "Saving…" : "Enroll"}
+                </Button>
+              </DialogFooter>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
 
       <ConfirmModal
         open={confirmOpen}

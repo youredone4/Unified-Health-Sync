@@ -527,6 +527,51 @@ export const insertSeniorVisitSchema = createInsertSchema(seniorVisits).omit({ i
 export type SeniorVisit = typeof seniorVisits.$inferSelect;
 export type InsertSeniorVisit = z.infer<typeof insertSeniorVisitSchema>;
 
+// === FP SERVICE RECORDS (Family Planning enrollment tracking) ===
+export const FP_METHODS = ["BTL", "NSV", "CONDOM", "PILLS_POP", "PILLS_COC", "DMPA", "IMPLANT", "IUD_INTERVAL", "IUD_PP", "LAM", "BBT", "CMM", "STM", "SDM", "OTHERS"] as const;
+export type FpMethod = typeof FP_METHODS[number];
+export const FP_STATUSES = ["CURRENT_USER", "NEW_ACCEPTOR", "DROPOUT"] as const;
+export type FpStatus = typeof FP_STATUSES[number];
+
+// Maps fp_method to M1 row_key
+export const FP_METHOD_ROW_KEY: Record<FpMethod, string | null> = {
+  BTL: "FP-01",
+  NSV: "FP-02",
+  CONDOM: "FP-03",
+  PILLS_POP: "FP-04a",
+  PILLS_COC: "FP-04b",
+  DMPA: "FP-05",
+  IMPLANT: "FP-06",
+  IUD_INTERVAL: "FP-07a",
+  IUD_PP: "FP-07b",
+  LAM: "FP-08",
+  BBT: "FP-09",
+  CMM: "FP-10",
+  STM: "FP-11",
+  SDM: "FP-12",
+  OTHERS: null,
+};
+
+export const fpServiceRecords = pgTable("fp_service_records", {
+  id: serial("id").primaryKey(),
+  barangay: text("barangay").notNull(),
+  patientName: text("patient_name").notNull(),
+  linkedPersonType: text("linked_person_type"), // "MOTHER" | "GENERAL"
+  linkedPersonId: integer("linked_person_id"),   // FK to mothers.id if MOTHER
+  dob: text("dob"),                               // used to auto-calculate age group
+  fpMethod: text("fp_method").notNull(),          // one of FP_METHODS
+  fpStatus: text("fp_status").notNull(),          // one of FP_STATUSES
+  dateStarted: text("date_started").notNull(),
+  dateStopped: text("date_stopped"),
+  notes: text("notes"),
+  recordedBy: text("recorded_by"),
+  createdAt: text("created_at").notNull(),
+});
+
+export const insertFpServiceRecordSchema = createInsertSchema(fpServiceRecords).omit({ id: true });
+export type FpServiceRecord = typeof fpServiceRecords.$inferSelect;
+export type InsertFpServiceRecord = z.infer<typeof insertFpServiceRecordSchema>;
+
 // === AUTH & RBAC (from Replit Auth integration + extensions) ===
 // Note: barangays, userBarangays, auditLogs, users, sessions are defined in ./models/auth.ts
 export * from "./models/auth";
