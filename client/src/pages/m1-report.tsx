@@ -183,12 +183,12 @@ export default function M1ReportPage() {
   });
 
   const updateStatusMutation = useMutation({
-    mutationFn: async ({ reportId, status }: { reportId: number; status: string }) => {
-      const res = await apiRequest("POST", `/api/m1/reports/${reportId}/status`, { status });
+    mutationFn: async ({ reportId, action }: { reportId: number; action: "submit" | "reopen" }) => {
+      const res = await apiRequest("POST", `/api/m1/reports/${reportId}/status`, { action });
       return res.json();
     },
     onSuccess: (_data, variables) => {
-      const label = variables.status === "SUBMITTED_LOCKED" ? "submitted and locked" : "reopened as draft";
+      const label = variables.action === "submit" ? "submitted and locked" : "reopened as draft";
       toast({ title: "Report Status Updated", description: `Report has been ${label}.` });
       if (activeReportId) {
         queryClient.invalidateQueries({ queryKey: [`/api/m1/reports/${activeReportId}`] });
@@ -396,29 +396,28 @@ export default function M1ReportPage() {
     return undefined;
   };
 
-  // Completeness: % of encodeable indicator cells on the current page that have a non-zero value
+  // Completeness: filled/total cells on current page — includes computed and manually entered values
   const completeness = useMemo(() => {
-    const inds = catalog.filter(ind => ind.pageNumber === currentPage && !ind.isComputed);
+    const inds = catalog.filter(ind => ind.pageNumber === currentPage);
     if (inds.length === 0) return 100;
     let filled = 0;
     let total = 0;
     inds.forEach(ind => {
       const colType = ind.columnGroupType || "SINGLE";
-      let keys: string[];
+      let pairs: [string, string][];
       if (colType === "AGE_GROUP") {
-        keys = ["10-14", "15-19", "20-49", "TOTAL"].map(c => `${ind.rowKey}:${c}`);
+        pairs = ["10-14", "15-19", "20-49", "TOTAL"].map(c => [ind.rowKey, c] as [string, string]);
       } else if (colType === "SEX_RATE" || colType === "SEX") {
-        keys = ["M", "F", "TOTAL"].map(c => `${ind.rowKey}:${c}`);
+        pairs = ["M", "F", "TOTAL"].map(c => [ind.rowKey, c] as [string, string]);
       } else if (colType === "FP_DUAL") {
-        keys = ["CU_10-14","CU_15-19","CU_20-49","CU_TOTAL","NA_10-14","NA_15-19","NA_20-49","NA_TOTAL"].map(c => `${ind.rowKey}:${c}`);
+        pairs = ["CU_10-14","CU_15-19","CU_20-49","CU_TOTAL","NA_10-14","NA_15-19","NA_20-49","NA_TOTAL"].map(c => [ind.rowKey, c] as [string, string]);
       } else {
-        keys = [`${ind.rowKey}:VALUE`];
+        pairs = [[ind.rowKey, "VALUE"]];
       }
-      keys.forEach(k => {
+      pairs.forEach(([rk, ck]) => {
         total++;
-        const [rk, ck] = k.split(":");
         const v = getValue(rk, ck);
-        if (v !== 0 && v !== "" && v !== null && v !== undefined) filled++;
+        if (v !== "" && v !== null && v !== undefined) filled++;
       });
     });
     return total === 0 ? 100 : Math.round((filled / total) * 100);
@@ -604,11 +603,11 @@ export default function M1ReportPage() {
 
   const existingReport = reportInstances.find(r => r.month === selectedMonth && r.year === selectedYear);
 
-  const SourceBadge = ({ source }: { source?: string }) => {
-    if (!source) return null;
+  const SourceBadge = ({ source, showMissing = false }: { source?: string; showMissing?: boolean }) => {
     if (source === "COMPUTED") return <span className="ml-1 text-[10px] px-1 rounded bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-200">Auto</span>;
     if (source === "ENCODED") return <span className="ml-1 text-[10px] px-1 rounded bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200">Manual</span>;
-    if (source === "IMPORTED") return <span className="ml-1 text-[10px] px-1 rounded bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-200">Import</span>;
+    if (source === "IMPORTED") return <span className="ml-1 text-[10px] px-1 rounded bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-200">Imported</span>;
+    if (showMissing) return <span className="ml-1 text-[10px] px-1 rounded bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400">Missing</span>;
     return null;
   };
 
@@ -668,11 +667,12 @@ export default function M1ReportPage() {
             {indicators.map(ind => (
               <tr key={ind.rowKey} className={ind.indentLevel ? "bg-muted/20" : ""}>
                 <td className="border p-2" style={{ paddingLeft: (ind.indentLevel || 0) * 16 + 8 }}>
-                  {ind.officialLabel}
+                  <span>{ind.officialLabel}</span>
+                  <SourceBadge source={getValueSource(ind.rowKey, "CU_TOTAL")} showMissing={!getValueSource(ind.rowKey, "CU_TOTAL")} />
                 </td>
                 {["CU_10-14", "CU_15-19", "CU_20-49", "CU_TOTAL", "NA_10-14", "NA_15-19", "NA_20-49", "NA_TOTAL"].map(col => (
                   <td key={col} className="border p-1 text-center">
-                    {reportMode === "encode" && !ind.isComputed ? (
+                    {reportMode === "encode" && !ind.isComputed && !isLocked ? (
                       <Input
                         type="number"
                         className="w-14 h-7 text-center text-xs"
@@ -686,7 +686,7 @@ export default function M1ReportPage() {
                   </td>
                 ))}
                 <td className="border p-1 text-center">
-                  {reportMode === "encode" ? (
+                  {reportMode === "encode" && !isLocked ? (
                     <Input
                       type="text"
                       className="w-full h-7 text-xs"
@@ -722,11 +722,12 @@ export default function M1ReportPage() {
             {indicators.map(ind => (
               <tr key={ind.rowKey} className={ind.indentLevel ? "bg-muted/20" : ""}>
                 <td className="border p-2" style={{ paddingLeft: (ind.indentLevel || 0) * 16 + 8 }}>
-                  {ind.officialLabel}
+                  <span>{ind.officialLabel}</span>
+                  <SourceBadge source={getValueSource(ind.rowKey, "TOTAL")} showMissing={!getValueSource(ind.rowKey, "TOTAL")} />
                 </td>
                 {["10-14", "15-19", "20-49", "TOTAL"].map(col => (
                   <td key={col} className="border p-1 text-center">
-                    {reportMode === "encode" && !ind.isComputed ? (
+                    {reportMode === "encode" && !ind.isComputed && !isLocked ? (
                       <Input
                         type="number"
                         className="w-14 h-7 text-center text-xs"
@@ -740,7 +741,7 @@ export default function M1ReportPage() {
                   </td>
                 ))}
                 <td className="border p-1 text-center">
-                  {reportMode === "encode" ? (
+                  {reportMode === "encode" && !isLocked ? (
                     <Input
                       type="text"
                       className="w-full h-7 text-xs"
@@ -785,12 +786,13 @@ export default function M1ReportPage() {
               return (
                 <tr key={ind.rowKey} className={ind.indentLevel ? "bg-muted/20" : ""}>
                   <td className="border p-2" style={{ paddingLeft: (ind.indentLevel || 0) * 16 + 8 }}>
-                    {ind.officialLabel}
+                    <span>{ind.officialLabel}</span>
+                    <SourceBadge source={getValueSource(ind.rowKey, "TOTAL")} showMissing={!getValueSource(ind.rowKey, "TOTAL")} />
                   </td>
                   {hasM && (
                     <td className="border p-1 text-center">
                       {rowHasM ? (
-                        reportMode === "encode" && !ind.isComputed ? (
+                        reportMode === "encode" && !ind.isComputed && !isLocked ? (
                           <Input
                             type="number"
                             className="w-14 h-7 text-center text-xs"
@@ -807,7 +809,7 @@ export default function M1ReportPage() {
                   {hasF && (
                     <td className="border p-1 text-center">
                       {rowHasF ? (
-                        reportMode === "encode" && !ind.isComputed ? (
+                        reportMode === "encode" && !ind.isComputed && !isLocked ? (
                           <Input
                             type="number"
                             className="w-14 h-7 text-center text-xs"
@@ -822,7 +824,7 @@ export default function M1ReportPage() {
                     </td>
                   )}
                   <td className="border p-1 text-center">
-                    {reportMode === "encode" && !ind.isComputed ? (
+                    {reportMode === "encode" && !ind.isComputed && !isLocked ? (
                       <Input
                         type="number"
                         className="w-14 h-7 text-center text-xs"
@@ -840,7 +842,7 @@ export default function M1ReportPage() {
                     </td>
                   )}
                   <td className="border p-1 text-center">
-                    {reportMode === "encode" ? (
+                    {reportMode === "encode" && !isLocked ? (
                       <Input
                         type="text"
                         className="w-full h-7 text-xs"
@@ -874,7 +876,7 @@ export default function M1ReportPage() {
             <tr key={ind.rowKey} className={ind.indentLevel ? "bg-muted/20" : ""}>
               <td className="border p-2" style={{ paddingLeft: (ind.indentLevel || 0) * 16 + 8 }}>
                 <span>{ind.officialLabel}</span>
-                {reportMode === "view" && <SourceBadge source={getValueSource(ind.rowKey, "VALUE")} />}
+                <SourceBadge source={getValueSource(ind.rowKey, "VALUE")} showMissing={!getValueSource(ind.rowKey, "VALUE")} />
               </td>
               <td className="border p-1 text-center">
                 {reportMode === "encode" && !ind.isComputed && !isLocked ? (
@@ -1071,18 +1073,18 @@ export default function M1ReportPage() {
                     <Button
                       size="sm"
                       variant="default"
-                      onClick={() => updateStatusMutation.mutate({ reportId: activeReportId, status: "SUBMITTED_LOCKED" })}
+                      onClick={() => updateStatusMutation.mutate({ reportId: activeReportId, action: "submit" })}
                       disabled={updateStatusMutation.isPending}
                       data-testid="button-submit-report"
                     >
                       {updateStatusMutation.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Send className="h-4 w-4 mr-1" />}
                       Submit Report
                     </Button>
-                  ) : !isTL && (
+                  ) : (user?.role === UserRole.MHO || user?.role === UserRole.SYSTEM_ADMIN) && (
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => updateStatusMutation.mutate({ reportId: activeReportId, status: "DRAFT" })}
+                      onClick={() => updateStatusMutation.mutate({ reportId: activeReportId, action: "reopen" })}
                       disabled={updateStatusMutation.isPending}
                       data-testid="button-reopen-report"
                     >

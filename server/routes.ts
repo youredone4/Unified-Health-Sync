@@ -562,9 +562,16 @@ export async function registerRoutes(
 
   // Create new M1 report instance
   app.post("/api/m1/reports", loadUserInfo, requireAuth, ar(async (req, res) => {
-    // TL can only create for their assigned barangays
+    // TL can only create for their assigned barangays — validate both name and ID
     if (req.userInfo?.role === UserRole.TL) {
-      const { barangayName } = req.body;
+      const { barangayName, barangayId } = req.body;
+      const allBarangays = await storage.getBarangays();
+      const allowedIds = allBarangays
+        .filter(b => req.userInfo!.assignedBarangays.includes(b.name))
+        .map(b => b.id);
+      if (barangayId && !allowedIds.includes(Number(barangayId))) {
+        return res.status(403).json({ message: "You can only create reports for your assigned barangays" });
+      }
       if (barangayName && !req.userInfo.assignedBarangays.includes(barangayName)) {
         return res.status(403).json({ message: "You can only create reports for your assigned barangays" });
       }
@@ -581,7 +588,7 @@ export async function registerRoutes(
     res.status(201).json(report);
   }));
 
-  // Update M1 indicator values for a report — audit each ENCODED save
+  // Update M1 indicator values for a report — audit each ENCODED field change
   app.put("/api/m1/reports/:id/values", loadUserInfo, requireAuth, ar(async (req, res) => {
     const id = parseId(req.params.id, res); if (id === null) return;
     // Verify report exists and TL scoping
@@ -602,32 +609,45 @@ export async function registerRoutes(
     }
     // req.body can be an array (values directly) or { values: [...] }
     const values: any[] = Array.isArray(req.body) ? req.body : (req.body.values || []);
+    // Build old-value map from existing saved values for field-level diff
+    const oldValueMap: Record<string, any> = {};
+    existing.values.forEach((v: any) => {
+      const key = v.columnKey ? `${v.rowKey}:${v.columnKey}` : v.rowKey;
+      oldValueMap[key] = v.valueNumber ?? v.valueText ?? null;
+    });
     const updated = await storage.updateM1IndicatorValues(id, values);
-    // Audit ENCODED saves
-    const encodedCount = values.filter((v: any) => v.valueSource === "ENCODED").length;
-    if (encodedCount > 0) {
-      await createAuditLog(
-        req.userInfo!.id, req.userInfo!.role,
-        "UPDATE", "M1_INDICATOR_VALUES", id,
-        existing.instance.barangayName || undefined,
-        { previousSavedCount: existing.values.length },
-        { updatedCount: encodedCount, reportId: id }, req
-      );
-    }
+    // One audit row per changed ENCODED field
+    const auditPromises = values
+      .filter((v: any) => v.valueSource === "ENCODED")
+      .map(async (v: any) => {
+        const fieldKey = v.columnKey ? `${v.rowKey}:${v.columnKey}` : v.rowKey;
+        const newVal = v.valueNumber ?? v.valueText ?? null;
+        const oldVal = oldValueMap[fieldKey] ?? null;
+        if (newVal !== oldVal) {
+          await createAuditLog(
+            req.userInfo!.id, req.userInfo!.role,
+            "UPDATE", "M1_INDICATOR_VALUE", id,
+            existing.instance.barangayName || undefined,
+            { rowKey: v.rowKey, columnKey: v.columnKey ?? null, value: oldVal },
+            { rowKey: v.rowKey, columnKey: v.columnKey ?? null, value: newVal }, req
+          );
+        }
+      });
+    await Promise.all(auditPromises);
     res.json(updated);
   }));
 
-  // Update M1 report status (Submit / Reopen)
+  // Update M1 report status via action: "submit" (DRAFT→SUBMITTED_LOCKED) or "reopen" (SUBMITTED_LOCKED→DRAFT)
+  // Only MHO and SYSTEM_ADMIN may reopen a locked report.
   app.post("/api/m1/reports/:id/status", loadUserInfo, requireAuth, ar(async (req, res) => {
     const id = parseId(req.params.id, res); if (id === null) return;
-    const { status } = req.body;
-    const allowed = ["DRAFT", "READY_FOR_REVIEW", "SUBMITTED_LOCKED"];
-    if (!allowed.includes(status)) {
-      return res.status(400).json({ message: `Invalid status. Must be one of: ${allowed.join(", ")}` });
+    const { action } = req.body;
+    if (!action || !["submit", "reopen"].includes(action)) {
+      return res.status(400).json({ message: "Invalid action. Must be 'submit' or 'reopen'" });
     }
     const existing = await storage.getM1ReportInstance(id);
     if (!existing) return res.status(404).json({ message: "Report not found" });
-    // TL scoping
+    // TL scoping: verify barangay ownership
     if (req.userInfo?.role === UserRole.TL) {
       const allBarangays = await storage.getBarangays();
       const allowedIds = allBarangays
@@ -636,18 +656,29 @@ export async function registerRoutes(
       if (existing.instance.barangayId && !allowedIds.includes(existing.instance.barangayId)) {
         return res.status(403).json({ message: "Access denied to this barangay" });
       }
-      // TL cannot reopen a SUBMITTED_LOCKED report
-      if (existing.instance.status === "SUBMITTED_LOCKED" && status !== "SUBMITTED_LOCKED") {
-        return res.status(403).json({ message: "Only MHO or Admin can reopen a submitted report" });
+    }
+    // Transition rules
+    if (action === "submit") {
+      if (existing.instance.status !== "DRAFT") {
+        return res.status(400).json({ message: "Only DRAFT reports can be submitted" });
+      }
+    } else if (action === "reopen") {
+      if (existing.instance.status !== "SUBMITTED_LOCKED") {
+        return res.status(400).json({ message: "Only SUBMITTED_LOCKED reports can be reopened" });
+      }
+      // Only MHO and SYSTEM_ADMIN can reopen
+      if (![UserRole.MHO, UserRole.SYSTEM_ADMIN].includes(req.userInfo!.role as any)) {
+        return res.status(403).json({ message: "Only MHO or System Admin can reopen a submitted report" });
       }
     }
-    const updated = await storage.updateM1ReportStatus(id, status);
+    const newStatus = action === "submit" ? "SUBMITTED_LOCKED" : "DRAFT";
+    const updated = await storage.updateM1ReportStatus(id, newStatus);
     await createAuditLog(
       req.userInfo!.id, req.userInfo!.role,
-      "UPDATE", "M1_REPORT_STATUS", id,
+      action === "submit" ? "SUBMIT" : "REOPEN", "M1_REPORT", id,
       existing.instance.barangayName || undefined,
-      { previousStatus: existing.instance.status },
-      { newStatus: status }, req
+      { status: existing.instance.status },
+      { status: newStatus }, req
     );
     res.json(updated);
   }));
