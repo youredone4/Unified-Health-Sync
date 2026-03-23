@@ -127,7 +127,7 @@ export interface IStorage {
   createSeniorVisit(visit: InsertSeniorVisit): Promise<SeniorVisit>;
 
   // FP Service Records
-  getFpServiceRecords(filters?: { barangay?: string; barangays?: string[] }): Promise<FpServiceRecord[]>;
+  getFpServiceRecords(filters?: { barangay?: string; barangays?: string[]; month?: string }): Promise<FpServiceRecord[]>;
   getFpServiceRecord(id: number): Promise<FpServiceRecord | undefined>;
   createFpServiceRecord(record: InsertFpServiceRecord): Promise<FpServiceRecord>;
   updateFpServiceRecord(id: number, updates: Partial<InsertFpServiceRecord>): Promise<FpServiceRecord>;
@@ -1282,18 +1282,15 @@ export class DatabaseStorage implements IStorage {
   }
 
   // === FP SERVICE RECORDS ===
-  async getFpServiceRecords(filters?: { barangay?: string; barangays?: string[] }): Promise<FpServiceRecord[]> {
-    if (filters?.barangay) {
-      return await db.select().from(fpServiceRecords)
-        .where(eq(fpServiceRecords.barangay, filters.barangay))
-        .orderBy(desc(fpServiceRecords.createdAt));
-    }
-    if (filters?.barangays && filters.barangays.length > 0) {
-      return await db.select().from(fpServiceRecords)
-        .where(inArray(fpServiceRecords.barangay, filters.barangays))
-        .orderBy(desc(fpServiceRecords.createdAt));
-    }
-    return await db.select().from(fpServiceRecords).orderBy(desc(fpServiceRecords.createdAt));
+  async getFpServiceRecords(filters?: { barangay?: string; barangays?: string[]; month?: string }): Promise<FpServiceRecord[]> {
+    const conditions = [];
+    if (filters?.barangay) conditions.push(eq(fpServiceRecords.barangay, filters.barangay));
+    if (filters?.barangays && filters.barangays.length > 0) conditions.push(inArray(fpServiceRecords.barangay, filters.barangays));
+    if (filters?.month) conditions.push(eq(fpServiceRecords.reportingMonth, filters.month));
+    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+    return await db.select().from(fpServiceRecords)
+      .where(whereClause)
+      .orderBy(desc(fpServiceRecords.createdAt));
   }
 
   async getFpServiceRecord(id: number): Promise<FpServiceRecord | undefined> {

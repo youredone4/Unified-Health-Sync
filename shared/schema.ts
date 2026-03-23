@@ -563,6 +563,7 @@ export const fpServiceRecords = pgTable("fp_service_records", {
   fpStatus: text("fp_status").notNull(),          // one of FP_STATUSES
   dateStarted: text("date_started").notNull(),
   dateStopped: text("date_stopped"),
+  reportingMonth: text("reporting_month"),        // YYYY-MM, e.g. "2025-12" for M1 scoping
   notes: text("notes"),
   recordedBy: text("recorded_by"),
   createdAt: text("created_at").notNull(),

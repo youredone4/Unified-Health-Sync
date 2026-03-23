@@ -144,7 +144,14 @@ export default function M1ReportPage() {
   const { data: mothers = [] } = useQuery<Mother[]>({ queryKey: ["/api/mothers"] });
   const { data: children = [] } = useQuery<Child[]>({ queryKey: ["/api/children"] });
   const { data: seniors = [] } = useQuery<Senior[]>({ queryKey: ["/api/seniors"] });
-  const { data: fpRecords = [] } = useQuery<FpServiceRecord[]>({ queryKey: ["/api/fp-records"] });
+  const reportingMonthStr = `${selectedYear}-${String(selectedMonth).padStart(2, "0")}`;
+  const barangayName = barangays.find(b => b.id === selectedBarangayId)?.name;
+  const fpQueryParams = new URLSearchParams({ month: reportingMonthStr });
+  if (barangayName) fpQueryParams.set("barangay", barangayName);
+  const { data: fpRecords = [] } = useQuery<FpServiceRecord[]>({
+    queryKey: ["/api/fp-records", reportingMonthStr, barangayName ?? "all"],
+    queryFn: () => fetch(`/api/fp-records?${fpQueryParams}`, { credentials: "include" }).then(r => r.json()),
+  });
 
   const selectedBarangay = barangays.find(b => b.id === selectedBarangayId);
 
@@ -384,15 +391,14 @@ export default function M1ReportPage() {
     computed["G2-04:F"] = { valueNumber: seniorsWithMeds["F"], valueSource: "COMPUTED" };
     computed["G2-04:TOTAL"] = { valueNumber: seniorsWithMeds["TOTAL"], valueSource: "COMPUTED" };
 
-    // === FP Section: compute from fp_service_records ===
-    const filteredFp = barangayName
-      ? fpRecords.filter(r => r.barangay === barangayName)
-      : fpRecords;
+    // === FP Section: compute from fp_service_records (already filtered by month+barangay via API) ===
+    // Age is computed relative to end of reporting month to keep historical M1 counts stable
+    const reportMonthEnd = new Date(selectedYear, selectedMonth - 1 + 1, 0); // last day of report month
 
     const getFpAgeGroup = (dob: string | null | undefined): string => {
       if (!dob) return "other";
       try {
-        const age = differenceInYears(new Date(), parseISO(dob));
+        const age = differenceInYears(reportMonthEnd, parseISO(dob));
         if (age >= 10 && age <= 14) return "10-14";
         if (age >= 15 && age <= 19) return "15-19";
         if (age >= 20 && age <= 49) return "20-49";
@@ -400,8 +406,8 @@ export default function M1ReportPage() {
       } catch { return "other"; }
     };
 
-    const currentUsers = filteredFp.filter(r => r.fpStatus === "CURRENT_USER");
-    const newAcceptors = filteredFp.filter(r => r.fpStatus === "NEW_ACCEPTOR");
+    const currentUsers = fpRecords.filter(r => r.fpStatus === "CURRENT_USER");
+    const newAcceptors = fpRecords.filter(r => r.fpStatus === "NEW_ACCEPTOR");
 
     // Helper to count by age group for a set of fp records filtered to a method
     const fpCountByAgeGroup = (list: FpServiceRecord[]) => ({
@@ -479,7 +485,7 @@ export default function M1ReportPage() {
     computed["FP-00:VALUE"] = { valueNumber: wra1549.length, valueSource: "COMPUTED" };
 
     return computed;
-  }, [selectedBarangay, mothers, children, seniors, fpRecords]);
+  }, [selectedBarangay, selectedYear, selectedMonth, mothers, children, seniors, fpRecords]);
 
   const getValue = (rowKey: string, columnKey?: string): number | string => {
     const key = columnKey ? `${rowKey}:${columnKey}` : rowKey;
@@ -820,7 +826,7 @@ export default function M1ReportPage() {
           </thead>
           <tbody>
             {indicators.map(ind => (
-              <tr key={ind.rowKey} className={ind.indentLevel ? "bg-muted/20" : ""}>
+              <tr key={ind.rowKey} data-indicator-key={ind.rowKey} className={ind.indentLevel ? "bg-muted/20" : ""}>
                 <td className="border p-2" style={{ paddingLeft: (ind.indentLevel || 0) * 16 + 8 }}>
                   {ind.officialLabel}
                 </td>

@@ -87,6 +87,7 @@ const fpFormSchema = z.object({
   fpStatus: z.enum(FP_STATUSES, { required_error: "Status is required" }),
   dateStarted: z.string().min(1, "Date Started is required"),
   dateStopped: z.string().optional(),
+  reportingMonth: z.string().regex(/^\d{4}-\d{2}$/, "Format: YYYY-MM").optional(),
   notes: z.string().optional(),
 });
 
@@ -126,6 +127,7 @@ function FpFormDialog({ open, onClose, record, defaultBarangay }: FpFormDialogPr
       fpStatus: (record?.fpStatus as FpFormValues["fpStatus"]) || undefined,
       dateStarted: record?.dateStarted || format(new Date(), "yyyy-MM-dd"),
       dateStopped: record?.dateStopped || "",
+      reportingMonth: record?.reportingMonth || format(new Date(), "yyyy-MM"),
       notes: record?.notes || "",
     },
   });
@@ -270,6 +272,15 @@ function FpFormDialog({ open, onClose, record, defaultBarangay }: FpFormDialogPr
                 </FormItem>
               )} />
             )}
+            <FormField control={form.control} name="reportingMonth" render={({ field }) => (
+              <FormItem>
+                <FormLabel>Reporting Month (YYYY-MM)</FormLabel>
+                <FormControl>
+                  <Input {...field} type="month" data-testid="input-reporting-month" />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )} />
             <FormField control={form.control} name="notes" render={({ field }) => (
               <FormItem>
                 <FormLabel>Notes</FormLabel>

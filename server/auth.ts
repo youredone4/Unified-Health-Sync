@@ -195,13 +195,14 @@ export function registerAuthRoutes(app: Express): void {
         return res.status(403).json({ message: "Account is disabled" });
       }
       
-      // Get assigned barangays for TL users
-      let assignedBarangays: number[] = [];
+      // Get assigned barangays for TL users (return names for frontend use)
+      let assignedBarangays: string[] = [];
       if (user.role === UserRole.TL) {
-        const assignments = await db.select()
+        const assignments = await db.select({ barangayName: barangays.name })
           .from(userBarangays)
+          .innerJoin(barangays, eq(userBarangays.barangayId, barangays.id))
           .where(eq(userBarangays.userId, userId));
-        assignedBarangays = assignments.map(a => a.barangayId);
+        assignedBarangays = assignments.map(a => a.barangayName);
       }
       
       res.json({

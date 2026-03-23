@@ -1118,18 +1118,19 @@ export async function registerRoutes(
   const fpRBAC = [loadUserInfo, requireAuth];
 
   app.get("/api/fp-records", fpRBAC, ar(async (req, res) => {
-    const { barangay } = req.query as { barangay?: string };
+    const { barangay, month } = req.query as { barangay?: string; month?: string };
     const user = req.userInfo!;
     if (user.role === UserRole.TL) {
       if (barangay && !user.assignedBarangays.includes(barangay)) {
         return res.status(403).json({ message: "Not authorized for this barangay" });
       }
       const records = await storage.getFpServiceRecords({
-        barangays: barangay ? [barangay] : user.assignedBarangays
+        barangays: barangay ? [barangay] : user.assignedBarangays,
+        month,
       });
       return res.json(records);
     }
-    const records = await storage.getFpServiceRecords(barangay ? { barangay } : undefined);
+    const records = await storage.getFpServiceRecords(barangay || month ? { barangay, month } : undefined);
     res.json(records);
   }));
 
@@ -1165,11 +1166,13 @@ export async function registerRoutes(
     if (req.userInfo?.role === UserRole.TL && !req.userInfo.assignedBarangays.includes(existing.barangay)) {
       return res.status(403).json({ message: "Not authorized for this barangay" });
     }
-    const updated = await storage.updateFpServiceRecord(id, req.body);
+    const parsed = insertFpServiceRecordSchema.partial().safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message || "Invalid data" });
+    const updated = await storage.updateFpServiceRecord(id, parsed.data);
     res.json(updated);
   }));
 
-  app.delete("/api/fp-records/:id", [loadUserInfo, requireAuth, requireRole(UserRole.SYSTEM_ADMIN, UserRole.MHO)], ar(async (req, res) => {
+  app.delete("/api/fp-records/:id", [loadUserInfo, requireAuth, requireRole(UserRole.SYSTEM_ADMIN)], ar(async (req, res) => {
     const id = parseId(req.params.id, res); if (id === null) return;
     const existing = await storage.getFpServiceRecord(id);
     if (!existing) return res.status(404).json({ message: "FP record not found" });
