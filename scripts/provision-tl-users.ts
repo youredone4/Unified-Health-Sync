@@ -8,27 +8,23 @@
  *
  * Safe to re-run: skips any username that already exists.
  * Default password for all accounts: 123456
- * Users should change their password after first login.
+ * Users should change their password after first login via their profile page.
  *
- * Barangay name notes:
- *   "Amogis" (request) → Amoslog (ID 16) in DB
- *   "Magpayang" (request) → Magupange (ID 26) in DB
- *   "San Jose" → Added as new barangay (ID 33)
- *   "Mabuhay" → Added as new barangay (ID 34)
+ * Barangay name notes (staff list → DB name):
+ *   "Amogis"    → Amoslog        (alternate spelling)
+ *   "Magpayang" → Magupange      (alternate spelling)
  */
 
 import { db } from "../server/db";
 import { users, userBarangays, barangays } from "../shared/schema";
 import { eq } from "drizzle-orm";
-import bcrypt from "bcrypt";
+import { hashPassword } from "../server/auth";
 
 const DEFAULT_PASSWORD = "123456";
-const SALT_ROUNDS = 10;
 
 interface TLUserSpec {
   username: string;
   firstName: string;
-  middleName?: string;
   lastName: string;
   barangayNames: string[];
 }
@@ -37,90 +33,84 @@ const TL_USERS: TLUserSpec[] = [
   {
     username: "CHapa",
     firstName: "Carespin",
-    middleName: "V.",
     lastName: "Hapa",
     barangayNames: ["Mabini"],
   },
   {
     username: "ADeramaso",
     firstName: "April",
-    middleName: "T.",
     lastName: "Deramaso",
     barangayNames: ["Ellaperal (Nonok)"],
   },
   {
     username: "RPolestico",
     firstName: "Ranibeth",
-    middleName: "P.",
     lastName: "Polestico",
     barangayNames: ["Central (Poblacion)"],
   },
   {
     username: "BBarcos",
     firstName: "Wilgen",
-    middleName: "C.",
     lastName: "Barcos",
     barangayNames: ["Boyongan", "Macalaya"],
   },
   {
     username: "PPagobo",
     firstName: "Princess Jackie",
-    middleName: "B.",
     lastName: "Pagobo",
-    barangayNames: ["San Isidro", "Mabuhay"],
+    barangayNames: ["San Isidro", "Magupange"],
   },
   {
     username: "CGalvez",
     firstName: "Charlito",
-    middleName: "D.",
     lastName: "Galvez",
-    barangayNames: ["San Jose"],
+    // "San Jose" on staff list was a typo — correct barangay is Sani-sani
+    barangayNames: ["Sani-sani"],
   },
   {
     username: "RRivera",
     firstName: "Ruth",
-    middleName: "E.",
     lastName: "Rivera",
-    // "Magpayang" from request → Magupange in DB
+    // "Magpayang" on staff list → Magupange in DB
     barangayNames: ["Magupange"],
   },
   {
     username: "RJamiel",
     firstName: "Rennie",
-    middleName: "M.",
     lastName: "Jamiel",
-    // "Amogis" from request → Amoslog in DB
+    // "Amogis" on staff list → Amoslog in DB
     barangayNames: ["Amoslog"],
   },
   {
     username: "BBullas",
     firstName: "Jensen",
-    middleName: "B.",
     lastName: "Bullas",
     barangayNames: ["Panhutongan"],
   },
   {
     username: "RDalgume",
     firstName: "Meljay",
-    middleName: "R.",
     lastName: "Dalgume",
     barangayNames: ["Tagbongabong"],
   },
   {
     username: "LLlado",
     firstName: "Risha Ann",
-    middleName: "C.",
     lastName: "Llado",
     barangayNames: ["Anislagan"],
   },
   {
     username: "DOcol",
     firstName: "Dulce Mae",
-    middleName: "D.",
     lastName: "Ocol",
     barangayNames: ["Suyoc", "Bugas-bugas"],
   },
 ];
+
+function getErrorMessage(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  return String(err);
+}
 
 async function main() {
   console.log("=== HealthSync TL User Provisioning Script ===\n");
@@ -133,7 +123,7 @@ async function main() {
 
   console.log(`Loaded ${allBarangays.length} barangays from DB\n`);
 
-  const passwordHash = await bcrypt.hash(DEFAULT_PASSWORD, SALT_ROUNDS);
+  const passwordHash = await hashPassword(DEFAULT_PASSWORD);
 
   let created = 0;
   let skipped = 0;
@@ -141,7 +131,7 @@ async function main() {
 
   for (const spec of TL_USERS) {
     try {
-      // Check if username already exists
+      // Check if username already exists — skip cleanly if so
       const [existing] = await db
         .select({ id: users.id })
         .from(users)
@@ -153,7 +143,7 @@ async function main() {
         continue;
       }
 
-      // Resolve barangay IDs
+      // Resolve barangay names to IDs
       const barangayIds: number[] = [];
       const resolvedNames: string[] = [];
       for (const bName of spec.barangayNames) {
@@ -190,8 +180,8 @@ async function main() {
         `CREATED: ${spec.username} (${spec.firstName} ${spec.lastName}) → ${resolvedNames.join(", ")}`
       );
       created++;
-    } catch (err: any) {
-      const msg = `ERROR: ${spec.username} — ${err.message}`;
+    } catch (err: unknown) {
+      const msg = `ERROR: ${spec.username} — ${getErrorMessage(err)}`;
       console.error(msg);
       errors.push(msg);
     }
@@ -201,6 +191,7 @@ async function main() {
   console.log(`Created:  ${created}`);
   console.log(`Skipped:  ${skipped}`);
   console.log(`Errors:   ${errors.length}`);
+
   if (errors.length > 0) {
     console.log("\nErrors:");
     errors.forEach((e) => console.log(" -", e));
@@ -209,11 +200,13 @@ async function main() {
 
   console.log("\nAll TL accounts provisioned successfully.");
   console.log(`Default password: ${DEFAULT_PASSWORD}`);
-  console.log("Remind users to change their password after first login via their profile page.");
+  console.log(
+    "Remind users to change their password after first login via their profile page."
+  );
   process.exit(0);
 }
 
-main().catch((err) => {
-  console.error("Fatal error:", err);
+main().catch((err: unknown) => {
+  console.error("Fatal error:", getErrorMessage(err));
   process.exit(1);
 });
