@@ -622,8 +622,8 @@ export async function registerRoutes(
     if (existing.instance.status === "SUBMITTED_LOCKED") {
       return res.status(403).json({ message: "Cannot edit a submitted report. Reopen it first." });
     }
-    // req.body can be an array (values directly) or { values: [...] }
-    const values: any[] = Array.isArray(req.body) ? req.body : (req.body.values || []);
+    // Request body shape: { values: [...] }
+    const values: any[] = req.body.values || [];
     // Build old-value map from existing saved values for field-level diff
     const oldValueMap: Record<string, any> = {};
     existing.values.forEach((v: any) => {
