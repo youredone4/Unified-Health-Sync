@@ -1,0 +1,191 @@
+Refactor and enhance the system so M1 report generation is based on a unified patient identity layer plus section-specific program/service records, and ensure that all functionality is fully tested across all roles (not just admin).
+
+Important
+- The system is already working
+- Do NOT rebuild the entire system
+- Do NOT break existing registries, dashboards, reports, or role-based access
+- Reuse existing logic where correct
+- Focus on alignment, structure, and completeness
+- Ensure proper testing across all roles before finalizing
+
+==================================================
+A. Core Architecture (M1 Data Model)
+==================================================
+
+Goal
+Make M1 reporting accurate by using:
+- a unified patient identity layer (Master Patient Index)
+- section-specific program/service records
+
+1. Unified Patient Identity Layer
+Create or improve a shared patient index that links:
+- Mother profiles
+- Child profiles
+- Senior profiles
+- General/Other patients
+
+This should support:
+- global patient search
+- deduplication
+- linking across modules
+
+2. Do NOT rely on a single “All Patients” table alone
+Do not solve M1 by only combining all patients into one flat table.
+Instead:
+- keep patient identity separate
+- use program/service records for reporting
+
+==================================================
+B. Section-Based M1 Data Capture
+==================================================
+
+3. Add structured records for each M1 section
+Each M1 section must have proper data capture.
+
+Example: Family Planning / Modern FP Methods
+Capture:
+- patient_id
+- barangay
+- DOB
+- age (derived)
+- age group (auto-calculated)
+- FP method
+- status:
+  - current user
+  - acceptor
+  - dropout
+- date started
+- date stopped (if applicable)
+- reporting period relevance
+
+Repeat this pattern for:
+- Maternal Care
+- Child Care
+- Immunization
+- Nutrition
+- NCD
+- Infectious Disease
+- Vital Statistics
+- all sections from the M1 report
+
+4. Age Group Calculation
+- use DOB from patient profile
+- use service/program date
+- auto-calculate age group
+- avoid manual age group entry unless override is needed
+
+==================================================
+C. UI Alignment with M1
+==================================================
+
+5. Ensure UI captures all M1-required data
+- if M1 requires a field, the UI must capture it
+- if missing, add it to the correct module or form
+- do not leave report fields without input sources
+
+6. Hybrid M1 workflow
+- auto-fill where system data exists
+- allow manual input for missing data
+- allow manual correction where needed
+
+==================================================
+D. Role-Based Access
+==================================================
+
+7. Team Leader (Barangay Nurse)
+- can view M1 for assigned barangay only
+- can edit their barangay M1
+- can complete missing values
+
+8. Super Admin / Municipal roles
+- can view all barangays
+- can review/edit reports
+- can finalize/lock reports
+
+==================================================
+E. Testing Requirements (CRITICAL)
+==================================================
+
+9. Test full M1 data flow
+Verify that:
+- data entered in UI modules flows correctly into M1 report
+- all M1 sections generate correct values
+- age group calculations are correct
+- Modern FP Methods (current users, acceptors, dropouts) are correctly counted
+
+10. Test auto-fill vs manual edit behavior
+- confirm auto-filled values match source data
+- confirm manual edits override correctly
+- confirm edited values persist
+
+11. Test across ALL roles (NOT admin only)
+Test using:
+- Team Leader (Barangay Nurse)
+- Triage Nurse (if implemented)
+- Municipal Health Officer
+- Senior Health Admin
+- Super Admin
+
+Verify:
+- role-based visibility works correctly
+- Team Leader cannot access other barangays
+- editing permissions behave correctly per role
+- no unauthorized access or editing
+
+12. Test end-to-end workflow
+Simulate real workflow:
+- create/update patient profile
+- add program/service records (e.g., FP, child growth, etc.)
+- generate M1 report
+- verify counts reflect actual data
+- perform manual edits
+- verify audit logs capture changes
+
+13. Test edge cases
+- missing data
+- duplicate patient entries
+- incorrect barangay assignment
+- incomplete records
+- imported vs manually entered data
+
+==================================================
+F. Audit Logging
+==================================================
+
+14. Track all manual changes
+Log:
+- user
+- role
+- barangay
+- field changed
+- old value
+- new value
+- timestamp
+
+==================================================
+G. Deliverables
+==================================================
+
+Provide:
+1. unified patient identity design
+2. section-based M1 data models
+3. UI updates for missing fields
+4. mapping of M1 indicators to source data
+5. role-based access implementation
+6. full testing results across roles
+7. list of modules/files changed
+8. summary of fixes and validations performed
+
+==================================================
+H. Success Criteria
+==================================================
+
+- all M1 sections are properly supported by system data
+- UI captures all required M1 fields
+- Modern FP Methods are accurately tracked and counted
+- age groups are correctly calculated
+- M1 reports are generated per barangay correctly
+- Team Leaders can manage their barangay reports only
+- audit logs track all manual edits
+- system works correctly across all roles
+- no regression or broken functionality
