@@ -523,12 +523,20 @@ export async function registerRoutes(
       const allowedIds = allBarangays
         .filter(b => assignedNames.includes(b.name))
         .map(b => b.id);
-      const requestedId = barangayId ? Number(barangayId) : undefined;
-      if (requestedId && !allowedIds.includes(requestedId)) {
-        return res.status(403).json({ message: "Access denied to this barangay" });
+      // Reject invalid/non-numeric barangayId query param
+      if (barangayId !== undefined) {
+        const parsedId = Number(barangayId);
+        if (!Number.isFinite(parsedId) || parsedId <= 0) {
+          return res.status(400).json({ message: "Invalid barangayId" });
+        }
+        if (!allowedIds.includes(parsedId)) {
+          return res.status(403).json({ message: "Access denied to this barangay" });
+        }
       }
+      const requestedId = barangayId ? Number(barangayId) : undefined;
+      // Default to first allowed barangay (assignedBarangays[0] ordering) when no barangayId given
       const reports = await storage.getM1ReportInstances({
-        barangayId: requestedId || allowedIds[0],
+        barangayId: requestedId ?? allowedIds[0],
         month: month ? Number(month) : undefined,
         year: year ? Number(year) : undefined,
       });
