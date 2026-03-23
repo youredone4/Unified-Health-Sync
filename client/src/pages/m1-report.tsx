@@ -176,7 +176,7 @@ export default function M1ReportPage() {
 
   const saveValuesMutation = useMutation({
     mutationFn: async (data: { reportId: number; values: any[] }) => {
-      const res = await apiRequest("PUT", `/api/m1/reports/${data.reportId}/values`, data.values);
+      const res = await apiRequest("PUT", `/api/m1/reports/${data.reportId}/values`, { values: data.values });
       return res.json();
     },
     onSuccess: () => {
