@@ -1,0 +1,92 @@
+Enhance the Messaging module by adding one global General Chat for all registered system users.
+
+Context
+- The system already has an SMS messaging feature used for external communication with patients.
+- We want to add an internal chat feature for system users only.
+- This should be one shared global chat for all registered users.
+- Do NOT break the existing SMS functionality.
+- Do NOT mix SMS with internal chat.
+
+Goal
+Add a “General Chat” tab inside the Messaging module where all registered users can join the same shared internal chat room.
+
+Requirements
+
+1. Add General Chat tab
+- In the Messaging module, add a new tab:
+  - SMS
+  - General Chat
+- Keep the existing SMS feature unchanged
+
+2. One global chat only
+- Create one shared chat room for all registered users
+- All logged-in users can see the same message stream
+- Do NOT create barangay-based chat
+- Do NOT create role-based chat
+- Do NOT create private chat in this task
+
+3. General Chat functionality
+Allow all registered users to:
+- view the shared chat
+- send messages to the shared chat
+
+Each message should include:
+- sender name
+- sender role (optional)
+- timestamp
+- message content
+
+4. UI layout
+Use a simple chat layout:
+- scrollable message list
+- input field at the bottom
+- send button
+- newest messages appear at the bottom
+- clean and readable styling
+
+5. Real-time or near-real-time updates
+- if real-time is supported by the current stack, use it
+- otherwise implement reliable polling
+- chat should update without reloading the whole page
+
+6. Authentication and access
+- only logged-in registered users can access General Chat
+- use the existing authentication system
+- do not allow public access
+
+7. Preserve role logic
+- all registered roles can access the same global chat
+- do not create separate chat visibility rules for this task
+- keep role labels optional for display only
+
+8. Keep General Chat separate from SMS
+- SMS remains for external/patient messaging
+- General Chat is for internal user communication only
+- do not merge the two features
+
+9. Optional enhancements if feasible
+- unread indicator
+- message time formatting
+- auto-scroll to latest message
+- simple empty-state if no messages yet
+
+10. Preserve existing functionality
+- do not break the SMS module
+- do not break user login
+- do not break role-based access in other modules
+- do not affect dashboards or registries
+
+11. Deliverables
+Provide:
+1. General Chat tab
+2. one global shared chat implementation
+3. message send and fetch logic
+4. authentication/access protection
+5. files changed
+
+Success Criteria
+- all logged-in registered users can access the same General Chat
+- users can send and receive messages in one shared chat room
+- SMS remains unchanged
+- no private, barangay-based, or role-based chat is created
+- system remains stable
