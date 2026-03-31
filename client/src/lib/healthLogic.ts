@@ -355,6 +355,7 @@ export function getWHOReferenceData(sex: string | null | undefined): WHOReferenc
  * Returns null when: no growth records, weight ≤ 0, or age outside 0–60 months.
  */
 export function getWeightZScore(child: Child): WeightZScoreResult | null {
+  if (!child.dob) return null;
   const growth = child.growth || [];
   if (growth.length === 0) return null;
 
