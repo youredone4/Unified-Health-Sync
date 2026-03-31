@@ -34,8 +34,8 @@ export default function GrowthMonitoring() {
   }, [childrenWithGrowth, nameFilter, barangayFilter]);
 
   const uniqueBarangays = useMemo(() => {
-    const fromChildren = Array.from(new Set(childrenWithGrowth.map(c => c.barangay)));
-    const fromApi = barangays.map(b => b.name);
+    const fromChildren = childrenWithGrowth.map(c => c.barangay).filter((b): b is string => !!b);
+    const fromApi = barangays.map(b => b.name).filter(Boolean);
     const combined = new Set([...fromChildren, ...fromApi]);
     return Array.from(combined).sort();
   }, [childrenWithGrowth, barangays]);

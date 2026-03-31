@@ -62,11 +62,11 @@ export default function CalendarPage() {
         allEvents.push({
           id: `pc-${m.id}`,
           date: m.nextPrenatalCheckDate,
-          title: `${m.firstName} ${m.lastName} - Prenatal Check`,
+          title: `${m.firstName ?? 'Unknown'} ${m.lastName ?? ''} - Prenatal Check`.trim(),
           type: 'prenatal',
           status: pc.status,
           link: `/mother/${m.id}`,
-          barangay: m.barangay
+          barangay: m.barangay ?? ''
         });
       }
       const tt = getTTStatus(m);
@@ -74,11 +74,11 @@ export default function CalendarPage() {
         allEvents.push({
           id: `tt-${m.id}`,
           date: tt.dueDate,
-          title: `${m.firstName} ${m.lastName} - ${tt.nextShotLabel}`,
+          title: `${m.firstName ?? 'Unknown'} ${m.lastName ?? ''} - ${tt.nextShotLabel}`.trim(),
           type: 'tt',
           status: tt.status,
           link: `/mother/${m.id}`,
-          barangay: m.barangay
+          barangay: m.barangay ?? ''
         });
       }
     });
@@ -89,11 +89,11 @@ export default function CalendarPage() {
         allEvents.push({
           id: `cv-${c.id}`,
           date: c.nextVisitDate,
-          title: `${c.name} - Next Visit`,
+          title: `${c.name ?? 'Unknown Child'} - Next Visit`,
           type: 'vaccine',
           status: visit.status,
           link: `/child/${c.id}`,
-          barangay: c.barangay
+          barangay: c.barangay ?? ''
         });
       }
     });
@@ -104,11 +104,11 @@ export default function CalendarPage() {
         allEvents.push({
           id: `sp-${s.id}`,
           date: s.nextPickupDate,
-          title: `${s.firstName} ${s.lastName} - Meds Pickup`,
+          title: `${s.firstName ?? 'Unknown'} ${s.lastName ?? ''} - Meds Pickup`.trim(),
           type: 'senior',
           status: pickup.status,
           link: `/senior/${s.id}`,
-          barangay: s.barangay
+          barangay: s.barangay ?? ''
         });
       }
     });
@@ -118,7 +118,7 @@ export default function CalendarPage() {
 
   const barangays = useMemo(() => {
     const set = new Set<string>();
-    events.forEach(e => set.add(e.barangay));
+    events.forEach(e => { if (e.barangay) set.add(e.barangay); });
     return Array.from(set).sort();
   }, [events]);
 

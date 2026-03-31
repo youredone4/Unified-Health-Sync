@@ -29,7 +29,7 @@ export default function ChildWorklist() {
 
   const barangays = useMemo(() => {
     const set = new Set<string>();
-    children.forEach(c => set.add(c.barangay));
+    children.forEach(c => { if (c.barangay) set.add(c.barangay); });
     return Array.from(set).sort();
   }, [children]);
 

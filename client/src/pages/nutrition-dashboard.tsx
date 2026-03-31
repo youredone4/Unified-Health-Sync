@@ -63,7 +63,7 @@ export default function NutritionDashboard() {
   const [activeFilter, setActiveFilter] = useState<FilterKey>(null);
 
   const barangays = useMemo(() => {
-    const set = new Set(children.map((c) => c.barangay));
+    const set = new Set(children.map((c) => c.barangay).filter((b): b is string => !!b));
     return Array.from(set).sort();
   }, [children]);
 
