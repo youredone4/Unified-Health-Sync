@@ -1,0 +1,129 @@
+URGENT: Fix the production white-screen issues for these specific sections in the deployed system:
+
+- Calendar
+- Vaccination Schedule
+- Growth Monitoring
+- Nutrition Dashboard
+
+Important Context
+- These sections are showing a white screen in production.
+- The app is already deployed.
+- This is not a redesign task.
+- Do NOT rebuild the whole system.
+- Focus on root-cause debugging, fixing, validating, and retesting in production.
+
+Primary Goal
+Find and fix the exact causes of the white-screen failures in these modules, then verify they are fully working in the deployed production environment.
+
+Critical Requirement
+Do not stop at making the page partially load. Make sure each affected section:
+- renders correctly
+- handles empty or incomplete data safely
+- works across roles
+- works via sidebar navigation and direct URL access
+- works after browser refresh
+
+Affected Sections
+
+1. Calendar
+2. Vaccination Schedule
+3. Growth Monitoring
+4. Nutrition Dashboard
+
+Tasks
+
+1. Investigate root causes
+Inspect likely causes such as:
+- frontend runtime errors
+- undefined/null data access
+- broken imports or components
+- failed API calls
+- malformed response data
+- role guard issues
+- broken route config
+- production-only environment/config mismatch
+- lazy-loaded component failure
+- unhandled exceptions
+
+2. Fix each affected module
+For each of the four sections:
+- identify the exact crash reason
+- fix the root cause
+- make sure the page renders without a blank screen
+- add safe fallbacks for missing/partial data
+- make sure charts/tables/cards do not crash if data is empty
+
+3. Add defensive handling
+Where needed:
+- null/undefined guards
+- loading states
+- empty states
+- safe chart rendering when no records exist
+- safe table rendering when no rows exist
+- error boundaries or graceful fallbacks if appropriate
+
+4. Production verification
+Because this is already deployed:
+- inspect production logs
+- inspect browser console/runtime errors
+- inspect network/API failures
+- confirm the fix works in production, not just local development
+
+5. Test across roles
+Do NOT test only as admin.
+
+Test these affected sections using:
+- Super Admin
+- Municipal Health Officer
+- Senior Health Admin
+- Team Leader (Barangay Nurse)
+- Triage Nurse if implemented
+
+Verify:
+- allowed pages load correctly for each role
+- unauthorized access fails gracefully
+- no role-specific white screen occurs
+
+6. Test real data conditions
+Retest using:
+- existing records
+- empty datasets
+- partial/incomplete records
+- newly added records
+- imported records if applicable
+- filtered views/search
+
+7. Test route behavior
+For each affected section:
+- open from sidebar navigation
+- open direct URL
+- refresh browser on page
+- verify it still loads correctly
+
+8. Retest after fixes
+After applying fixes:
+- retest Calendar
+- retest Vaccination Schedule
+- retest Growth Monitoring
+- retest Nutrition Dashboard
+- retest related linked pages from Child and Nutrition modules
+- verify no regression in nearby workflows
+
+9. Deliverables
+Provide:
+1. root cause found for each affected section
+2. exact fixes applied
+3. list of files changed
+4. production test results
+5. role-based test results
+6. any remaining issue if one still exists
+
+Success Criteria
+- Calendar loads correctly in production
+- Vaccination Schedule loads correctly in production
+- Growth Monitoring loads correctly in production
+- Nutrition Dashboard loads correctly in production
+- no white screen remains in these sections
+- pages handle missing/empty data safely
+- pages work across roles
+- deployed production behavior is confirmed stable
