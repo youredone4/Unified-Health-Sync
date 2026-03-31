@@ -5,14 +5,43 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { SidebarProvider, SidebarTrigger, SidebarInset } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
-import { Bell, LogOut, User, UserCircle } from "lucide-react";
+import { Bell, LogOut, User, UserCircle, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { useState } from "react";
+import { Component, type ReactNode, useState } from "react";
 import { ThemeProvider } from "@/contexts/theme-context";
 import { useAuth, permissions } from "@/hooks/use-auth";
+
+class PageErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean; error: Error | null }> {
+  constructor(props: { children: ReactNode }) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="flex flex-col items-center justify-center h-full gap-4 p-8">
+          <div className="p-3 rounded-full bg-destructive/10">
+            <AlertTriangle className="w-8 h-8 text-destructive" />
+          </div>
+          <div className="text-center">
+            <p className="text-lg font-semibold mb-1">Something went wrong on this page</p>
+            <p className="text-sm text-muted-foreground mb-4">There was an unexpected error loading this section.</p>
+            <Button onClick={() => { this.setState({ hasError: false, error: null }); window.location.reload(); }}>
+              Reload Page
+            </Button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 import LandingPage from "@/pages/landing";
 import Dashboard from "@/pages/dashboard";
@@ -275,7 +304,9 @@ function AuthenticatedApp() {
                 </div>
               </header>
               <main className="flex-1 overflow-auto p-4">
-                <Router />
+                <PageErrorBoundary>
+                  <Router />
+                </PageErrorBoundary>
               </main>
             </SidebarInset>
           </div>

@@ -177,39 +177,54 @@ export interface VaccineStatus {
 }
 
 export function getNextVaccineStatus(child: Child): VaccineStatus {
-  const dob = parseISO(child.dob);
-  const vaccines = child.vaccines || {};
-
-  for (const vax of VACCINE_SCHEDULE) {
-    const key = vax.key as keyof typeof vaccines;
-    if (!vaccines[key]) {
-      const dueDate = addDays(dob, vax.daysFromBirth);
-      const daysUntil = differenceInDays(dueDate, TODAY);
-      return {
-        nextVaccine: vax.key,
-        nextVaccineLabel: vax.label,
-        dueDate: format(dueDate, 'yyyy-MM-dd'),
-        status: daysUntil < 0 ? 'overdue' : daysUntil <= 7 ? 'due_soon' : 'upcoming'
-      };
-    }
+  if (!child.dob) {
+    return { nextVaccine: null, nextVaccineLabel: 'No DOB recorded', dueDate: null, status: 'upcoming' };
   }
+  try {
+    const dob = parseISO(child.dob);
+    if (isNaN(dob.getTime())) {
+      return { nextVaccine: null, nextVaccineLabel: 'Invalid DOB', dueDate: null, status: 'upcoming' };
+    }
+    const vaccines = child.vaccines || {};
 
-  return {
-    nextVaccine: null,
-    nextVaccineLabel: 'All vaccines complete',
-    dueDate: null,
-    status: 'completed'
-  };
+    for (const vax of VACCINE_SCHEDULE) {
+      const key = vax.key as keyof typeof vaccines;
+      if (!vaccines[key]) {
+        const dueDate = addDays(dob, vax.daysFromBirth);
+        const daysUntil = differenceInDays(dueDate, TODAY);
+        return {
+          nextVaccine: vax.key,
+          nextVaccineLabel: vax.label,
+          dueDate: format(dueDate, 'yyyy-MM-dd'),
+          status: daysUntil < 0 ? 'overdue' : daysUntil <= 7 ? 'due_soon' : 'upcoming'
+        };
+      }
+    }
+
+    return {
+      nextVaccine: null,
+      nextVaccineLabel: 'All vaccines complete',
+      dueDate: null,
+      status: 'completed'
+    };
+  } catch {
+    return { nextVaccine: null, nextVaccineLabel: 'Unable to compute', dueDate: null, status: 'upcoming' };
+  }
 }
 
 export function getChildVisitStatus(child: Child): { status: StatusType; daysUntil: number | null } {
   if (!child.nextVisitDate) return { status: 'upcoming', daysUntil: null };
-  const visitDate = parseISO(child.nextVisitDate);
-  const daysUntil = differenceInDays(visitDate, TODAY);
-  return {
-    status: daysUntil < 0 ? 'overdue' : daysUntil <= 7 ? 'due_soon' : 'upcoming',
-    daysUntil
-  };
+  try {
+    const visitDate = parseISO(child.nextVisitDate);
+    if (isNaN(visitDate.getTime())) return { status: 'upcoming', daysUntil: null };
+    const daysUntil = differenceInDays(visitDate, TODAY);
+    return {
+      status: daysUntil < 0 ? 'overdue' : daysUntil <= 7 ? 'due_soon' : 'upcoming',
+      daysUntil
+    };
+  } catch {
+    return { status: 'upcoming', daysUntil: null };
+  }
 }
 
 export function getAgeInMonths(dob: string): number {
