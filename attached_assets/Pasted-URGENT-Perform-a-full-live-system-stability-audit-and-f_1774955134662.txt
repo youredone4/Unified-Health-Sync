@@ -1,0 +1,167 @@
+URGENT: Perform a full live-system stability audit and fix all white-screen / blank-page failures across the deployed application.
+
+Context
+- The system is already deployed live.
+- There are multiple pages showing a white screen or blank page.
+- The examples already observed are only samples, not the full list.
+- This is not a redesign task.
+- Do NOT rebuild the whole system.
+- Focus on debugging, fixing, validating, and retesting until the deployed system is stable.
+
+Primary Goal
+Find and fix all route/page/module failures causing white screens or blank screens in production, then test and retest the entire deployed app to make sure it is working properly across modules and roles.
+
+Critical Requirement
+Do NOT treat this as a fix for only a few known pages.
+Assume there may be multiple hidden failures across the app.
+Perform a broad route-by-route and module-by-module audit.
+
+Tasks
+
+1. Investigate the root causes of white screens
+Check for common production failure causes such as:
+- frontend runtime errors
+- broken imports
+- undefined/null access during render
+- missing props or missing query results
+- broken route definitions
+- auth/role guard issues
+- failed API calls
+- database/query failures
+- production-only environment/config mismatches
+- lazy loading/import chunk failures
+- hydration/render errors
+- unhandled exceptions
+- malformed data returned by APIs
+- missing empty-state handling
+
+2. Audit all major routes and modules
+Do a full audit of the live deployed system, including but not limited to:
+- Municipal Dashboard
+- Hotspots & Analytics
+- Calendar
+- TT Reminders
+- Prenatal Dashboard
+- Mother Registry
+- Vaccination Schedule
+- Child Dashboard
+- Child Registry
+- Growth Monitoring
+- Nutrition Dashboard
+- Underweight Follow-ups
+- HTN Meds Pickup
+- Senior Dashboard
+- Senior Registry
+- Case Worklist
+- Case Registry
+- Outbreak Map
+- DOTS Worklist
+- TB Registry
+- Availability & Surplus
+- Stock-outs & Low Stock
+- M1 Report
+- Health Analytics
+- Messages
+- Patient Check-up
+- User Management
+- Audit Logs
+- Settings
+
+Also inspect child/detail/profile pages, edit pages, add-record pages, and report pages — not just dashboard landing pages.
+
+3. Fix all blank-screen pages found
+For each failing page:
+- identify the exact root cause
+- fix the underlying issue
+- make sure the page renders properly
+- make sure empty data does not cause crashes
+- make sure invalid or partial records do not cause crashes
+- prevent blank white-screen behavior
+
+4. Add defensive error handling
+Where needed:
+- add null/undefined guards
+- add loading states
+- add empty states
+- add safe fallbacks
+- add route/component error handling if appropriate
+- ensure errors fail gracefully instead of rendering a blank screen
+
+5. Verify production deployment behavior
+Because this is already deployed:
+- inspect production logs
+- inspect browser/runtime console errors
+- inspect server/API failures
+- inspect deployment/build configuration
+- verify that production environment variables and endpoints are correct
+- confirm fixes work in the deployed production environment, not only locally
+
+6. Test role-based rendering
+Do NOT test only as admin.
+
+Test all relevant roles:
+- Super Admin
+- Municipal Health Officer
+- Senior Health Admin
+- Team Leader (Barangay Nurse)
+- Triage Nurse if implemented
+
+For each role, verify:
+- allowed pages load correctly
+- unauthorized pages fail gracefully without crashing
+- sidebar navigation works
+- profile-specific pages load correctly
+- no role-specific white screens occur
+
+7. Test real-world data conditions
+Retest pages using:
+- populated records
+- empty datasets
+- partial/incomplete records
+- newly created records
+- imported records
+- records missing optional fields
+- users with limited barangay assignment
+- pages with filters/search active
+
+8. Test direct route access and refresh behavior
+For every major module:
+- navigate from the sidebar
+- open direct URL routes manually
+- refresh the browser on deep-linked pages
+- verify no route breaks on refresh or direct access
+
+9. End-to-end retest after fixes
+After all identified issues are fixed:
+- retest the original sample failing pages
+- retest all major routes/modules
+- retest page-to-page navigation
+- retest create/edit/view flows
+- retest report screens
+- retest across roles
+- retest the live deployed app, not just the development environment
+
+10. Do not close the task early
+Do not consider this complete until:
+- the known sample broken pages are fixed
+- additional broken pages discovered during audit are also fixed
+- major modules no longer show white screens
+- the deployed app is stable across roles and common workflows
+
+11. Deliverables
+Provide:
+1. list of all broken pages/routes found
+2. root cause for each failure
+3. fixes applied for each failure
+4. list of all modules/routes tested
+5. list of roles tested
+6. production verification results
+7. any remaining issues, if any
+8. files changed
+
+Success Criteria
+- no major page or module shows a white screen in production
+- pages render correctly even with missing or incomplete data
+- route access works from navigation and direct URL entry
+- system works across all roles, not just admin
+- deployed production system is stable after testing and retesting
