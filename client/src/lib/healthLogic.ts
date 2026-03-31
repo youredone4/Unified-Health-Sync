@@ -37,10 +37,8 @@ export function getTTStatus(mother: Mother): TTStatus {
     mother.tt5Date,
   ];
 
-  // Count completed shots
   const completedShots = ttDates.filter(d => d).length;
 
-  // If all shots complete
   if (completedShots >= 5) {
     return {
       nextShot: null,
@@ -51,11 +49,9 @@ export function getTTStatus(mother: Mother): TTStatus {
     };
   }
 
-  // Find next shot
   const nextShotIndex = completedShots;
   const nextShotInfo = TT_SCHEDULE[nextShotIndex];
 
-  // TT1 has no previous date requirement
   if (nextShotIndex === 0) {
     return {
       nextShot: 'TT1',
@@ -66,7 +62,6 @@ export function getTTStatus(mother: Mother): TTStatus {
     };
   }
 
-  // Calculate due date based on previous shot
   const previousShotDate = ttDates[nextShotIndex - 1];
   if (!previousShotDate) {
     return {
@@ -78,16 +73,23 @@ export function getTTStatus(mother: Mother): TTStatus {
     };
   }
 
-  const dueDate = addDays(parseISO(previousShotDate), nextShotInfo.daysAfterPrevious);
-  const daysUntil = differenceInDays(dueDate, TODAY);
-
-  return {
-    nextShot: nextShotInfo.shot,
-    nextShotLabel: nextShotInfo.label,
-    dueDate: format(dueDate, 'yyyy-MM-dd'),
-    status: daysUntil < 0 ? 'overdue' : daysUntil <= 7 ? 'due_soon' : 'upcoming',
-    completedShots
-  };
+  try {
+    const prevDate = parseISO(previousShotDate);
+    if (isNaN(prevDate.getTime())) {
+      return { nextShot: nextShotInfo.shot, nextShotLabel: nextShotInfo.label, dueDate: null, status: 'overdue', completedShots };
+    }
+    const dueDate = addDays(prevDate, nextShotInfo.daysAfterPrevious);
+    const daysUntil = differenceInDays(dueDate, TODAY);
+    return {
+      nextShot: nextShotInfo.shot,
+      nextShotLabel: nextShotInfo.label,
+      dueDate: format(dueDate, 'yyyy-MM-dd'),
+      status: daysUntil < 0 ? 'overdue' : daysUntil <= 7 ? 'due_soon' : 'upcoming',
+      completedShots
+    };
+  } catch {
+    return { nextShot: nextShotInfo.shot, nextShotLabel: nextShotInfo.label, dueDate: null, status: 'overdue', completedShots };
+  }
 }
 
 // Pregnancy status based on expected delivery date
@@ -100,7 +102,6 @@ export interface PregnancyStatus {
 }
 
 export function getPregnancyStatus(mother: Mother): PregnancyStatus {
-  // If outcome is set, pregnancy is closed
   if (mother.outcome) {
     return {
       isOverdue: false,
@@ -121,40 +122,56 @@ export function getPregnancyStatus(mother: Mother): PregnancyStatus {
     };
   }
 
-  // Calculate current weeks pregnant based on registration GA and time elapsed
-  const regDate = parseISO(mother.registrationDate);
-  const daysElapsed = differenceInDays(TODAY, regDate);
-  const weeksElapsed = Math.floor(daysElapsed / 7);
-  const currentGaWeeks = mother.gaWeeks + weeksElapsed;
+  try {
+    if (!mother.registrationDate) {
+      return { isOverdue: false, daysOverdue: 0, weeksPregnant: mother.gaWeeks || 0, expectedDeliveryDate: mother.expectedDeliveryDate || null, status: 'normal' };
+    }
+    const regDate = parseISO(mother.registrationDate);
+    if (isNaN(regDate.getTime())) {
+      return { isOverdue: false, daysOverdue: 0, weeksPregnant: mother.gaWeeks || 0, expectedDeliveryDate: mother.expectedDeliveryDate || null, status: 'normal' };
+    }
+    const daysElapsed = differenceInDays(TODAY, regDate);
+    const weeksElapsed = Math.floor(daysElapsed / 7);
+    const currentGaWeeks = (mother.gaWeeks || 0) + weeksElapsed;
 
-  // Calculate EDD if not set
-  let eddStr = mother.expectedDeliveryDate;
-  if (!eddStr) {
-    const weeksToDelivery = 40 - mother.gaWeeks;
-    const edd = addDays(regDate, weeksToDelivery * 7);
-    eddStr = format(edd, 'yyyy-MM-dd');
+    let eddStr = mother.expectedDeliveryDate;
+    if (!eddStr) {
+      const weeksToDelivery = 40 - (mother.gaWeeks || 0);
+      const edd = addDays(regDate, weeksToDelivery * 7);
+      eddStr = format(edd, 'yyyy-MM-dd');
+    }
+
+    const edd = parseISO(eddStr);
+    if (isNaN(edd.getTime())) {
+      return { isOverdue: false, daysOverdue: 0, weeksPregnant: currentGaWeeks, expectedDeliveryDate: null, status: 'normal' };
+    }
+    const daysOverdue = differenceInDays(TODAY, edd);
+
+    return {
+      isOverdue: daysOverdue > 0,
+      daysOverdue: Math.max(0, daysOverdue),
+      weeksPregnant: currentGaWeeks,
+      expectedDeliveryDate: eddStr,
+      status: daysOverdue > 7 ? 'overdue' : currentGaWeeks >= 37 ? 'term' : 'normal'
+    };
+  } catch {
+    return { isOverdue: false, daysOverdue: 0, weeksPregnant: mother.gaWeeks || 0, expectedDeliveryDate: mother.expectedDeliveryDate || null, status: 'normal' };
   }
-
-  const edd = parseISO(eddStr);
-  const daysOverdue = differenceInDays(TODAY, edd);
-
-  return {
-    isOverdue: daysOverdue > 0,
-    daysOverdue: Math.max(0, daysOverdue),
-    weeksPregnant: currentGaWeeks,
-    expectedDeliveryDate: eddStr,
-    status: daysOverdue > 7 ? 'overdue' : currentGaWeeks >= 37 ? 'term' : 'normal'
-  };
 }
 
 export function getPrenatalCheckStatus(mother: Mother): { status: StatusType; daysUntil: number | null } {
   if (!mother.nextPrenatalCheckDate) return { status: 'upcoming', daysUntil: null };
-  const checkDate = parseISO(mother.nextPrenatalCheckDate);
-  const daysUntil = differenceInDays(checkDate, TODAY);
-  return {
-    status: daysUntil < 0 ? 'overdue' : daysUntil <= 7 ? 'due_soon' : 'upcoming',
-    daysUntil
-  };
+  try {
+    const checkDate = parseISO(mother.nextPrenatalCheckDate);
+    if (isNaN(checkDate.getTime())) return { status: 'upcoming', daysUntil: null };
+    const daysUntil = differenceInDays(checkDate, TODAY);
+    return {
+      status: daysUntil < 0 ? 'overdue' : daysUntil <= 7 ? 'due_soon' : 'upcoming',
+      daysUntil
+    };
+  } catch {
+    return { status: 'upcoming', daysUntil: null };
+  }
 }
 
 export const VACCINE_SCHEDULE = [
@@ -227,21 +244,33 @@ export function getChildVisitStatus(child: Child): { status: StatusType; daysUnt
   }
 }
 
-export function getAgeInMonths(dob: string): number {
-  const birthDate = parseISO(dob);
-  const days = differenceInDays(TODAY, birthDate);
-  return Math.floor(days / 30);
+export function getAgeInMonths(dob: string | null | undefined): number {
+  if (!dob) return 0;
+  try {
+    const birthDate = parseISO(dob);
+    if (isNaN(birthDate.getTime())) return 0;
+    const days = differenceInDays(TODAY, birthDate);
+    return Math.max(0, Math.floor(days / 30));
+  } catch {
+    return 0;
+  }
 }
 
 /**
  * Age in completed months between dob and a specific reference date.
  * Used to place growth measurements on the WHO age-in-months X-axis.
  */
-export function getAgeInMonthsAt(dob: string, referenceDate: string): number {
-  const birth = parseISO(dob);
-  const ref   = parseISO(referenceDate);
-  const days  = differenceInDays(ref, birth);
-  return Math.max(0, Math.floor(days / 30));
+export function getAgeInMonthsAt(dob: string | null | undefined, referenceDate: string | null | undefined): number {
+  if (!dob || !referenceDate) return 0;
+  try {
+    const birth = parseISO(dob);
+    const ref   = parseISO(referenceDate);
+    if (isNaN(birth.getTime()) || isNaN(ref.getTime())) return 0;
+    const days  = differenceInDays(ref, birth);
+    return Math.max(0, Math.floor(days / 30));
+  } catch {
+    return 0;
+  }
 }
 
 // WHO 2006 Child Growth Standards — Weight-for-Age LMS parameters.
@@ -373,20 +402,30 @@ export function isUnderweightRisk(child: Child): boolean {
 export function hasMissingGrowthCheck(child: Child): boolean {
   const growth = child.growth || [];
   if (growth.length === 0) return true;
-  
   const lastGrowth = growth[growth.length - 1];
-  const lastDate = parseISO(lastGrowth.date);
-  return differenceInDays(TODAY, lastDate) > 60;
+  if (!lastGrowth.date) return true;
+  try {
+    const lastDate = parseISO(lastGrowth.date);
+    if (isNaN(lastDate.getTime())) return true;
+    return differenceInDays(TODAY, lastDate) > 60;
+  } catch {
+    return true;
+  }
 }
 
 export function getSeniorPickupStatus(senior: Senior): { status: StatusType; daysUntil: number | null } {
   if (!senior.nextPickupDate) return { status: 'upcoming', daysUntil: null };
-  const pickupDate = parseISO(senior.nextPickupDate);
-  const daysUntil = differenceInDays(pickupDate, TODAY);
-  return {
-    status: daysUntil < 0 ? 'overdue' : daysUntil <= 7 ? 'due_soon' : 'upcoming',
-    daysUntil
-  };
+  try {
+    const pickupDate = parseISO(senior.nextPickupDate);
+    if (isNaN(pickupDate.getTime())) return { status: 'upcoming', daysUntil: null };
+    const daysUntil = differenceInDays(pickupDate, TODAY);
+    return {
+      status: daysUntil < 0 ? 'overdue' : daysUntil <= 7 ? 'due_soon' : 'upcoming',
+      daysUntil
+    };
+  } catch {
+    return { status: 'upcoming', daysUntil: null };
+  }
 }
 
 export function isMedsReadyForPickup(senior: Senior): boolean {
@@ -421,9 +460,15 @@ export function getStatusBadgeClass(status: StatusType | StockStatus): string {
   }
 }
 
-export function formatDate(dateStr: string | null): string {
+export function formatDate(dateStr: string | null | undefined): string {
   if (!dateStr) return 'N/A';
-  return format(parseISO(dateStr), 'MMM d, yyyy');
+  try {
+    const d = parseISO(dateStr);
+    if (isNaN(d.getTime())) return 'N/A';
+    return format(d, 'MMM d, yyyy');
+  } catch {
+    return 'N/A';
+  }
 }
 
 // === DISEASE SURVEILLANCE ===
@@ -439,8 +484,13 @@ export function getDiseaseStatus(diseaseCase: DiseaseCase): DiseaseStatusType {
 
 export function getDaysSinceReported(diseaseCase: DiseaseCase): number {
   if (!diseaseCase.dateReported) return 0;
-  const reportedDate = parseISO(diseaseCase.dateReported);
-  return differenceInDays(TODAY, reportedDate);
+  try {
+    const reportedDate = parseISO(diseaseCase.dateReported);
+    if (isNaN(reportedDate.getTime())) return 0;
+    return differenceInDays(TODAY, reportedDate);
+  } catch {
+    return 0;
+  }
 }
 
 export function isOutbreakCondition(cases: DiseaseCase[]): { isOutbreak: boolean; condition: string | null; count: number } {
@@ -483,14 +533,17 @@ export type TBStatusType = 'overdue' | 'due_today' | 'due_soon' | 'on_track' | '
 
 export function getTBDotsVisitStatus(patient: TBPatient): { status: TBStatusType; daysUntil: number | null } {
   if (!patient.nextDotsVisitDate) return { status: 'on_track', daysUntil: null };
-  
-  const visitDate = parseISO(patient.nextDotsVisitDate);
-  const daysUntil = differenceInDays(visitDate, TODAY);
-  
-  if (daysUntil < 0) return { status: 'overdue', daysUntil };
-  if (daysUntil === 0) return { status: 'due_today', daysUntil: 0 };
-  if (daysUntil <= 3) return { status: 'due_soon', daysUntil };
-  return { status: 'on_track', daysUntil };
+  try {
+    const visitDate = parseISO(patient.nextDotsVisitDate);
+    if (isNaN(visitDate.getTime())) return { status: 'on_track', daysUntil: null };
+    const daysUntil = differenceInDays(visitDate, TODAY);
+    if (daysUntil < 0) return { status: 'overdue', daysUntil };
+    if (daysUntil === 0) return { status: 'due_today', daysUntil: 0 };
+    if (daysUntil <= 3) return { status: 'due_soon', daysUntil };
+    return { status: 'on_track', daysUntil };
+  } catch {
+    return { status: 'on_track', daysUntil: null };
+  }
 }
 
 export function getTBMissedDoseRisk(patient: TBPatient): boolean {
@@ -499,14 +552,17 @@ export function getTBMissedDoseRisk(patient: TBPatient): boolean {
 
 export function getTBSputumCheckStatus(patient: TBPatient): { status: StatusType; daysUntil: number | null } {
   if (!patient.nextSputumCheckDate) return { status: 'upcoming', daysUntil: null };
-  
-  const checkDate = parseISO(patient.nextSputumCheckDate);
-  const daysUntil = differenceInDays(checkDate, TODAY);
-  
-  return {
-    status: daysUntil < 0 ? 'overdue' : daysUntil <= 7 ? 'due_soon' : 'upcoming',
-    daysUntil
-  };
+  try {
+    const checkDate = parseISO(patient.nextSputumCheckDate);
+    if (isNaN(checkDate.getTime())) return { status: 'upcoming', daysUntil: null };
+    const daysUntil = differenceInDays(checkDate, TODAY);
+    return {
+      status: daysUntil < 0 ? 'overdue' : daysUntil <= 7 ? 'due_soon' : 'upcoming',
+      daysUntil
+    };
+  } catch {
+    return { status: 'upcoming', daysUntil: null };
+  }
 }
 
 export function getTBOverallStatus(patient: TBPatient): TBStatusType {
@@ -536,15 +592,27 @@ export function getTBStatusBadgeClass(status: TBStatusType): string {
 }
 
 export function getTreatmentDaysRemaining(patient: TBPatient): number {
-  const startDate = parseISO(patient.treatmentStartDate);
-  const totalDays = patient.treatmentPhase === 'Intensive' ? 56 : 112;
-  const daysSinceStart = differenceInDays(TODAY, startDate);
-  return Math.max(0, totalDays - daysSinceStart);
+  if (!patient.treatmentStartDate) return 0;
+  try {
+    const startDate = parseISO(patient.treatmentStartDate);
+    if (isNaN(startDate.getTime())) return 0;
+    const totalDays = patient.treatmentPhase === 'Intensive' ? 56 : 112;
+    const daysSinceStart = differenceInDays(TODAY, startDate);
+    return Math.max(0, totalDays - daysSinceStart);
+  } catch {
+    return 0;
+  }
 }
 
 export function getTreatmentProgress(patient: TBPatient): number {
-  const startDate = parseISO(patient.treatmentStartDate);
-  const totalDays = patient.treatmentPhase === 'Intensive' ? 56 : 112;
-  const daysSinceStart = differenceInDays(TODAY, startDate);
-  return Math.min(100, Math.max(0, (daysSinceStart / totalDays) * 100));
+  if (!patient.treatmentStartDate) return 0;
+  try {
+    const startDate = parseISO(patient.treatmentStartDate);
+    if (isNaN(startDate.getTime())) return 0;
+    const totalDays = patient.treatmentPhase === 'Intensive' ? 56 : 112;
+    const daysSinceStart = differenceInDays(TODAY, startDate);
+    return Math.min(100, Math.max(0, (daysSinceStart / totalDays) * 100));
+  } catch {
+    return 0;
+  }
 }

@@ -16,8 +16,8 @@ export default function ChildRegistry() {
   const [search, setSearch] = useState('');
 
   const filtered = children.filter(c =>
-    c.name.toLowerCase().includes(search.toLowerCase()) ||
-    c.barangay.toLowerCase().includes(search.toLowerCase())
+    (c.name ?? '').toLowerCase().includes(search.toLowerCase()) ||
+    (c.barangay ?? '').toLowerCase().includes(search.toLowerCase())
   );
 
   const pagination = usePagination(filtered);

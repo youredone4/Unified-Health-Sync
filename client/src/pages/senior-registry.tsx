@@ -22,8 +22,8 @@ export default function SeniorRegistry() {
   const canImport = user ? permissions.canImportReports(user.role) : false;
 
   const filtered = seniors.filter(s =>
-    `${s.firstName} ${s.lastName}`.toLowerCase().includes(search.toLowerCase()) ||
-    s.barangay.toLowerCase().includes(search.toLowerCase())
+    `${s.firstName ?? ''} ${s.lastName ?? ''}`.toLowerCase().includes(search.toLowerCase()) ||
+    (s.barangay ?? '').toLowerCase().includes(search.toLowerCase())
   );
 
   const pagination = usePagination(filtered);

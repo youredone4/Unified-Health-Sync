@@ -16,8 +16,8 @@ export default function MotherRegistry() {
   const [search, setSearch] = useState('');
 
   const filtered = mothers.filter(m =>
-    `${m.firstName} ${m.lastName}`.toLowerCase().includes(search.toLowerCase()) ||
-    m.barangay.toLowerCase().includes(search.toLowerCase())
+    `${m.firstName ?? ''} ${m.lastName ?? ''}`.toLowerCase().includes(search.toLowerCase()) ||
+    (m.barangay ?? '').toLowerCase().includes(search.toLowerCase())
   );
 
   const pagination = usePagination(filtered);

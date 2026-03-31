@@ -24,8 +24,8 @@ export default function NutritionWorklist() {
 
   const filteredAtRisk = atRisk.filter(c =>
     search === '' ||
-    c.name.toLowerCase().includes(search.toLowerCase()) ||
-    c.barangay.toLowerCase().includes(search.toLowerCase())
+    (c.name ?? '').toLowerCase().includes(search.toLowerCase()) ||
+    (c.barangay ?? '').toLowerCase().includes(search.toLowerCase())
   );
 
   const pagination = usePagination(filteredAtRisk);

@@ -47,8 +47,8 @@ export default function TBWorklist() {
 
   const filteredPatients = getBaseFilteredPatients().filter(p =>
     search === '' ||
-    `${p.firstName} ${p.lastName}`.toLowerCase().includes(search.toLowerCase()) ||
-    p.barangay.toLowerCase().includes(search.toLowerCase())
+    `${p.firstName ?? ''} ${p.lastName ?? ''}`.toLowerCase().includes(search.toLowerCase()) ||
+    (p.barangay ?? '').toLowerCase().includes(search.toLowerCase())
   );
 
   const pagination = usePagination(filteredPatients);

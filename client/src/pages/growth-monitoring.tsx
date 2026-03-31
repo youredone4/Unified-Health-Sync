@@ -27,7 +27,7 @@ export default function GrowthMonitoring() {
   const filteredChildren = useMemo(() => {
     return childrenWithGrowth.filter(c => {
       const matchesName = nameFilter === "" || 
-        c.name.toLowerCase().includes(nameFilter.toLowerCase());
+        (c.name ?? '').toLowerCase().includes(nameFilter.toLowerCase());
       const matchesBarangay = barangayFilter === "all" || c.barangay === barangayFilter;
       return matchesName && matchesBarangay;
     });

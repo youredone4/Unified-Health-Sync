@@ -42,8 +42,8 @@ export default function SeniorWorklist() {
 
   const filteredSeniors = getBaseFilteredSeniors().filter(s =>
     search === '' ||
-    `${s.firstName} ${s.lastName}`.toLowerCase().includes(search.toLowerCase()) ||
-    s.barangay.toLowerCase().includes(search.toLowerCase())
+    `${s.firstName ?? ''} ${s.lastName ?? ''}`.toLowerCase().includes(search.toLowerCase()) ||
+    (s.barangay ?? '').toLowerCase().includes(search.toLowerCase())
   );
 
   const pagination = usePagination(filteredSeniors);

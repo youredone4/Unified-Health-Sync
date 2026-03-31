@@ -26,9 +26,13 @@ export default function TBProfile() {
   const canDelete = permissions.canDelete(user?.role);
 
   const id = Number(params.id);
-  const { data: patient, isLoading } = useQuery<TBPatient>({
+  const { data: patient, isLoading, isError } = useQuery<TBPatient>({
     queryKey: ['/api/tb-patients', id],
-    queryFn: () => fetch(`/api/tb-patients/${id}`).then(res => res.json())
+    queryFn: async () => {
+      const res = await fetch(`/api/tb-patients/${id}`, { credentials: 'include' });
+      if (!res.ok) throw new Error('Not found');
+      return res.json();
+    }
   });
 
   const updateMutation = useMutation({
@@ -71,8 +75,16 @@ export default function TBProfile() {
     updateMutation.mutate({ referralToRHU: true });
   };
 
-  if (isLoading || !patient) {
+  if (isLoading) {
     return <div className="flex items-center justify-center h-64"><p className="text-muted-foreground">Loading...</p></div>;
+  }
+  if (isError || !patient) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64 gap-3">
+        <p className="text-muted-foreground">TB DOTS record not found or could not be loaded.</p>
+        <button onClick={() => navigate('/tb')} className="text-sm text-primary underline">Back to TB Worklist</button>
+      </div>
+    );
   }
 
   const visitStatus = getTBDotsVisitStatus(patient);

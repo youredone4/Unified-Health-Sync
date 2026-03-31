@@ -44,9 +44,9 @@ export default function DiseaseWorklist() {
 
   const filteredCases = getBaseFilteredCases().filter(c =>
     search === '' ||
-    c.patientName.toLowerCase().includes(search.toLowerCase()) ||
-    c.barangay.toLowerCase().includes(search.toLowerCase()) ||
-    c.condition.toLowerCase().includes(search.toLowerCase())
+    (c.patientName ?? '').toLowerCase().includes(search.toLowerCase()) ||
+    (c.barangay ?? '').toLowerCase().includes(search.toLowerCase()) ||
+    (c.condition ?? '').toLowerCase().includes(search.toLowerCase())
   );
 
   const pagination = usePagination(filteredCases);

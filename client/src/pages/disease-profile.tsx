@@ -25,9 +25,13 @@ export default function DiseaseProfile() {
   const canDelete = user?.role === UserRole.SYSTEM_ADMIN;
 
   const id = Number(params.id);
-  const { data: diseaseCase, isLoading } = useQuery<DiseaseCase>({
+  const { data: diseaseCase, isLoading, isError } = useQuery<DiseaseCase>({
     queryKey: ['/api/disease-cases', id],
-    queryFn: () => fetch(`/api/disease-cases/${id}`).then(res => res.json())
+    queryFn: async () => {
+      const res = await fetch(`/api/disease-cases/${id}`, { credentials: 'include' });
+      if (!res.ok) throw new Error('Not found');
+      return res.json();
+    }
   });
 
   const updateMutation = useMutation({
@@ -76,8 +80,16 @@ export default function DiseaseProfile() {
     updateMutation.mutate({ status: newStatus });
   };
 
-  if (isLoading || !diseaseCase) {
+  if (isLoading) {
     return <div className="flex items-center justify-center h-64"><p className="text-muted-foreground">Loading...</p></div>;
+  }
+  if (isError || !diseaseCase) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64 gap-3">
+        <p className="text-muted-foreground">Disease case not found or could not be loaded.</p>
+        <button onClick={() => navigate('/disease/registry')} className="text-sm text-primary underline">Back to Registry</button>
+      </div>
+    );
   }
 
   const daysSince = getDaysSinceReported(diseaseCase);
