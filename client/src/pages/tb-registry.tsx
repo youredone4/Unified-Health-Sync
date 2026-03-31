@@ -23,7 +23,7 @@ export default function TBRegistry() {
   const barangays = Array.from(new Set(patients.map(p => p.barangay)));
 
   const filteredPatients = patients.filter(p => {
-    const fullName = `${p.firstName} ${p.lastName}`.toLowerCase();
+    const fullName = `${p.firstName ?? ''} ${p.lastName ?? ''}`.toLowerCase();
     const matchesSearch = fullName.includes(search.toLowerCase());
     const matchesPhase = phaseFilter === 'all' || p.treatmentPhase === phaseFilter;
     const matchesBarangay = barangayFilter === 'all' || p.barangay === barangayFilter;

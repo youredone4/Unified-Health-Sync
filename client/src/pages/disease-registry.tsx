@@ -23,7 +23,7 @@ export default function DiseaseRegistry() {
   const barangays = Array.from(new Set(cases.map(c => c.barangay)));
 
   const filteredCases = cases.filter(c => {
-    const matchesSearch = c.patientName.toLowerCase().includes(search.toLowerCase());
+    const matchesSearch = (c.patientName ?? '').toLowerCase().includes(search.toLowerCase());
     const matchesCondition = conditionFilter === 'all' || c.condition === conditionFilter;
     const matchesBarangay = barangayFilter === 'all' || c.barangay === barangayFilter;
     return matchesSearch && matchesCondition && matchesBarangay;
