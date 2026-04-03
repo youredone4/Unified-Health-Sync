@@ -240,7 +240,7 @@ export default function Dashboard() {
             {isTL
               ? assignedBarangays[0]
                 ? `Barangay: ${assignedBarangays[0]}`
-                : "Barangay Dashboard"
+                : "Barangay: Not assigned"
               : "Placer Health Overview - 20 Barangays"}
           </p>
         </div>
