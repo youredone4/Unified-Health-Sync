@@ -1,0 +1,64 @@
+Enhance the dashboard labeling and behavior so that Team Leader (Barangay Nurse) users see a “Barangay Dashboard” instead of “Municipality Dashboard”, based on their role and RBAC.
+
+Context
+- The system currently shows “Municipality Dashboard” as the main dashboard label.
+- Team Leaders (Barangay Nurses) only have access to their assigned barangay data.
+- This creates a mismatch between the UI label and their actual scope.
+- Do NOT redesign the dashboard layout.
+- Only adjust labeling and role-based presentation.
+
+Goal
+Make the dashboard label and context reflect the user’s role:
+- Municipal-level users → “Municipality Dashboard”
+- Team Leaders (Barangay Nurses) → “Barangay Dashboard”
+
+Requirements
+
+1. Role-based dashboard label
+- Detect user role on login/session
+- If role = Team Leader (Barangay Nurse):
+  - change dashboard title to: “Barangay Dashboard”
+- For all other roles:
+  - keep “Municipality Dashboard”
+
+2. Optional: Show assigned barangay
+For Team Leaders:
+- display assigned barangay name in the dashboard header or subtitle
+
+Example:
+Barangay Dashboard  
+Barangay: Mabini
+
+3. Do NOT change data logic
+- do not alter existing data filtering
+- RBAC already limits Team Leader to their barangay
+- this task is only for UI/label alignment
+
+4. Preserve layout and components
+- do not redesign cards, charts, or layout
+- only adjust labels and header text
+
+5. Ensure consistency
+Apply this label change consistently in:
+- main dashboard page
+- sidebar navigation label (if applicable)
+- breadcrumb/header titles
+
+6. Test across roles
+Verify:
+- Team Leader sees “Barangay Dashboard”
+- other roles still see “Municipality Dashboard”
+- no role sees incorrect label
+
+7. Deliverables
+Provide:
+1. role-based label logic
+2. updated dashboard title implementation
+3. optional barangay display (if implemented)
+4. files changed
+
+Success Criteria
+- Team Leader users see “Barangay Dashboard”
+- municipal-level users still see “Municipality Dashboard”
+- UI accurately reflects RBAC scope
+- no changes to data behavior
