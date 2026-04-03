@@ -161,7 +161,7 @@ const NAV_GROUPS: NavGroup[] = [
 export function AppSidebar() {
   const [location] = useLocation();
   const { settings } = useTheme();
-  const { role, isAuthenticated } = useAuth();
+  const { role, isAuthenticated, isTL } = useAuth();
   const [logoError, setLogoError] = useState(false);
 
   const { data: unreadData } = useQuery<{ count: number }>({
@@ -209,7 +209,11 @@ export function AppSidebar() {
             {group.label && <SidebarGroupLabel>{group.label}</SidebarGroupLabel>}
             <SidebarGroupContent>
               <SidebarMenu>
-                {group.items.map((item) => (
+                {group.items.map((item) => {
+                  const displayTitle = item.url === "/" && isTL
+                    ? "Barangay Dashboard"
+                    : item.title;
+                  return (
                   <SidebarMenuItem key={item.title}>
                     <SidebarMenuButton
                       asChild
@@ -218,7 +222,7 @@ export function AppSidebar() {
                     >
                       <Link href={item.url} data-testid={`nav-${item.url.replace(/\//g, "-")}`}>
                         <item.icon className="w-4 h-4" />
-                        <span>{item.title}</span>
+                        <span>{displayTitle}</span>
                         {item.isBadged && (unreadData?.count ?? 0) > 0 && (
                           <Badge
                             className="ml-auto h-5 min-w-5 flex items-center justify-center text-xs px-1"
@@ -230,7 +234,8 @@ export function AppSidebar() {
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
-                ))}
+                  );
+                })}
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>

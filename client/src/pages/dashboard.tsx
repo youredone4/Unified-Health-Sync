@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
+import { useAuth } from "@/hooks/use-auth";
 import type { Mother, Child, Senior, InventoryItem, DiseaseCase, TBPatient } from "@shared/schema";
 import { getTTStatus, getNextVaccineStatus, getSeniorPickupStatus, isMedsReadyForPickup, isUnderweightRisk, isOutbreakCondition, getTBDotsVisitStatus, getTBMissedDoseRisk, getDiseaseStatus } from "@/lib/healthLogic";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -141,6 +142,7 @@ function AlertItem({ type, message, barangay, date, index }: {
 
 export default function Dashboard() {
   const [, navigate] = useLocation();
+  const { isTL, assignedBarangays } = useAuth();
   const { data: mothers = [] } = useQuery<Mother[]>({ queryKey: ['/api/mothers'] });
   const { data: children = [] } = useQuery<Child[]>({ queryKey: ['/api/children'] });
   const { data: seniors = [] } = useQuery<Senior[]>({ queryKey: ['/api/seniors'] });
@@ -231,8 +233,16 @@ export default function Dashboard() {
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
-          <h1 className="text-2xl font-bold" data-testid="text-page-title">Municipal Dashboard</h1>
-          <p className="text-muted-foreground">Placer Health Overview - 20 Barangays</p>
+          <h1 className="text-2xl font-bold" data-testid="text-page-title">
+            {isTL ? "Barangay Dashboard" : "Municipal Dashboard"}
+          </h1>
+          <p className="text-muted-foreground">
+            {isTL
+              ? assignedBarangays[0]
+                ? `Barangay: ${assignedBarangays[0]}`
+                : "Barangay Dashboard"
+              : "Placer Health Overview - 20 Barangays"}
+          </p>
         </div>
         <Badge variant="outline" className="text-sm" data-testid="badge-total-patients">
           <Users className="w-4 h-4 mr-1" />
