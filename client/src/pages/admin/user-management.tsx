@@ -129,16 +129,9 @@ function FaceMatchBadge({ status, score, reason }: { status: string | null; scor
       </span>
     );
   }
-  if (status === "FAILED") {
-    return (
-      <span className="inline-flex items-center gap-1 text-xs bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200 px-2 py-0.5 rounded-full" title={reason || ""}>
-        <AlertCircle className="w-3.5 h-3.5" />Check Failed — Verify Manually
-      </span>
-    );
-  }
   return (
-    <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-      <HelpCircle className="w-3.5 h-3.5" />{status}
+    <span className="inline-flex items-center gap-1 text-xs bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200 px-2 py-0.5 rounded-full" title={reason || ""}>
+      <AlertCircle className="w-3.5 h-3.5" />Verify Manually
     </span>
   );
 }

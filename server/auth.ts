@@ -325,6 +325,11 @@ export function registerAuthRoutes(app: Express): void {
           return res.status(400).json({ message: "A valid government ID photo is required. Please upload a clear photo or scan." });
         }
 
+        if (!uploadedSelfie) {
+          cleanupUploads();
+          return res.status(400).json({ message: "A selfie photo is required for identity verification. Please complete the selfie capture step." });
+        }
+
         // Server-side TL barangay enforcement: TL must be assigned to at least one valid barangay
         if (requestedRole === UserRole.TL) {
           const rawIds: number[] = (Array.isArray(barangayIdsRaw) ? barangayIdsRaw : barangayIdsRaw ? [barangayIdsRaw] : [])
@@ -396,24 +401,26 @@ export function registerAuthRoutes(app: Express): void {
           { username: newUser.username, fullName: newUser.fullName, role: newUser.role, status: newUser.status }
         );
 
-        // Trigger async face-match (does not block response, never auto-approves)
+        // Trigger async face-match when both files are present (does not block response, never auto-approves)
+        // Selfie is now mandatory, so selfiePath should always be set.
         const idPath = path.join(KYC_UPLOAD_DIR, kycIdFileUrl);
-        const selfiePath = kycSelfieUrl ? path.join(KYC_UPLOAD_DIR, kycSelfieUrl) : null;
+        const selfiePath = path.join(KYC_UPLOAD_DIR, kycSelfieUrl!);
 
         setImmediate(async () => {
+          // runFaceMatch handles all error cases internally and always returns INCONCLUSIVE on failure
           let faceMatch: Awaited<ReturnType<typeof runFaceMatch>>;
           try {
             faceMatch = await runFaceMatch(idPath, selfiePath);
           } catch (err: any) {
             console.error("[kyc-face-match] Unexpected error:", err?.message || err);
             faceMatch = {
-              status: "FAILED",
+              status: "INCONCLUSIVE",
               score: null,
               reason: "Face comparison service encountered an unexpected error. Admin must verify identity manually.",
             };
           }
 
-          // Always persist result (including FAILED) — never silently drop
+          // Always persist result — never silently drop
           try {
             await db.update(users).set({
               kycFaceMatchStatus: faceMatch.status,

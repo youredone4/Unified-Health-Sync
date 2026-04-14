@@ -5,8 +5,8 @@
  * and produce a match verdict for admin review. This is advisory only — it NEVER
  * auto-approves or auto-rejects an account.
  * 
- * Verdicts: HIGH_MATCH | POSSIBLE_MATCH | LOW_MATCH | INCONCLUSIVE | FAILED
- * Score: 0.0–1.0 float (null when unavailable)
+ * Verdicts: HIGH_MATCH | POSSIBLE_MATCH | LOW_MATCH | INCONCLUSIVE
+ * Score: 0.0–1.0 float (null when not computable)
  */
 
 import OpenAI from "openai";
@@ -22,8 +22,7 @@ export type FaceMatchStatus =
   | "HIGH_MATCH"
   | "POSSIBLE_MATCH"
   | "LOW_MATCH"
-  | "INCONCLUSIVE"
-  | "FAILED";
+  | "INCONCLUSIVE";
 
 export interface FaceMatchResult {
   status: FaceMatchStatus;
@@ -46,21 +45,21 @@ function mimeType(filePath: string): string {
 
 export async function runFaceMatch(
   idFilePath: string,
-  selfieFilePath: string | null
+  selfieFilePath: string
 ): Promise<FaceMatchResult> {
-  if (!selfieFilePath || !fs.existsSync(selfieFilePath)) {
+  if (!fs.existsSync(selfieFilePath)) {
     return {
       status: "INCONCLUSIVE",
       score: null,
-      reason: "No selfie was submitted for comparison.",
+      reason: "Selfie file not found on disk. Admin must verify identity manually.",
     };
   }
 
   if (!fs.existsSync(idFilePath)) {
     return {
-      status: "FAILED",
+      status: "INCONCLUSIVE",
       score: null,
-      reason: "ID file not found on disk — face comparison could not run.",
+      reason: "ID file not found on disk. Admin must verify identity manually.",
     };
   }
 
@@ -90,7 +89,6 @@ IMPORTANT GUIDELINES:
 - You are an assistive tool only. A human administrator makes the final decision.
 - Be conservative: if image quality is poor, face is unclear, or the ID photo is too small, return INCONCLUSIVE.
 - confidence_score is a decimal between 0 and 1 (e.g. 0.87 for 87% confidence).
-- NEVER return INCONCLUSIVE or FAILED as the only option when you can make a determination.
 
 Verdict meanings:
 - HIGH_MATCH: Strong visual similarity between ID and selfie (confidence >= 0.75)
@@ -136,12 +134,12 @@ Respond in EXACTLY this JSON format (no markdown, no extra text, no comments):
       return {
         status: "INCONCLUSIVE",
         score: null,
-        reason: `AI returned unparseable response. Admin must verify manually.`,
+        reason: "AI returned an unparseable response. Admin must verify identity manually.",
       };
     }
 
-    const verdict = parsed.verdict as FaceMatchStatus;
     const validVerdicts: FaceMatchStatus[] = ["HIGH_MATCH", "POSSIBLE_MATCH", "LOW_MATCH", "INCONCLUSIVE"];
+    const verdict = parsed.verdict as FaceMatchStatus;
     const status: FaceMatchStatus = validVerdicts.includes(verdict) ? verdict : "INCONCLUSIVE";
 
     let score: number | null = null;
@@ -154,7 +152,7 @@ Respond in EXACTLY this JSON format (no markdown, no extra text, no comments):
   } catch (err: any) {
     console.error("[kyc-face-match] API error:", err?.message || err);
     return {
-      status: "FAILED",
+      status: "INCONCLUSIVE",
       score: null,
       reason: "Face comparison service encountered an error. Admin must verify identity manually.",
     };

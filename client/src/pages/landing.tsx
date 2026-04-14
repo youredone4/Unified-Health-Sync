@@ -206,12 +206,22 @@ export default function LandingPage() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
   const [cameraError, setCameraError] = useState<string | null>(null);
+  const [cameraUnavailable, setCameraUnavailable] = useState(false); // true only when device has no camera
   const [selfiePreview, setSelfiePreview] = useState<string | null>(null);
 
   const startCamera = useCallback(async () => {
     setCameraError(null);
+    setCameraUnavailable(false);
     setSelfiePreview(null);
     setRegSelfie(null);
+
+    // Check if camera API is available at all
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      setCameraUnavailable(true);
+      setCameraError("Your browser or device does not support camera access. Please upload a selfie photo instead.");
+      return;
+    }
+
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user", width: 640, height: 480 } });
       setCameraStream(stream);
@@ -219,8 +229,21 @@ export default function LandingPage() {
         videoRef.current.srcObject = stream;
         videoRef.current.play();
       }
-    } catch {
-      setCameraError("Camera access denied. Please allow camera access and try again, or use a device with a camera.");
+    } catch (err: any) {
+      const errName = err?.name || "";
+      if (errName === "NotFoundError" || errName === "DevicesNotFoundError" || errName === "OverconstrainedError") {
+        // No camera hardware found — allow file fallback
+        setCameraUnavailable(true);
+        setCameraError("No camera was found on this device. Please upload a selfie photo instead.");
+      } else if (errName === "NotSupportedError") {
+        // Browser/context does not support camera — allow file fallback
+        setCameraUnavailable(true);
+        setCameraError("Camera is not supported in this context. Please upload a selfie photo instead.");
+      } else {
+        // Permission denied or other error — camera is required, no file fallback
+        setCameraUnavailable(false);
+        setCameraError("Camera access was denied. Please allow camera access in your browser settings and try again.");
+      }
     }
   }, []);
 
@@ -289,7 +312,7 @@ export default function LandingPage() {
     setRegFullName(""); setRegContact(""); setRegEmail("");
     setRegRole("TL"); setRegBarangayIds([]);
     setRegIdType(""); setRegIdFile(null); setRegSelfie(null);
-    stopCamera(); setSelfiePreview(null); setCameraError(null);
+    stopCamera(); setSelfiePreview(null); setCameraError(null); setCameraUnavailable(false);
   };
 
   const isTeamLeader = lastLogin.role === "TL";
@@ -665,26 +688,31 @@ export default function LandingPage() {
                         <div className="rounded-md bg-destructive/10 border border-destructive/20 p-3 text-xs text-destructive">
                           {cameraError}
                         </div>
-                        <Button type="button" variant="outline" size="sm" className="w-full" onClick={startCamera} data-testid="button-retry-camera">
-                          <Camera className="w-4 h-4 mr-1" />Try Camera Again
-                        </Button>
-                        <div className="text-center text-xs text-muted-foreground">— or —</div>
-                        <label
-                          className="flex flex-col items-center gap-2 p-3 border-2 border-dashed rounded-md cursor-pointer hover:border-primary transition-colors"
-                          data-testid="upload-selfie-fallback"
-                        >
-                          <Upload className="w-5 h-5 text-muted-foreground" />
-                          <span className="text-xs text-muted-foreground">Upload selfie photo instead</span>
-                          <input
-                            type="file"
-                            className="hidden"
-                            accept=".jpg,.jpeg,.png,.heic"
-                            onChange={(e) => {
-                              const file = e.target.files?.[0];
-                              if (file) { setRegSelfie(file); setCameraError(null); }
-                            }}
-                          />
-                        </label>
+                        {/* Only show retry button when camera is denied (not unavailable) */}
+                        {!cameraUnavailable && (
+                          <Button type="button" variant="outline" size="sm" className="w-full" onClick={startCamera} data-testid="button-retry-camera">
+                            <Camera className="w-4 h-4 mr-1" />Try Camera Again
+                          </Button>
+                        )}
+                        {/* File upload fallback ONLY when camera hardware/API is truly unavailable */}
+                        {cameraUnavailable && (
+                          <label
+                            className="flex flex-col items-center gap-2 p-3 border-2 border-dashed rounded-md cursor-pointer hover:border-primary transition-colors"
+                            data-testid="upload-selfie-fallback"
+                          >
+                            <Upload className="w-5 h-5 text-muted-foreground" />
+                            <span className="text-xs text-muted-foreground">Upload selfie photo instead</span>
+                            <input
+                              type="file"
+                              className="hidden"
+                              accept=".jpg,.jpeg,.png,.heic"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) { setRegSelfie(file); setCameraError(null); }
+                              }}
+                            />
+                          </label>
+                        )}
                       </div>
                     ) : (
                       <div className="space-y-2">
