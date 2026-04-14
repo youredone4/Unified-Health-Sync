@@ -26,7 +26,7 @@ export type FaceMatchStatus =
 
 export interface FaceMatchResult {
   status: FaceMatchStatus;
-  score: number | null;   // 0.0–1.0 confidence; null when not applicable
+  score: number;    // 0.0–1.0 confidence; 0 when not computable
   reason: string;
 }
 
@@ -50,7 +50,7 @@ export async function runFaceMatch(
   if (!fs.existsSync(selfieFilePath)) {
     return {
       status: "INCONCLUSIVE",
-      score: null,
+      score: 0,
       reason: "Selfie file not found on disk. Admin must verify identity manually.",
     };
   }
@@ -58,7 +58,7 @@ export async function runFaceMatch(
   if (!fs.existsSync(idFilePath)) {
     return {
       status: "INCONCLUSIVE",
-      score: null,
+      score: 0,
       reason: "ID file not found on disk. Admin must verify identity manually.",
     };
   }
@@ -67,7 +67,7 @@ export async function runFaceMatch(
   if (idExt === ".pdf") {
     return {
       status: "INCONCLUSIVE",
-      score: null,
+      score: 0,
       reason: "ID was submitted as a PDF. Face comparison requires an image file. Admin must verify identity manually.",
     };
   }
@@ -133,7 +133,7 @@ Respond in EXACTLY this JSON format (no markdown, no extra text, no comments):
     } catch {
       return {
         status: "INCONCLUSIVE",
-        score: null,
+        score: 0,
         reason: "AI returned an unparseable response. Admin must verify identity manually.",
       };
     }
@@ -142,7 +142,7 @@ Respond in EXACTLY this JSON format (no markdown, no extra text, no comments):
     const verdict = parsed.verdict as FaceMatchStatus;
     const status: FaceMatchStatus = validVerdicts.includes(verdict) ? verdict : "INCONCLUSIVE";
 
-    let score: number | null = null;
+    let score: number = 0;
     if (typeof parsed.confidence_score === "number") {
       score = Math.min(1, Math.max(0, parsed.confidence_score));
     }
@@ -153,7 +153,7 @@ Respond in EXACTLY this JSON format (no markdown, no extra text, no comments):
     console.error("[kyc-face-match] API error:", err?.message || err);
     return {
       status: "INCONCLUSIVE",
-      score: null,
+      score: 0,
       reason: "Face comparison service encountered an error. Admin must verify identity manually.",
     };
   }

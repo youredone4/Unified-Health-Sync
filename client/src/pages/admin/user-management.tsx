@@ -40,8 +40,8 @@ interface UserWithAssignments {
   hasKycSelfie: boolean;
   /** AI face-match result status */
   kycFaceMatchStatus: string | null;
-  /** Confidence score 0.0–1.0 float (null when unavailable) */
-  kycFaceMatchScore: number | null;
+  /** Confidence score 0.0–1.0 float (0 when not computable) */
+  kycFaceMatchScore: number | null; // null = not yet run; 0 = run but score unavailable
   /** Brief explanation from AI */
   kycFaceMatchReason: string | null;
   assignedBarangays: { id: number; name: string }[];
@@ -88,15 +88,15 @@ const roleColors: Record<string, string> = {
   TL: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
 };
 
-function formatScore(score: number | null): string {
-  if (score === null || score === undefined) return "";
+function formatScore(score: number | null, meaningful = true): string {
+  if (!meaningful || score === null || score === undefined || score === 0) return "";
   return ` · ${Math.round(score * 100)}%`;
 }
 
 function FaceMatchBadge({ status, score, reason }: { status: string | null; score: number | null; reason: string | null }) {
-  if (!status) {
+  if (!status || status === "PENDING") {
     return (
-      <span className="inline-flex items-center gap-1 text-xs text-muted-foreground" title="AI face verification not yet run">
+      <span className="inline-flex items-center gap-1 text-xs text-muted-foreground" title="AI face verification is running...">
         <HelpCircle className="w-3.5 h-3.5" />AI Check: Pending
       </span>
     );

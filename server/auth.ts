@@ -377,6 +377,9 @@ export function registerAuthRoutes(app: Express): void {
           kycIdType: kycIdType.trim(),
           kycIdFileUrl,
           kycSelfieUrl,
+          // Initialize face-match as PENDING so admin can see the state
+          // while async job runs in background
+          kycFaceMatchStatus: "PENDING",
         }).returning();
 
         // Assign barangays if TL (IDs already validated above)
@@ -415,7 +418,7 @@ export function registerAuthRoutes(app: Express): void {
             console.error("[kyc-face-match] Unexpected error:", err?.message || err);
             faceMatch = {
               status: "INCONCLUSIVE",
-              score: null,
+              score: 0,
               reason: "Face comparison service encountered an unexpected error. Admin must verify identity manually.",
             };
           }
