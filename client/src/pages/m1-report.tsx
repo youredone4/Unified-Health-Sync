@@ -101,6 +101,16 @@ export default function M1ReportPage() {
     }
   }, [isTL, assignedBarangays, barangays, selectedBarangayId]);
 
+  // Auto-load existing report instance whenever the query result changes (avoids stale closure)
+  useEffect(() => {
+    if (reportInstances.length > 0) {
+      setActiveReportId(prev => prev ?? reportInstances[0].id);
+    } else {
+      setActiveReportId(null);
+      setEditedValues({});
+    }
+  }, [reportInstances]);
+
   const activeTemplate = templates.find(t => t.isActive) || templates[0];
 
   const { data: catalog = [], isLoading: catalogLoading } = useQuery<M1IndicatorCatalog[]>({
@@ -1149,7 +1159,11 @@ export default function M1ReportPage() {
 
           <div className="flex flex-col gap-1">
             <Label className="text-xs">Month</Label>
-            <Select value={selectedMonth.toString()} onValueChange={(v) => setSelectedMonth(parseInt(v, 10))}>
+            <Select value={selectedMonth.toString()} onValueChange={(v) => {
+              setSelectedMonth(parseInt(v, 10));
+              setActiveReportId(null);
+              setEditedValues({});
+            }}>
               <SelectTrigger className="w-[140px]" data-testid="select-month">
                 <SelectValue />
               </SelectTrigger>
@@ -1163,7 +1177,11 @@ export default function M1ReportPage() {
 
           <div className="flex flex-col gap-1">
             <Label className="text-xs">Year</Label>
-            <Select value={selectedYear.toString()} onValueChange={(v) => setSelectedYear(parseInt(v, 10))}>
+            <Select value={selectedYear.toString()} onValueChange={(v) => {
+              setSelectedYear(parseInt(v, 10));
+              setActiveReportId(null);
+              setEditedValues({});
+            }}>
               <SelectTrigger className="w-[100px]" data-testid="select-year">
                 <SelectValue />
               </SelectTrigger>
@@ -1219,11 +1237,6 @@ export default function M1ReportPage() {
                   Create Report
                 </Button>
               )}
-              {existingReport && !activeReportId && (
-                <Button size="sm" variant="outline" onClick={() => setActiveReportId(existingReport.id)} data-testid="button-load-report">
-                  Load Report
-                </Button>
-              )}
               {activeReportId && (
                 <>
                   {!isLocked && (
@@ -1275,21 +1288,23 @@ export default function M1ReportPage() {
           </CardHeader>
           <CardContent>
             <Tabs value={currentPage.toString()} onValueChange={(v) => setCurrentPage(parseInt(v, 10))}>
-              <div className="flex items-center justify-between mb-4">
-                <TabsList>
-                  <TabsTrigger value="1" data-testid="tab-page-1">Page 1</TabsTrigger>
-                  <TabsTrigger value="2" data-testid="tab-page-2">Page 2</TabsTrigger>
-                  <TabsTrigger value="3" data-testid="tab-page-3">Page 3</TabsTrigger>
-                </TabsList>
-                <div className="flex gap-2">
-                  <Button size="icon" variant="ghost" onClick={() => setCurrentPage(Math.max(1, currentPage - 1))} disabled={currentPage === 1} data-testid="button-prev-page">
-                    <ChevronLeft className="h-4 w-4" />
-                  </Button>
-                  <Button size="icon" variant="ghost" onClick={() => setCurrentPage(Math.min(3, currentPage + 1))} disabled={currentPage === 3} data-testid="button-next-page">
-                    <ChevronRight className="h-4 w-4" />
-                  </Button>
+              {activeReportId && (
+                <div className="flex items-center justify-between mb-4">
+                  <TabsList>
+                    <TabsTrigger value="1" data-testid="tab-page-1">Page 1</TabsTrigger>
+                    <TabsTrigger value="2" data-testid="tab-page-2">Page 2</TabsTrigger>
+                    <TabsTrigger value="3" data-testid="tab-page-3">Page 3</TabsTrigger>
+                  </TabsList>
+                  <div className="flex gap-2">
+                    <Button size="icon" variant="ghost" onClick={() => setCurrentPage(Math.max(1, currentPage - 1))} disabled={currentPage === 1} data-testid="button-prev-page">
+                      <ChevronLeft className="h-4 w-4" />
+                    </Button>
+                    <Button size="icon" variant="ghost" onClick={() => setCurrentPage(Math.min(3, currentPage + 1))} disabled={currentPage === 3} data-testid="button-next-page">
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
-              </div>
+              )}
 
               {activeReportId && (
                 <div className="mb-2 space-y-1">
@@ -1308,26 +1323,51 @@ export default function M1ReportPage() {
                 </div>
               )}
 
-              {[1, 2, 3].map(page => (
-                <TabsContent key={page} value={page.toString()} className="space-y-6">
-                  <h3 className="font-semibold text-lg border-b pb-2">{PAGE_TITLES[page]}</h3>
+              {!selectedBarangayId ? (
+                <div className="flex flex-col items-center justify-center py-16 text-muted-foreground gap-3" data-testid="empty-state-no-barangay">
+                  <Building2 className="h-12 w-12 opacity-30" />
+                  <p className="text-lg font-medium">Select a barangay to view or create reports</p>
+                  <p className="text-sm">Use the barangay selector above to get started.</p>
+                </div>
+              ) : !existingReport && !createReportMutation.isPending ? (
+                <div className="flex flex-col items-center justify-center py-16 text-muted-foreground gap-4" data-testid="empty-state-no-report">
+                  <FileText className="h-12 w-12 opacity-30" />
+                  <div className="text-center">
+                    <p className="text-lg font-medium">No report for this period</p>
+                    <p className="text-sm mt-1">There is no M1 report for {MONTHS.find(m => m.value === selectedMonth)?.label} {selectedYear} in {selectedBarangay?.name}.</p>
+                  </div>
+                  <Button onClick={handleCreateReport} data-testid="button-create-report-empty">
+                    <Plus className="h-4 w-4 mr-1" />
+                    Create Report
+                  </Button>
+                </div>
+              ) : !activeReportId ? (
+                <div className="flex items-center justify-center py-16 gap-2 text-muted-foreground" data-testid="loading-report">
+                  <Loader2 className="h-6 w-6 animate-spin" />
+                  <span>Loading report...</span>
+                </div>
+              ) : (
+                [1, 2, 3].map(page => (
+                  <TabsContent key={page} value={page.toString()} className="space-y-6">
+                    <h3 className="font-semibold text-lg border-b pb-2">{PAGE_TITLES[page]}</h3>
 
-                  {Object.entries(groupedIndicators)
-                    .filter(([_, indicators]) => indicators[0]?.pageNumber === page)
-                    .sort(([, a], [, b]) => (a[0]?.rowOrder || 0) - (b[0]?.rowOrder || 0))
-                    .map(([sectionCode, indicators]) => (
-                      <div key={sectionCode} className="space-y-3">
-                        <h4 className="font-medium text-sm text-primary uppercase tracking-wide flex items-center gap-2">
-                          <span className="bg-primary text-primary-foreground px-2 py-0.5 rounded text-xs">{sectionCode}</span>
-                          {SECTION_TITLES[sectionCode] || sectionCode}
-                        </h4>
-                        <div className="border rounded-md overflow-x-auto">
-                          {renderIndicatorTable(sectionCode, indicators)}
+                    {Object.entries(groupedIndicators)
+                      .filter(([_, indicators]) => indicators[0]?.pageNumber === page)
+                      .sort(([, a], [, b]) => (a[0]?.rowOrder || 0) - (b[0]?.rowOrder || 0))
+                      .map(([sectionCode, indicators]) => (
+                        <div key={sectionCode} className="space-y-3">
+                          <h4 className="font-medium text-sm text-primary uppercase tracking-wide flex items-center gap-2">
+                            <span className="bg-primary text-primary-foreground px-2 py-0.5 rounded text-xs">{sectionCode}</span>
+                            {SECTION_TITLES[sectionCode] || sectionCode}
+                          </h4>
+                          <div className="border rounded-md overflow-x-auto">
+                            {renderIndicatorTable(sectionCode, indicators)}
+                          </div>
                         </div>
-                      </div>
-                    ))}
-                </TabsContent>
-              ))}
+                      ))}
+                  </TabsContent>
+                ))
+              )}
             </Tabs>
           </CardContent>
         </Card>
