@@ -610,6 +610,20 @@ export async function registerRoutes(
         return res.status(403).json({ message: "You can only create reports for your assigned barangays" });
       }
     }
+    // Duplicate prevention: return 409 if report already exists for this barangay/month/year
+    if (req.body.barangayId && req.body.month && req.body.year) {
+      const existing = await storage.getM1ReportInstances({
+        barangayId: Number(req.body.barangayId),
+        month: Number(req.body.month),
+        year: Number(req.body.year),
+      });
+      if (existing.length > 0) {
+        return res.status(409).json({
+          message: "Report already exists for this barangay and period",
+          reportId: existing[0].id,
+        });
+      }
+    }
     const report = await storage.createM1ReportInstance({
       ...req.body,
       createdByUserId: req.userInfo?.id || null,
@@ -730,6 +744,34 @@ export async function registerRoutes(
     const id = parseId(req.params.barangayId, res); if (id === null) return;
     const settings = await storage.getBarangaySettings(id);
     res.json(settings || {});
+  }));
+
+  // Compute M1 indicator values from system data (date-filtered, ENCODED-safe)
+  app.post("/api/m1/reports/:id/compute", loadUserInfo, requireAuth, ar(async (req, res) => {
+    const id = parseId(req.params.id, res); if (id === null) return;
+    const existing = await storage.getM1ReportInstance(id);
+    if (!existing) return res.status(404).json({ message: "Report not found" });
+    // TL scope check
+    if (req.userInfo?.role === UserRole.TL) {
+      const allBarangays = await storage.getBarangays();
+      const allowed = allBarangays
+        .filter(b => req.userInfo!.assignedBarangays.includes(b.name))
+        .map(b => b.id);
+      if (!existing.instance.barangayId || !allowed.includes(existing.instance.barangayId)) {
+        return res.status(403).json({ message: "Access denied to this barangay" });
+      }
+    }
+    if (existing.instance.status === "SUBMITTED_LOCKED") {
+      return res.status(403).json({ message: "Cannot compute into a submitted report. Reopen it first." });
+    }
+    const result = await storage.computeM1Values(id);
+    await createAuditLog(
+      req.userInfo!.id, req.userInfo!.role,
+      "UPDATE", "M1_REPORT", id,
+      existing.instance.barangayName || undefined,
+      undefined, { action: "compute", computed: result.computed, skipped: result.skipped }, req
+    );
+    res.json(result);
   }));
 
   // Bulk import M1 CSV data for a specific barangay and month/year

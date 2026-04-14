@@ -95,6 +95,7 @@ export interface IStorage {
   updateM1ReportStatus(id: number, status: string): Promise<M1ReportInstance>;
   getMunicipalitySettings(): Promise<MunicipalitySettings | undefined>;
   getBarangaySettings(barangayId: number): Promise<BarangaySettings | undefined>;
+  computeM1Values(reportId: number): Promise<{ computed: number; skipped: number }>;
 
   // Senior Medication Claims (Cross-barangay verification)
   getSeniorMedClaims(seniorId?: number): Promise<SeniorMedClaim[]>;
@@ -523,6 +524,114 @@ export class DatabaseStorage implements IStorage {
       .returning();
     if (!updated) throw new Error(`Report ${id} not found`);
     return updated;
+  }
+
+  async computeM1Values(reportId: number): Promise<{ computed: number; skipped: number }> {
+    const [instance] = await db.select().from(m1ReportInstances).where(eq(m1ReportInstances.id, reportId));
+    if (!instance) throw new Error("Report not found");
+
+    const { month, year, barangayName } = instance;
+    const monthLike = `${year}-${String(month).padStart(2, "0")}%`;
+
+    // Collect ENCODED keys to protect from overwrite
+    const existing = await db.select().from(m1IndicatorValues)
+      .where(eq(m1IndicatorValues.reportInstanceId, reportId));
+    const encodedKeys = new Set(
+      existing.filter(v => v.valueSource === "ENCODED")
+        .map(v => v.columnKey ? `${v.rowKey}:${v.columnKey}` : v.rowKey)
+    );
+
+    const computedRaw: Array<{ rowKey: string; columnKey: string | null; valueNumber: number }> = [];
+
+    const add = (rowKey: string, columnKey: string | null, val: number) => {
+      const k = columnKey ? `${rowKey}:${columnKey}` : rowKey;
+      if (!encodedKeys.has(k)) computedRaw.push({ rowKey, columnKey, valueNumber: val });
+    };
+
+    const countQ = async (table: any, conds: any[]): Promise<number> => {
+      const where = conds.length === 1 ? conds[0] : and(...(conds as [any, ...any[]]));
+      const [r] = await db.select({ n: sql<number>`count(*)::int` }).from(table).where(where);
+      return r?.n ?? 0;
+    };
+
+    // === MOTHERS ===
+    const mBase = barangayName ? [eq(mothers.barangay, barangayName)] : [];
+
+    // Deliveries this month
+    const mDelivered = [...mBase, sql`outcome_date LIKE ${monthLike}`];
+    add("B-01", "VALUE", await countQ(mothers, mDelivered));
+    add("B-02", "10-14", await countQ(mothers, [...mDelivered, sql`age BETWEEN 10 AND 14`]));
+    add("B-02", "15-19", await countQ(mothers, [...mDelivered, sql`age BETWEEN 15 AND 19`]));
+    add("B-02", "20-49", await countQ(mothers, [...mDelivered, sql`age BETWEEN 20 AND 49`]));
+    add("B-02", "TOTAL",  await countQ(mothers, mDelivered));
+    add("B-02a", "VALUE", await countQ(mothers, [...mDelivered, sql`birth_weight_category = 'normal'`]));
+    add("B-02b", "VALUE", await countQ(mothers, [...mDelivered, sql`birth_weight_category = 'low'`]));
+    add("E-01",  "TOTAL", await countQ(mothers, [...mDelivered, sql`breastfed_within_1hr = true`]));
+    add("H-01",  "TOTAL", await countQ(mothers, [...mDelivered, sql`outcome = 'live_birth'`]));
+    add("H-02",  "TOTAL", await countQ(mothers, [...mDelivered, sql`outcome = 'stillbirth'`]));
+
+    // ANC 8+ visits (deliveries with 8+ ANC this month)
+    const mAnc8 = [...mDelivered, sql`anc_visits >= 8`];
+    add("A-01b", "10-14", await countQ(mothers, [...mAnc8, sql`age BETWEEN 10 AND 14`]));
+    add("A-01b", "15-19", await countQ(mothers, [...mAnc8, sql`age BETWEEN 15 AND 19`]));
+    add("A-01b", "20-49", await countQ(mothers, [...mAnc8, sql`age BETWEEN 20 AND 49`]));
+    add("A-01b", "TOTAL",  await countQ(mothers, mAnc8));
+
+    // BMI status (mothers registered this month)
+    const mReg = [...mBase, sql`registration_date LIKE ${monthLike}`];
+    for (const [rk, bmiVal] of [["A-02a", "normal"], ["A-02b", "low"], ["A-02c", "high"]]) {
+      const bmiCond = [...mReg, sql`bmi_status = ${bmiVal}`];
+      add(rk, "10-14", await countQ(mothers, [...bmiCond, sql`age BETWEEN 10 AND 14`]));
+      add(rk, "15-19", await countQ(mothers, [...bmiCond, sql`age BETWEEN 15 AND 19`]));
+      add(rk, "20-49", await countQ(mothers, [...bmiCond, sql`age BETWEEN 20 AND 49`]));
+      add(rk, "TOTAL",  await countQ(mothers, bmiCond));
+    }
+
+    // === CHILDREN ===
+    const cBase = barangayName ? [eq(children.barangay, barangayName)] : [];
+
+    const addVax = async (rowKey: string, jsonKey: string) => {
+      const cond = [...cBase, sql`vaccines->>${jsonKey} LIKE ${monthLike}`];
+      add(rowKey, "M",     await countQ(children, [...cond, sql`sex = 'male'`]));
+      add(rowKey, "F",     await countQ(children, [...cond, sql`sex = 'female'`]));
+      add(rowKey, "TOTAL", await countQ(children, cond));
+    };
+
+    await addVax("D1-02", "bcg");
+    await addVax("D2-01", "penta1");
+    await addVax("D2-02", "penta2");
+    await addVax("D2-03", "penta3");
+    await addVax("D2-04", "opv1");
+    await addVax("D2-05", "opv2");
+    await addVax("D2-06", "opv3");
+
+    // === SENIORS ===
+    const sBase = barangayName ? [eq(seniors.barangay, barangayName)] : [];
+
+    // Medication given this month
+    const sMed = [...sBase, sql`last_medication_given_date LIKE ${monthLike}`];
+    add("G2-04", "M",     await countQ(seniors, [...sMed, sql`sex = 'M'`]));
+    add("G2-04", "F",     await countQ(seniors, [...sMed, sql`sex = 'F'`]));
+    add("G2-04", "TOTAL", await countQ(seniors, sMed));
+
+    // BP recorded this month
+    const sBP = [...sBase, sql`last_bp_date LIKE ${monthLike}`];
+    add("G2-03", "TOTAL", await countQ(seniors, sBP));
+
+    // Save all computed values (ENCODED already excluded via `add`)
+    if (computedRaw.length > 0) {
+      await this.updateM1IndicatorValues(reportId, computedRaw.map(v => ({
+        rowKey: v.rowKey,
+        columnKey: v.columnKey,
+        valueNumber: v.valueNumber,
+        valueSource: "COMPUTED",
+      })));
+    }
+
+    return {
+      computed: computedRaw.length,
+      skipped: existing.filter(v => v.valueSource === "ENCODED").length,
+    };
   }
 
   async getMunicipalitySettings(): Promise<MunicipalitySettings | undefined> {

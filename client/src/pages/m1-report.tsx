@@ -8,7 +8,8 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { FileText, Download, Save, Plus, ChevronLeft, ChevronRight, RefreshCw, Building2, Upload, Database, Loader2, Lock, Unlock, Send } from "lucide-react";
+import { FileText, Download, Save, Plus, ChevronLeft, ChevronRight, RefreshCw, Building2, Upload, Database, Loader2, Lock, Unlock, Send, Cpu, ChevronDown, ChevronUp, Info } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { useTheme } from "@/contexts/theme-context";
 import { useAuth, permissions, UserRole } from "@/hooks/use-auth";
@@ -82,6 +83,8 @@ export default function M1ReportPage() {
   const [editedValues, setEditedValues] = useState<IndicatorValueMap>({});
   const [activeReportId, setActiveReportId] = useState<number | null>(null);
   const [diseaseImportOpen, setDiseaseImportOpen] = useState(false);
+  const [switcherOpen, setSwitcherOpen] = useState(true);
+  const [dataSourcesOpen, setDataSourcesOpen] = useState(false);
   const { user, isTL, assignedBarangays } = useAuth();
 
   const { data: templates = [], isLoading: templatesLoading } = useQuery<M1TemplateVersion[]>({
@@ -151,6 +154,14 @@ export default function M1ReportPage() {
     enabled: !!activeReportId,
   });
 
+  // All-barangay overview for the selected period (switcher panel, non-TL only)
+  const overviewQueryKey = !isTL ? `/api/m1/reports?month=${selectedMonth}&year=${selectedYear}` : null;
+  const { data: allBarangayReports = [] } = useQuery<M1ReportInstance[]>({
+    queryKey: [overviewQueryKey],
+    queryFn: () => fetch(`/api/m1/reports?month=${selectedMonth}&year=${selectedYear}`, { credentials: "include" }).then(r => r.json()),
+    enabled: !isTL,
+  });
+
   const { data: mothers = [] } = useQuery<Mother[]>({ queryKey: ["/api/mothers"] });
   const { data: children = [] } = useQuery<Child[]>({ queryKey: ["/api/children"] });
   const { data: seniors = [] } = useQuery<Senior[]>({ queryKey: ["/api/seniors"] });
@@ -181,15 +192,32 @@ export default function M1ReportPage() {
       const res = await apiRequest("POST", "/api/m1/reports", data);
       return res.json();
     },
-    onSuccess: (data) => {
+    onSuccess: (data: any) => {
       toast({ title: "Report created", description: "New M1 report instance created successfully." });
       setActiveReportId(data.id);
       if (reportInstancesQueryKey) {
         queryClient.invalidateQueries({ queryKey: [reportInstancesQueryKey] });
       }
+      if (overviewQueryKey) {
+        queryClient.invalidateQueries({ queryKey: [overviewQueryKey] });
+      }
     },
-    onError: () => {
-      toast({ title: "Error", description: "Failed to create report.", variant: "destructive" });
+    onError: (err: any) => {
+      // Handle 409 conflict – existing report, open it instead
+      const raw: string = err?.message ?? "";
+      if (raw.startsWith("409:")) {
+        try {
+          const body = JSON.parse(raw.slice(4).trim());
+          if (body.reportId) {
+            toast({ title: "Report already exists", description: "Opening the existing report for this period." });
+            setActiveReportId(body.reportId);
+            if (reportInstancesQueryKey) queryClient.invalidateQueries({ queryKey: [reportInstancesQueryKey] });
+            if (overviewQueryKey) queryClient.invalidateQueries({ queryKey: [overviewQueryKey] });
+            return;
+          }
+        } catch {}
+      }
+      toast({ title: "Error", description: extractApiError(err, "Failed to create report."), variant: "destructive" });
     },
   });
 
@@ -250,6 +278,25 @@ export default function M1ReportPage() {
     },
     onError: () => {
       toast({ title: "Error", description: "Failed to generate historical data.", variant: "destructive" });
+    },
+  });
+
+  const computeMutation = useMutation({
+    mutationFn: async (reportId: number) => {
+      const res = await apiRequest("POST", `/api/m1/reports/${reportId}/compute`, {});
+      return res.json() as Promise<{ computed: number; skipped: number }>;
+    },
+    onSuccess: (data) => {
+      toast({
+        title: "Computation Complete",
+        description: `${data.computed} indicator values computed from system data. ${data.skipped} manually-entered values preserved.`,
+      });
+      if (activeReportId) {
+        queryClient.invalidateQueries({ queryKey: [`/api/m1/reports/${activeReportId}`] });
+      }
+    },
+    onError: (err: any) => {
+      toast({ title: "Compute Error", description: extractApiError(err, "Failed to compute values."), variant: "destructive" });
     },
   });
 
@@ -1200,6 +1247,60 @@ export default function M1ReportPage() {
         </div>
       </div>
 
+      {/* Multi-Barangay Switcher Panel — non-TL users only */}
+      {!isTL && (
+        <Card>
+          <button
+            className="w-full flex items-center justify-between px-4 py-3 text-sm font-medium hover:bg-muted/50 transition-colors"
+            onClick={() => setSwitcherOpen(o => !o)}
+            data-testid="button-switcher-toggle"
+          >
+            <span className="flex items-center gap-2">
+              <Building2 className="h-4 w-4" />
+              Barangay Overview — {MONTHS.find(m => m.value === selectedMonth)?.label} {selectedYear}
+              <Badge variant="outline" className="ml-1">{allBarangayReports.length} reports</Badge>
+            </span>
+            {switcherOpen ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+          </button>
+          {switcherOpen && (
+            <CardContent className="pt-0 pb-3">
+              {allBarangayReports.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-4">No reports submitted for this period yet.</p>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {allBarangayReports.map(r => (
+                    <button
+                      key={r.id}
+                      data-testid={`switcher-barangay-${r.id}`}
+                      className={cn(
+                        "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors",
+                        r.id === activeReportId
+                          ? "bg-primary text-primary-foreground border-primary"
+                          : "bg-background hover:bg-muted border-border",
+                      )}
+                      onClick={() => {
+                        const bgy = barangays.find(b => b.name === r.barangayName);
+                        if (bgy) setSelectedBarangayId(bgy.id);
+                        setActiveReportId(r.id);
+                        setEditedValues({});
+                      }}
+                    >
+                      <span>{r.barangayName}</span>
+                      <span className={cn(
+                        "px-1 rounded text-[10px]",
+                        r.status === "SUBMITTED_LOCKED" ? "bg-green-500/20 text-green-700 dark:text-green-400" : "bg-yellow-500/20 text-yellow-700 dark:text-yellow-400"
+                      )}>
+                        {r.status === "SUBMITTED_LOCKED" ? "✓" : "Draft"}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          )}
+        </Card>
+      )}
+
       <Card>
         <CardHeader className="pb-2 flex flex-row items-center justify-between gap-2">
           <div>
@@ -1259,6 +1360,18 @@ export default function M1ReportPage() {
                     <Download className="h-4 w-4 mr-1" />
                     Export PDF
                   </Button>
+                  {!isLocked && (user?.role === UserRole.MHO || user?.role === UserRole.SYSTEM_ADMIN) && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => computeMutation.mutate(activeReportId)}
+                      disabled={computeMutation.isPending}
+                      data-testid="button-compute"
+                    >
+                      {computeMutation.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Cpu className="h-4 w-4 mr-1" />}
+                      Compute from Data
+                    </Button>
+                  )}
                   {!isLocked ? (
                     <Button
                       size="sm"
@@ -1320,6 +1433,64 @@ export default function M1ReportPage() {
                 <div className="mb-2 flex items-center gap-2 rounded-md bg-muted px-3 py-2 text-sm text-muted-foreground" data-testid="locked-notice">
                   <Lock className="h-4 w-4 shrink-0" />
                   This report is submitted and locked. Reopen it to make changes.
+                </div>
+              )}
+
+              {/* Empty values banner */}
+              {activeReportId && activeReport && activeReport.values.length === 0 && !isLocked && (
+                <div className="mb-3 flex items-start gap-3 rounded-md border border-yellow-500/30 bg-yellow-50 dark:bg-yellow-950/30 px-4 py-3 text-sm" data-testid="banner-empty-values">
+                  <Info className="h-5 w-5 text-yellow-600 dark:text-yellow-400 shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <p className="font-medium text-yellow-800 dark:text-yellow-300">This report has no indicator values yet.</p>
+                    <p className="text-yellow-700 dark:text-yellow-400 text-xs mt-1">
+                      You can compute values automatically from system data, encode them manually in Encode Mode, or import them via CSV.
+                    </p>
+                  </div>
+                  {(user?.role === UserRole.MHO || user?.role === UserRole.SYSTEM_ADMIN) && (
+                    <Button size="sm" variant="outline" className="shrink-0 border-yellow-500/50"
+                      onClick={() => computeMutation.mutate(activeReportId)}
+                      disabled={computeMutation.isPending}
+                      data-testid="button-compute-banner"
+                    >
+                      {computeMutation.isPending ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Cpu className="h-3 w-3 mr-1" />}
+                      Compute Now
+                    </Button>
+                  )}
+                </div>
+              )}
+
+              {/* Data Sources panel — admin/MHO only */}
+              {activeReportId && selectedBarangayId && (user?.role === UserRole.MHO || user?.role === UserRole.SYSTEM_ADMIN) && (
+                <div className="mb-3 border rounded-md" data-testid="panel-data-sources">
+                  <button
+                    className="w-full flex items-center justify-between px-4 py-2.5 text-xs font-medium hover:bg-muted/50 transition-colors"
+                    onClick={() => setDataSourcesOpen(o => !o)}
+                    data-testid="button-data-sources-toggle"
+                  >
+                    <span className="flex items-center gap-2 text-muted-foreground">
+                      <Database className="h-3.5 w-3.5" />
+                      System Data Sources for {selectedBarangay?.name}
+                    </span>
+                    {dataSourcesOpen ? <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />}
+                  </button>
+                  {dataSourcesOpen && (
+                    <div className="px-4 pb-3 pt-1 grid grid-cols-2 sm:grid-cols-4 gap-3 border-t">
+                      {[
+                        { label: "Mothers on record", value: mothers.filter(m => !selectedBarangay || m.barangay === selectedBarangay.name).length },
+                        { label: "Children on record", value: children.filter(c => !selectedBarangay || c.barangay === selectedBarangay.name).length },
+                        { label: "Seniors on record", value: seniors.filter(s => !selectedBarangay || s.barangay === selectedBarangay.name).length },
+                        { label: "FP Service Records", value: fpRecords.length },
+                      ].map(item => (
+                        <div key={item.label} className="flex flex-col gap-1 bg-muted/30 rounded-md p-2">
+                          <span className="text-[10px] text-muted-foreground leading-tight">{item.label}</span>
+                          <span className="text-lg font-bold" data-testid={`datasource-${item.label.replace(/\s+/g, '-').toLowerCase()}`}>{item.value}</span>
+                        </div>
+                      ))}
+                      <div className="col-span-2 sm:col-span-4 text-[10px] text-muted-foreground">
+                        Values are computed using date filters matching the selected reporting period ({MONTHS.find(m => m.value === selectedMonth)?.label} {selectedYear}). Manually-encoded indicator values are preserved when computing.
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
