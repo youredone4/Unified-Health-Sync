@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { getTTStatus, getNextVaccineStatus, getSeniorPickupStatus, isMedsReadyForPickup, getPrenatalCheckStatus, getWeightZScore, hasMissingGrowthCheck } from "@/lib/healthLogic";
 import type { Mother, Child, Senior, InventoryItem } from "@shared/schema";
 import { AlertCircle, Clock, Info } from "lucide-react";
+import { useBarangay } from "@/contexts/barangay-context";
 
 interface NotificationDrawerProps {
   open: boolean;
@@ -18,9 +19,10 @@ interface Notification {
 }
 
 export default function NotificationDrawer({ open, onOpenChange }: NotificationDrawerProps) {
-  const { data: mothers = [] } = useQuery<Mother[]>({ queryKey: ['/api/mothers'] });
-  const { data: children = [] } = useQuery<Child[]>({ queryKey: ['/api/children'] });
-  const { data: seniors = [] } = useQuery<Senior[]>({ queryKey: ['/api/seniors'] });
+  const { scopedPath } = useBarangay();
+  const { data: mothers = [] } = useQuery<Mother[]>({ queryKey: [scopedPath('/api/mothers')] });
+  const { data: children = [] } = useQuery<Child[]>({ queryKey: [scopedPath('/api/children')] });
+  const { data: seniors = [] } = useQuery<Senior[]>({ queryKey: [scopedPath('/api/seniors')] });
   const { data: inventory = [] } = useQuery<InventoryItem[]>({ queryKey: ['/api/inventory'] });
 
   const notifications: Notification[] = [];

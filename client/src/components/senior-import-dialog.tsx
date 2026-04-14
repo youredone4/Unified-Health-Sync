@@ -7,7 +7,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { Upload, X, FileText, AlertCircle, CheckCircle2, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest, queryClient, invalidateScopedQueries } from "@/lib/queryClient";
 import { parseSeniorFile, type SeniorImportRow, type SeniorParseError } from "@/lib/seniorImportParser";
 import { usePagination } from "@/hooks/use-pagination";
 import TablePagination from "@/components/table-pagination";
@@ -105,7 +105,7 @@ export default function SeniorImportDialog({ open, onOpenChange }: Props) {
       return result as { imported: number };
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/seniors"] });
+      invalidateScopedQueries("/api/seniors");
       toast({ title: "Import complete", description: `${data.imported} senior citizens imported successfully.` });
       handleClose();
     },

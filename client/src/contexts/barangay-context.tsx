@@ -1,6 +1,8 @@
 import { createContext, useContext, useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
 
+const STORAGE_KEY = "healthsync_selected_barangay";
+
 interface BarangayContextValue {
   selectedBarangay: string | null;
   setSelectedBarangay: (b: string) => void;
@@ -16,8 +18,12 @@ const BarangayContext = createContext<BarangayContextValue>({
 export function BarangayProvider({ children }: { children: React.ReactNode }) {
   const { isTL, assignedBarangays } = useAuth();
 
-  // In-memory only: resets to first assigned barangay on every page load / login.
-  const [preferredBarangay, setPreferredBarangay] = useState<string | null>(null);
+  // Persisted in sessionStorage so a TL's selection survives navigation within
+  // the same tab session. The stored value is validated against assigned list on
+  // every render; invalid / missing values fall back to the first assigned barangay.
+  const [preferredBarangay, setPreferredBarangay] = useState<string | null>(() => {
+    try { return sessionStorage.getItem(STORAGE_KEY); } catch { return null; }
+  });
 
   // Compute effective barangay synchronously during render — no useEffect needed.
   // If auth data is already cached (normal case for logged-in users), this resolves
@@ -31,6 +37,7 @@ export function BarangayProvider({ children }: { children: React.ReactNode }) {
   })();
 
   const setSelectedBarangay = (b: string) => {
+    try { sessionStorage.setItem(STORAGE_KEY, b); } catch {}
     setPreferredBarangay(b);
   };
 

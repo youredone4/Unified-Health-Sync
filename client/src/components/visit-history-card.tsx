@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ClipboardList, Calendar, ChevronDown, ChevronUp, Plus, User } from "lucide-react";
 import { format, parseISO, isValid } from "date-fns";
 import { useAuth } from "@/hooks/use-auth";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, invalidateScopedQueries } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { PrenatalVisit, ChildVisit, SeniorVisit } from "@shared/schema";
 
@@ -302,7 +302,7 @@ function AddVisitDialog({
       queryClient.invalidateQueries({ queryKey: ["/api/nurse-visits", profileType.toLowerCase(), String(profileId)] });
       // Refresh mother profile so Next Prenatal Check card shows updated date
       if (profileType === "Mother") {
-        queryClient.invalidateQueries({ queryKey: ["/api/mothers"] });
+        invalidateScopedQueries("/api/mothers");
       }
       // Refresh child profile so WHO growth chart picks up the new measurement
       if (profileType === "Child") {

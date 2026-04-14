@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { Upload, X, FileText, Download, AlertCircle, CheckCircle2, Loader2, FileSpreadsheet, History } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest, queryClient, invalidateScopedQueries } from "@/lib/queryClient";
 import { parseFile, generateCSVTemplate, generateXLSXTemplate, type NormalizedRow, type ParseError } from "@/lib/importParser";
 import { usePagination } from "@/hooks/use-pagination";
 import TablePagination from "@/components/table-pagination";
@@ -92,7 +92,7 @@ export default function DiseaseImportDialog({ open, onOpenChange }: Props) {
       return res.json() as Promise<{ imported: number }>;
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/disease-cases"] });
+      invalidateScopedQueries("/api/disease-cases");
       const entry: ImportHistoryEntry = {
         id: crypto.randomUUID(),
         timestamp: new Date().toISOString(),
