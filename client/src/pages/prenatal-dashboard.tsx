@@ -143,10 +143,10 @@ export default function PrenatalDashboard() {
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <KpiCard title="Total Mothers" value={mothers.length} icon={Users} />
-        <KpiCard title="Overdue" value={overdue} icon={AlertCircle} variant="danger" />
-        <KpiCard title="Due Soon" value={dueSoon} icon={Heart} variant="warning" />
-        <KpiCard title="Completed" value={completed} icon={CheckCircle} variant="success" />
+        <KpiCard title="Total Mothers" value={mothers.length} icon={Users} onClick={() => navigate('/prenatal/registry')} />
+        <KpiCard title="Overdue" value={overdue} icon={AlertCircle} variant="danger" onClick={() => navigate('/prenatal')} />
+        <KpiCard title="Due Soon" value={dueSoon} icon={Heart} variant="warning" onClick={() => navigate('/prenatal')} />
+        <KpiCard title="Completed" value={completed} icon={CheckCircle} variant="success" onClick={() => navigate('/prenatal/registry')} />
       </div>
 
       {/* Quick Actions */}

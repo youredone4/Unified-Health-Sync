@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import type { InventoryItem, MedicineInventoryItem } from "@shared/schema";
 import { getStockStatus } from "@/lib/healthLogic";
 import KpiCard from "@/components/kpi-card";
@@ -11,6 +11,7 @@ import { Package, AlertCircle, CheckCircle, TrendingUp, Plus, Pill } from "lucid
 import { formatDate } from "@/lib/healthLogic";
 
 export default function InventoryPage() {
+  const [, navigate] = useLocation();
   const { data: inventory = [], isLoading } = useQuery<InventoryItem[]>({ queryKey: ['/api/inventory'] });
   const { data: medicines = [], isLoading: medLoading } = useQuery<MedicineInventoryItem[]>({ queryKey: ['/api/medicine-inventory'] });
 
@@ -63,8 +64,8 @@ export default function InventoryPage() {
       </div>
 
       <div className="grid grid-cols-3 gap-4">
-        <KpiCard title="Barangays with Stock-outs" value={stockOutBarangays} icon={AlertCircle} variant={stockOutBarangays > 0 ? 'danger' : 'default'} />
-        <KpiCard title="Low Stock Barangays" value={lowStockBarangays} icon={TrendingUp} variant={lowStockBarangays > 0 ? 'warning' : 'default'} />
+        <KpiCard title="Barangays with Stock-outs" value={stockOutBarangays} icon={AlertCircle} variant={stockOutBarangays > 0 ? 'danger' : 'default'} onClick={() => navigate('/inventory/stockouts')} />
+        <KpiCard title="Low Stock Barangays" value={lowStockBarangays} icon={TrendingUp} variant={lowStockBarangays > 0 ? 'warning' : 'default'} onClick={() => navigate('/inventory/stockouts')} />
         <KpiCard title="Total Barangays" value={inventory.length} icon={CheckCircle} />
       </div>
 

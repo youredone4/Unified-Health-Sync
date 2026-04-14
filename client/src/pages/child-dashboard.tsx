@@ -136,11 +136,11 @@ export default function ChildDashboard() {
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-        <KpiCard title="Total Children" value={children.length} icon={Users} />
-        <KpiCard title="Overdue" value={overdue} icon={AlertCircle} variant="danger" />
-        <KpiCard title="Due Soon" value={dueSoon} icon={Baby} variant="warning" />
-        <KpiCard title="Completed" value={completed} icon={CheckCircle} variant="success" />
-        <KpiCard title="Underweight Risk" value={underweight} icon={Scale} variant={underweight > 0 ? 'warning' : 'default'} />
+        <KpiCard title="Total Children" value={children.length} icon={Users} onClick={() => navigate('/child/registry')} />
+        <KpiCard title="Overdue" value={overdue} icon={AlertCircle} variant="danger" onClick={() => navigate('/child')} />
+        <KpiCard title="Due Soon" value={dueSoon} icon={Baby} variant="warning" onClick={() => navigate('/child')} />
+        <KpiCard title="Completed" value={completed} icon={CheckCircle} variant="success" onClick={() => navigate('/child/registry')} />
+        <KpiCard title="Underweight Risk" value={underweight} icon={Scale} variant={underweight > 0 ? 'warning' : 'default'} onClick={() => navigate('/nutrition')} />
       </div>
 
       <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">

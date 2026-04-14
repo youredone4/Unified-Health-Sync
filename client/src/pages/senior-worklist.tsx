@@ -67,10 +67,10 @@ export default function SeniorWorklist() {
       </div>
 
       <div className="grid grid-cols-4 gap-4">
-        <KpiCard title="Overdue" value={overdue.length} icon={AlertCircle} variant="danger" />
-        <KpiCard title="Due Soon" value={dueSoon.length} icon={Clock} variant="warning" />
-        <KpiCard title="Meds Ready" value={medsReady.length} icon={Check} variant="success" />
-        <KpiCard title="Total Seniors" value={seniors.length} icon={Users} />
+        <KpiCard title="Overdue" value={overdue.length} icon={AlertCircle} variant="danger" active={activeTab === 'overdue'} onClick={() => setActiveTab(activeTab === 'overdue' ? 'all' : 'overdue')} />
+        <KpiCard title="Due Soon" value={dueSoon.length} icon={Clock} variant="warning" active={activeTab === 'due_soon'} onClick={() => setActiveTab(activeTab === 'due_soon' ? 'all' : 'due_soon')} />
+        <KpiCard title="Meds Ready" value={medsReady.length} icon={Check} variant="success" active={activeTab === 'ready'} onClick={() => setActiveTab(activeTab === 'ready' ? 'all' : 'ready')} />
+        <KpiCard title="Total Seniors" value={seniors.length} icon={Users} active={activeTab === 'all'} onClick={() => setActiveTab('all')} />
       </div>
 
       <Card>

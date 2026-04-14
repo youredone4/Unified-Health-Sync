@@ -489,28 +489,48 @@ export default function FpRegistry() {
 
       {/* Summary Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card>
+        <Card
+          className={`cursor-pointer transition-all hover:opacity-90 select-none ${filterStatus === 'all' ? 'ring-2 ring-foreground/40' : ''}`}
+          onClick={() => setFilterStatus('all')}
+          data-testid="card-total-clients"
+        >
           <CardContent className="pt-4">
             <p className="text-sm text-muted-foreground">Total Clients</p>
             <p className="text-3xl font-bold" data-testid="text-total-clients">{summary.total}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Tap to show all</p>
           </CardContent>
         </Card>
-        <Card>
+        <Card
+          className={`cursor-pointer transition-all hover:opacity-90 select-none ${filterStatus === 'CURRENT_USER' ? 'ring-2 ring-green-500/70 border-green-500/50' : ''}`}
+          onClick={() => setFilterStatus(filterStatus === 'CURRENT_USER' ? 'all' : 'CURRENT_USER')}
+          data-testid="card-current-users"
+        >
           <CardContent className="pt-4">
             <p className="text-sm text-muted-foreground">Current Users</p>
             <p className="text-3xl font-bold text-green-600" data-testid="text-current-users">{summary.currentUsers}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">{filterStatus === 'CURRENT_USER' ? 'Tap to clear' : 'Tap to filter'}</p>
           </CardContent>
         </Card>
-        <Card>
+        <Card
+          className={`cursor-pointer transition-all hover:opacity-90 select-none ${filterStatus === 'NEW_ACCEPTOR' ? 'ring-2 ring-blue-500/70 border-blue-500/50' : ''}`}
+          onClick={() => setFilterStatus(filterStatus === 'NEW_ACCEPTOR' ? 'all' : 'NEW_ACCEPTOR')}
+          data-testid="card-new-acceptors"
+        >
           <CardContent className="pt-4">
             <p className="text-sm text-muted-foreground">New Acceptors</p>
             <p className="text-3xl font-bold text-blue-600" data-testid="text-new-acceptors">{summary.newAcceptors}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">{filterStatus === 'NEW_ACCEPTOR' ? 'Tap to clear' : 'Tap to filter'}</p>
           </CardContent>
         </Card>
-        <Card>
+        <Card
+          className={`cursor-pointer transition-all hover:opacity-90 select-none ${filterStatus === 'DROPOUT' ? 'ring-2 ring-red-500/70 border-red-500/50' : ''}`}
+          onClick={() => setFilterStatus(filterStatus === 'DROPOUT' ? 'all' : 'DROPOUT')}
+          data-testid="card-dropouts"
+        >
           <CardContent className="pt-4">
             <p className="text-sm text-muted-foreground">Dropouts</p>
             <p className="text-3xl font-bold text-red-600" data-testid="text-dropouts">{summary.dropouts}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">{filterStatus === 'DROPOUT' ? 'Tap to clear' : 'Tap to filter'}</p>
           </CardContent>
         </Card>
       </div>

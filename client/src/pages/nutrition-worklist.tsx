@@ -17,6 +17,7 @@ export default function NutritionWorklist() {
   const { scopedPath } = useBarangay();
   const { data: children = [], isLoading } = useQuery<Child[]>({ queryKey: [scopedPath('/api/children')] });
   const [search, setSearch] = useState('');
+  const [activeFilter, setActiveFilter] = useState<'underweight' | 'missing' | null>(null);
 
   const underweight = children.filter(c => isUnderweightRisk(c));
   const missingGrowth = children.filter(c => hasMissingGrowthCheck(c));
@@ -24,7 +25,13 @@ export default function NutritionWorklist() {
   [...underweight, ...missingGrowth].forEach(c => atRiskMap.set(c.id, c));
   const atRisk = Array.from(atRiskMap.values());
 
-  const filteredAtRisk = atRisk.filter(c =>
+  const baseList = activeFilter === 'underweight'
+    ? underweight
+    : activeFilter === 'missing'
+      ? missingGrowth
+      : atRisk;
+
+  const filteredAtRisk = baseList.filter(c =>
     search === '' ||
     (c.name ?? '').toLowerCase().includes(search.toLowerCase()) ||
     (c.barangay ?? '').toLowerCase().includes(search.toLowerCase())
@@ -32,7 +39,7 @@ export default function NutritionWorklist() {
 
   const pagination = usePagination(filteredAtRisk);
 
-  useEffect(() => { pagination.resetPage(); }, [search]);
+  useEffect(() => { pagination.resetPage(); }, [search, activeFilter]);
 
   if (isLoading) {
     return <div className="flex items-center justify-center h-64"><p className="text-muted-foreground">Loading...</p></div>;
@@ -49,9 +56,9 @@ export default function NutritionWorklist() {
       </div>
 
       <div className="grid grid-cols-3 gap-4">
-        <KpiCard title="Underweight Risk" value={underweight.length} icon={AlertCircle} variant="danger" />
-        <KpiCard title="Missing Growth Check" value={missingGrowth.length} icon={Clock} variant="warning" />
-        <KpiCard title="Total At Risk" value={atRisk.length} icon={Users} />
+        <KpiCard title="Underweight Risk" value={underweight.length} icon={AlertCircle} variant="danger" active={activeFilter === 'underweight'} onClick={() => setActiveFilter(activeFilter === 'underweight' ? null : 'underweight')} />
+        <KpiCard title="Missing Growth Check" value={missingGrowth.length} icon={Clock} variant="warning" active={activeFilter === 'missing'} onClick={() => setActiveFilter(activeFilter === 'missing' ? null : 'missing')} />
+        <KpiCard title="Total At Risk" value={atRisk.length} icon={Users} active={activeFilter === null} onClick={() => setActiveFilter(null)} />
       </div>
 
       <Card>

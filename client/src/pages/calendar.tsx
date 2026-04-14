@@ -52,6 +52,7 @@ export default function CalendarPage() {
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [typeFilter, setTypeFilter] = useState<string>('all');
   const [barangayFilter, setBarangayFilter] = useState<string>('all');
+  const [statusFilter, setStatusFilter] = useState<string | null>(null);
 
   const { data: mothers = [] } = useQuery<Mother[]>({ queryKey: [scopedPath('/api/mothers')] });
   const { data: children = [] } = useQuery<Child[]>({ queryKey: [scopedPath('/api/children')] });
@@ -130,9 +131,12 @@ export default function CalendarPage() {
     return events.filter(e => {
       if (typeFilter !== 'all' && e.type !== typeFilter) return false;
       if (barangayFilter !== 'all' && e.barangay !== barangayFilter) return false;
+      if (statusFilter === 'overdue' && e.status !== 'overdue') return false;
+      if (statusFilter === 'due_soon' && e.status !== 'dueSoon') return false;
+      if (statusFilter === 'upcoming' && (e.status === 'overdue' || e.status === 'dueSoon')) return false;
       return true;
     });
-  }, [events, typeFilter, barangayFilter]);
+  }, [events, typeFilter, barangayFilter, statusFilter]);
 
   const statusCounts = useMemo(() => {
     const counts = { overdue: 0, dueSoon: 0, upcoming: 0 };
@@ -179,7 +183,11 @@ export default function CalendarPage() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4" data-testid="status-summary-cards">
-        <Card className="border-destructive/50 bg-destructive/10" data-testid="card-overdue-count">
+        <Card
+          className={`border-destructive/50 bg-destructive/10 cursor-pointer transition-all hover:opacity-90 select-none ${statusFilter === 'overdue' ? 'ring-2 ring-destructive/70' : ''}`}
+          onClick={() => setStatusFilter(statusFilter === 'overdue' ? null : 'overdue')}
+          data-testid="card-overdue-count"
+        >
           <CardContent className="pt-4">
             <div className="flex items-center gap-3">
               <div className="p-2 rounded-full bg-destructive/20">
@@ -188,11 +196,16 @@ export default function CalendarPage() {
               <div>
                 <p className="text-2xl font-bold text-destructive" data-testid="text-overdue-value">{statusCounts.overdue}</p>
                 <p className="text-sm text-muted-foreground" data-testid="text-overdue-label">Overdue</p>
+                <p className="text-xs text-muted-foreground mt-0.5">{statusFilter === 'overdue' ? 'Tap to clear' : 'Tap to filter'}</p>
               </div>
             </div>
           </CardContent>
         </Card>
-        <Card className="border-yellow-500/50 dark:border-yellow-400/50 bg-yellow-500/10 dark:bg-yellow-400/10" data-testid="card-duesoon-count">
+        <Card
+          className={`border-yellow-500/50 dark:border-yellow-400/50 bg-yellow-500/10 dark:bg-yellow-400/10 cursor-pointer transition-all hover:opacity-90 select-none ${statusFilter === 'due_soon' ? 'ring-2 ring-yellow-500/70' : ''}`}
+          onClick={() => setStatusFilter(statusFilter === 'due_soon' ? null : 'due_soon')}
+          data-testid="card-duesoon-count"
+        >
           <CardContent className="pt-4">
             <div className="flex items-center gap-3">
               <div className="p-2 rounded-full bg-yellow-500/20 dark:bg-yellow-400/20">
@@ -201,11 +214,16 @@ export default function CalendarPage() {
               <div>
                 <p className="text-2xl font-bold text-yellow-600 dark:text-yellow-400" data-testid="text-duesoon-value">{statusCounts.dueSoon}</p>
                 <p className="text-sm text-muted-foreground" data-testid="text-duesoon-label">Due Soon</p>
+                <p className="text-xs text-muted-foreground mt-0.5">{statusFilter === 'due_soon' ? 'Tap to clear' : 'Tap to filter'}</p>
               </div>
             </div>
           </CardContent>
         </Card>
-        <Card className="border-green-500/50 dark:border-green-400/50 bg-green-500/10 dark:bg-green-400/10" data-testid="card-upcoming-count">
+        <Card
+          className={`border-green-500/50 dark:border-green-400/50 bg-green-500/10 dark:bg-green-400/10 cursor-pointer transition-all hover:opacity-90 select-none ${statusFilter === 'upcoming' ? 'ring-2 ring-green-500/70' : ''}`}
+          onClick={() => setStatusFilter(statusFilter === 'upcoming' ? null : 'upcoming')}
+          data-testid="card-upcoming-count"
+        >
           <CardContent className="pt-4">
             <div className="flex items-center gap-3">
               <div className="p-2 rounded-full bg-green-500/20 dark:bg-green-400/20">
@@ -214,6 +232,7 @@ export default function CalendarPage() {
               <div>
                 <p className="text-2xl font-bold text-green-600 dark:text-green-400" data-testid="text-upcoming-value">{statusCounts.upcoming}</p>
                 <p className="text-sm text-muted-foreground" data-testid="text-upcoming-label">Upcoming</p>
+                <p className="text-xs text-muted-foreground mt-0.5">{statusFilter === 'upcoming' ? 'Tap to clear' : 'Tap to filter'}</p>
               </div>
             </div>
           </CardContent>

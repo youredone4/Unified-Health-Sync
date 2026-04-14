@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { useBarangay } from "@/contexts/barangay-context";
 import type { Mother, Child, Senior, InventoryItem, DiseaseCase, TBPatient } from "@shared/schema";
 import { getTTStatus, getNextVaccineStatus, isMedsReadyForPickup, isUnderweightRisk, getTBMissedDoseRisk } from "@/lib/healthLogic";
@@ -48,12 +49,13 @@ function RiskBadge({ level, score }: { level: "high" | "medium" | "low"; score?:
   );
 }
 
-function KpiSummaryCard({ title, value, subtitle, icon: Icon, variant }: {
+function KpiSummaryCard({ title, value, subtitle, icon: Icon, variant, onClick }: {
   title: string;
   value: number;
   subtitle: string;
   icon: any;
   variant: "danger" | "warning" | "success" | "info";
+  onClick?: () => void;
 }) {
   const variants = {
     danger: { bg: "bg-red-500/10", border: "border-red-500/30", icon: "text-red-400" },
@@ -63,7 +65,11 @@ function KpiSummaryCard({ title, value, subtitle, icon: Icon, variant }: {
   };
   const v = variants[variant];
   return (
-    <Card className={`${v.bg} ${v.border}`}>
+    <Card
+      className={`${v.bg} ${v.border} ${onClick ? 'cursor-pointer hover:opacity-90 transition-all select-none' : ''}`}
+      onClick={onClick}
+      role={onClick ? 'button' : undefined}
+    >
       <CardContent className="p-4">
         <div className="flex items-center gap-3">
           <div className={`p-2 rounded-full ${v.bg}`}>
@@ -285,6 +291,7 @@ function BarangayDetailModal({ data, onClose, mothers, children, seniors, invent
 }
 
 export default function Hotspots() {
+  const [, navigate] = useLocation();
   const [selectedBarangay, setSelectedBarangay] = useState<BarangayData | null>(null);
   const { scopedPath } = useBarangay();
 
@@ -369,6 +376,7 @@ export default function Hotspots() {
           subtitle="Mothers need vaccination"
           icon={Heart}
           variant={totalTTOverdue > 0 ? "danger" : "success"}
+          onClick={() => navigate('/prenatal')}
         />
         <KpiSummaryCard
           title="Vaccines Overdue"
@@ -376,6 +384,7 @@ export default function Hotspots() {
           subtitle="Children need catch-up"
           icon={Baby}
           variant={totalVaxOverdue > 0 ? "danger" : "success"}
+          onClick={() => navigate('/child')}
         />
         <KpiSummaryCard
           title="Meds Pending"
@@ -383,6 +392,7 @@ export default function Hotspots() {
           subtitle="Seniors awaiting pickup"
           icon={Pill}
           variant={totalMedsPending > 0 ? "warning" : "success"}
+          onClick={() => navigate('/senior')}
         />
         <KpiSummaryCard
           title="Stock-outs"
@@ -390,6 +400,7 @@ export default function Hotspots() {
           subtitle="Barangays with 0 stock"
           icon={Package}
           variant={totalStockouts > 0 ? "danger" : "success"}
+          onClick={() => navigate('/inventory/stockouts')}
         />
         <KpiSummaryCard
           title="TB At Risk"
@@ -397,6 +408,7 @@ export default function Hotspots() {
           subtitle="Missed doses"
           icon={Activity}
           variant={totalTBAtRisk > 0 ? "danger" : "success"}
+          onClick={() => navigate('/tb')}
         />
       </div>
 
