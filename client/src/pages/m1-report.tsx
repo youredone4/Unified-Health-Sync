@@ -562,18 +562,18 @@ export default function M1ReportPage() {
     return computed;
   }, [selectedBarangay, selectedYear, selectedMonth, mothers, children, seniors, fpRecords]);
 
+  // getValue: only reads from persisted (DB) values and in-progress edits.
+  // The client-side computedValues useMemo is NOT used here — computed values must be
+  // persisted to the DB via "Compute from System Data" before they appear in the grid.
   const getValue = (rowKey: string, columnKey?: string): number | string => {
     const key = columnKey ? `${rowKey}:${columnKey}` : rowKey;
     if (editedValues[key] !== undefined) {
-      return editedValues[key].valueNumber ?? editedValues[key].valueText ?? 0;
+      return editedValues[key].valueNumber ?? editedValues[key].valueText ?? "";
     }
     if (savedValuesMap[key] !== undefined) {
-      return savedValuesMap[key].valueNumber ?? savedValuesMap[key].valueText ?? 0;
+      return savedValuesMap[key].valueNumber ?? savedValuesMap[key].valueText ?? "";
     }
-    if (computedValues[key] !== undefined) {
-      return computedValues[key].valueNumber ?? 0;
-    }
-    return 0;
+    return "";
   };
 
   // Returns the value source for a given cell key (for badge display)
@@ -581,7 +581,6 @@ export default function M1ReportPage() {
     const key = columnKey ? `${rowKey}:${columnKey}` : rowKey;
     if (editedValues[key] !== undefined) return "ENCODED";
     if (savedValuesMap[key] !== undefined) return savedValuesMap[key].valueSource;
-    if (computedValues[key] !== undefined) return "COMPUTED";
     return undefined;
   };
 
@@ -595,10 +594,6 @@ export default function M1ReportPage() {
     if (savedValuesMap[key] !== undefined) {
       const v = savedValuesMap[key];
       return v.valueNumber !== null && v.valueNumber !== undefined || (v.valueText !== null && v.valueText !== undefined);
-    }
-    if (computedValues[key] !== undefined) {
-      const v = computedValues[key];
-      return v.valueNumber !== null && v.valueNumber !== undefined;
     }
     return false;
   };
@@ -623,7 +618,7 @@ export default function M1ReportPage() {
       if (hasCellValue(ind.rowKey, primaryCol)) filled++;
     });
     return { filled, total, pct: total === 0 ? 100 : Math.round((filled / total) * 100) };
-  }, [catalog, currentPage, editedValues, savedValuesMap, computedValues]);
+  }, [catalog, currentPage, editedValues, savedValuesMap]);
 
   const isLocked = activeReport?.instance?.status === "SUBMITTED_LOCKED";
 
