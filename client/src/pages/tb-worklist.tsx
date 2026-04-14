@@ -1,6 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import type { TBPatient } from "@shared/schema";
+import { useAuth } from "@/hooks/use-auth";
+import { useBarangay } from "@/contexts/barangay-context";
 import { getTBDotsVisitStatus, getTBOverallStatus, getTBMissedDoseRisk, formatDate, getTreatmentProgress } from "@/lib/healthLogic";
 import KpiCard from "@/components/kpi-card";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -17,7 +19,10 @@ type FilterKey = 'overdue' | 'due_today' | 'at_risk' | 'all' | null;
 
 export default function TBWorklist() {
   const [, navigate] = useLocation();
-  const { data: patients = [], isLoading } = useQuery<TBPatient[]>({ queryKey: ['/api/tb-patients'] });
+  const { isTL } = useAuth();
+  const { selectedBarangay } = useBarangay();
+  const { data: rawPatients = [], isLoading } = useQuery<TBPatient[]>({ queryKey: ['/api/tb-patients'] });
+  const patients = isTL && selectedBarangay ? rawPatients.filter(p => p.barangay === selectedBarangay) : rawPatients;
   const [activeFilter, setActiveFilter] = useState<FilterKey>(null);
   const [search, setSearch] = useState('');
 

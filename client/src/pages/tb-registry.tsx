@@ -12,13 +12,22 @@ import { ClipboardList, Search, Plus } from "lucide-react";
 import { useState, useEffect } from "react";
 import { usePagination } from "@/hooks/use-pagination";
 import TablePagination from "@/components/table-pagination";
+import { useAuth } from "@/hooks/use-auth";
+import { useBarangay } from "@/contexts/barangay-context";
 
 export default function TBRegistry() {
   const [, navigate] = useLocation();
+  const { isTL } = useAuth();
+  const { selectedBarangay } = useBarangay();
   const { data: patients = [], isLoading } = useQuery<TBPatient[]>({ queryKey: ['/api/tb-patients'] });
   const [search, setSearch] = useState("");
   const [phaseFilter, setPhaseFilter] = useState("all");
   const [barangayFilter, setBarangayFilter] = useState("all");
+
+  useEffect(() => {
+    if (isTL && selectedBarangay) setBarangayFilter(selectedBarangay);
+    else if (!isTL) setBarangayFilter("all");
+  }, [isTL, selectedBarangay]);
 
   const barangays = Array.from(new Set(patients.map(p => p.barangay)));
 
@@ -82,17 +91,19 @@ export default function TBRegistry() {
                 <SelectItem value="Continuation">Continuation</SelectItem>
               </SelectContent>
             </Select>
-            <Select value={barangayFilter} onValueChange={setBarangayFilter}>
-              <SelectTrigger className="w-[180px]" data-testid="select-barangay">
-                <SelectValue placeholder="Barangay" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Barangays</SelectItem>
-                {barangays.map(b => (
-                  <SelectItem key={b} value={b}>{b}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {!isTL && (
+              <Select value={barangayFilter} onValueChange={setBarangayFilter}>
+                <SelectTrigger className="w-[180px]" data-testid="select-barangay">
+                  <SelectValue placeholder="Barangay" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Barangays</SelectItem>
+                  {barangays.map(b => (
+                    <SelectItem key={b} value={b}>{b}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
           </div>
         </CardContent>
       </Card>

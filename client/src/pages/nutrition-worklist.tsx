@@ -1,6 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import type { Child } from "@shared/schema";
+import { useAuth } from "@/hooks/use-auth";
+import { useBarangay } from "@/contexts/barangay-context";
 import { isUnderweightRisk, hasMissingGrowthCheck, getWeightZScore, formatDate, getAgeInMonths } from "@/lib/healthLogic";
 import KpiCard from "@/components/kpi-card";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -13,7 +15,10 @@ import TablePagination from "@/components/table-pagination";
 
 export default function NutritionWorklist() {
   const [, navigate] = useLocation();
-  const { data: children = [], isLoading } = useQuery<Child[]>({ queryKey: ['/api/children'] });
+  const { isTL } = useAuth();
+  const { selectedBarangay } = useBarangay();
+  const { data: rawChildren = [], isLoading } = useQuery<Child[]>({ queryKey: ['/api/children'] });
+  const children = isTL && selectedBarangay ? rawChildren.filter(c => c.barangay === selectedBarangay) : rawChildren;
   const [search, setSearch] = useState('');
 
   const underweight = children.filter(c => isUnderweightRisk(c));

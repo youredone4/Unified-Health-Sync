@@ -10,13 +10,26 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { AlertTriangle, Clock, CheckCircle, Baby, ChevronRight } from "lucide-react";
 import { usePagination } from "@/hooks/use-pagination";
 import TablePagination from "@/components/table-pagination";
+import { useAuth } from "@/hooks/use-auth";
+import { useBarangay } from "@/contexts/barangay-context";
 
 export default function ChildWorklist() {
   const [, navigate] = useLocation();
+  const { isTL } = useAuth();
+  const { selectedBarangay } = useBarangay();
   const { data: children = [], isLoading } = useQuery<Child[]>({ queryKey: ['/api/children'] });
   const { data: mothers = [] } = useQuery<Mother[]>({ queryKey: ['/api/mothers'] });
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [barangayFilter, setBarangayFilter] = useState<string>('all');
+
+  // Lock barangay filter to context selection for TL users
+  useEffect(() => {
+    if (isTL && selectedBarangay) {
+      setBarangayFilter(selectedBarangay);
+    } else if (!isTL) {
+      setBarangayFilter('all');
+    }
+  }, [isTL, selectedBarangay]);
 
   const getMother = (motherId: number | null) => mothers.find(m => m.id === motherId);
 
@@ -166,19 +179,21 @@ export default function ChildWorklist() {
             Upcoming
           </Button>
         </div>
-        <div className="ml-auto">
-          <Select value={barangayFilter} onValueChange={setBarangayFilter}>
-            <SelectTrigger className="w-[180px]" data-testid="select-barangay-filter">
-              <SelectValue placeholder="All Barangays" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Barangays</SelectItem>
-              {barangays.map(b => (
-                <SelectItem key={b} value={b}>{b}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+        {!isTL && (
+          <div className="ml-auto">
+            <Select value={barangayFilter} onValueChange={setBarangayFilter}>
+              <SelectTrigger className="w-[180px]" data-testid="select-barangay-filter">
+                <SelectValue placeholder="All Barangays" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Barangays</SelectItem>
+                {barangays.map(b => (
+                  <SelectItem key={b} value={b}>{b}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
       </div>
 
       <Card data-testid="card-worklist">

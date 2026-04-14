@@ -12,7 +12,9 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useState } from "react";
 import { ThemeProvider } from "@/contexts/theme-context";
+import { BarangayProvider } from "@/contexts/barangay-context";
 import { useAuth, permissions } from "@/hooks/use-auth";
+import BarangaySwitcher from "@/components/barangay-switcher";
 
 import LandingPage from "@/pages/landing";
 import Dashboard from "@/pages/dashboard";
@@ -199,6 +201,7 @@ function AuthenticatedApp() {
 
   return (
     <ThemeProvider>
+      <BarangayProvider>
       <TooltipProvider>
         <SidebarProvider style={sidebarStyle as React.CSSProperties}>
           <div className="flex h-screen w-full">
@@ -207,7 +210,8 @@ function AuthenticatedApp() {
               <header className="flex items-center justify-between gap-2 p-3 border-b border-border sticky top-0 z-50 bg-background">
                 <div className="flex items-center gap-2">
                   <SidebarTrigger data-testid="button-sidebar-toggle" />
-                  <span className="text-sm text-muted-foreground">{liveDate}</span>
+                  <span className="text-sm text-muted-foreground hidden sm:inline">{liveDate}</span>
+                  <BarangaySwitcher />
                 </div>
                 <div className="flex items-center gap-3">
                   <Button
@@ -284,6 +288,7 @@ function AuthenticatedApp() {
         <SmsOutbox open={smsOutboxOpen} onOpenChange={setSmsOutboxOpen} />
         <Toaster />
       </TooltipProvider>
+      </BarangayProvider>
     </ThemeProvider>
   );
 }

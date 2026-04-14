@@ -1,6 +1,8 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
+import { useAuth } from "@/hooks/use-auth";
+import { useBarangay } from "@/contexts/barangay-context";
 import type { Mother, Child, Senior } from "@shared/schema";
 import { getTTStatus, formatDate, getPrenatalCheckStatus, getChildVisitStatus, getSeniorPickupStatus } from "@/lib/healthLogic";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -44,10 +46,17 @@ const typeColorClasses = {
 
 export default function CalendarPage() {
   const [, navigate] = useLocation();
+  const { isTL } = useAuth();
+  const { selectedBarangay } = useBarangay();
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [typeFilter, setTypeFilter] = useState<string>('all');
   const [barangayFilter, setBarangayFilter] = useState<string>('all');
+
+  useEffect(() => {
+    if (isTL && selectedBarangay) setBarangayFilter(selectedBarangay);
+    else if (!isTL) setBarangayFilter('all');
+  }, [isTL, selectedBarangay]);
 
   const { data: mothers = [] } = useQuery<Mother[]>({ queryKey: ['/api/mothers'] });
   const { data: children = [] } = useQuery<Child[]>({ queryKey: ['/api/children'] });
@@ -236,19 +245,21 @@ export default function CalendarPage() {
             );
           })}
         </div>
-        <div className="ml-auto">
-          <Select value={barangayFilter} onValueChange={setBarangayFilter}>
-            <SelectTrigger className="w-[180px]" data-testid="select-barangay-filter">
-              <SelectValue placeholder="All Barangays" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Barangays</SelectItem>
-              {barangays.map(b => (
-                <SelectItem key={b} value={b}>{b}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+        {!isTL && (
+          <div className="ml-auto">
+            <Select value={barangayFilter} onValueChange={setBarangayFilter}>
+              <SelectTrigger className="w-[180px]" data-testid="select-barangay-filter">
+                <SelectValue placeholder="All Barangays" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Barangays</SelectItem>
+                {barangays.map(b => (
+                  <SelectItem key={b} value={b}>{b}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

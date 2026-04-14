@@ -1,6 +1,8 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
+import { useAuth } from "@/hooks/use-auth";
+import { useBarangay } from "@/contexts/barangay-context";
 import type { Child } from "@shared/schema";
 import { formatDate, getAgeInMonths } from "@/lib/healthLogic";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,11 +18,18 @@ interface Barangay {
 
 export default function GrowthMonitoring() {
   const [, navigate] = useLocation();
+  const { isTL } = useAuth();
+  const { selectedBarangay } = useBarangay();
   const [nameFilter, setNameFilter] = useState("");
   const [barangayFilter, setBarangayFilter] = useState("all");
   
   const { data: children = [] } = useQuery<Child[]>({ queryKey: ['/api/children'] });
   const { data: barangays = [] } = useQuery<Barangay[]>({ queryKey: ['/api/barangays'] });
+
+  useEffect(() => {
+    if (isTL && selectedBarangay) setBarangayFilter(selectedBarangay);
+    else if (!isTL) setBarangayFilter("all");
+  }, [isTL, selectedBarangay]);
 
   const childrenWithGrowth = children.filter(c => (c.growth || []).length > 0);
 
@@ -70,18 +79,20 @@ export default function GrowthMonitoring() {
                   data-testid="input-name-filter"
                 />
               </div>
-              <Select value={barangayFilter} onValueChange={setBarangayFilter}>
-                <SelectTrigger className="w-full sm:w-48" data-testid="select-barangay-filter">
-                  <MapPin className="w-4 h-4 mr-2 text-muted-foreground" />
-                  <SelectValue placeholder="All Barangays" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Barangays</SelectItem>
-                  {uniqueBarangays.map(b => (
-                    <SelectItem key={b} value={b}>{b}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              {!isTL && (
+                <Select value={barangayFilter} onValueChange={setBarangayFilter}>
+                  <SelectTrigger className="w-full sm:w-48" data-testid="select-barangay-filter">
+                    <MapPin className="w-4 h-4 mr-2 text-muted-foreground" />
+                    <SelectValue placeholder="All Barangays" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Barangays</SelectItem>
+                    {uniqueBarangays.map(b => (
+                      <SelectItem key={b} value={b}>{b}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
             </div>
           </div>
         </CardHeader>

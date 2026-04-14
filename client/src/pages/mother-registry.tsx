@@ -9,11 +9,19 @@ import { Users, Search, Plus } from "lucide-react";
 import { useState, useEffect } from "react";
 import { usePagination } from "@/hooks/use-pagination";
 import TablePagination from "@/components/table-pagination";
+import { useAuth } from "@/hooks/use-auth";
+import { useBarangay } from "@/contexts/barangay-context";
 
 export default function MotherRegistry() {
   const [, navigate] = useLocation();
-  const { data: mothers = [], isLoading } = useQuery<Mother[]>({ queryKey: ['/api/mothers'] });
+  const { isTL } = useAuth();
+  const { selectedBarangay } = useBarangay();
+  const { data: allMothers = [], isLoading } = useQuery<Mother[]>({ queryKey: ['/api/mothers'] });
   const [search, setSearch] = useState('');
+
+  const mothers = isTL && selectedBarangay
+    ? allMothers.filter(m => m.barangay === selectedBarangay)
+    : allMothers;
 
   const filtered = mothers.filter(m =>
     `${m.firstName ?? ''} ${m.lastName ?? ''}`.toLowerCase().includes(search.toLowerCase()) ||

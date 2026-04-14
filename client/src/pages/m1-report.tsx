@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { useTheme } from "@/contexts/theme-context";
 import { useAuth, permissions, UserRole } from "@/hooks/use-auth";
+import { useBarangay } from "@/contexts/barangay-context";
 import DiseaseImportDialog from "@/components/disease-import-dialog";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { M1TemplateVersion, M1IndicatorCatalog, Barangay, M1ReportInstance, M1IndicatorValue, Mother, Child, Senior, MunicipalitySettings, BarangaySettings, FpServiceRecord, DiseaseCase } from "@shared/schema";
@@ -86,6 +87,7 @@ export default function M1ReportPage() {
   const [switcherOpen, setSwitcherOpen] = useState(true);
   const [dataSourcesOpen, setDataSourcesOpen] = useState(false);
   const { user, isTL, assignedBarangays } = useAuth();
+  const { selectedBarangay: contextBarangay } = useBarangay();
 
   const { data: templates = [], isLoading: templatesLoading } = useQuery<M1TemplateVersion[]>({
     queryKey: ["/api/m1/templates"],
@@ -95,14 +97,15 @@ export default function M1ReportPage() {
     queryKey: ["/api/barangays"],
   });
 
-  // TL auto-lock: when TL logs in, auto-select their first assigned barangay (deterministic: assignedBarangays[0])
+  // TL auto-lock: sync M1 barangay selection to BarangayContext (switches when TL changes context barangay)
   useEffect(() => {
-    if (isTL && assignedBarangays.length > 0 && barangays.length > 0 && selectedBarangayId === null) {
-      const firstAssignedName = assignedBarangays[0];
-      const firstAssigned = barangays.find(b => b.name === firstAssignedName);
-      if (firstAssigned) setSelectedBarangayId(firstAssigned.id);
+    if (isTL && barangays.length > 0) {
+      const targetName = contextBarangay || assignedBarangays[0];
+      if (!targetName) return;
+      const found = barangays.find(b => b.name === targetName);
+      if (found) setSelectedBarangayId(found.id);
     }
-  }, [isTL, assignedBarangays, barangays, selectedBarangayId]);
+  }, [isTL, contextBarangay, assignedBarangays, barangays]);
 
   const activeTemplate = templates.find(t => t.isActive) || templates[0];
 

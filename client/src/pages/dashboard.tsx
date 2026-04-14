@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
+import { useBarangay } from "@/contexts/barangay-context";
 import type { Mother, Child, Senior, InventoryItem, DiseaseCase, TBPatient } from "@shared/schema";
 import { getTTStatus, getNextVaccineStatus, getSeniorPickupStatus, isMedsReadyForPickup, isUnderweightRisk, isOutbreakCondition, getTBDotsVisitStatus, getTBMissedDoseRisk, getDiseaseStatus } from "@/lib/healthLogic";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -142,13 +143,22 @@ function AlertItem({ type, message, barangay, date, index }: {
 
 export default function Dashboard() {
   const [, navigate] = useLocation();
-  const { isTL, assignedBarangays } = useAuth();
-  const { data: mothers = [] } = useQuery<Mother[]>({ queryKey: ['/api/mothers'] });
-  const { data: children = [] } = useQuery<Child[]>({ queryKey: ['/api/children'] });
-  const { data: seniors = [] } = useQuery<Senior[]>({ queryKey: ['/api/seniors'] });
+  const { isTL } = useAuth();
+  const { selectedBarangay } = useBarangay();
+  const { data: rawMothers = [] } = useQuery<Mother[]>({ queryKey: ['/api/mothers'] });
+  const { data: rawChildren = [] } = useQuery<Child[]>({ queryKey: ['/api/children'] });
+  const { data: rawSeniors = [] } = useQuery<Senior[]>({ queryKey: ['/api/seniors'] });
   const { data: inventory = [] } = useQuery<InventoryItem[]>({ queryKey: ['/api/inventory'] });
-  const { data: diseaseCases = [] } = useQuery<DiseaseCase[]>({ queryKey: ['/api/disease-cases'] });
-  const { data: tbPatients = [] } = useQuery<TBPatient[]>({ queryKey: ['/api/tb-patients'] });
+  const { data: rawDiseaseCases = [] } = useQuery<DiseaseCase[]>({ queryKey: ['/api/disease-cases'] });
+  const { data: rawTbPatients = [] } = useQuery<TBPatient[]>({ queryKey: ['/api/tb-patients'] });
+
+  // For TL users, filter all data to the selected barangay
+  const brgy = isTL && selectedBarangay ? selectedBarangay : null;
+  const mothers = brgy ? rawMothers.filter(m => m.barangay === brgy) : rawMothers;
+  const children = brgy ? rawChildren.filter(c => c.barangay === brgy) : rawChildren;
+  const seniors = brgy ? rawSeniors.filter(s => s.barangay === brgy) : rawSeniors;
+  const diseaseCases = brgy ? rawDiseaseCases.filter(d => d.barangay === brgy) : rawDiseaseCases;
+  const tbPatients = brgy ? rawTbPatients.filter(t => t.barangay === brgy) : rawTbPatients;
 
   // Calculate totals
   const totalMothers = mothers.length;
@@ -238,8 +248,8 @@ export default function Dashboard() {
           </h1>
           <p className="text-muted-foreground">
             {isTL
-              ? assignedBarangays[0]
-                ? `Barangay: ${assignedBarangays[0]}`
+              ? selectedBarangay
+                ? `Barangay: ${selectedBarangay}`
                 : "Barangay: Not assigned"
               : "Placer Health Overview - 20 Barangays"}
           </p>

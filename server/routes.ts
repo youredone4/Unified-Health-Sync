@@ -32,11 +32,28 @@ export async function registerRoutes(
   // RBAC middleware for registry DELETE - SYSTEM_ADMIN only
   const adminOnlyRBAC = [loadUserInfo, requireAuth, requireRole(UserRole.SYSTEM_ADMIN)];
 
-  // Helper to filter data by TL's assigned barangays
-  function filterByBarangay<T extends { barangay: string }>(data: T[], userInfo: Express.Request["userInfo"]): T[] {
+  // Helper to filter data by TL's assigned barangays.
+  // If an explicit barangay query param is provided and the user is a TL,
+  // validates it is in their assigned list and filters to only that barangay.
+  // Returns null (caller should send 403) if the requested barangay is not allowed.
+  function filterByBarangay<T extends { barangay: string }>(
+    data: T[],
+    userInfo: Express.Request["userInfo"],
+    explicitBarangay?: string
+  ): T[] | null {
     if (!userInfo) return [];
     if (userInfo.role === UserRole.TL) {
+      if (explicitBarangay) {
+        if (!userInfo.assignedBarangays.includes(explicitBarangay)) {
+          return null; // forbidden
+        }
+        return data.filter(item => item.barangay === explicitBarangay);
+      }
       return data.filter(item => userInfo.assignedBarangays.includes(item.barangay));
+    }
+    // Non-TL roles: if explicit barangay requested, just filter to it (no restriction)
+    if (explicitBarangay) {
+      return data.filter(item => item.barangay === explicitBarangay);
     }
     return data;
   }
@@ -60,7 +77,10 @@ export async function registerRoutes(
   // === MOTHERS ===
   app.get(api.mothers.list.path, registryReadRBAC, async (req, res) => {
     const data = await storage.getMothers();
-    res.json(filterByBarangay(data, req.userInfo));
+    const explicitBarangay = req.query.barangay ? String(req.query.barangay) : undefined;
+    const filtered = filterByBarangay(data, req.userInfo, explicitBarangay);
+    if (filtered === null) return res.status(403).json({ message: "Access denied to this barangay" });
+    res.json(filtered);
   });
 
   // Mother search for FP registry linking
@@ -68,7 +88,7 @@ export async function registerRoutes(
     const q = String(req.query.q || "").trim().toLowerCase();
     if (q.length < 2) return res.json([]);
     const data = await storage.getMothers();
-    const scoped = filterByBarangay(data, req.userInfo);
+    const scoped = filterByBarangay(data, req.userInfo) ?? [];
     const currentYear = new Date().getFullYear();
     const results = scoped
       .filter(m => `${m.firstName} ${m.lastName}`.toLowerCase().includes(q))
@@ -126,7 +146,10 @@ export async function registerRoutes(
   // === CHILDREN ===
   app.get(api.children.list.path, registryReadRBAC, async (req, res) => {
     const data = await storage.getChildren();
-    res.json(filterByBarangay(data, req.userInfo));
+    const explicitBarangay = req.query.barangay ? String(req.query.barangay) : undefined;
+    const filtered = filterByBarangay(data, req.userInfo, explicitBarangay);
+    if (filtered === null) return res.status(403).json({ message: "Access denied to this barangay" });
+    res.json(filtered);
   });
 
   app.get(api.children.get.path, registryReadRBAC, ar(async (req, res) => {
@@ -167,7 +190,10 @@ export async function registerRoutes(
   // === SENIORS ===
   app.get(api.seniors.list.path, registryReadRBAC, async (req, res) => {
     const data = await storage.getSeniors();
-    res.json(filterByBarangay(data, req.userInfo));
+    const explicitBarangay = req.query.barangay ? String(req.query.barangay) : undefined;
+    const filtered = filterByBarangay(data, req.userInfo, explicitBarangay);
+    if (filtered === null) return res.status(403).json({ message: "Access denied to this barangay" });
+    res.json(filtered);
   });
 
   app.get(api.seniors.get.path, registryReadRBAC, ar(async (req, res) => {
