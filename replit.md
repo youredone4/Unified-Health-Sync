@@ -15,6 +15,7 @@ The application is specifically designed for users with low digital literacy, em
 - SMS notification system (demo mode)
 - Interactive map of health facilities
 - AI-powered predictive health analytics with trend analysis
+- KYC assistive face-match verification (OpenAI Vision, advisory only)
 
 ## Health Analytics
 
@@ -107,6 +108,14 @@ Healthcare workers (SHA, TL roles) can self-register at the login page:
 - Approve button → activates account instantly
 - Reject button → requires rejection reason; user sees reason on next login attempt
 - KYC files viewable by admins only via `/api/admin/kyc-files/:userId?type=id` or `?type=selfie` (no raw filename exposure)
+- **AI Face-Match badge** shows HIGH_MATCH / POSSIBLE_MATCH / LOW_MATCH / INCONCLUSIVE / NO_SELFIE — advisory only, never auto-approves
+
+**KYC Assistive Face-Match:**
+- Runs asynchronously after registration via `setImmediate` (does not block API response)
+- Compares government ID photo vs. webcam selfie using OpenAI Vision (gpt-4o-mini)
+- Results stored as `kycFaceMatchStatus`, `kycFaceMatchScore`, `kycFaceMatchReason` on users table
+- Selfie is now **mandatory** in registration Step 3 — captured via in-browser webcam (no file upload)
+- Service: `server/kyc-face-match.ts`; PDFs fallback gracefully to INCONCLUSIVE
 
 ### User Management
 System Admins can manage users at `/admin/users`:

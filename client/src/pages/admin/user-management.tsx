@@ -16,7 +16,7 @@ import { useAuth, UserRole } from "@/hooks/use-auth";
 import {
   Users, Shield, Search, Edit, MapPin, Plus, Trash2, Key,
   CheckCircle, XCircle, Clock, Eye, UserCheck, UserX,
-  PhoneCall, Mail, Calendar, IdCard,
+  PhoneCall, Mail, Calendar, IdCard, ScanFace, AlertCircle, HelpCircle,
 } from "lucide-react";
 
 interface UserWithAssignments {
@@ -38,6 +38,12 @@ interface UserWithAssignments {
   hasKycIdFile: boolean;
   /** True if a selfie was uploaded (raw filename is never returned) */
   hasKycSelfie: boolean;
+  /** AI face-match result status */
+  kycFaceMatchStatus: string | null;
+  /** Human-readable confidence score e.g. "87%" */
+  kycFaceMatchScore: string | null;
+  /** Brief explanation from AI */
+  kycFaceMatchReason: string | null;
   assignedBarangays: { id: number; name: string }[];
 }
 
@@ -81,6 +87,52 @@ const roleColors: Record<string, string> = {
   SHA: "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200",
   TL: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
 };
+
+function FaceMatchBadge({ status, score, reason }: { status: string | null; score: string | null; reason: string | null }) {
+  if (!status || status === "PENDING") {
+    return (
+      <span className="inline-flex items-center gap-1 text-xs text-muted-foreground" title="Face verification still running...">
+        <HelpCircle className="w-3.5 h-3.5" />AI Check: Pending
+      </span>
+    );
+  }
+  if (status === "NO_SELFIE") {
+    return (
+      <span className="inline-flex items-center gap-1 text-xs text-muted-foreground" title="No selfie was submitted">
+        <ScanFace className="w-3.5 h-3.5" />No Selfie
+      </span>
+    );
+  }
+  if (status === "INCONCLUSIVE") {
+    return (
+      <span className="inline-flex items-center gap-1 text-xs bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300 px-2 py-0.5 rounded-full" title={reason || ""}>
+        <HelpCircle className="w-3.5 h-3.5" />Inconclusive {score && score !== "N/A" ? `· ${score}` : ""}
+      </span>
+    );
+  }
+  if (status === "HIGH_MATCH") {
+    return (
+      <span className="inline-flex items-center gap-1 text-xs bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 px-2 py-0.5 rounded-full" title={reason || ""}>
+        <CheckCircle className="w-3.5 h-3.5" />High Match · {score}
+      </span>
+    );
+  }
+  if (status === "POSSIBLE_MATCH") {
+    return (
+      <span className="inline-flex items-center gap-1 text-xs bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200 px-2 py-0.5 rounded-full" title={reason || ""}>
+        <AlertCircle className="w-3.5 h-3.5" />Possible Match · {score}
+      </span>
+    );
+  }
+  if (status === "LOW_MATCH") {
+    return (
+      <span className="inline-flex items-center gap-1 text-xs bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200 px-2 py-0.5 rounded-full" title={reason || ""}>
+        <XCircle className="w-3.5 h-3.5" />Low Match · {score}
+      </span>
+    );
+  }
+  return null;
+}
 
 function statusBadge(status: string) {
   switch (status) {
@@ -625,6 +677,26 @@ export default function UserManagement() {
                               <strong>ID Type:</strong> {user.kycIdType}
                             </p>
                           )}
+
+                          {/* AI Face-Match Result */}
+                          <div className="flex items-start gap-2">
+                            <ScanFace className="w-4 h-4 text-primary mt-0.5 shrink-0" />
+                            <div className="space-y-1">
+                              <p className="text-xs font-medium text-foreground">AI Face Verification</p>
+                              <FaceMatchBadge
+                                status={user.kycFaceMatchStatus}
+                                score={user.kycFaceMatchScore}
+                                reason={user.kycFaceMatchReason}
+                              />
+                              {user.kycFaceMatchReason && user.kycFaceMatchStatus && user.kycFaceMatchStatus !== "NO_SELFIE" && user.kycFaceMatchStatus !== "PENDING" && (
+                                <p className="text-xs text-muted-foreground italic">{user.kycFaceMatchReason}</p>
+                              )}
+                              <p className="text-xs text-muted-foreground">
+                                Advisory only — admin decision required.
+                              </p>
+                            </div>
+                          </div>
+
                           <div className="flex gap-2 flex-wrap">
                             {user.hasKycIdFile && (
                               <a

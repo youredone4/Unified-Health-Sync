@@ -54,6 +54,10 @@ export const users = pgTable("users", {
   kycNotes: text("kyc_notes"),
   kycReviewedAt: timestamp("kyc_reviewed_at"),
   kycReviewedById: varchar("kyc_reviewed_by_id"),
+  // AI face-match results (populated after registration, never used for auto-approval)
+  kycFaceMatchStatus: varchar("kyc_face_match_status"), // HIGH_MATCH | POSSIBLE_MATCH | LOW_MATCH | INCONCLUSIVE | PENDING | NO_SELFIE
+  kycFaceMatchScore: varchar("kyc_face_match_score"),   // human-readable score string e.g. "87%"
+  kycFaceMatchReason: text("kyc_face_match_reason"),    // brief explanation from AI
 });
 
 export type UpsertUser = typeof users.$inferInsert;

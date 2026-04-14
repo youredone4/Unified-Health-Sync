@@ -102,6 +102,7 @@ export function registerAdminRoutes(app: Express) {
         ...user,
         hasKycIdFile: !!kycIdFileUrl,
         hasKycSelfie: !!kycSelfieUrl,
+        // face-match fields already included via spread (kycFaceMatchStatus, kycFaceMatchScore, kycFaceMatchReason)
         assignedBarangays: userAssignments[user.id] || [],
       }));
       

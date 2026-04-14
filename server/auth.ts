@@ -8,6 +8,7 @@ import connectPg from "connect-pg-simple";
 import { db } from "./db";
 import { users, userBarangays, barangays, auditLogs, UserRole, UserStatus } from "@shared/schema";
 import { eq, inArray } from "drizzle-orm";
+import { runFaceMatch } from "./kyc-face-match";
 
 interface TLUserSeed {
   username: string;
@@ -394,6 +395,24 @@ export function registerAuthRoutes(app: Express): void {
           newUser.id,
           { username: newUser.username, fullName: newUser.fullName, role: newUser.role, status: newUser.status }
         );
+
+        // Trigger async face-match (does not block response, never auto-approves)
+        const idPath = path.join(KYC_UPLOAD_DIR, kycIdFileUrl);
+        const selfiePath = kycSelfieUrl ? path.join(KYC_UPLOAD_DIR, kycSelfieUrl) : null;
+
+        setImmediate(async () => {
+          try {
+            const faceMatch = await runFaceMatch(idPath, selfiePath);
+            await db.update(users).set({
+              kycFaceMatchStatus: faceMatch.status,
+              kycFaceMatchScore: faceMatch.score,
+              kycFaceMatchReason: faceMatch.reason,
+            }).where(eq(users.id, newUser.id));
+            console.log(`[kyc-face-match] User ${newUser.username}: ${faceMatch.status} (${faceMatch.score})`);
+          } catch (err: any) {
+            console.error("[kyc-face-match] Background error:", err?.message || err);
+          }
+        });
 
         res.status(201).json({
           message: "Registration submitted successfully. Your account is pending administrator verification.",

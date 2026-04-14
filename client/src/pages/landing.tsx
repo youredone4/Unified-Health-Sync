@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -9,7 +9,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { ThemeSettings, Barangay } from "@shared/schema";
-import { Loader2, Eye, EyeOff, CheckCircle, ArrowLeft, ArrowRight, Upload, X } from "lucide-react";
+import { Loader2, Eye, EyeOff, CheckCircle, ArrowLeft, ArrowRight, Upload, X, Camera, RefreshCw } from "lucide-react";
 
 interface LastLoginInfo {
   role?: string;
@@ -202,12 +202,77 @@ export default function LandingPage() {
     setRegStep(3);
   };
 
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+  const [selfiePreview, setSelfiePreview] = useState<string | null>(null);
+
+  const startCamera = useCallback(async () => {
+    setCameraError(null);
+    setSelfiePreview(null);
+    setRegSelfie(null);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user", width: 640, height: 480 } });
+      setCameraStream(stream);
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        videoRef.current.play();
+      }
+    } catch {
+      setCameraError("Camera access denied. Please allow camera access and try again, or use a device with a camera.");
+    }
+  }, []);
+
+  const stopCamera = useCallback(() => {
+    if (cameraStream) {
+      cameraStream.getTracks().forEach(t => t.stop());
+      setCameraStream(null);
+    }
+  }, [cameraStream]);
+
+  const captureSelfie = useCallback(() => {
+    if (!videoRef.current || !canvasRef.current) return;
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    canvas.width = video.videoWidth || 640;
+    canvas.height = video.videoHeight || 480;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
+    setSelfiePreview(dataUrl);
+    canvas.toBlob((blob) => {
+      if (blob) setRegSelfie(new File([blob], "selfie.jpg", { type: "image/jpeg" }));
+    }, "image/jpeg", 0.85);
+    stopCamera();
+  }, [stopCamera]);
+
+  const retakeSelfie = useCallback(() => {
+    setSelfiePreview(null);
+    setRegSelfie(null);
+    startCamera();
+  }, [startCamera]);
+
+  useEffect(() => {
+    if (regStep === 3 && !selfiePreview && !cameraStream) {
+      startCamera();
+    }
+    if (regStep !== 3) {
+      stopCamera();
+      setSelfiePreview(null);
+    }
+  }, [regStep]);
+
   const handleStep3Submit = () => {
     if (!regIdType) {
       toast({ title: "Please select an ID type", variant: "destructive" }); return;
     }
     if (!regIdFile) {
       toast({ title: "Please upload a valid ID photo", variant: "destructive" }); return;
+    }
+    if (!regSelfie) {
+      toast({ title: "Selfie photo is required. Please take a selfie using the camera.", variant: "destructive" }); return;
     }
     registerMutation.mutate();
   };
@@ -224,6 +289,7 @@ export default function LandingPage() {
     setRegFullName(""); setRegContact(""); setRegEmail("");
     setRegRole("TL"); setRegBarangayIds([]);
     setRegIdType(""); setRegIdFile(null); setRegSelfie(null);
+    stopCamera(); setSelfiePreview(null); setCameraError(null);
   };
 
   const isTeamLeader = lastLogin.role === "TL";
@@ -513,8 +579,10 @@ export default function LandingPage() {
                 <div className="space-y-4">
                   <div className="rounded-md bg-muted/50 p-3 text-xs text-muted-foreground">
                     Your identity will be verified by a system administrator before you can access the health system.
-                    Please upload a clear photo or scan of a valid government-issued ID.
+                    Upload your government ID, then take a selfie for identity verification.
                   </div>
+
+                  {/* ID Type */}
                   <div className="space-y-2">
                     <Label>ID Type *</Label>
                     <Select value={regIdType} onValueChange={setRegIdType}>
@@ -528,6 +596,8 @@ export default function LandingPage() {
                       </SelectContent>
                     </Select>
                   </div>
+
+                  {/* ID File Upload */}
                   <div className="space-y-2">
                     <Label>Valid ID Photo * (JPG, PNG, or PDF, max 10MB)</Label>
                     {regIdFile ? (
@@ -551,29 +621,76 @@ export default function LandingPage() {
                       </label>
                     )}
                   </div>
+
+                  {/* Webcam Selfie Capture */}
                   <div className="space-y-2">
-                    <Label>Selfie Photo (optional)</Label>
-                    {regSelfie ? (
-                      <div className="flex items-center gap-2 p-2 border rounded-md bg-muted/50">
-                        <Upload className="w-4 h-4 text-primary shrink-0" />
-                        <span className="text-sm truncate flex-1">{regSelfie.name}</span>
-                        <button onClick={() => setRegSelfie(null)} className="text-muted-foreground hover:text-destructive">
-                          <X className="w-4 h-4" />
-                        </button>
+                    <Label className="flex items-center gap-1.5">
+                      <Camera className="w-4 h-4" />
+                      Selfie Photo * (for identity verification)
+                    </Label>
+
+                    {/* Captured selfie preview */}
+                    {selfiePreview ? (
+                      <div className="space-y-2">
+                        <div className="relative rounded-md overflow-hidden border bg-black">
+                          <img src={selfiePreview} alt="Your selfie" className="w-full object-contain max-h-48" data-testid="img-selfie-preview" />
+                          <div className="absolute top-2 right-2">
+                            <span className="bg-green-600 text-white text-xs px-2 py-0.5 rounded-full flex items-center gap-1">
+                              <CheckCircle className="w-3 h-3" />Captured
+                            </span>
+                          </div>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="w-full"
+                          onClick={retakeSelfie}
+                          data-testid="button-retake-selfie"
+                        >
+                          <RefreshCw className="w-4 h-4 mr-1" />Retake Selfie
+                        </Button>
+                      </div>
+                    ) : cameraError ? (
+                      <div className="space-y-2">
+                        <div className="rounded-md bg-destructive/10 border border-destructive/20 p-3 text-xs text-destructive">
+                          {cameraError}
+                        </div>
+                        <Button type="button" variant="outline" size="sm" className="w-full" onClick={startCamera} data-testid="button-retry-camera">
+                          <Camera className="w-4 h-4 mr-1" />Try Again
+                        </Button>
                       </div>
                     ) : (
-                      <label className="flex flex-col items-center gap-2 p-4 border-2 border-dashed rounded-md cursor-pointer hover:border-primary transition-colors" data-testid="upload-selfie">
-                        <Upload className="w-6 h-6 text-muted-foreground" />
-                        <span className="text-sm text-muted-foreground">Click to upload selfie (optional)</span>
-                        <input
-                          type="file"
-                          className="hidden"
-                          accept=".jpg,.jpeg,.png,.heic"
-                          onChange={(e) => setRegSelfie(e.target.files?.[0] || null)}
-                        />
-                      </label>
+                      <div className="space-y-2">
+                        <div className="relative rounded-md overflow-hidden bg-black border" style={{ minHeight: 192 }}>
+                          <video
+                            ref={videoRef}
+                            className="w-full object-cover max-h-48"
+                            autoPlay
+                            playsInline
+                            muted
+                            data-testid="video-webcam"
+                          />
+                          {!cameraStream && (
+                            <div className="absolute inset-0 flex items-center justify-center text-muted-foreground text-sm">
+                              <Loader2 className="w-5 h-5 animate-spin mr-2" />Starting camera...
+                            </div>
+                          )}
+                        </div>
+                        <Button
+                          type="button"
+                          className="w-full"
+                          onClick={captureSelfie}
+                          disabled={!cameraStream}
+                          data-testid="button-capture-selfie"
+                        >
+                          <Camera className="w-4 h-4 mr-2" />Take Selfie
+                        </Button>
+                      </div>
                     )}
+                    <canvas ref={canvasRef} className="hidden" />
                   </div>
+
                   <Button
                     className="w-full"
                     onClick={handleStep3Submit}
