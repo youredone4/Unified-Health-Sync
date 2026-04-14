@@ -1,0 +1,162 @@
+Fix and standardize card interactivity across all modules that use dashboard/stat/summary cards so the user experience is consistent and all appropriate cards are clickable.
+
+Context
+- The system already has multiple modules with dashboard cards, metric cards, summary cards, and status cards.
+- Some cards are clickable and already filter data or navigate correctly.
+- Some cards are not clickable, which creates inconsistent behavior and confuses users.
+- This is a health system, so navigation and filtering must be clear, fast, and reliable.
+- Do NOT redesign the entire UI.
+- Focus on standardizing card behavior and fixing dead/non-clickable cards.
+
+Primary Goal
+Make all relevant cards across the listed modules behave consistently and meaningfully when clicked.
+
+Modules in scope
+Apply this review and fix to modules including:
+- Municipal Dashboard
+- Hotspots & Analytics
+- Calendar
+- TT Reminders
+- Prenatal Dashboard
+- Mother Registry
+- Vaccination Schedule
+- Child Dashboard
+- Child Registry
+- FP Registry
+- Growth Monitoring
+- Nutrition Dashboard
+- Underweight Follow-ups
+- HTN Meds Pickup
+- Senior Dashboard
+- Senior Registry
+- Case Worklist
+- Case Registry
+- Outbreak Map
+- DOTS Worklist
+- TB Registry
+- Availability & Surplus
+- Stock-outs & Low Stock
+- Patient Check-up
+
+Requirements
+
+1. Audit all cards in the listed modules
+Inspect all cards used in these modules, including:
+- summary/stat cards
+- count cards
+- status cards
+- worklist cards
+- dashboard metric cards
+
+For each card, determine whether it should:
+- filter data on the current page
+- navigate to a related detail page/worklist
+- open a detailed modal/view
+- remain intentionally static
+
+2. Standardize card behavior
+For cards that represent metrics, statuses, or counts, make them clickable where appropriate.
+
+Clicking a card should perform a meaningful action such as:
+- filtering the visible dataset
+- opening the related worklist
+- navigating to the relevant module/detail page
+- showing records behind that metric
+
+Examples:
+- Overdue -> show overdue records
+- Missed Visit -> filter worklist to missed visits
+- Active Cases -> show active case list
+- Total Seniors -> show senior registry/worklist
+- Low Stock -> show low stock records
+
+3. Fix dead/non-clickable cards
+If a card should be actionable but is currently not clickable:
+- add the missing click handler
+- connect it to the correct filter or route
+- ensure the action works correctly
+
+4. Clearly define non-clickable cards
+If a card is intentionally informational only and should remain static:
+- make that explicit in the UI
+- remove misleading hover/click styling
+- ensure it does not look broken
+
+5. Add consistent visual feedback
+For clickable cards:
+- show pointer cursor
+- add hover effect
+- make clickable state visually obvious
+
+For non-clickable cards:
+- avoid misleading hover/click styles
+
+6. Preserve role-based and barangay-based logic
+When cards are clicked:
+- respect RBAC
+- respect barangay filtering/switcher logic
+- Team Leaders must only see results for their selected/assigned barangay
+- do not expose unauthorized data
+
+7. Ensure card behavior works with filtered contexts
+If a user has:
+- selected a barangay
+- selected a month/year
+- applied filters
+
+then clicking a card must still respect those contexts correctly.
+
+8. Prevent broken actions
+No clickable card should lead to:
+- white screen
+- loading loop
+- missing route
+- page not found
+- empty result caused by wrong mapping unless genuinely no data exists
+
+9. Apply consistency across all listed modules
+Do not fix only one or two pages.
+Review all listed modules and make card behavior consistent system-wide.
+
+10. Test all card actions
+For each module listed above:
+- click every actionable card
+- verify the correct filter/navigation/result occurs
+- verify data displayed matches the clicked metric
+
+11. Test across roles
+Do NOT test only as admin.
+
+Test at minimum:
+- Super Admin
+- Municipal Health Officer
+- Senior Health Admin
+- Team Leader (Barangay Nurse)
+- Triage Nurse if implemented
+
+12. Test edge cases
+Retest card behavior for:
+- empty datasets
+- incomplete records
+- multi-barangay users with barangay switcher
+- month/year filtered reports
+- direct URL reload after navigation
+- no-record states
+
+13. Deliverables
+Provide:
+1. list of modules/cards audited
+2. list of cards fixed
+3. intended action for each major card group
+4. files changed
+5. test results across roles
+6. any cards intentionally left static and why
+
+Success Criteria
+- all relevant cards across the listed modules are clickable where appropriate
+- non-clickable cards are intentionally and clearly static
+- no dead or inconsistent cards remain
+- card behavior is consistent across modules
+- results respect role and barangay restrictions
+- no broken navigation or blank screens occur from card clicks
+- system remains stable
