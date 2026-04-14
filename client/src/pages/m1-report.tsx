@@ -1481,14 +1481,19 @@ export default function M1ReportPage() {
                   {dataSourcesOpen && (() => {
                     const bName = selectedBarangay?.name;
                     const bMothers = mothers.filter(m => (!bName || m.barangay === bName) && (m.registrationDate?.startsWith(reportingMonthStr) || m.outcomeDate?.startsWith(reportingMonthStr)));
-                    const bChildren = children.filter(c => !bName || c.barangay === bName);
+                    const bChildren = children.filter(c => {
+                      if (bName && c.barangay !== bName) return false;
+                      const vax = c.vaccines as Record<string, string> | null;
+                      if (!vax) return false;
+                      return Object.values(vax).some(d => typeof d === "string" && d.startsWith(reportingMonthStr));
+                    });
                     const bSeniors = seniors.filter(s => (!bName || s.barangay === bName) && s.lastMedicationGivenDate?.startsWith(reportingMonthStr));
                     const computedCount = activeReport?.values.filter(v => v.valueSource === "COMPUTED").length ?? 0;
                     const encodedCount = activeReport?.values.filter(v => v.valueSource === "ENCODED").length ?? 0;
                     const importedCount = activeReport?.values.filter(v => v.valueSource === "IMPORTED").length ?? 0;
                     const sources = [
                       { label: "Prenatal records (this period)", value: bMothers.length },
-                      { label: "Children with immunization data", value: bChildren.length },
+                      { label: "Children with vaccines this period", value: bChildren.length },
                       { label: "Seniors with medication this period", value: bSeniors.length },
                       { label: "FP service records (this period)", value: fpRecords.length },
                       { label: "Disease surveillance entries", value: periodDiseaseCases.length },
