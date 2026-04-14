@@ -5,7 +5,8 @@
  * and produce a match verdict for admin review. This is advisory only — it NEVER
  * auto-approves or auto-rejects an account.
  * 
- * Verdicts: HIGH_MATCH | POSSIBLE_MATCH | LOW_MATCH | INCONCLUSIVE | NO_SELFIE
+ * Verdicts: HIGH_MATCH | POSSIBLE_MATCH | LOW_MATCH | INCONCLUSIVE | FAILED
+ * Score: 0.0–1.0 float (null when unavailable)
  */
 
 import OpenAI from "openai";
@@ -22,12 +23,11 @@ export type FaceMatchStatus =
   | "POSSIBLE_MATCH"
   | "LOW_MATCH"
   | "INCONCLUSIVE"
-  | "NO_SELFIE"
-  | "PENDING";
+  | "FAILED";
 
 export interface FaceMatchResult {
   status: FaceMatchStatus;
-  score: string;
+  score: number | null;   // 0.0–1.0 confidence; null when not applicable
   reason: string;
 }
 
@@ -38,7 +38,6 @@ function fileToBase64(filePath: string): string {
 
 function mimeType(filePath: string): string {
   const ext = path.extname(filePath).toLowerCase();
-  if (ext === ".pdf") return "image/jpeg"; // PDFs unsupported in vision; treat as jpeg fallback
   if (ext === ".png") return "image/png";
   if (ext === ".gif") return "image/gif";
   if (ext === ".webp") return "image/webp";
@@ -50,19 +49,27 @@ export async function runFaceMatch(
   selfieFilePath: string | null
 ): Promise<FaceMatchResult> {
   if (!selfieFilePath || !fs.existsSync(selfieFilePath)) {
-    return { status: "NO_SELFIE", score: "N/A", reason: "No selfie was submitted." };
+    return {
+      status: "INCONCLUSIVE",
+      score: null,
+      reason: "No selfie was submitted for comparison.",
+    };
   }
 
   if (!fs.existsSync(idFilePath)) {
-    return { status: "INCONCLUSIVE", score: "N/A", reason: "ID file not found on disk." };
+    return {
+      status: "FAILED",
+      score: null,
+      reason: "ID file not found on disk — face comparison could not run.",
+    };
   }
 
   const idExt = path.extname(idFilePath).toLowerCase();
   if (idExt === ".pdf") {
     return {
       status: "INCONCLUSIVE",
-      score: "N/A",
-      reason: "ID submitted as PDF — face comparison requires an image. Admin must verify manually.",
+      score: null,
+      reason: "ID was submitted as a PDF. Face comparison requires an image file. Admin must verify identity manually.",
     };
   }
 
@@ -74,37 +81,37 @@ export async function runFaceMatch(
 
     const systemPrompt = `You are a KYC identity verification assistant for a Philippine barangay health system.
 Your task is to compare two photos:
-1. A government-issued ID photo (may show a small face in the ID card)
-2. A selfie photo taken by the registrant
+1. A government-issued ID photo (contains a small portrait photo on the ID card)
+2. A webcam selfie taken by the applicant during registration
 
-Evaluate whether the face on the ID matches the face in the selfie.
+Evaluate whether the face on the ID card matches the face in the selfie.
 
-IMPORTANT:
-- You are an assistive tool only. A human administrator will make the final decision.
-- Never make definitive identity claims. Give a probability-based assessment.
-- Be conservative: if image quality is poor or face is unclear, say INCONCLUSIVE.
+IMPORTANT GUIDELINES:
+- You are an assistive tool only. A human administrator makes the final decision.
+- Be conservative: if image quality is poor, face is unclear, or the ID photo is too small, return INCONCLUSIVE.
+- confidence_score is a decimal between 0 and 1 (e.g. 0.87 for 87% confidence).
+- NEVER return INCONCLUSIVE or FAILED as the only option when you can make a determination.
 
-Respond in exactly this JSON format (no markdown, no extra text):
-{
-  "verdict": "HIGH_MATCH" | "POSSIBLE_MATCH" | "LOW_MATCH" | "INCONCLUSIVE",
-  "confidence_pct": <integer 0-100>,
-  "reason": "<1-2 sentence explanation of your assessment>"
-}`;
+Verdict meanings:
+- HIGH_MATCH: Strong visual similarity between ID and selfie (confidence >= 0.75)
+- POSSIBLE_MATCH: Moderate similarity, could be the same person (confidence 0.50–0.74)
+- LOW_MATCH: Notable differences, unlikely the same person (confidence < 0.50)
+- INCONCLUSIVE: Cannot make determination due to image quality, no face visible, or other issues
+
+Respond in EXACTLY this JSON format (no markdown, no extra text, no comments):
+{"verdict":"HIGH_MATCH","confidence_score":0.87,"reason":"The facial features including nose bridge and jaw line closely match between ID and selfie."}`;
 
     const response = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       max_tokens: 200,
       messages: [
-        {
-          role: "system",
-          content: systemPrompt,
-        },
+        { role: "system", content: systemPrompt },
         {
           role: "user",
           content: [
             {
               type: "text",
-              text: "Please compare these two images and provide your face-match assessment.",
+              text: "Please compare the face on the government ID (image 1) with the selfie (image 2) and return your assessment.",
             },
             {
               type: "image_url",
@@ -120,7 +127,7 @@ Respond in exactly this JSON format (no markdown, no extra text):
     });
 
     const content = response.choices[0]?.message?.content?.trim() || "";
-    let parsed: { verdict: string; confidence_pct: number; reason: string };
+    let parsed: { verdict: string; confidence_score: number; reason: string };
 
     try {
       const cleaned = content.replace(/```json\n?|```/g, "").trim();
@@ -128,26 +135,28 @@ Respond in exactly this JSON format (no markdown, no extra text):
     } catch {
       return {
         status: "INCONCLUSIVE",
-        score: "N/A",
-        reason: `AI returned non-JSON response: ${content.slice(0, 120)}`,
+        score: null,
+        reason: `AI returned unparseable response. Admin must verify manually.`,
       };
     }
 
     const verdict = parsed.verdict as FaceMatchStatus;
     const validVerdicts: FaceMatchStatus[] = ["HIGH_MATCH", "POSSIBLE_MATCH", "LOW_MATCH", "INCONCLUSIVE"];
-    const status = validVerdicts.includes(verdict) ? verdict : "INCONCLUSIVE";
+    const status: FaceMatchStatus = validVerdicts.includes(verdict) ? verdict : "INCONCLUSIVE";
 
-    const confidence = typeof parsed.confidence_pct === "number" ? parsed.confidence_pct : 0;
-    const score = `${confidence}%`;
-    const reason = parsed.reason || "No reason provided.";
+    let score: number | null = null;
+    if (typeof parsed.confidence_score === "number") {
+      score = Math.min(1, Math.max(0, parsed.confidence_score));
+    }
+    const reason = typeof parsed.reason === "string" ? parsed.reason : "No reason provided.";
 
     return { status, score, reason };
   } catch (err: any) {
-    console.error("[kyc-face-match] Error:", err?.message || err);
+    console.error("[kyc-face-match] API error:", err?.message || err);
     return {
-      status: "INCONCLUSIVE",
-      score: "N/A",
-      reason: "Face comparison service unavailable. Admin should verify manually.",
+      status: "FAILED",
+      score: null,
+      reason: "Face comparison service encountered an error. Admin must verify identity manually.",
     };
   }
 }

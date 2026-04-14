@@ -651,14 +651,40 @@ export default function LandingPage() {
                           <RefreshCw className="w-4 h-4 mr-1" />Retake Selfie
                         </Button>
                       </div>
+                    ) : regSelfie && !selfiePreview ? (
+                      /* File upload fallback — selfie from file, no preview */
+                      <div className="flex items-center gap-2 p-2 border rounded-md bg-muted/50">
+                        <Upload className="w-4 h-4 text-primary shrink-0" />
+                        <span className="text-sm truncate flex-1">{regSelfie.name}</span>
+                        <button onClick={() => { setRegSelfie(null); startCamera(); }} className="text-muted-foreground hover:text-destructive">
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
                     ) : cameraError ? (
                       <div className="space-y-2">
                         <div className="rounded-md bg-destructive/10 border border-destructive/20 p-3 text-xs text-destructive">
                           {cameraError}
                         </div>
                         <Button type="button" variant="outline" size="sm" className="w-full" onClick={startCamera} data-testid="button-retry-camera">
-                          <Camera className="w-4 h-4 mr-1" />Try Again
+                          <Camera className="w-4 h-4 mr-1" />Try Camera Again
                         </Button>
+                        <div className="text-center text-xs text-muted-foreground">— or —</div>
+                        <label
+                          className="flex flex-col items-center gap-2 p-3 border-2 border-dashed rounded-md cursor-pointer hover:border-primary transition-colors"
+                          data-testid="upload-selfie-fallback"
+                        >
+                          <Upload className="w-5 h-5 text-muted-foreground" />
+                          <span className="text-xs text-muted-foreground">Upload selfie photo instead</span>
+                          <input
+                            type="file"
+                            className="hidden"
+                            accept=".jpg,.jpeg,.png,.heic"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) { setRegSelfie(file); setCameraError(null); }
+                            }}
+                          />
+                        </label>
                       </div>
                     ) : (
                       <div className="space-y-2">

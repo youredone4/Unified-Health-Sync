@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { index, jsonb, pgTable, timestamp, varchar, text, serial, primaryKey } from "drizzle-orm/pg-core";
+import { index, jsonb, pgTable, timestamp, varchar, text, serial, primaryKey, real } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -55,8 +55,8 @@ export const users = pgTable("users", {
   kycReviewedAt: timestamp("kyc_reviewed_at"),
   kycReviewedById: varchar("kyc_reviewed_by_id"),
   // AI face-match results (populated after registration, never used for auto-approval)
-  kycFaceMatchStatus: varchar("kyc_face_match_status"), // HIGH_MATCH | POSSIBLE_MATCH | LOW_MATCH | INCONCLUSIVE | PENDING | NO_SELFIE
-  kycFaceMatchScore: varchar("kyc_face_match_score"),   // human-readable score string e.g. "87%"
+  kycFaceMatchStatus: varchar("kyc_face_match_status"), // HIGH_MATCH | POSSIBLE_MATCH | LOW_MATCH | INCONCLUSIVE | FAILED | null(not yet run)
+  kycFaceMatchScore: real("kyc_face_match_score"),      // confidence 0.0–1.0 (null if unavailable)
   kycFaceMatchReason: text("kyc_face_match_reason"),    // brief explanation from AI
 });
 

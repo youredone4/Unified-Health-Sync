@@ -40,8 +40,8 @@ interface UserWithAssignments {
   hasKycSelfie: boolean;
   /** AI face-match result status */
   kycFaceMatchStatus: string | null;
-  /** Human-readable confidence score e.g. "87%" */
-  kycFaceMatchScore: string | null;
+  /** Confidence score 0.0–1.0 float (null when unavailable) */
+  kycFaceMatchScore: number | null;
   /** Brief explanation from AI */
   kycFaceMatchReason: string | null;
   assignedBarangays: { id: number; name: string }[];
@@ -88,50 +88,59 @@ const roleColors: Record<string, string> = {
   TL: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
 };
 
-function FaceMatchBadge({ status, score, reason }: { status: string | null; score: string | null; reason: string | null }) {
-  if (!status || status === "PENDING") {
+function formatScore(score: number | null): string {
+  if (score === null || score === undefined) return "";
+  return ` · ${Math.round(score * 100)}%`;
+}
+
+function FaceMatchBadge({ status, score, reason }: { status: string | null; score: number | null; reason: string | null }) {
+  if (!status) {
     return (
-      <span className="inline-flex items-center gap-1 text-xs text-muted-foreground" title="Face verification still running...">
+      <span className="inline-flex items-center gap-1 text-xs text-muted-foreground" title="AI face verification not yet run">
         <HelpCircle className="w-3.5 h-3.5" />AI Check: Pending
-      </span>
-    );
-  }
-  if (status === "NO_SELFIE") {
-    return (
-      <span className="inline-flex items-center gap-1 text-xs text-muted-foreground" title="No selfie was submitted">
-        <ScanFace className="w-3.5 h-3.5" />No Selfie
-      </span>
-    );
-  }
-  if (status === "INCONCLUSIVE") {
-    return (
-      <span className="inline-flex items-center gap-1 text-xs bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300 px-2 py-0.5 rounded-full" title={reason || ""}>
-        <HelpCircle className="w-3.5 h-3.5" />Inconclusive {score && score !== "N/A" ? `· ${score}` : ""}
       </span>
     );
   }
   if (status === "HIGH_MATCH") {
     return (
       <span className="inline-flex items-center gap-1 text-xs bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 px-2 py-0.5 rounded-full" title={reason || ""}>
-        <CheckCircle className="w-3.5 h-3.5" />High Match · {score}
+        <CheckCircle className="w-3.5 h-3.5" />High Match{formatScore(score)}
       </span>
     );
   }
   if (status === "POSSIBLE_MATCH") {
     return (
       <span className="inline-flex items-center gap-1 text-xs bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200 px-2 py-0.5 rounded-full" title={reason || ""}>
-        <AlertCircle className="w-3.5 h-3.5" />Possible Match · {score}
+        <AlertCircle className="w-3.5 h-3.5" />Possible Match{formatScore(score)}
       </span>
     );
   }
   if (status === "LOW_MATCH") {
     return (
       <span className="inline-flex items-center gap-1 text-xs bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200 px-2 py-0.5 rounded-full" title={reason || ""}>
-        <XCircle className="w-3.5 h-3.5" />Low Match · {score}
+        <XCircle className="w-3.5 h-3.5" />Low Match{formatScore(score)}
       </span>
     );
   }
-  return null;
+  if (status === "INCONCLUSIVE") {
+    return (
+      <span className="inline-flex items-center gap-1 text-xs bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200 px-2 py-0.5 rounded-full" title={reason || ""}>
+        <AlertCircle className="w-3.5 h-3.5" />Inconclusive — Verify Manually
+      </span>
+    );
+  }
+  if (status === "FAILED") {
+    return (
+      <span className="inline-flex items-center gap-1 text-xs bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200 px-2 py-0.5 rounded-full" title={reason || ""}>
+        <AlertCircle className="w-3.5 h-3.5" />Check Failed — Verify Manually
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+      <HelpCircle className="w-3.5 h-3.5" />{status}
+    </span>
+  );
 }
 
 function statusBadge(status: string) {
@@ -688,7 +697,7 @@ export default function UserManagement() {
                                 score={user.kycFaceMatchScore}
                                 reason={user.kycFaceMatchReason}
                               />
-                              {user.kycFaceMatchReason && user.kycFaceMatchStatus && user.kycFaceMatchStatus !== "NO_SELFIE" && user.kycFaceMatchStatus !== "PENDING" && (
+                              {user.kycFaceMatchReason && user.kycFaceMatchStatus && (
                                 <p className="text-xs text-muted-foreground italic">{user.kycFaceMatchReason}</p>
                               )}
                               <p className="text-xs text-muted-foreground">

@@ -401,17 +401,48 @@ export function registerAuthRoutes(app: Express): void {
         const selfiePath = kycSelfieUrl ? path.join(KYC_UPLOAD_DIR, kycSelfieUrl) : null;
 
         setImmediate(async () => {
+          let faceMatch: Awaited<ReturnType<typeof runFaceMatch>>;
           try {
-            const faceMatch = await runFaceMatch(idPath, selfiePath);
+            faceMatch = await runFaceMatch(idPath, selfiePath);
+          } catch (err: any) {
+            console.error("[kyc-face-match] Unexpected error:", err?.message || err);
+            faceMatch = {
+              status: "FAILED",
+              score: null,
+              reason: "Face comparison service encountered an unexpected error. Admin must verify identity manually.",
+            };
+          }
+
+          // Always persist result (including FAILED) — never silently drop
+          try {
             await db.update(users).set({
               kycFaceMatchStatus: faceMatch.status,
               kycFaceMatchScore: faceMatch.score,
               kycFaceMatchReason: faceMatch.reason,
             }).where(eq(users.id, newUser.id));
-            console.log(`[kyc-face-match] User ${newUser.username}: ${faceMatch.status} (${faceMatch.score})`);
-          } catch (err: any) {
-            console.error("[kyc-face-match] Background error:", err?.message || err);
+          } catch (dbErr: any) {
+            console.error("[kyc-face-match] Failed to persist result for", newUser.username, dbErr?.message || dbErr);
           }
+
+          // Audit log for KYC face-match result
+          try {
+            await writeAuditLog(
+              "SYSTEM",
+              "SYSTEM",
+              "KYC_FACE_MATCH",
+              newUser.id,
+              {
+                status: faceMatch.status,
+                score: faceMatch.score,
+                reason: faceMatch.reason,
+                username: newUser.username,
+              }
+            );
+          } catch (auditErr: any) {
+            console.error("[kyc-face-match] Failed to write audit log:", auditErr?.message || auditErr);
+          }
+
+          console.log(`[kyc-face-match] User ${newUser.username}: ${faceMatch.status} score=${faceMatch.score}`);
         });
 
         res.status(201).json({
