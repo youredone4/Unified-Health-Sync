@@ -1,9 +1,12 @@
 import bcrypt from "bcrypt";
 import session from "express-session";
+import path from "path";
+import fs from "fs";
+import multer from "multer";
 import type { Express, RequestHandler } from "express";
 import connectPg from "connect-pg-simple";
 import { db } from "./db";
-import { users, userBarangays, barangays, UserRole, UserStatus } from "@shared/schema";
+import { users, userBarangays, barangays, auditLogs, UserRole, UserStatus } from "@shared/schema";
 import { eq } from "drizzle-orm";
 
 interface TLUserSeed {
@@ -29,6 +32,38 @@ const PLACER_TL_USERS: TLUserSeed[] = [
 ];
 
 const SALT_ROUNDS = 10;
+
+// KYC upload directory (not publicly accessible)
+const KYC_UPLOAD_DIR = path.join(process.cwd(), "uploads", "kyc");
+if (!fs.existsSync(KYC_UPLOAD_DIR)) {
+  fs.mkdirSync(KYC_UPLOAD_DIR, { recursive: true });
+}
+
+// Multer storage for KYC uploads
+const kycStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => {
+    cb(null, KYC_UPLOAD_DIR);
+  },
+  filename: (_req, file, cb) => {
+    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
+    const ext = path.extname(file.originalname).toLowerCase();
+    cb(null, `kyc-${uniqueSuffix}${ext}`);
+  },
+});
+
+const kycUpload = multer({
+  storage: kycStorage,
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB max
+  fileFilter: (_req, file, cb) => {
+    const allowed = [".jpg", ".jpeg", ".png", ".pdf", ".heic"];
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (allowed.includes(ext)) {
+      cb(null, true);
+    } else {
+      cb(new Error("Only JPG, PNG, PDF, and HEIC files are allowed"));
+    }
+  },
+});
 
 // Password utilities
 export async function hashPassword(password: string): Promise<string> {
@@ -88,7 +123,6 @@ export async function setupAuth(app: Express) {
 // Seed initial SYSTEM_ADMIN
 async function seedInitialAdmin() {
   try {
-    // Check if any user with username "admin" exists
     const [existingAdmin] = await db.select().from(users).where(eq(users.username, "admin"));
     
     if (!existingAdmin) {
@@ -151,7 +185,6 @@ async function seedTLUsers() {
       const [existing] = await db.select({ id: users.id }).from(users).where(eq(users.username, spec.username));
       if (existing) continue;
 
-      // Resolve barangay names to IDs — warn and skip if a name is missing
       const barangayIds: number[] = [];
       let valid = true;
       for (const bName of spec.barangayNames) {
@@ -188,8 +221,131 @@ async function seedTLUsers() {
   }
 }
 
+// Helper to write audit log
+async function writeAuditLog(
+  actingUserId: string,
+  actingUserRole: string,
+  action: string,
+  entityId: string,
+  afterData: Record<string, unknown>,
+  req?: Express.Request
+) {
+  try {
+    await db.insert(auditLogs).values({
+      userId: actingUserId,
+      userRole: actingUserRole,
+      action,
+      entityType: "USER",
+      entityId,
+      afterJson: afterData,
+      ipAddress: (req as any)?.ip || null,
+      userAgent: (req as any)?.headers?.["user-agent"] || null,
+    });
+  } catch (err) {
+    console.error("Failed to write auth audit log:", err);
+  }
+}
+
 // Register auth routes
 export function registerAuthRoutes(app: Express): void {
+  // Self-Registration (no auth required)
+  app.post("/api/auth/register",
+    kycUpload.fields([
+      { name: "kycIdFile", maxCount: 1 },
+      { name: "kycSelfie", maxCount: 1 },
+    ]),
+    async (req: any, res) => {
+      try {
+        const {
+          username, password, confirmPassword,
+          fullName, email, contactNumber,
+          role, barangayIds: barangayIdsRaw,
+          kycIdType,
+        } = req.body;
+
+        // Basic validation
+        if (!username?.trim() || !password || !fullName?.trim() || !contactNumber?.trim()) {
+          return res.status(400).json({ message: "Username, password, full name, and contact number are required" });
+        }
+
+        if (password.length < 8) {
+          return res.status(400).json({ message: "Password must be at least 8 characters" });
+        }
+
+        if (password !== confirmPassword) {
+          return res.status(400).json({ message: "Passwords do not match" });
+        }
+
+        // Only allow SHA or TL for self-registration
+        const allowedRoles = [UserRole.SHA, UserRole.TL];
+        const requestedRole = role || UserRole.TL;
+        if (!allowedRoles.includes(requestedRole)) {
+          return res.status(400).json({ message: "Invalid role. You may register as SHA or TL only." });
+        }
+
+        // Check username uniqueness
+        const [existing] = await db.select({ id: users.id }).from(users).where(eq(users.username, username.trim()));
+        if (existing) {
+          return res.status(400).json({ message: "Username is already taken" });
+        }
+
+        // Resolve uploaded files
+        const files = req.files as Record<string, Express.Multer.File[]> | undefined;
+        const kycIdFileUrl = files?.kycIdFile?.[0]?.filename
+          ? files.kycIdFile[0].filename
+          : null;
+        const kycSelfieUrl = files?.kycSelfie?.[0]?.filename
+          ? files.kycSelfie[0].filename
+          : null;
+
+        const passwordHash = await hashPassword(password);
+
+        const [newUser] = await db.insert(users).values({
+          username: username.trim(),
+          passwordHash,
+          fullName: fullName.trim(),
+          email: email?.trim() || null,
+          contactNumber: contactNumber.trim(),
+          role: requestedRole,
+          status: UserStatus.PENDING_VERIFICATION,
+          kycIdType: kycIdType || null,
+          kycIdFileUrl,
+          kycSelfieUrl,
+        }).returning();
+
+        // Assign barangays if TL
+        if (requestedRole === UserRole.TL && barangayIdsRaw) {
+          const barangayIds: number[] = (Array.isArray(barangayIdsRaw) ? barangayIdsRaw : [barangayIdsRaw])
+            .map((id: string) => parseInt(id, 10))
+            .filter((id: number) => !isNaN(id));
+
+          if (barangayIds.length > 0) {
+            await db.insert(userBarangays).values(
+              barangayIds.map(bId => ({ userId: newUser.id, barangayId: bId }))
+            ).onConflictDoNothing();
+          }
+        }
+
+        // Audit log — use system as actor since user is not logged in
+        await writeAuditLog(
+          "SYSTEM",
+          "SYSTEM",
+          "REGISTER",
+          newUser.id,
+          { username: newUser.username, fullName: newUser.fullName, role: newUser.role, status: newUser.status }
+        );
+
+        res.status(201).json({
+          message: "Registration submitted successfully. Your account is pending administrator verification.",
+          userId: newUser.id,
+        });
+      } catch (error) {
+        console.error("Registration error:", error);
+        res.status(500).json({ message: "Registration failed. Please try again." });
+      }
+    }
+  );
+
   // Login
   app.post("/api/auth/login", async (req, res) => {
     try {
@@ -199,22 +355,39 @@ export function registerAuthRoutes(app: Express): void {
         return res.status(400).json({ message: "Username and password are required" });
       }
       
-      // Find user by username
       const [user] = await db.select().from(users).where(eq(users.username, username));
       
       if (!user) {
         return res.status(401).json({ message: "Invalid username or password" });
       }
       
-      // Check if user is disabled
-      if (user.status === UserStatus.DISABLED) {
-        return res.status(403).json({ message: "Account is disabled. Please contact an administrator." });
-      }
-      
-      // Verify password
+      // Verify password first (same error message to prevent username enumeration)
       const isValid = await verifyPassword(password, user.passwordHash);
       if (!isValid) {
         return res.status(401).json({ message: "Invalid username or password" });
+      }
+
+      // Check account status after password verification
+      if (user.status === UserStatus.PENDING_VERIFICATION) {
+        return res.status(403).json({
+          message: "Your account is pending verification. Please wait for administrator approval.",
+          statusCode: "PENDING_VERIFICATION",
+        });
+      }
+
+      if (user.status === UserStatus.REJECTED) {
+        const noteMsg = user.kycNotes ? ` Reason: ${user.kycNotes}` : "";
+        return res.status(403).json({
+          message: `Your account registration was not approved.${noteMsg} Please contact the administrator for assistance.`,
+          statusCode: "REJECTED",
+        });
+      }
+
+      if (user.status === UserStatus.DISABLED) {
+        return res.status(403).json({
+          message: "Your account has been disabled. Please contact the administrator.",
+          statusCode: "DISABLED",
+        });
       }
       
       // Set session
@@ -397,3 +570,6 @@ export const isAuthenticated: RequestHandler = async (req, res, next) => {
     res.status(500).json({ message: "Authentication check failed" });
   }
 };
+
+// Export KYC upload dir for use in admin routes
+export { KYC_UPLOAD_DIR };

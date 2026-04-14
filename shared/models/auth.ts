@@ -15,6 +15,8 @@ export type UserRoleType = typeof UserRole[keyof typeof UserRole];
 export const UserStatus = {
   ACTIVE: "ACTIVE",
   DISABLED: "DISABLED",
+  PENDING_VERIFICATION: "PENDING_VERIFICATION",
+  REJECTED: "REJECTED",
 } as const;
 export type UserStatusType = typeof UserStatus[keyof typeof UserStatus];
 
@@ -40,9 +42,18 @@ export const users = pgTable("users", {
   lastName: varchar("last_name"),
   profileImageUrl: varchar("profile_image_url"),
   role: varchar("role").notNull().default("TL"), // SYSTEM_ADMIN, MHO, SHA, TL
-  status: varchar("status").notNull().default("ACTIVE"), // ACTIVE, DISABLED
+  status: varchar("status").notNull().default("ACTIVE"), // ACTIVE, DISABLED, PENDING_VERIFICATION, REJECTED
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
+  // KYC / Registration fields
+  contactNumber: varchar("contact_number"),
+  fullName: varchar("full_name"),
+  kycIdType: varchar("kyc_id_type"),
+  kycIdFileUrl: varchar("kyc_id_file_url"),
+  kycSelfieUrl: varchar("kyc_selfie_url"),
+  kycNotes: text("kyc_notes"),
+  kycReviewedAt: timestamp("kyc_reviewed_at"),
+  kycReviewedById: varchar("kyc_reviewed_by_id"),
 });
 
 export type UpsertUser = typeof users.$inferInsert;
@@ -117,7 +128,7 @@ export const auditLogs = pgTable("audit_logs", {
   id: serial("id").primaryKey(),
   userId: varchar("user_id").notNull(),
   userRole: varchar("user_role").notNull(),
-  action: varchar("action").notNull(), // CREATE, UPDATE, DELETE, LOGIN, LOGOUT, VIEW, GENERATE_REPORT, IMPORT
+  action: varchar("action").notNull(), // CREATE, UPDATE, DELETE, LOGIN, LOGOUT, VIEW, GENERATE_REPORT, IMPORT, REGISTER, KYC_APPROVE, KYC_REJECT, DISABLE, ENABLE
   entityType: varchar("entity_type").notNull(), // USER, MOTHER, CHILD, SENIOR, INVENTORY, etc.
   entityId: varchar("entity_id"),
   barangayId: serial("barangay_id"),

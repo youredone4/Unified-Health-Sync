@@ -1,9 +1,11 @@
 import type { Express } from "express";
+import path from "path";
+import fs from "fs";
 import { db } from "../db";
 import { users, barangays, userBarangays, auditLogs, UserRole, UserStatus } from "@shared/schema";
-import { eq, and, desc, like, or, inArray, sql } from "drizzle-orm";
-import { loadUserInfo, requireAuth, requireRole, createAuditLog, permissions } from "../middleware/rbac";
-import { hashPassword } from "../auth";
+import { eq, and, desc, sql } from "drizzle-orm";
+import { loadUserInfo, requireAuth, requireRole, createAuditLog } from "../middleware/rbac";
+import { hashPassword, KYC_UPLOAD_DIR } from "../auth";
 
 export function registerAdminRoutes(app: Express) {
   // Apply user info loading to all routes
@@ -12,7 +14,7 @@ export function registerAdminRoutes(app: Express) {
   // Note: /api/auth/me is defined in server/auth.ts - no duplicate here
 
   // === BARANGAYS ===
-  app.get("/api/barangays", requireAuth, async (req, res) => {
+  app.get("/api/barangays", async (req, res) => {
     try {
       const allBarangays = await db.select().from(barangays);
       res.json(allBarangays);
@@ -22,12 +24,55 @@ export function registerAdminRoutes(app: Express) {
     }
   });
 
+  // === PROTECTED KYC FILE SERVING (SYSTEM_ADMIN only) ===
+  app.get("/api/admin/kyc-files/:userId/:filename", requireAuth, requireRole(UserRole.SYSTEM_ADMIN), async (req, res) => {
+    try {
+      const { userId, filename } = req.params;
+
+      // Security: validate filename — no path traversal allowed
+      const safeName = path.basename(filename);
+      if (safeName !== filename || filename.includes("..")) {
+        return res.status(400).json({ message: "Invalid file name" });
+      }
+
+      // Verify the user exists and owns this KYC file
+      const [user] = await db.select({
+        kycIdFileUrl: users.kycIdFileUrl,
+        kycSelfieUrl: users.kycSelfieUrl,
+      }).from(users).where(eq(users.id, userId));
+
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      if (user.kycIdFileUrl !== safeName && user.kycSelfieUrl !== safeName) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      const filePath = path.join(KYC_UPLOAD_DIR, safeName);
+      if (!fs.existsSync(filePath)) {
+        return res.status(404).json({ message: "File not found" });
+      }
+
+      // Serve the file inline
+      res.sendFile(filePath);
+    } catch (error) {
+      console.error("Error serving KYC file:", error);
+      res.status(500).json({ message: "Failed to serve file" });
+    }
+  });
+
   // === USER MANAGEMENT (Admin only) ===
   
   // List all users with their barangay assignments
   app.get("/api/admin/users", requireAuth, requireRole(UserRole.SYSTEM_ADMIN), async (req, res) => {
     try {
-      const allUsers = await db.select().from(users);
+      const { status } = req.query;
+      
+      let query = db.select().from(users);
+      const allUsers = status
+        ? await db.select().from(users).where(eq(users.status, status as string))
+        : await db.select().from(users);
       
       // Get barangay assignments for all users
       const assignments = await db
@@ -50,6 +95,7 @@ export function registerAdminRoutes(app: Express) {
       
       const usersWithAssignments = allUsers.map(user => ({
         ...user,
+        passwordHash: undefined,
         assignedBarangays: userAssignments[user.id] || [],
       }));
       
@@ -79,6 +125,7 @@ export function registerAdminRoutes(app: Express) {
 
       res.json({
         ...user,
+        passwordHash: undefined,
         assignedBarangays: assignments.map(a => ({ id: a.barangayId, name: a.barangayName })),
       });
     } catch (error) {
@@ -100,13 +147,11 @@ export function registerAdminRoutes(app: Express) {
         return res.status(400).json({ message: "Password must be at least 6 characters" });
       }
       
-      // Validate TL role requires barangay assignments
       const userRole = role || UserRole.TL;
       if (userRole === UserRole.TL && (!barangayIds || barangayIds.length === 0)) {
         return res.status(400).json({ message: "Team Leaders must be assigned to at least one barangay" });
       }
       
-      // Check if username already exists
       const [existing] = await db.select().from(users).where(eq(users.username, username));
       if (existing) {
         return res.status(400).json({ message: "Username already exists" });
@@ -124,7 +169,6 @@ export function registerAdminRoutes(app: Express) {
         status: status || UserStatus.ACTIVE,
       }).returning();
       
-      // Assign barangays for TL users
       if (userRole === UserRole.TL && barangayIds && barangayIds.length > 0) {
         await db.insert(userBarangays).values(
           barangayIds.map((barangayId: number) => ({
@@ -134,7 +178,6 @@ export function registerAdminRoutes(app: Express) {
         );
       }
       
-      // Audit log
       await createAuditLog(
         req.userInfo.id,
         req.userInfo.role,
@@ -158,13 +201,102 @@ export function registerAdminRoutes(app: Express) {
     }
   });
 
+  // Approve pending registration (SYSTEM_ADMIN only)
+  app.post("/api/admin/users/:id/approve", requireAuth, requireRole(UserRole.SYSTEM_ADMIN), async (req: any, res) => {
+    try {
+      const userId = req.params.id;
+      const [user] = await db.select().from(users).where(eq(users.id, userId));
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      if (user.status !== UserStatus.PENDING_VERIFICATION) {
+        return res.status(400).json({ message: "User is not pending verification" });
+      }
+
+      const [updated] = await db
+        .update(users)
+        .set({
+          status: UserStatus.ACTIVE,
+          kycReviewedAt: new Date(),
+          kycReviewedById: req.userInfo.id,
+          kycNotes: null,
+          updatedAt: new Date(),
+        })
+        .where(eq(users.id, userId))
+        .returning();
+
+      await createAuditLog(
+        req.userInfo.id,
+        req.userInfo.role,
+        "KYC_APPROVE",
+        "USER",
+        userId,
+        undefined,
+        { status: user.status },
+        { status: UserStatus.ACTIVE, reviewedBy: req.userInfo.username },
+        req
+      );
+
+      res.json({ ...updated, passwordHash: undefined });
+    } catch (error) {
+      console.error("Error approving user:", error);
+      res.status(500).json({ message: "Failed to approve user" });
+    }
+  });
+
+  // Reject pending registration (SYSTEM_ADMIN only)
+  app.post("/api/admin/users/:id/reject", requireAuth, requireRole(UserRole.SYSTEM_ADMIN), async (req: any, res) => {
+    try {
+      const userId = req.params.id;
+      const { note } = req.body;
+
+      const [user] = await db.select().from(users).where(eq(users.id, userId));
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      if (user.status !== UserStatus.PENDING_VERIFICATION) {
+        return res.status(400).json({ message: "User is not pending verification" });
+      }
+
+      const [updated] = await db
+        .update(users)
+        .set({
+          status: UserStatus.REJECTED,
+          kycNotes: note || null,
+          kycReviewedAt: new Date(),
+          kycReviewedById: req.userInfo.id,
+          updatedAt: new Date(),
+        })
+        .where(eq(users.id, userId))
+        .returning();
+
+      await createAuditLog(
+        req.userInfo.id,
+        req.userInfo.role,
+        "KYC_REJECT",
+        "USER",
+        userId,
+        undefined,
+        { status: user.status },
+        { status: UserStatus.REJECTED, note, reviewedBy: req.userInfo.username },
+        req
+      );
+
+      res.json({ ...updated, passwordHash: undefined });
+    } catch (error) {
+      console.error("Error rejecting user:", error);
+      res.status(500).json({ message: "Failed to reject user" });
+    }
+  });
+
   // Update user (role, status, password)
   app.put("/api/admin/users/:id", requireAuth, requireRole(UserRole.SYSTEM_ADMIN), async (req: any, res) => {
     try {
       const { role, status, password, firstName, lastName, email } = req.body;
       const userId = req.params.id;
 
-      // Get before state for audit
       const [beforeUser] = await db.select().from(users).where(eq(users.id, userId));
       if (!beforeUser) {
         return res.status(404).json({ message: "User not found" });
@@ -175,7 +307,6 @@ export function registerAdminRoutes(app: Express) {
         return res.status(400).json({ message: "Cannot disable your own account" });
       }
 
-      // Build update object
       const updateData: any = {
         role: role || beforeUser.role,
         status: status || beforeUser.status,
@@ -185,7 +316,6 @@ export function registerAdminRoutes(app: Express) {
         updatedAt: new Date(),
       };
       
-      // Update password if provided
       if (password && password.length >= 6) {
         updateData.passwordHash = await hashPassword(password);
       }
@@ -196,11 +326,18 @@ export function registerAdminRoutes(app: Express) {
         .where(eq(users.id, userId))
         .returning();
 
-      // Audit log
+      // Determine action label for audit
+      let action = "UPDATE";
+      if (status === UserStatus.DISABLED && beforeUser.status !== UserStatus.DISABLED) {
+        action = "DISABLE";
+      } else if (status === UserStatus.ACTIVE && beforeUser.status === UserStatus.DISABLED) {
+        action = "ENABLE";
+      }
+
       await createAuditLog(
         req.userInfo.id,
         req.userInfo.role,
-        "UPDATE",
+        action,
         "USER",
         userId,
         undefined,
@@ -224,7 +361,6 @@ export function registerAdminRoutes(app: Express) {
     try {
       const userId = req.params.id;
       
-      // Prevent admin from deleting themselves
       if (userId === req.userInfo.id) {
         return res.status(400).json({ message: "Cannot delete your own account" });
       }
@@ -235,7 +371,6 @@ export function registerAdminRoutes(app: Express) {
         return res.status(404).json({ message: "User not found" });
       }
       
-      // Audit log
       await createAuditLog(
         req.userInfo.id,
         req.userInfo.role,
@@ -261,27 +396,22 @@ export function registerAdminRoutes(app: Express) {
       const userId = req.params.id;
       const { barangayIds } = req.body as { barangayIds: number[] };
 
-      // Verify user exists
       const [user] = await db.select().from(users).where(eq(users.id, userId));
       if (!user) {
         return res.status(404).json({ message: "User not found" });
       }
       
-      // Validate TL users must have at least one barangay
       if (user.role === UserRole.TL && (!barangayIds || barangayIds.length === 0)) {
         return res.status(400).json({ message: "Team Leaders must be assigned to at least one barangay" });
       }
 
-      // Get before state for audit
       const beforeAssignments = await db
         .select({ barangayId: userBarangays.barangayId })
         .from(userBarangays)
         .where(eq(userBarangays.userId, userId));
 
-      // Remove existing assignments
       await db.delete(userBarangays).where(eq(userBarangays.userId, userId));
 
-      // Add new assignments
       if (barangayIds && barangayIds.length > 0) {
         await db.insert(userBarangays).values(
           barangayIds.map((barangayId: number) => ({
@@ -291,7 +421,6 @@ export function registerAdminRoutes(app: Express) {
         );
       }
 
-      // Get updated assignments
       const afterAssignments = await db
         .select({
           barangayId: userBarangays.barangayId,
@@ -301,7 +430,6 @@ export function registerAdminRoutes(app: Express) {
         .innerJoin(barangays, eq(userBarangays.barangayId, barangays.id))
         .where(eq(userBarangays.userId, userId));
 
-      // Audit log
       await createAuditLog(
         req.userInfo.id,
         req.userInfo.role,
@@ -316,6 +444,7 @@ export function registerAdminRoutes(app: Express) {
 
       res.json({
         ...user,
+        passwordHash: undefined,
         assignedBarangays: afterAssignments.map(a => ({ id: a.barangayId, name: a.barangayName })),
       });
     } catch (error) {
@@ -329,29 +458,14 @@ export function registerAdminRoutes(app: Express) {
     try {
       const { userId, action, entityType, barangayName, startDate, endDate, limit = 100, offset = 0 } = req.query;
 
-      let query = db.select().from(auditLogs);
-      
-      // Build conditions array
       const conditions = [];
       
-      if (userId) {
-        conditions.push(eq(auditLogs.userId, userId as string));
-      }
-      if (action) {
-        conditions.push(eq(auditLogs.action, action as string));
-      }
-      if (entityType) {
-        conditions.push(eq(auditLogs.entityType, entityType as string));
-      }
-      if (barangayName) {
-        conditions.push(eq(auditLogs.barangayName, barangayName as string));
-      }
-      if (startDate) {
-        conditions.push(sql`${auditLogs.createdAt} >= ${new Date(startDate as string)}`);
-      }
-      if (endDate) {
-        conditions.push(sql`${auditLogs.createdAt} <= ${new Date(endDate as string)}`);
-      }
+      if (userId) conditions.push(eq(auditLogs.userId, userId as string));
+      if (action) conditions.push(eq(auditLogs.action, action as string));
+      if (entityType) conditions.push(eq(auditLogs.entityType, entityType as string));
+      if (barangayName) conditions.push(eq(auditLogs.barangayName, barangayName as string));
+      if (startDate) conditions.push(sql`${auditLogs.createdAt} >= ${new Date(startDate as string)}`);
+      if (endDate) conditions.push(sql`${auditLogs.createdAt} <= ${new Date(endDate as string)}`);
 
       const logs = await db
         .select()

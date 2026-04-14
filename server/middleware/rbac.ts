@@ -45,9 +45,15 @@ export const loadUserInfo: RequestHandler = async (req, res, next) => {
       return next();
     }
 
-    // Check if user is disabled
+    // Block non-active accounts from making authenticated API calls
     if (dbUser.status === "DISABLED") {
       return res.status(403).json({ message: "Account is disabled. Please contact an administrator." });
+    }
+    if (dbUser.status === "PENDING_VERIFICATION") {
+      return res.status(403).json({ message: "Account is pending verification." });
+    }
+    if (dbUser.status === "REJECTED") {
+      return res.status(403).json({ message: "Account registration was not approved." });
     }
 
     // Get assigned barangays for TL role

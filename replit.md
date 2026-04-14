@@ -96,12 +96,26 @@ Team Leaders can only access data from their assigned barangays. The `user_baran
 - TL cannot reopen SUBMITTED_LOCKED reports (only MHO/Admin can)
 - All M1 API routes now require authentication (`[loadUserInfo, requireAuth]`)
 
+### Self-Registration & KYC Verification
+Healthcare workers (SHA, TL roles) can self-register at the login page:
+- 3-step registration wizard: Account Setup → Personal Info → KYC Upload
+- KYC uploads (government ID photo, optional selfie) stored in `uploads/kyc/` (server-only)
+- New accounts start as `PENDING_VERIFICATION` — cannot log in until approved
+- Login blocked for PENDING/REJECTED users with informative messages
+
+**Admin KYC Review** (`/admin/users` → Pending Approvals tab):
+- Approve button → activates account instantly
+- Reject button → requires rejection reason; user sees reason on next login attempt
+- KYC files viewable by admins only via `/api/admin/kyc-files/:userId/:filename`
+
 ### User Management
 System Admins can manage users at `/admin/users`:
 - Create users with username, password, role, barangay assignments
-- Edit user roles and status
-- Reset user passwords
+- Edit user roles and status (Active/Disabled/Rejected)
+- Quick disable/re-enable toggle on each user row
+- Reset user passwords (separate dialog)
 - Delete users (cannot delete self)
+- Two tabs: "All Users" and "Pending Approvals" (with count badge)
 
 ## System Architecture
 
