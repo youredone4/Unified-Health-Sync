@@ -304,7 +304,7 @@ export default function CalendarPage() {
               {daysInMonth.map(day => {
                 const dayEvents = eventsOnDate(day);
                 const hasOverdue = dayEvents.some(e => e.status === 'overdue');
-                const hasDueSoon = dayEvents.some(e => e.status === 'dueSoon');
+                const hasDueSoon = dayEvents.some(e => e.status === 'due_soon');
                 const isSelected = selectedDate && isSameDay(day, selectedDate);
                 const isTodayDate = isToday(day);
 
