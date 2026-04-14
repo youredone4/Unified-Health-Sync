@@ -1,0 +1,348 @@
+URGENT: Implement secure user registration with integrated KYC verification, fix the M1 Report module in production, and add strict barangay switching for multi-barangay Team Leaders.
+
+Important Context
+- The system is already deployed live.
+- This is a health system, so the data is highly sensitive.
+- Registration and KYC must be implemented securely.
+- The issue in production is specifically with the M1 Report module: it is showing empty in production, unlike the test environment.
+- Team Leaders with multiple barangays must not see merged data; they must switch one barangay at a time.
+- Do NOT rebuild the whole system.
+- Do NOT redesign unrelated modules.
+- Focus on structured enhancement + debugging + testing.
+- Security, privacy, auditability, and barangay-level data integrity are critical.
+
+Definition for this task
+KYC = identity verification during registration using profile details plus uploaded valid ID and admin approval.
+
+Primary Goals
+1. Add Registration to Login page
+2. Integrate KYC verification into registration
+3. Add secure account status control (Pending, Verified, Rejected, Disabled)
+4. Allow Admin to approve, reject, disable, and re-enable users
+5. Fix the M1 Report module in production
+6. Ensure M1 in production reflects real system data and works like the test environment
+7. Add barangay switcher for users assigned to multiple barangays
+8. Prevent merged barangay data for Team Leaders
+9. Test everything across all roles, not just admin
+
+==================================================
+A. Registration + KYC Integration
+==================================================
+
+1. Add Registration to Login Page
+- Add a "Register" option/button on the login screen
+- Registration should create a new user account securely
+
+2. Registration Form Fields
+At minimum include:
+- Full Name
+- Username
+- Password
+- Confirm Password
+- Contact Number
+- Email if used
+- Role selection only if appropriate, otherwise admin-assigned
+- Barangay assignment where applicable
+
+3. Integrate KYC into Registration
+Registration must include KYC-related inputs such as:
+- Valid ID upload
+- Basic identity details
+- Supporting information needed for account verification
+
+Optional if feasible:
+- Selfie upload
+- Additional verification inputs
+
+4. Initial Account Status
+After registration:
+- account status = Pending Verification
+- user must not be treated as fully trusted yet
+
+==================================================
+B. Health-System Security Requirements
+==================================================
+
+5. Protect sensitive user data
+Because this is a health system:
+- store passwords securely using proper password hashing
+- do not store plaintext passwords
+- protect uploaded KYC files/documents
+- restrict access to KYC files to authorized admins only
+- do not expose sensitive user details unnecessarily in the UI
+- avoid leaking sensitive information in logs, errors, or URLs
+
+6. Access control and least privilege
+- only authorized roles should review KYC submissions
+- only authorized roles should approve, reject, disable, or re-enable users
+- ordinary users must not access other users’ KYC records
+- role permissions must be enforced in both frontend and backend/API
+
+7. Secure account lifecycle
+- Pending users must have limited access
+- Verified users can access the system according to RBAC
+- Rejected users should be blocked or restricted with a clear message
+- Disabled users must not be able to log in
+
+8. Sensitive data handling
+- KYC documents should not be publicly accessible
+- uploaded files should use protected storage/access control
+- do not display full sensitive details unless necessary for authorized review
+- keep audit logs for security-sensitive actions
+
+9. Audit logging
+Log critical actions such as:
+- registration submission
+- KYC approval
+- KYC rejection
+- account disable/enable
+- admin review actions
+
+Audit logs should include:
+- acting user
+- target user
+- action
+- timestamp
+
+Do not log raw passwords or overly sensitive secrets.
+
+==================================================
+C. Account Verification Workflow
+==================================================
+
+10. Account Status Types
+Each user must have:
+- Pending
+- Verified
+- Rejected
+- Disabled
+
+11. Admin Verification Panel
+Authorized admins must be able to:
+- view pending registrations
+- review submitted KYC data
+- approve -> mark as Verified
+- reject -> mark as Rejected
+- disable -> mark as Disabled
+- re-enable if appropriate
+
+12. Login Behavior Based on Status
+- Pending -> show clear message such as "Your account is pending verification."
+- Verified -> full access based on role
+- Rejected -> block login with clear message
+- Disabled -> block login with clear message such as "Your account has been disabled. Please contact the administrator."
+
+==================================================
+D. M1 Report Production Fix
+==================================================
+
+13. Investigate why M1 is empty in production
+Current issue:
+- M1 Report works in test environment
+- M1 Report is empty in production
+
+Treat this as a data pipeline, filtering, environment, or mapping issue, not just a UI issue.
+
+Inspect:
+- production database contents
+- M1 source tables/collections
+- API/data fetch logic
+- production environment variables
+- report query logic
+- date/month/year filters
+- barangay filters
+- imported M1 data integration
+- differences between test and production environments
+- null/empty-state handling in UI
+
+14. Compare test vs production
+Compare:
+- database schema
+- table/collection names
+- actual data present
+- environment configuration
+- report query conditions
+- role-based filtering behavior
+
+Identify the exact reason production returns empty results while test does not.
+
+15. Verify M1 source-to-report mapping
+Ensure the M1 report is actually connected to real production data for all relevant sections, not to test/mock assumptions.
+
+Check whether production M1 is pulling from:
+- Family Planning / Modern FP data
+- Maternal data
+- Child health data
+- Immunization data
+- Nutrition data
+- NCD / other required M1 sections
+- imported M1 records if they are part of the report pipeline
+
+16. Check filtering logic carefully
+Inspect whether production M1 is filtering by:
+- month
+- year
+- barangay
+- role-based barangay scope
+
+Verify:
+- no hardcoded test values
+- no wrong date assumptions
+- no barangay name mismatches
+- no filter conditions excluding all production rows
+
+17. Fix M1 report behavior in production
+Ensure:
+- M1 loads correctly in production
+- data appears when source data exists
+- empty-state messaging is shown only when truly no matching data exists
+- no blank or misleading screen
+- M1 behavior matches the intended logic of the test environment
+
+18. Improve M1 transparency if feasible
+If possible, add a simple data-source summary or debug-friendly admin view showing:
+- which modules/records contribute to M1
+- how many records are counted per section
+- selected month/year/barangay context
+
+This should help future validation and troubleshooting.
+
+==================================================
+E. Barangay Switcher for Multi-Barangay Team Leaders
+==================================================
+
+19. Add Barangay Switcher UI
+For users assigned to multiple barangays:
+- show a barangay dropdown/switcher
+- place it in the header or dashboard area
+
+Example:
+Barangay: [ Mabini ▼ ]
+
+20. Populate switcher correctly
+- list only barangays assigned to that user
+- no access to unassigned barangays
+
+21. Default selection
+- auto-select the first assigned barangay on login
+- optionally persist selected barangay during session/navigation
+
+22. Enforce single-barangay view
+When a barangay is selected:
+- dashboards must show only that barangay’s data
+- registries must filter to that barangay
+- M1 reports must generate only that barangay’s data
+- analytics must filter to that barangay
+- do NOT merge data across assigned barangays in one view for Team Leaders
+
+23. Role behavior
+- Team Leader with multiple barangays -> must use switcher and see one barangay at a time
+- Team Leader with one barangay -> fixed barangay context, no switcher needed
+- Admin / municipal roles -> can retain broader access as allowed by RBAC
+
+24. Backend/API enforcement
+- do NOT rely only on frontend filtering
+- all backend/API queries must respect the selected barangay and assigned access
+- prevent data leakage across barangays through direct URL or API access
+
+25. M1 and report integrity
+- M1 reports must always be generated per barangay
+- Team Leaders must not see merged multi-barangay totals by default
+- ensure barangay-specific reporting accuracy
+
+==================================================
+F. Testing and Retesting
+==================================================
+
+26. Test Registration Flow
+- create new account
+- submit KYC
+- confirm status = Pending
+
+27. Test Verification Flow
+- approve user -> can log in appropriately
+- reject user -> blocked/restricted
+- disable user -> blocked
+- re-enable user -> can access again if allowed
+
+28. Test Security Controls
+Verify:
+- unauthorized users cannot access KYC records
+- KYC files are protected
+- passwords are stored securely
+- backend enforces permissions, not only UI hiding
+- sensitive data is not exposed in logs or errors
+
+29. Test M1 Report specifically in production
+Do not test only locally or in test environment.
+
+Verify in production:
+- M1 loads
+- correct data appears when source data exists
+- month/year/barangay filtering works
+- Admin view works
+- Team Leader barangay-scoped view works
+- imported data is included if intended
+- empty states are correct and not false emptiness
+
+30. Test Barangay Switcher
+For multi-barangay Team Leaders:
+- switch barangay
+- verify data changes correctly
+- verify no merging
+- verify M1 reflects only the selected barangay
+- verify direct URL and refresh still enforce correct barangay view
+
+31. Test Across Roles
+Test:
+- Super Admin
+- Municipal Health Officer
+- Senior Health Admin
+- Team Leader (Barangay Nurse)
+- newly registered user
+- Triage Nurse if implemented
+
+32. Retest in Production
+- test actual deployed environment
+- test direct URLs
+- test refresh behavior
+- test empty/incomplete data states
+- verify fixes after deployment
+- do not stop after one successful test; test and retest
+
+==================================================
+G. Deliverables
+==================================================
+
+Provide:
+1. registration page implementation
+2. KYC integration in registration
+3. secure account status system
+4. admin verification panel
+5. disable/enable user functionality
+6. M1 production root cause analysis
+7. M1 production fix
+8. barangay switcher implementation
+9. backend/API barangay filtering enforcement
+10. security and permission protections added
+11. test results across roles
+12. production verification results
+13. files changed
+
+==================================================
+H. Success Criteria
+==================================================
+
+- users can register from login page
+- KYC is part of registration
+- new users are marked as Pending
+- authorized admins can approve, reject, disable, and re-enable users
+- login respects account status
+- sensitive user/KYC data is protected appropriately for a health system
+- M1 Report works in production
+- M1 in production reflects real system data correctly
+- Team Leaders with multiple barangays do not see merged data
+- multi-barangay Team Leaders can switch one barangay at a time
+- backend prevents barangay data leakage
+- system works across all roles
+- no regression or broken modules

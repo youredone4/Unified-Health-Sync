@@ -1,0 +1,300 @@
+URGENT: Implement secure user registration with integrated KYC verification, fix the Reporting module issues in production, and add strict barangay switching for multi-barangay Team Leaders.
+
+Important Context
+- The system is already deployed live.
+- This is a health system, so the data is highly sensitive.
+- Registration and KYC must be implemented securely.
+- Reporting is currently broken in production (empty page, missing "Generate Report").
+- Team Leaders with multiple barangays must not see merged data; they must switch one barangay at a time.
+- Do NOT rebuild the whole system.
+- Do NOT redesign unrelated modules.
+- Focus on structured enhancement + debugging + testing.
+- Security, privacy, auditability, and barangay-level data integrity are critical.
+
+Definition for this task
+KYC = identity verification during registration using profile details plus uploaded valid ID and admin approval.
+
+Primary Goals
+1. Add Registration to Login page
+2. Integrate KYC verification into registration
+3. Add secure account status control (Pending, Verified, Rejected, Disabled)
+4. Allow Admin to approve, reject, disable, and re-enable users
+5. Fix Reporting module in production
+6. Restore "Generate Report" where allowed
+7. Add barangay switcher for users assigned to multiple barangays
+8. Prevent merged barangay data for Team Leaders
+9. Test everything across all roles, not just admin
+
+==================================================
+A. Registration + KYC Integration
+==================================================
+
+1. Add Registration to Login Page
+- Add a “Register” option/button on the login screen
+- Registration should create a new user account securely
+
+2. Registration Form Fields
+At minimum include:
+- Full Name
+- Username
+- Password
+- Confirm Password
+- Contact Number
+- Email if used
+- Role selection only if appropriate, otherwise admin-assigned
+- Barangay assignment where applicable
+
+3. Integrate KYC into Registration
+Registration must include KYC-related inputs such as:
+- Valid ID upload
+- Basic identity details
+- Supporting information needed for account verification
+
+Optional if feasible:
+- Selfie upload
+- Additional verification inputs
+
+4. Initial Account Status
+After registration:
+- account status = Pending Verification
+- user must not be treated as fully trusted yet
+
+==================================================
+B. Health-System Security Requirements
+==================================================
+
+5. Protect sensitive user data
+Because this is a health system:
+- store passwords securely using proper password hashing
+- do not store plaintext passwords
+- protect uploaded KYC files/documents
+- restrict access to KYC files to authorized admins only
+- do not expose sensitive user details unnecessarily in the UI
+- avoid leaking sensitive information in logs, errors, or URLs
+
+6. Access control and least privilege
+- only authorized roles should review KYC submissions
+- only authorized roles should approve, reject, disable, or re-enable users
+- ordinary users must not access other users’ KYC records
+- role permissions must be enforced in both frontend and backend/API
+
+7. Secure account lifecycle
+- Pending users must have limited access
+- Verified users can access the system according to RBAC
+- Rejected users should be blocked or restricted with a clear message
+- Disabled users must not be able to log in
+
+8. Sensitive data handling
+- KYC documents should not be publicly accessible
+- uploaded files should use protected storage/access control
+- do not display full sensitive details unless necessary for authorized review
+- keep audit logs for security-sensitive actions
+
+9. Audit logging
+Log critical actions such as:
+- registration submission
+- KYC approval
+- KYC rejection
+- account disable/enable
+- admin review actions
+
+Audit logs should include:
+- acting user
+- target user
+- action
+- timestamp
+
+Do not log raw passwords or overly sensitive secrets.
+
+==================================================
+C. Account Verification Workflow
+==================================================
+
+10. Account Status Types
+Each user must have:
+- Pending
+- Verified
+- Rejected
+- Disabled
+
+11. Admin Verification Panel
+Authorized admins must be able to:
+- view pending registrations
+- review submitted KYC data
+- approve → mark as Verified
+- reject → mark as Rejected
+- disable → mark as Disabled
+- re-enable if appropriate
+
+12. Login Behavior Based on Status
+- Pending → show clear message such as “Your account is pending verification.”
+- Verified → full access based on role
+- Rejected → block login with clear message
+- Disabled → block login with clear message such as “Your account has been disabled. Please contact the administrator.”
+
+==================================================
+D. Reporting Module Production Fix
+==================================================
+
+13. Investigate Reporting Issue
+Current issues:
+- Reporting page is empty in production
+- "Generate Report" button is missing
+
+Inspect:
+- frontend rendering logic
+- API/data fetch
+- role-based UI conditions
+- production environment issues
+- missing/null data handling
+- production-only errors
+
+14. Fix Reporting Page
+Ensure:
+- page loads correctly
+- UI renders even if no data exists
+- no blank/white screen occurs
+- safe empty states are shown where appropriate
+
+15. Restore Generate Report
+- make the button visible where allowed
+- verify for Admin and Team Leader views according to permissions
+- ensure it works properly in production
+
+16. Verify role-based Reporting access
+- Admin / higher roles → access according to RBAC
+- Team Leader → barangay-level only if intended
+- unauthorized roles should fail gracefully, not with white screens
+
+==================================================
+E. Barangay Switcher for Multi-Barangay Team Leaders
+==================================================
+
+17. Add Barangay Switcher UI
+For users assigned to multiple barangays:
+- show a barangay dropdown/switcher
+- place it in the header or dashboard area
+
+Example:
+Barangay: [ Mabini ▼ ]
+
+18. Populate switcher correctly
+- list only barangays assigned to that user
+- no access to unassigned barangays
+
+19. Default selection
+- auto-select the first assigned barangay on login
+- optionally persist selected barangay during session/navigation
+
+20. Enforce single-barangay view
+When a barangay is selected:
+- dashboards must show only that barangay’s data
+- registries must filter to that barangay
+- reports must generate only that barangay’s data
+- analytics must filter to that barangay
+- do NOT merge data across assigned barangays in one view for Team Leaders
+
+21. Role behavior
+- Team Leader with multiple barangays → must use switcher and see one barangay at a time
+- Team Leader with one barangay → fixed barangay context, no switcher needed
+- Admin / municipal roles → can retain broader access as allowed by RBAC
+
+22. Backend/API enforcement
+- do NOT rely only on frontend filtering
+- all backend/API queries must respect the selected barangay and assigned access
+- prevent data leakage across barangays through direct URL or API access
+
+23. M1 and report integrity
+- M1 reports must always be generated per barangay
+- Team Leaders must not see merged multi-barangay totals by default
+- ensure barangay-specific reporting accuracy
+
+==================================================
+F. Testing and Retesting
+==================================================
+
+24. Test Registration Flow
+- create new account
+- submit KYC
+- confirm status = Pending
+
+25. Test Verification Flow
+- approve user → can log in appropriately
+- reject user → blocked/restricted
+- disable user → blocked
+- re-enable user → can access again if allowed
+
+26. Test Security Controls
+Verify:
+- unauthorized users cannot access KYC records
+- KYC files are protected
+- passwords are stored securely
+- backend enforces permissions, not only UI hiding
+- sensitive data is not exposed in logs or errors
+
+27. Test Reporting Module
+- Reporting page loads
+- Generate Report appears where allowed
+- production behavior is correct
+- empty states do not white-screen
+
+28. Test Barangay Switcher
+For multi-barangay Team Leaders:
+- switch barangay
+- verify data changes correctly
+- verify no merging
+- verify reports reflect only the selected barangay
+- verify direct URL and refresh still enforce correct barangay view
+
+29. Test Across Roles
+Test:
+- Super Admin
+- Municipal Health Officer
+- Senior Health Admin
+- Team Leader (Barangay Nurse)
+- newly registered user
+- Triage Nurse if implemented
+
+30. Retest in Production
+- test actual deployed environment
+- test direct URLs
+- test refresh behavior
+- test empty/incomplete data states
+- verify fixes after deployment
+- do not stop after one successful test; test and retest
+
+==================================================
+G. Deliverables
+==================================================
+
+Provide:
+1. registration page implementation
+2. KYC integration in registration
+3. secure account status system
+4. admin verification panel
+5. disable/enable user functionality
+6. Reporting module fix
+7. Generate Report restoration
+8. barangay switcher implementation
+9. backend/API barangay filtering enforcement
+10. security and permission protections added
+11. test results across roles
+12. files changed
+
+==================================================
+H. Success Criteria
+==================================================
+
+- users can register from login page
+- KYC is part of registration
+- new users are marked as Pending
+- authorized admins can approve, reject, disable, and re-enable users
+- login respects account status
+- sensitive user/KYC data is protected appropriately for a health system
+- Reporting page works in production
+- Generate Report button is restored where allowed
+- Team Leaders with multiple barangays do not see merged data
+- multi-barangay Team Leaders can switch one barangay at a time
+- backend prevents barangay data leakage
+- system works across all roles
+- no regression or broken modules
