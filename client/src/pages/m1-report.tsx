@@ -185,6 +185,7 @@ export default function M1ReportPage() {
   const { data: fpRecords = [] } = useQuery<FpServiceRecord[]>({
     queryKey: ["/api/fp-records", reportingMonthStr, barangayName ?? "all"],
     queryFn: () => fetch(`/api/fp-records?${fpQueryParams}`, { credentials: "include" }).then(r => r.json()),
+    enabled: !isTL || !!barangayName,
   });
 
   const selectedBarangay = barangays.find(b => b.id === selectedBarangayId);
