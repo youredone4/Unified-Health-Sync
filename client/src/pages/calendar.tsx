@@ -132,8 +132,8 @@ export default function CalendarPage() {
       if (typeFilter !== 'all' && e.type !== typeFilter) return false;
       if (barangayFilter !== 'all' && e.barangay !== barangayFilter) return false;
       if (statusFilter === 'overdue' && e.status !== 'overdue') return false;
-      if (statusFilter === 'due_soon' && e.status !== 'dueSoon') return false;
-      if (statusFilter === 'upcoming' && (e.status === 'overdue' || e.status === 'dueSoon')) return false;
+      if (statusFilter === 'due_soon' && e.status !== 'due_soon') return false;
+      if (statusFilter === 'upcoming' && (e.status === 'overdue' || e.status === 'due_soon')) return false;
       return true;
     });
   }, [events, typeFilter, barangayFilter, statusFilter]);
@@ -142,7 +142,7 @@ export default function CalendarPage() {
     const counts = { overdue: 0, dueSoon: 0, upcoming: 0 };
     filteredEvents.forEach(e => {
       if (e.status === 'overdue') counts.overdue++;
-      else if (e.status === 'dueSoon') counts.dueSoon++;
+      else if (e.status === 'due_soon') counts.dueSoon++;
       else counts.upcoming++;
     });
     return counts;
