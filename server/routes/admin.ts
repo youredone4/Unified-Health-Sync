@@ -25,17 +25,16 @@ export function registerAdminRoutes(app: Express) {
   });
 
   // === PROTECTED KYC FILE SERVING (SYSTEM_ADMIN only) ===
-  app.get("/api/admin/kyc-files/:userId/:filename", requireAuth, requireRole(UserRole.SYSTEM_ADMIN), async (req, res) => {
+  // Uses query param ?type=id|selfie to avoid exposing raw storage filenames
+  app.get("/api/admin/kyc-files/:userId", requireAuth, requireRole(UserRole.SYSTEM_ADMIN), async (req, res) => {
     try {
-      const { userId, filename } = req.params;
+      const { userId } = req.params;
+      const type = req.query.type as string; // "id" or "selfie"
 
-      // Security: validate filename — no path traversal allowed
-      const safeName = path.basename(filename);
-      if (safeName !== filename || filename.includes("..")) {
-        return res.status(400).json({ message: "Invalid file name" });
+      if (type !== "id" && type !== "selfie") {
+        return res.status(400).json({ message: "Invalid type. Use ?type=id or ?type=selfie" });
       }
 
-      // Verify the user exists and owns this KYC file
       const [user] = await db.select({
         kycIdFileUrl: users.kycIdFileUrl,
         kycSelfieUrl: users.kycSelfieUrl,
@@ -45,16 +44,20 @@ export function registerAdminRoutes(app: Express) {
         return res.status(404).json({ message: "User not found" });
       }
 
-      if (user.kycIdFileUrl !== safeName && user.kycSelfieUrl !== safeName) {
-        return res.status(403).json({ message: "Access denied" });
+      const storedFilename = type === "selfie" ? user.kycSelfieUrl : user.kycIdFileUrl;
+
+      if (!storedFilename) {
+        return res.status(404).json({ message: "File not uploaded" });
       }
 
+      // Double-check: only allow filenames, no path traversal
+      const safeName = path.basename(storedFilename);
       const filePath = path.join(KYC_UPLOAD_DIR, safeName);
       if (!fs.existsSync(filePath)) {
-        return res.status(404).json({ message: "File not found" });
+        return res.status(404).json({ message: "File not found on disk" });
       }
 
-      // Serve the file inline
+      // Serve inline without leaking the storage path
       res.sendFile(filePath);
     } catch (error) {
       console.error("Error serving KYC file:", error);
@@ -93,9 +96,10 @@ export function registerAdminRoutes(app: Express) {
         userAssignments[a.userId].push({ id: a.barangayId, name: a.barangayName });
       }
       
-      const usersWithAssignments = allUsers.map(user => ({
+      const usersWithAssignments = allUsers.map(({ passwordHash: _pw, kycIdFileUrl, kycSelfieUrl, ...user }) => ({
         ...user,
-        passwordHash: undefined,
+        hasKycIdFile: !!kycIdFileUrl,
+        hasKycSelfie: !!kycSelfieUrl,
         assignedBarangays: userAssignments[user.id] || [],
       }));
       
@@ -123,9 +127,11 @@ export function registerAdminRoutes(app: Express) {
         .innerJoin(barangays, eq(userBarangays.barangayId, barangays.id))
         .where(eq(userBarangays.userId, user.id));
 
+      const { passwordHash: _pw, kycIdFileUrl, kycSelfieUrl, ...userSafe } = user;
       res.json({
-        ...user,
-        passwordHash: undefined,
+        ...userSafe,
+        hasKycIdFile: !!kycIdFileUrl,
+        hasKycSelfie: !!kycSelfieUrl,
         assignedBarangays: assignments.map(a => ({ id: a.barangayId, name: a.barangayName })),
       });
     } catch (error) {

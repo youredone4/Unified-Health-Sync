@@ -15,7 +15,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth, UserRole } from "@/hooks/use-auth";
 import {
   Users, Shield, Search, Edit, MapPin, Plus, Trash2, Key,
-  CheckCircle, XCircle, Clock, FileText, Eye, UserCheck, UserX,
+  CheckCircle, XCircle, Clock, Eye, UserCheck, UserX,
   PhoneCall, Mail, Calendar, IdCard,
 } from "lucide-react";
 
@@ -32,11 +32,35 @@ interface UserWithAssignments {
   fullName: string | null;
   contactNumber: string | null;
   kycIdType: string | null;
-  kycIdFileUrl: string | null;
-  kycSelfieUrl: string | null;
   kycNotes: string | null;
   kycReviewedAt: string | null;
+  /** True if a government ID file was uploaded (raw filename is never returned) */
+  hasKycIdFile: boolean;
+  /** True if a selfie was uploaded (raw filename is never returned) */
+  hasKycSelfie: boolean;
   assignedBarangays: { id: number; name: string }[];
+}
+
+interface CreateUserPayload {
+  username: string;
+  password: string;
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  role: string;
+  barangayIds?: number[];
+}
+
+interface UpdateUserPayload {
+  userId: string;
+  role?: string;
+  status?: string;
+  password?: string;
+}
+
+interface ResetPasswordPayload {
+  userId: string;
+  password: string;
 }
 
 interface Barangay {
@@ -130,7 +154,7 @@ export default function UserManagement() {
 
   // Mutations
   const createUserMutation = useMutation({
-    mutationFn: async (data: any) => {
+    mutationFn: async (data: CreateUserPayload) => {
       const response = await apiRequest("POST", "/api/admin/users", data);
       return response.json();
     },
@@ -146,7 +170,7 @@ export default function UserManagement() {
   });
 
   const updateUserMutation = useMutation({
-    mutationFn: async ({ userId, ...data }: any) => {
+    mutationFn: async ({ userId, ...data }: UpdateUserPayload) => {
       return apiRequest("PUT", `/api/admin/users/${userId}`, data);
     },
     onSuccess: () => {
@@ -184,7 +208,7 @@ export default function UserManagement() {
   });
 
   const resetPasswordMutation = useMutation({
-    mutationFn: async ({ userId, password }: { userId: string; password: string }) => {
+    mutationFn: async ({ userId, password }: ResetPasswordPayload) => {
       return apiRequest("PUT", `/api/admin/users/${userId}`, { password });
     },
     onSuccess: () => {
@@ -593,7 +617,7 @@ export default function UserManagement() {
                       </div>
 
                       {/* KYC info */}
-                      {(user.kycIdType || user.kycIdFileUrl) && (
+                      {(user.kycIdType || user.hasKycIdFile) && (
                         <div className="rounded-md bg-muted/50 p-3 space-y-2">
                           {user.kycIdType && (
                             <p className="text-sm flex items-center gap-2">
@@ -602,9 +626,9 @@ export default function UserManagement() {
                             </p>
                           )}
                           <div className="flex gap-2 flex-wrap">
-                            {user.kycIdFileUrl && (
+                            {user.hasKycIdFile && (
                               <a
-                                href={`/api/admin/kyc-files/${user.id}/${user.kycIdFileUrl}`}
+                                href={`/api/admin/kyc-files/${user.id}?type=id`}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="inline-flex items-center gap-1 text-xs text-primary underline"
@@ -613,9 +637,9 @@ export default function UserManagement() {
                                 <Eye className="w-3.5 h-3.5" />View ID Document
                               </a>
                             )}
-                            {user.kycSelfieUrl && (
+                            {user.hasKycSelfie && (
                               <a
-                                href={`/api/admin/kyc-files/${user.id}/${user.kycSelfieUrl}`}
+                                href={`/api/admin/kyc-files/${user.id}?type=selfie`}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="inline-flex items-center gap-1 text-xs text-primary underline"

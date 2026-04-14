@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { ThemeSettings, Barangay } from "@shared/schema";
 import { Loader2, Eye, EyeOff, CheckCircle, ArrowLeft, ArrowRight, Upload, X } from "lucide-react";
@@ -67,6 +67,11 @@ export default function LandingPage() {
 
   const { toast } = useToast();
 
+  const [loginError, setLoginError] = useState<{
+    type: "error" | "pending" | "rejected" | "disabled";
+    message: string;
+  } | null>(null);
+
   const { data: settings } = useQuery<ThemeSettings>({
     queryKey: ["/api/theme-settings"],
   });
@@ -89,19 +94,36 @@ export default function LandingPage() {
 
   const loginMutation = useMutation({
     mutationFn: async (credentials: LoginCredentials) => {
-      const response = await apiRequest("POST", "/api/auth/login", credentials);
-      return response.json();
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(credentials),
+        credentials: "include",
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        const err = new Error(data.message || "Login failed") as Error & { statusCode?: string };
+        err.statusCode = data.statusCode;
+        throw err;
+      }
+      return data;
     },
     onSuccess: () => {
+      setLoginError(null);
       queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
       window.location.reload();
     },
-    onError: (error: Error) => {
-      toast({
-        title: "Sign In Failed",
-        description: error.message || "Invalid username or password",
-        variant: "destructive",
-      });
+    onError: (error: Error & { statusCode?: string }) => {
+      const statusCode = error.statusCode;
+      if (statusCode === "PENDING_VERIFICATION") {
+        setLoginError({ type: "pending", message: error.message });
+      } else if (statusCode === "REJECTED") {
+        setLoginError({ type: "rejected", message: error.message });
+      } else if (statusCode === "DISABLED") {
+        setLoginError({ type: "disabled", message: error.message });
+      } else {
+        setLoginError({ type: "error", message: "Invalid username or password. Please check your credentials." });
+      }
     },
   });
 
@@ -146,8 +168,9 @@ export default function LandingPage() {
 
   const handleLoginSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setLoginError(null);
     if (!username.trim() || !password.trim()) {
-      toast({ title: "Missing Credentials", description: "Please enter both username and password", variant: "destructive" });
+      setLoginError({ type: "error", message: "Please enter both username and password." });
       return;
     }
     loginMutation.mutate({ username: username.trim(), password });
@@ -234,6 +257,28 @@ export default function LandingPage() {
             </CardHeader>
             <CardContent>
               <form onSubmit={handleLoginSubmit} className="space-y-4">
+                {loginError && (
+                  <div
+                    className={`rounded-md p-3 text-sm flex items-start gap-2 ${
+                      loginError.type === "pending"
+                        ? "bg-yellow-50 text-yellow-900 border border-yellow-200 dark:bg-yellow-950 dark:text-yellow-200 dark:border-yellow-800"
+                        : loginError.type === "rejected"
+                        ? "bg-red-50 text-red-900 border border-red-200 dark:bg-red-950 dark:text-red-200 dark:border-red-800"
+                        : loginError.type === "disabled"
+                        ? "bg-orange-50 text-orange-900 border border-orange-200 dark:bg-orange-950 dark:text-orange-200 dark:border-orange-800"
+                        : "bg-red-50 text-red-900 border border-red-200 dark:bg-red-950 dark:text-red-200 dark:border-red-800"
+                    }`}
+                    data-testid="login-error-message"
+                    role="alert"
+                  >
+                    <span className="shrink-0 mt-0.5">
+                      {loginError.type === "pending" ? "⏳" :
+                       loginError.type === "rejected" ? "🚫" :
+                       loginError.type === "disabled" ? "🔒" : "⚠️"}
+                    </span>
+                    <span>{loginError.message}</span>
+                  </div>
+                )}
                 <div className="space-y-2">
                   <Label htmlFor="username">Username</Label>
                   <Input
@@ -241,7 +286,7 @@ export default function LandingPage() {
                     type="text"
                     placeholder="Enter username"
                     value={username}
-                    onChange={(e) => setUsername(e.target.value)}
+                    onChange={(e) => { setUsername(e.target.value); setLoginError(null); }}
                     disabled={loginMutation.isPending}
                     data-testid="input-username"
                     autoComplete="username"
@@ -255,7 +300,7 @@ export default function LandingPage() {
                       type={showPassword ? "text" : "password"}
                       placeholder="Enter password"
                       value={password}
-                      onChange={(e) => setPassword(e.target.value)}
+                      onChange={(e) => { setPassword(e.target.value); setLoginError(null); }}
                       disabled={loginMutation.isPending}
                       data-testid="input-password"
                       autoComplete="current-password"
