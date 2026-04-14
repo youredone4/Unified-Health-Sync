@@ -1,0 +1,95 @@
+Add automatic face-match verification as a KYC assistive check, but keep final approval under authorized admin review.
+
+Context
+- KYC is required during registration.
+- Users must provide:
+  - valid ID (upload or camera capture)
+  - live face capture via device camera
+- This is a health system with sensitive data, so KYC must not rely on fully automatic approval alone.
+
+Goal
+Add automatic ID-vs-live-face comparison to support KYC review, while keeping final decision under admin control.
+
+Requirements
+
+1. Automatic face comparison
+After the user submits:
+- a valid ID image
+- a live camera-captured face image
+
+the system should perform an automatic face comparison between:
+- the face visible on the ID
+- the live captured face
+
+2. Use comparison as an assistive check only
+- the face-match result must NOT automatically approve the account
+- admin approval must still be required
+- do not allow auto-verification solely based on face-match score
+
+3. Show match result to admin
+In the admin verification/review panel, show:
+- submitted valid ID
+- captured live face image
+- face-match result / confidence score
+- simple interpretation such as:
+  - high match
+  - possible match
+  - low match / mismatch
+
+4. Admin decision remains final
+Authorized admins must still be able to:
+- approve
+- reject
+- request correction if supported
+
+The face-match result should help admins review faster, but not replace them.
+
+5. Handle poor-quality inputs safely
+If the system cannot compare reliably because of:
+- blurry ID
+- low-quality face image
+- no detectable face
+- lighting issues
+
+then:
+- mark the comparison as inconclusive or failed
+- do not auto-reject silently
+- show a clear review warning to admin
+
+6. Security and privacy
+Because this is a health system:
+- do not expose face-match results publicly
+- restrict access to KYC images and match results to authorized admins only
+- protect image storage
+- do not expose raw biometric data unnecessarily
+- do not log sensitive image contents in plain logs
+
+7. Audit logging
+Log KYC review events such as:
+- face-match performed
+- admin approval/rejection after review
+- who reviewed the submission
+- timestamp
+
+8. Testing
+Verify:
+- face comparison runs after KYC submission
+- admin can see the result in review panel
+- no account is auto-approved without admin action
+- low-quality image cases are handled gracefully
+- unauthorized users cannot access face-match data
+
+Deliverables
+Provide:
+1. automatic ID-vs-live-face comparison logic
+2. admin review UI showing match result
+3. admin approval flow retained
+4. security protections for biometric/KYC assets
+5. files changed
+
+Success Criteria
+- system compares ID face vs live captured face
+- result is available to admins during KYC review
+- admin approval is still required
+- no auto-approval bypass exists
+- sensitive KYC data remains protected
