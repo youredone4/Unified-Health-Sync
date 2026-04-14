@@ -14,6 +14,8 @@ export function registerAdminRoutes(app: Express) {
   // Note: /api/auth/me is defined in server/auth.ts - no duplicate here
 
   // === BARANGAYS ===
+  // Intentionally unauthenticated: barangay names are not sensitive and
+  // must be accessible to unauthenticated users during self-registration.
   app.get("/api/barangays", async (req, res) => {
     try {
       const allBarangays = await db.select().from(barangays);
@@ -208,9 +210,12 @@ export function registerAdminRoutes(app: Express) {
   });
 
   // Approve pending registration (SYSTEM_ADMIN only)
+  // Accepts optional { note } body for reviewer comments on approval
   app.post("/api/admin/users/:id/approve", requireAuth, requireRole(UserRole.SYSTEM_ADMIN), async (req: any, res) => {
     try {
       const userId = req.params.id;
+      const { note } = req.body || {};
+
       const [user] = await db.select().from(users).where(eq(users.id, userId));
       if (!user) {
         return res.status(404).json({ message: "User not found" });
@@ -226,7 +231,7 @@ export function registerAdminRoutes(app: Express) {
           status: UserStatus.ACTIVE,
           kycReviewedAt: new Date(),
           kycReviewedById: req.userInfo.id,
-          kycNotes: null,
+          kycNotes: note?.trim() || null, // optional reviewer note on approval
           updatedAt: new Date(),
         })
         .where(eq(users.id, userId))
