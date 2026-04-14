@@ -7,7 +7,7 @@ import type { Express, RequestHandler } from "express";
 import connectPg from "connect-pg-simple";
 import { db } from "./db";
 import { users, userBarangays, barangays, auditLogs, UserRole, UserStatus } from "@shared/schema";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 
 interface TLUserSeed {
   username: string;
@@ -249,11 +249,27 @@ async function writeAuditLog(
 // Register auth routes
 export function registerAuthRoutes(app: Express): void {
   // Self-Registration (no auth required)
+  // Multer error handling wrapper
+  const kycUploadFields = kycUpload.fields([
+    { name: "kycIdFile", maxCount: 1 },
+    { name: "kycSelfie", maxCount: 1 },
+  ]);
+
   app.post("/api/auth/register",
-    kycUpload.fields([
-      { name: "kycIdFile", maxCount: 1 },
-      { name: "kycSelfie", maxCount: 1 },
-    ]),
+    (req, res, next) => {
+      kycUploadFields(req, res, (err) => {
+        if (err) {
+          if (err.code === "LIMIT_FILE_SIZE") {
+            return res.status(400).json({ message: "File is too large. Maximum size is 10MB." });
+          }
+          if (err.message) {
+            return res.status(400).json({ message: err.message });
+          }
+          return res.status(400).json({ message: "File upload failed. Please try again." });
+        }
+        next();
+      });
+    },
     async (req: any, res) => {
       try {
         const {
@@ -283,21 +299,62 @@ export function registerAuthRoutes(app: Express): void {
           return res.status(400).json({ message: "Invalid role. You may register as SHA or TL only." });
         }
 
+        // Resolve uploaded files BEFORE further validation so we can delete orphans on error
+        const files = req.files as Record<string, Express.Multer.File[]> | undefined;
+        const uploadedIdFile = files?.kycIdFile?.[0];
+        const uploadedSelfie = files?.kycSelfie?.[0];
+
+        // Helper to delete orphan upload file(s) on validation error
+        const cleanupUploads = () => {
+          [uploadedIdFile, uploadedSelfie].forEach(f => {
+            if (f?.path && fs.existsSync(f.path)) {
+              fs.unlink(f.path, (err) => { if (err) console.error("Cleanup failed:", err); });
+            }
+          });
+        };
+
+        // Server-side KYC enforcement: ID type and file are mandatory for all self-registrants
+        if (!kycIdType?.trim()) {
+          cleanupUploads();
+          return res.status(400).json({ message: "A valid government ID type is required." });
+        }
+
+        if (!uploadedIdFile) {
+          cleanupUploads();
+          return res.status(400).json({ message: "A valid government ID photo is required. Please upload a clear photo or scan." });
+        }
+
+        // Server-side TL barangay enforcement: TL must be assigned to at least one valid barangay
+        if (requestedRole === UserRole.TL) {
+          const barangayIds: number[] = (Array.isArray(barangayIdsRaw) ? barangayIdsRaw : barangayIdsRaw ? [barangayIdsRaw] : [])
+            .map((id: string) => parseInt(id, 10))
+            .filter((id: number) => !isNaN(id) && id > 0);
+
+          if (barangayIds.length === 0) {
+            cleanupUploads();
+            return res.status(400).json({ message: "Team Leaders must be assigned to at least one barangay." });
+          }
+
+          // Verify all provided barangay IDs actually exist in the database
+          const existingBarangays = await db.select({ id: barangays.id })
+            .from(barangays)
+            .where(inArray(barangays.id, barangayIds));
+
+          if (existingBarangays.length === 0) {
+            cleanupUploads();
+            return res.status(400).json({ message: "Invalid barangay assignment. Please select from the available barangays." });
+          }
+        }
+
         // Check username uniqueness
         const [existing] = await db.select({ id: users.id }).from(users).where(eq(users.username, username.trim()));
         if (existing) {
+          cleanupUploads();
           return res.status(400).json({ message: "Username is already taken" });
         }
 
-        // Resolve uploaded files
-        const files = req.files as Record<string, Express.Multer.File[]> | undefined;
-        const kycIdFileUrl = files?.kycIdFile?.[0]?.filename
-          ? files.kycIdFile[0].filename
-          : null;
-        const kycSelfieUrl = files?.kycSelfie?.[0]?.filename
-          ? files.kycSelfie[0].filename
-          : null;
-
+        const kycIdFileUrl = uploadedIdFile.filename;
+        const kycSelfieUrl = uploadedSelfie?.filename || null;
         const passwordHash = await hashPassword(password);
 
         const [newUser] = await db.insert(users).values({
@@ -308,16 +365,16 @@ export function registerAuthRoutes(app: Express): void {
           contactNumber: contactNumber.trim(),
           role: requestedRole,
           status: UserStatus.PENDING_VERIFICATION,
-          kycIdType: kycIdType || null,
+          kycIdType: kycIdType.trim(),
           kycIdFileUrl,
           kycSelfieUrl,
         }).returning();
 
-        // Assign barangays if TL
+        // Assign barangays if TL (IDs already validated above)
         if (requestedRole === UserRole.TL && barangayIdsRaw) {
           const barangayIds: number[] = (Array.isArray(barangayIdsRaw) ? barangayIdsRaw : [barangayIdsRaw])
             .map((id: string) => parseInt(id, 10))
-            .filter((id: number) => !isNaN(id));
+            .filter((id: number) => !isNaN(id) && id > 0);
 
           if (barangayIds.length > 0) {
             await db.insert(userBarangays).values(
