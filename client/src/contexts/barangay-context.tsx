@@ -1,8 +1,6 @@
 import { createContext, useContext, useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
 
-const STORAGE_KEY = "healthsync_selected_barangay";
-
 interface BarangayContextValue {
   selectedBarangay: string | null;
   setSelectedBarangay: (b: string) => void;
@@ -18,12 +16,9 @@ const BarangayContext = createContext<BarangayContextValue>({
 export function BarangayProvider({ children }: { children: React.ReactNode }) {
   const { isTL, assignedBarangays } = useAuth();
 
-  // Persisted in sessionStorage so a TL's selection survives navigation within
-  // the same tab session. The stored value is validated against assigned list on
-  // every render; invalid / missing values fall back to the first assigned barangay.
-  const [preferredBarangay, setPreferredBarangay] = useState<string | null>(() => {
-    try { return sessionStorage.getItem(STORAGE_KEY); } catch { return null; }
-  });
+  // In-memory only — intentionally not persisted. A full page refresh or new login
+  // resets to the first assigned barangay, matching the acceptance criteria.
+  const [preferredBarangay, setPreferredBarangay] = useState<string | null>(null);
 
   // Compute effective barangay synchronously during render — no useEffect needed.
   // If auth data is already cached (normal case for logged-in users), this resolves
@@ -37,12 +32,11 @@ export function BarangayProvider({ children }: { children: React.ReactNode }) {
   })();
 
   const setSelectedBarangay = (b: string) => {
-    try { sessionStorage.setItem(STORAGE_KEY, b); } catch {}
     setPreferredBarangay(b);
   };
 
   // Returns a URL with ?barangay= param appended for TL users with a resolved barangay.
-  // When effectiveBarangay is null (non-TL or auth not yet loaded), returns base path.
+  // When effectiveBarangay is null (non-TL), returns base path unchanged.
   const scopedPath = (basePath: string, extraParams?: Record<string, string>): string => {
     const params = new URLSearchParams(extraParams);
     if (effectiveBarangay) params.set("barangay", effectiveBarangay);
