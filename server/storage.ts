@@ -618,6 +618,28 @@ export class DatabaseStorage implements IStorage {
     const sBP = [...sBase, sql`last_bp_date LIKE ${monthLike}`];
     add("G2-03", "TOTAL", await countQ(seniors, sBP));
 
+    // === DISEASE REGISTRY ===
+    const dcBase = barangayName ? [eq(diseaseCases.barangay, barangayName)] : [];
+    const dcPeriod = [...dcBase, sql`date_reported LIKE ${monthLike}`];
+
+    // Map M1 row keys to disease condition ILIKE patterns
+    const diseaseMappings: Array<[string, string]> = [
+      ["I-01", "Dengue"],
+      ["I-03", "Measles"],
+      ["I-04", "AFP"],
+      ["I-05", "NNT"],
+      ["I-06", "Rabies"],
+      ["I-08", "Leprosy"],
+    ];
+    for (const [rowKey, condKeyword] of diseaseMappings) {
+      const cond = [...dcPeriod, sql`condition ILIKE ${"%" + condKeyword + "%"}`];
+      add(rowKey, "TOTAL", await countQ(diseaseCases, cond));
+    }
+
+    // I-07: TB Cases — from tbPatients table (treatment_start_date in period)
+    const tbBase = barangayName ? [eq(tbPatients.barangay, barangayName)] : [];
+    add("I-07", "TOTAL", await countQ(tbPatients, [...tbBase, sql`treatment_start_date LIKE ${monthLike}`]));
+
     // Save all computed values (ENCODED already excluded via `add`)
     if (computedRaw.length > 0) {
       await this.updateM1IndicatorValues(reportId, computedRaw.map(v => ({

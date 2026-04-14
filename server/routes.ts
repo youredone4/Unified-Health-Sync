@@ -362,7 +362,10 @@ export async function registerRoutes(
 
   // === DISEASE CASES ===
   app.get(api.diseaseCases.list.path, async (req, res) => {
-    const data = await storage.getDiseaseCases();
+    let data = await storage.getDiseaseCases();
+    const { barangay, month } = req.query;
+    if (barangay) data = data.filter(c => c.barangay === barangay);
+    if (month) data = data.filter(c => c.dateReported.startsWith(String(month)));
     res.json(data);
   });
 

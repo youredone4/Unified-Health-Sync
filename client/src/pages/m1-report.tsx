@@ -15,7 +15,7 @@ import { useTheme } from "@/contexts/theme-context";
 import { useAuth, permissions, UserRole } from "@/hooks/use-auth";
 import DiseaseImportDialog from "@/components/disease-import-dialog";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import type { M1TemplateVersion, M1IndicatorCatalog, Barangay, M1ReportInstance, M1IndicatorValue, Mother, Child, Senior, MunicipalitySettings, BarangaySettings, FpServiceRecord } from "@shared/schema";
+import type { M1TemplateVersion, M1IndicatorCatalog, Barangay, M1ReportInstance, M1IndicatorValue, Mother, Child, Senior, MunicipalitySettings, BarangaySettings, FpServiceRecord, DiseaseCase } from "@shared/schema";
 import { FP_METHOD_ROW_KEY } from "@shared/schema";
 import { differenceInMonths, differenceInYears, parseISO } from "date-fns";
 import { TODAY } from "@/lib/healthLogic";
@@ -167,6 +167,16 @@ export default function M1ReportPage() {
   const { data: seniors = [] } = useQuery<Senior[]>({ queryKey: ["/api/seniors"] });
   const reportingMonthStr = `${selectedYear}-${String(selectedMonth).padStart(2, "0")}`;
   const barangayName = barangays.find(b => b.id === selectedBarangayId)?.name;
+
+  // Disease cases for the reporting period (used in Data Sources panel)
+  const diseaseCasesQueryKey = barangayName
+    ? `/api/disease-cases?barangay=${encodeURIComponent(barangayName)}&month=${reportingMonthStr}`
+    : null;
+  const { data: periodDiseaseCases = [] } = useQuery<DiseaseCase[]>({
+    queryKey: [diseaseCasesQueryKey],
+    queryFn: () => fetch(`/api/disease-cases?barangay=${encodeURIComponent(barangayName!)}&month=${reportingMonthStr}`, { credentials: "include" }).then(r => r.ok ? r.json() : []),
+    enabled: !!barangayName,
+  });
   const fpQueryParams = new URLSearchParams({ month: reportingMonthStr });
   if (barangayName) fpQueryParams.set("barangay", barangayName);
   const { data: fpRecords = [] } = useQuery<FpServiceRecord[]>({
@@ -1469,28 +1479,59 @@ export default function M1ReportPage() {
                   >
                     <span className="flex items-center gap-2 text-muted-foreground">
                       <Database className="h-3.5 w-3.5" />
-                      System Data Sources for {selectedBarangay?.name}
+                      System Data Sources for {selectedBarangay?.name} — {MONTHS.find(m => m.value === selectedMonth)?.label} {selectedYear}
                     </span>
                     {dataSourcesOpen ? <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />}
                   </button>
-                  {dataSourcesOpen && (
-                    <div className="px-4 pb-3 pt-1 grid grid-cols-2 sm:grid-cols-4 gap-3 border-t">
-                      {[
-                        { label: "Mothers on record", value: mothers.filter(m => !selectedBarangay || m.barangay === selectedBarangay.name).length },
-                        { label: "Children on record", value: children.filter(c => !selectedBarangay || c.barangay === selectedBarangay.name).length },
-                        { label: "Seniors on record", value: seniors.filter(s => !selectedBarangay || s.barangay === selectedBarangay.name).length },
-                        { label: "FP Service Records", value: fpRecords.length },
-                      ].map(item => (
-                        <div key={item.label} className="flex flex-col gap-1 bg-muted/30 rounded-md p-2">
-                          <span className="text-[10px] text-muted-foreground leading-tight">{item.label}</span>
-                          <span className="text-lg font-bold" data-testid={`datasource-${item.label.replace(/\s+/g, '-').toLowerCase()}`}>{item.value}</span>
+                  {dataSourcesOpen && (() => {
+                    const bName = selectedBarangay?.name;
+                    const bMothers = mothers.filter(m => (!bName || m.barangay === bName) && (m.registrationDate?.startsWith(reportingMonthStr) || m.outcomeDate?.startsWith(reportingMonthStr)));
+                    const bChildren = children.filter(c => !bName || c.barangay === bName);
+                    const bSeniors = seniors.filter(s => (!bName || s.barangay === bName) && s.lastMedicationGivenDate?.startsWith(reportingMonthStr));
+                    const computedCount = activeReport?.values.filter(v => v.valueSource === "COMPUTED").length ?? 0;
+                    const encodedCount = activeReport?.values.filter(v => v.valueSource === "ENCODED").length ?? 0;
+                    const importedCount = activeReport?.values.filter(v => v.valueSource === "IMPORTED").length ?? 0;
+                    const sources = [
+                      { label: "Prenatal records (this period)", value: bMothers.length },
+                      { label: "Children with immunization data", value: bChildren.length },
+                      { label: "Seniors with medication this period", value: bSeniors.length },
+                      { label: "FP service records (this period)", value: fpRecords.length },
+                      { label: "Disease surveillance entries", value: periodDiseaseCases.length },
+                    ];
+                    return (
+                      <div className="px-4 pb-3 pt-2 border-t space-y-3">
+                        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                          {sources.map(item => (
+                            <div key={item.label} className="flex flex-col gap-1 bg-muted/30 rounded-md p-2">
+                              <span className="text-[10px] text-muted-foreground leading-tight">{item.label}</span>
+                              <span className="text-lg font-bold" data-testid={`datasource-${item.label.replace(/\s+/g, '-').toLowerCase()}`}>{item.value}</span>
+                            </div>
+                          ))}
                         </div>
-                      ))}
-                      <div className="col-span-2 sm:col-span-4 text-[10px] text-muted-foreground">
-                        Values are computed using date filters matching the selected reporting period ({MONTHS.find(m => m.value === selectedMonth)?.label} {selectedYear}). Manually-encoded indicator values are preserved when computing.
+                        <div className="flex flex-wrap gap-2 text-[10px]">
+                          <span className="px-2 py-1 rounded bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300">
+                            Auto-computed: {computedCount} indicators
+                          </span>
+                          <span className="px-2 py-1 rounded bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300">
+                            Manually entered: {encodedCount} indicators
+                          </span>
+                          {importedCount > 0 && (
+                            <span className="px-2 py-1 rounded bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300">
+                              Imported: {importedCount} indicators
+                            </span>
+                          )}
+                          <span className="px-2 py-1 rounded bg-muted text-muted-foreground">
+                            Empty: {(catalog.length * 2) - computedCount - encodedCount - importedCount > 0
+                              ? Math.max(0, catalog.length - computedCount - encodedCount - importedCount)
+                              : 0} indicators
+                          </span>
+                        </div>
+                        <p className="text-[10px] text-muted-foreground">
+                          Counts are filtered to {bName} for the reporting period ({reportingMonthStr}). "Compute from Data" will populate auto-computed indicators while preserving manually-entered values.
+                        </p>
                       </div>
-                    </div>
-                  )}
+                    );
+                  })()}
                 </div>
               )}
 
