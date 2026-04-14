@@ -326,23 +326,26 @@ export function registerAuthRoutes(app: Express): void {
 
         // Server-side TL barangay enforcement: TL must be assigned to at least one valid barangay
         if (requestedRole === UserRole.TL) {
-          const barangayIds: number[] = (Array.isArray(barangayIdsRaw) ? barangayIdsRaw : barangayIdsRaw ? [barangayIdsRaw] : [])
+          const rawIds: number[] = (Array.isArray(barangayIdsRaw) ? barangayIdsRaw : barangayIdsRaw ? [barangayIdsRaw] : [])
             .map((id: string) => parseInt(id, 10))
             .filter((id: number) => !isNaN(id) && id > 0);
 
-          if (barangayIds.length === 0) {
+          // Deduplicate
+          const uniqueBarangayIds = [...new Set(rawIds)];
+
+          if (uniqueBarangayIds.length === 0) {
             cleanupUploads();
             return res.status(400).json({ message: "Team Leaders must be assigned to at least one barangay." });
           }
 
-          // Verify all provided barangay IDs actually exist in the database
+          // Verify ALL provided barangay IDs actually exist in the database
           const existingBarangays = await db.select({ id: barangays.id })
             .from(barangays)
-            .where(inArray(barangays.id, barangayIds));
+            .where(inArray(barangays.id, uniqueBarangayIds));
 
-          if (existingBarangays.length === 0) {
+          if (existingBarangays.length !== uniqueBarangayIds.length) {
             cleanupUploads();
-            return res.status(400).json({ message: "Invalid barangay assignment. Please select from the available barangays." });
+            return res.status(400).json({ message: "One or more selected barangays are invalid. Please select from the available barangays." });
           }
         }
 

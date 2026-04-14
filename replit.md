@@ -106,7 +106,7 @@ Healthcare workers (SHA, TL roles) can self-register at the login page:
 **Admin KYC Review** (`/admin/users` → Pending Approvals tab):
 - Approve button → activates account instantly
 - Reject button → requires rejection reason; user sees reason on next login attempt
-- KYC files viewable by admins only via `/api/admin/kyc-files/:userId/:filename`
+- KYC files viewable by admins only via `/api/admin/kyc-files/:userId?type=id` or `?type=selfie` (no raw filename exposure)
 
 ### User Management
 System Admins can manage users at `/admin/users`:
