@@ -1,0 +1,99 @@
+Fix all report modules so their default Month and Year selectors use the current real-time date instead of hardcoded values, with immediate priority on the FHSIS M1 Brgy Report.
+
+Context
+- The FHSIS M1 Brgy Report page is still defaulting to:
+  - Month: December
+  - Year: 2025
+- This is incorrect.
+- Reporting modules in the system should not use stale hardcoded reporting periods.
+- The default selected reporting period should always reflect the current real month and year when the page loads.
+- Do NOT redesign the reporting pages.
+- Focus on fixing the default date logic cleanly and consistently across report-related modules.
+
+Primary Goal
+Make the Month and Year dropdowns in report modules dynamic based on the current real date.
+
+Priority Report
+- FHSIS M1 Brgy Report
+
+Also inspect and apply the same logic to other report modules/screens if they use:
+- Month selector
+- Year selector
+- default reporting period
+- report filter defaults
+
+Requirements
+
+1. Remove hardcoded default values
+- remove any static defaults such as:
+  - December
+  - 2025
+- inspect all report-related pages/components for similar hardcoded month/year values
+
+2. Use current date dynamically
+When a report page loads:
+- default Month = current month
+- default Year = current year
+
+Example:
+- if current date is April 2026
+  - Month should default to April
+  - Year should default to 2026
+
+3. Start with FHSIS M1 Brgy Report
+At minimum, fix:
+- the Month dropdown
+- the Year dropdown
+- any dependent report header or overview text using the same defaults
+
+4. Apply the same logic to other report modules
+Inspect and fix similar default-period behavior in any other report or analytics screens that use month/year filters or default reporting periods.
+
+5. Preserve manual selection
+- users must still be able to change month
+- users must still be able to change year
+- only the initial default on page load should be dynamic
+
+6. Keep reporting behavior correct
+Ensure the selected month/year is used consistently in:
+- report filtering
+- report generation
+- report headers/titles
+- barangay overview text
+- displayed report results
+- export/print output if applicable
+
+7. Prefer reliable date source
+- use system/server date if appropriate
+- avoid stale frontend constants
+- ensure timezone handling does not shift the month incorrectly
+- do not depend on manually updated values in code
+
+8. Test behavior thoroughly
+Verify:
+- FHSIS M1 Brgy Report loads with current month/year
+- changing month/year still works correctly
+- refreshing the page still defaults to the current real date
+- report generation still uses the selected period correctly
+- any other report screens with month/year filters also default correctly
+
+9. Production validation
+Because this is already deployed:
+- verify the fix in the production environment
+- confirm the defaults are not only fixed locally or in test
+- make sure no caching/stale build issue keeps old defaults visible
+
+Deliverables
+Provide:
+1. updated default month/year logic
+2. report modules/pages affected
+3. files changed
+4. confirmation that report filters now follow the current real date
+5. confirmation that manual month/year selection still works
+
+Success Criteria
+- FHSIS M1 Brgy Report no longer defaults to December 2025
+- it defaults to the current real month and year
+- other report modules with similar filters also use dynamic current-date defaults
+- reporting behavior remains correct
+- production reflects the fix properly
