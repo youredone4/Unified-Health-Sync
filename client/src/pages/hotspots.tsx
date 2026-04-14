@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useBarangay } from "@/contexts/barangay-context";
 import type { Mother, Child, Senior, InventoryItem, DiseaseCase, TBPatient } from "@shared/schema";
 import { getTTStatus, getNextVaccineStatus, isMedsReadyForPickup, isUnderweightRisk, getTBMissedDoseRisk } from "@/lib/healthLogic";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -285,13 +286,14 @@ function BarangayDetailModal({ data, onClose, mothers, children, seniors, invent
 
 export default function Hotspots() {
   const [selectedBarangay, setSelectedBarangay] = useState<BarangayData | null>(null);
+  const { scopedPath } = useBarangay();
 
-  const { data: mothers = [] } = useQuery<Mother[]>({ queryKey: ["/api/mothers"] });
-  const { data: children = [] } = useQuery<Child[]>({ queryKey: ["/api/children"] });
-  const { data: seniors = [] } = useQuery<Senior[]>({ queryKey: ["/api/seniors"] });
+  const { data: mothers = [] } = useQuery<Mother[]>({ queryKey: [scopedPath("/api/mothers")] });
+  const { data: children = [] } = useQuery<Child[]>({ queryKey: [scopedPath("/api/children")] });
+  const { data: seniors = [] } = useQuery<Senior[]>({ queryKey: [scopedPath("/api/seniors")] });
   const { data: inventory = [] } = useQuery<InventoryItem[]>({ queryKey: ["/api/inventory"] });
-  const { data: diseaseCases = [] } = useQuery<DiseaseCase[]>({ queryKey: ["/api/disease-cases"] });
-  const { data: tbPatients = [] } = useQuery<TBPatient[]>({ queryKey: ["/api/tb-patients"] });
+  const { data: diseaseCases = [] } = useQuery<DiseaseCase[]>({ queryKey: [scopedPath("/api/disease-cases")] });
+  const { data: tbPatients = [] } = useQuery<TBPatient[]>({ queryKey: [scopedPath("/api/tb-patients")] });
 
   const hotspotData: BarangayData[] = PLACER_BARANGAYS.map(b => {
     const ttOverdue = mothers.filter(m => m.barangay === b && getTTStatus(m).status === "overdue").length;

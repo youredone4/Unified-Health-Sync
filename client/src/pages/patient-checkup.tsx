@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
+import { useBarangay } from "@/contexts/barangay-context";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -182,6 +183,7 @@ function HistoryCard({ consult, defaultExpanded = false }: { consult: Consult; d
 export default function PatientCheckupPage() {
   const { canAccessPatientCheckup } = useAuth();
   const { toast } = useToast();
+  const { scopedPath } = useBarangay();
   const [searchTerm, setSearchTerm] = useState("");
   const [filterBarangay, setFilterBarangay] = useState("all");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
@@ -197,9 +199,9 @@ export default function PatientCheckupPage() {
   const [linkType, setLinkType] = useState<"none" | "Mother" | "Child" | "Senior">("none");
   const [linkSearch, setLinkSearch] = useState("");
 
-  const { data: mothers = [] } = useQuery<Mother[]>({ queryKey: ["/api/mothers"], enabled: canAccessPatientCheckup });
-  const { data: children = [] } = useQuery<Child[]>({ queryKey: ["/api/children"], enabled: canAccessPatientCheckup });
-  const { data: seniors = [] } = useQuery<Senior[]>({ queryKey: ["/api/seniors"], enabled: canAccessPatientCheckup });
+  const { data: mothers = [] } = useQuery<Mother[]>({ queryKey: [scopedPath("/api/mothers")], enabled: canAccessPatientCheckup });
+  const { data: children = [] } = useQuery<Child[]>({ queryKey: [scopedPath("/api/children")], enabled: canAccessPatientCheckup });
+  const { data: seniors = [] } = useQuery<Senior[]>({ queryKey: [scopedPath("/api/seniors")], enabled: canAccessPatientCheckup });
 
   type RegistryCandidate = { id: number; displayName: string; age?: number; sex?: string; barangay: string; addressLine?: string | null };
   const registryCandidates: RegistryCandidate[] = (() => {

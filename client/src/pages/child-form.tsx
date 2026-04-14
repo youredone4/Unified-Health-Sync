@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation, useParams } from "wouter";
 import { queryClient, apiRequest, invalidateScopedQueries } from "@/lib/queryClient";
+import { useBarangay } from "@/contexts/barangay-context";
 import { useToast } from "@/hooks/use-toast";
 import type { Child, Mother } from "@shared/schema";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -40,9 +41,10 @@ export default function ChildForm() {
   const params = useParams<{ id: string }>();
   const isEditing = params.id && params.id !== "new";
   const { toast } = useToast();
+  const { scopedPath } = useBarangay();
 
   const { data: barangays = [] } = useQuery<Barangay[]>({ queryKey: ['/api/barangays'] });
-  const { data: mothers = [] } = useQuery<Mother[]>({ queryKey: ['/api/mothers'] });
+  const { data: mothers = [] } = useQuery<Mother[]>({ queryKey: [scopedPath('/api/mothers')] });
   const { data: existingChild } = useQuery<Child>({
     queryKey: ['/api/children', params.id],
     enabled: !!isEditing,

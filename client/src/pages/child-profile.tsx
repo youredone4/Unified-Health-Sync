@@ -15,10 +15,12 @@ import ConsultationHistoryCard from "@/components/consultation-history-card";
 import VisitHistoryCard from "@/components/visit-history-card";
 import { useState, useMemo } from "react";
 import { apiRequest, invalidateScopedQueries } from "@/lib/queryClient";
+import { useBarangay } from "@/contexts/barangay-context";
 import { ComposedChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import type { ChildVisit } from "@shared/schema";
 
 export default function ChildProfile() {
+  const { scopedPath } = useBarangay();
   const { id } = useParams<{ id: string }>();
   const [, navigate] = useLocation();
   const queryClient = useQueryClient();
@@ -26,7 +28,7 @@ export default function ChildProfile() {
   const { user } = useAuth();
 
   const { data: child, isLoading } = useQuery<Child>({ queryKey: ['/api/children', id] });
-  const { data: mothers = [] } = useQuery<Mother[]>({ queryKey: ['/api/mothers'] });
+  const { data: mothers = [] } = useQuery<Mother[]>({ queryKey: [scopedPath('/api/mothers')] });
 
   const { data: childVisits = [] } = useQuery<ChildVisit[]>({
     queryKey: ["/api/nurse-visits", "child", id],

@@ -6,6 +6,7 @@ import { useLocation, useRoute } from "wouter";
 import { z } from "zod";
 import type { DiseaseCase, Barangay, Mother, Child, Senior } from "@shared/schema";
 import { apiRequest, queryClient, invalidateScopedQueries } from "@/lib/queryClient";
+import { useBarangay } from "@/contexts/barangay-context";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -46,6 +47,7 @@ export default function DiseaseForm() {
   const [match, params] = useRoute("/disease/:id/edit");
   const isEdit = match && params?.id;
   const { toast } = useToast();
+  const { scopedPath } = useBarangay();
 
   const [linkType, setLinkType] = useState<LinkType>("none");
   const [linkSearch, setLinkSearch] = useState("");
@@ -56,9 +58,9 @@ export default function DiseaseForm() {
     queryKey: ['/api/disease-cases', params?.id],
     enabled: !!isEdit,
   });
-  const { data: mothers = [] } = useQuery<Mother[]>({ queryKey: ['/api/mothers'] });
-  const { data: children = [] } = useQuery<Child[]>({ queryKey: ['/api/children'] });
-  const { data: seniors = [] } = useQuery<Senior[]>({ queryKey: ['/api/seniors'] });
+  const { data: mothers = [] } = useQuery<Mother[]>({ queryKey: [scopedPath('/api/mothers')] });
+  const { data: children = [] } = useQuery<Child[]>({ queryKey: [scopedPath('/api/children')] });
+  const { data: seniors = [] } = useQuery<Senior[]>({ queryKey: [scopedPath('/api/seniors')] });
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),

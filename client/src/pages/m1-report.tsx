@@ -87,7 +87,7 @@ export default function M1ReportPage() {
   const [switcherOpen, setSwitcherOpen] = useState(true);
   const [dataSourcesOpen, setDataSourcesOpen] = useState(false);
   const { user, isTL, assignedBarangays } = useAuth();
-  const { selectedBarangay: contextBarangay } = useBarangay();
+  const { selectedBarangay: contextBarangay, scopedPath } = useBarangay();
 
   const { data: templates = [], isLoading: templatesLoading } = useQuery<M1TemplateVersion[]>({
     queryKey: ["/api/m1/templates"],
@@ -165,9 +165,9 @@ export default function M1ReportPage() {
     enabled: !isTL,
   });
 
-  const { data: mothers = [] } = useQuery<Mother[]>({ queryKey: ["/api/mothers"] });
-  const { data: children = [] } = useQuery<Child[]>({ queryKey: ["/api/children"] });
-  const { data: seniors = [] } = useQuery<Senior[]>({ queryKey: ["/api/seniors"] });
+  const { data: mothers = [] } = useQuery<Mother[]>({ queryKey: [scopedPath("/api/mothers")] });
+  const { data: children = [] } = useQuery<Child[]>({ queryKey: [scopedPath("/api/children")] });
+  const { data: seniors = [] } = useQuery<Senior[]>({ queryKey: [scopedPath("/api/seniors")] });
   const reportingMonthStr = `${selectedYear}-${String(selectedMonth).padStart(2, "0")}`;
   const barangayName = barangays.find(b => b.id === selectedBarangayId)?.name;
 
