@@ -76,8 +76,8 @@ export default function M1ReportPage() {
   const { toast } = useToast();
   const { settings } = useTheme();
   
-  const [selectedMonth, setSelectedMonth] = useState(12);
-  const [selectedYear, setSelectedYear] = useState(2025);
+  const [selectedMonth, setSelectedMonth] = useState(() => new Date().getMonth() + 1);
+  const [selectedYear, setSelectedYear] = useState(() => new Date().getFullYear());
   const [selectedBarangayId, setSelectedBarangayId] = useState<number | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [reportMode, setReportMode] = useState<"view" | "encode">("view");
@@ -1242,13 +1242,10 @@ export default function M1ReportPage() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="2020">2020</SelectItem>
-                <SelectItem value="2021">2021</SelectItem>
-                <SelectItem value="2022">2022</SelectItem>
-                <SelectItem value="2023">2023</SelectItem>
-                <SelectItem value="2024">2024</SelectItem>
-                <SelectItem value="2025">2025</SelectItem>
-                <SelectItem value="2026">2026</SelectItem>
+                {Array.from({ length: 7 }, (_, i) => {
+                  const yr = new Date().getFullYear() - 5 + i;
+                  return <SelectItem key={yr} value={String(yr)}>{yr}</SelectItem>;
+                })}
               </SelectContent>
             </Select>
           </div>
