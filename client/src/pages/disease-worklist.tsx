@@ -1,7 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import type { DiseaseCase } from "@shared/schema";
-import { useAuth } from "@/hooks/use-auth";
 import { useBarangay } from "@/contexts/barangay-context";
 import { getDiseaseStatus, getDaysSinceReported, isOutbreakCondition, formatDate } from "@/lib/healthLogic";
 import KpiCard from "@/components/kpi-card";
@@ -18,12 +17,10 @@ type FilterKey = 'new' | 'monitoring' | 'all' | null;
 
 export default function DiseaseWorklist() {
   const [, navigate] = useLocation();
-  const { data: rawCases = [], isLoading } = useQuery<DiseaseCase[]>({ queryKey: ['/api/disease-cases'] });
+  const { scopedPath } = useBarangay();
+  const { data: cases = [], isLoading } = useQuery<DiseaseCase[]>({ queryKey: [scopedPath('/api/disease-cases')] });
   const [activeFilter, setActiveFilter] = useState<FilterKey>(null);
   const [search, setSearch] = useState('');
-  const { isTL } = useAuth();
-  const { selectedBarangay } = useBarangay();
-  const cases = isTL && selectedBarangay ? rawCases.filter(c => c.barangay === selectedBarangay) : rawCases;
 
   const casesWithStatus = cases.map(c => ({
     ...c,

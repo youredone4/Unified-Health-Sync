@@ -47,20 +47,15 @@ const typeColorClasses = {
 export default function CalendarPage() {
   const [, navigate] = useLocation();
   const { isTL } = useAuth();
-  const { selectedBarangay } = useBarangay();
+  const { scopedPath } = useBarangay();
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [typeFilter, setTypeFilter] = useState<string>('all');
   const [barangayFilter, setBarangayFilter] = useState<string>('all');
 
-  useEffect(() => {
-    if (isTL && selectedBarangay) setBarangayFilter(selectedBarangay);
-    else if (!isTL) setBarangayFilter('all');
-  }, [isTL, selectedBarangay]);
-
-  const { data: mothers = [] } = useQuery<Mother[]>({ queryKey: ['/api/mothers'] });
-  const { data: children = [] } = useQuery<Child[]>({ queryKey: ['/api/children'] });
-  const { data: seniors = [] } = useQuery<Senior[]>({ queryKey: ['/api/seniors'] });
+  const { data: mothers = [] } = useQuery<Mother[]>({ queryKey: [scopedPath('/api/mothers')] });
+  const { data: children = [] } = useQuery<Child[]>({ queryKey: [scopedPath('/api/children')] });
+  const { data: seniors = [] } = useQuery<Senior[]>({ queryKey: [scopedPath('/api/seniors')] });
 
   const events: CalendarEvent[] = useMemo(() => {
     const allEvents: CalendarEvent[] = [];

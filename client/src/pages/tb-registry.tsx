@@ -18,16 +18,11 @@ import { useBarangay } from "@/contexts/barangay-context";
 export default function TBRegistry() {
   const [, navigate] = useLocation();
   const { isTL } = useAuth();
-  const { selectedBarangay } = useBarangay();
-  const { data: patients = [], isLoading } = useQuery<TBPatient[]>({ queryKey: ['/api/tb-patients'] });
+  const { scopedPath } = useBarangay();
+  const { data: patients = [], isLoading } = useQuery<TBPatient[]>({ queryKey: [scopedPath('/api/tb-patients')] });
   const [search, setSearch] = useState("");
   const [phaseFilter, setPhaseFilter] = useState("all");
   const [barangayFilter, setBarangayFilter] = useState("all");
-
-  useEffect(() => {
-    if (isTL && selectedBarangay) setBarangayFilter(selectedBarangay);
-    else if (!isTL) setBarangayFilter("all");
-  }, [isTL, selectedBarangay]);
 
   const barangays = Array.from(new Set(patients.map(p => p.barangay)));
 

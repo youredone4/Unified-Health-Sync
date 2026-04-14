@@ -17,16 +17,11 @@ import { useBarangay } from "@/contexts/barangay-context";
 export default function DiseaseRegistry() {
   const [, navigate] = useLocation();
   const { isTL } = useAuth();
-  const { selectedBarangay } = useBarangay();
-  const { data: cases = [], isLoading } = useQuery<DiseaseCase[]>({ queryKey: ['/api/disease-cases'] });
+  const { scopedPath } = useBarangay();
+  const { data: cases = [], isLoading } = useQuery<DiseaseCase[]>({ queryKey: [scopedPath('/api/disease-cases')] });
   const [search, setSearch] = useState("");
   const [conditionFilter, setConditionFilter] = useState("all");
   const [barangayFilter, setBarangayFilter] = useState("all");
-
-  useEffect(() => {
-    if (isTL && selectedBarangay) setBarangayFilter(selectedBarangay);
-    else if (!isTL) setBarangayFilter("all");
-  }, [isTL, selectedBarangay]);
 
   const conditions = Array.from(new Set(cases.map(c => c.condition)));
   const barangays = Array.from(new Set(cases.map(c => c.barangay)));

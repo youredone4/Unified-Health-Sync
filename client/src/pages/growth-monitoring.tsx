@@ -19,17 +19,12 @@ interface Barangay {
 export default function GrowthMonitoring() {
   const [, navigate] = useLocation();
   const { isTL } = useAuth();
-  const { selectedBarangay } = useBarangay();
+  const { scopedPath } = useBarangay();
   const [nameFilter, setNameFilter] = useState("");
   const [barangayFilter, setBarangayFilter] = useState("all");
   
-  const { data: children = [] } = useQuery<Child[]>({ queryKey: ['/api/children'] });
+  const { data: children = [] } = useQuery<Child[]>({ queryKey: [scopedPath('/api/children')] });
   const { data: barangays = [] } = useQuery<Barangay[]>({ queryKey: ['/api/barangays'] });
-
-  useEffect(() => {
-    if (isTL && selectedBarangay) setBarangayFilter(selectedBarangay);
-    else if (!isTL) setBarangayFilter("all");
-  }, [isTL, selectedBarangay]);
 
   const childrenWithGrowth = children.filter(c => (c.growth || []).length > 0);
 

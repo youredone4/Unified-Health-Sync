@@ -144,21 +144,13 @@ function AlertItem({ type, message, barangay, date, index }: {
 export default function Dashboard() {
   const [, navigate] = useLocation();
   const { isTL } = useAuth();
-  const { selectedBarangay } = useBarangay();
-  const { data: rawMothers = [] } = useQuery<Mother[]>({ queryKey: ['/api/mothers'] });
-  const { data: rawChildren = [] } = useQuery<Child[]>({ queryKey: ['/api/children'] });
-  const { data: rawSeniors = [] } = useQuery<Senior[]>({ queryKey: ['/api/seniors'] });
+  const { selectedBarangay, scopedPath } = useBarangay();
+  const { data: mothers = [] } = useQuery<Mother[]>({ queryKey: [scopedPath('/api/mothers')] });
+  const { data: children = [] } = useQuery<Child[]>({ queryKey: [scopedPath('/api/children')] });
+  const { data: seniors = [] } = useQuery<Senior[]>({ queryKey: [scopedPath('/api/seniors')] });
   const { data: inventory = [] } = useQuery<InventoryItem[]>({ queryKey: ['/api/inventory'] });
-  const { data: rawDiseaseCases = [] } = useQuery<DiseaseCase[]>({ queryKey: ['/api/disease-cases'] });
-  const { data: rawTbPatients = [] } = useQuery<TBPatient[]>({ queryKey: ['/api/tb-patients'] });
-
-  // For TL users, filter all data to the selected barangay
-  const brgy = isTL && selectedBarangay ? selectedBarangay : null;
-  const mothers = brgy ? rawMothers.filter(m => m.barangay === brgy) : rawMothers;
-  const children = brgy ? rawChildren.filter(c => c.barangay === brgy) : rawChildren;
-  const seniors = brgy ? rawSeniors.filter(s => s.barangay === brgy) : rawSeniors;
-  const diseaseCases = brgy ? rawDiseaseCases.filter(d => d.barangay === brgy) : rawDiseaseCases;
-  const tbPatients = brgy ? rawTbPatients.filter(t => t.barangay === brgy) : rawTbPatients;
+  const { data: diseaseCases = [] } = useQuery<DiseaseCase[]>({ queryKey: [scopedPath('/api/disease-cases')] });
+  const { data: tbPatients = [] } = useQuery<TBPatient[]>({ queryKey: [scopedPath('/api/tb-patients')] });
 
   // Calculate totals
   const totalMothers = mothers.length;

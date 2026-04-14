@@ -387,10 +387,13 @@ export async function registerRoutes(
   });
 
   // === DISEASE CASES ===
-  app.get(api.diseaseCases.list.path, async (req, res) => {
+  app.get(api.diseaseCases.list.path, loadUserInfo, requireAuth, async (req, res) => {
     let data = await storage.getDiseaseCases();
-    const { barangay, month } = req.query;
-    if (barangay) data = data.filter(c => c.barangay === barangay);
+    const { month } = req.query;
+    const explicitBarangay = req.query.barangay ? String(req.query.barangay) : undefined;
+    const filtered = filterByBarangay(data, req.userInfo, explicitBarangay);
+    if (filtered === null) return res.status(403).json({ message: "Access denied to this barangay" });
+    data = filtered;
     if (month) data = data.filter(c => c.dateReported.startsWith(String(month)));
     res.json(data);
   });
@@ -434,9 +437,12 @@ export async function registerRoutes(
   }));
 
   // === TB PATIENTS ===
-  app.get(api.tbPatients.list.path, async (req, res) => {
-    const data = await storage.getTBPatients();
-    res.json(data);
+  app.get(api.tbPatients.list.path, loadUserInfo, requireAuth, async (req, res) => {
+    let data = await storage.getTBPatients();
+    const explicitBarangay = req.query.barangay ? String(req.query.barangay) : undefined;
+    const filtered = filterByBarangay(data, req.userInfo, explicitBarangay);
+    if (filtered === null) return res.status(403).json({ message: "Access denied to this barangay" });
+    res.json(filtered);
   });
 
   app.get(api.tbPatients.get.path, ar(async (req, res) => {

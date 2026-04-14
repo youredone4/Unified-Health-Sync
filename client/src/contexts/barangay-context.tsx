@@ -6,37 +6,59 @@ const STORAGE_KEY = "healthsync_selected_barangay";
 interface BarangayContextValue {
   selectedBarangay: string | null;
   setSelectedBarangay: (b: string) => void;
+  scopedPath: (basePath: string, extraParams?: Record<string, string>) => string;
 }
 
 const BarangayContext = createContext<BarangayContextValue>({
   selectedBarangay: null,
   setSelectedBarangay: () => {},
+  scopedPath: (p) => p,
 });
 
 export function BarangayProvider({ children }: { children: React.ReactNode }) {
   const { isTL, assignedBarangays } = useAuth();
 
-  const [selectedBarangay, setSelectedBarangayState] = useState<string | null>(null);
+  // Initialize synchronously from sessionStorage to avoid unscoped first render
+  const [selectedBarangay, setSelectedBarangayState] = useState<string | null>(() => {
+    try {
+      return sessionStorage.getItem(STORAGE_KEY);
+    } catch {
+      return null;
+    }
+  });
 
-  // Sync with auth state: when TL's assigned barangays are known, set default
+  // Validate stored value against assignedBarangays when auth loads
   useEffect(() => {
     if (!isTL || assignedBarangays.length === 0) {
       setSelectedBarangayState(null);
       return;
     }
-    const stored = sessionStorage.getItem(STORAGE_KEY);
-    const valid = stored && assignedBarangays.includes(stored) ? stored : assignedBarangays[0];
-    setSelectedBarangayState(valid);
+    setSelectedBarangayState(prev => {
+      if (prev && assignedBarangays.includes(prev)) return prev;
+      const fallback = assignedBarangays[0];
+      try { sessionStorage.setItem(STORAGE_KEY, fallback); } catch {}
+      return fallback;
+    });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isTL, assignedBarangays.join(",")]);
 
   const setSelectedBarangay = (b: string) => {
-    sessionStorage.setItem(STORAGE_KEY, b);
+    try { sessionStorage.setItem(STORAGE_KEY, b); } catch {}
     setSelectedBarangayState(b);
   };
 
+  const effectiveBarangay = isTL ? selectedBarangay : null;
+
+  // Returns a URL with ?barangay= param appended for TL users
+  const scopedPath = (basePath: string, extraParams?: Record<string, string>): string => {
+    const params = new URLSearchParams(extraParams);
+    if (effectiveBarangay) params.set("barangay", effectiveBarangay);
+    const qs = params.toString();
+    return qs ? `${basePath}?${qs}` : basePath;
+  };
+
   return (
-    <BarangayContext.Provider value={{ selectedBarangay: isTL ? selectedBarangay : null, setSelectedBarangay }}>
+    <BarangayContext.Provider value={{ selectedBarangay: effectiveBarangay, setSelectedBarangay, scopedPath }}>
       {children}
     </BarangayContext.Provider>
   );

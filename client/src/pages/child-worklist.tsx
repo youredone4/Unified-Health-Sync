@@ -16,20 +16,18 @@ import { useBarangay } from "@/contexts/barangay-context";
 export default function ChildWorklist() {
   const [, navigate] = useLocation();
   const { isTL } = useAuth();
-  const { selectedBarangay } = useBarangay();
-  const { data: children = [], isLoading } = useQuery<Child[]>({ queryKey: ['/api/children'] });
-  const { data: mothers = [] } = useQuery<Mother[]>({ queryKey: ['/api/mothers'] });
+  const { scopedPath } = useBarangay();
+  const { data: children = [], isLoading } = useQuery<Child[]>({ queryKey: [scopedPath('/api/children')] });
+  const { data: mothers = [] } = useQuery<Mother[]>({ queryKey: [scopedPath('/api/mothers')] });
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [barangayFilter, setBarangayFilter] = useState<string>('all');
 
-  // Lock barangay filter to context selection for TL users
+  // Non-TL users can filter by barangay via dropdown; TL scoping is handled by API
   useEffect(() => {
-    if (isTL && selectedBarangay) {
-      setBarangayFilter(selectedBarangay);
-    } else if (!isTL) {
+    if (!isTL) {
       setBarangayFilter('all');
     }
-  }, [isTL, selectedBarangay]);
+  }, [isTL]);
 
   const getMother = (motherId: number | null) => mothers.find(m => m.id === motherId);
 

@@ -12,21 +12,14 @@ import { useState, useEffect } from "react";
 import { Badge } from "@/components/ui/badge";
 import { usePagination } from "@/hooks/use-pagination";
 import TablePagination from "@/components/table-pagination";
-import { useAuth } from "@/hooks/use-auth";
 import { useBarangay } from "@/contexts/barangay-context";
 
 export default function SeniorWorklist() {
   const [, navigate] = useLocation();
-  const { isTL } = useAuth();
-  const { selectedBarangay } = useBarangay();
-  const { data: rawSeniors = [], isLoading } = useQuery<Senior[]>({ queryKey: ['/api/seniors'] });
+  const { scopedPath } = useBarangay();
+  const { data: seniors = [], isLoading } = useQuery<Senior[]>({ queryKey: [scopedPath('/api/seniors')] });
   const [activeTab, setActiveTab] = useState(() => localStorage.getItem('senior-tab') || 'overdue');
   const [search, setSearch] = useState('');
-
-  // Filter seniors by selected barangay for TL users
-  const seniors = isTL && selectedBarangay
-    ? rawSeniors.filter(s => s.barangay === selectedBarangay)
-    : rawSeniors;
 
   useEffect(() => {
     localStorage.setItem('senior-tab', activeTab);

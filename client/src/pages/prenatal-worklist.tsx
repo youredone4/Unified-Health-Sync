@@ -16,19 +16,15 @@ import { useBarangay } from "@/contexts/barangay-context";
 export default function PrenatalWorklist() {
   const [, navigate] = useLocation();
   const { isTL } = useAuth();
-  const { selectedBarangay } = useBarangay();
-  const { data: mothers = [], isLoading } = useQuery<Mother[]>({ queryKey: ['/api/mothers'] });
+  const { scopedPath } = useBarangay();
+  const { data: mothers = [], isLoading } = useQuery<Mother[]>({ queryKey: [scopedPath('/api/mothers')] });
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [barangayFilter, setBarangayFilter] = useState<string>('all');
 
-  // Lock barangay filter to context selection for TL users
+  // Non-TL users can filter by barangay via dropdown; TL scoping is handled by API
   useEffect(() => {
-    if (isTL && selectedBarangay) {
-      setBarangayFilter(selectedBarangay);
-    } else if (!isTL) {
-      setBarangayFilter('all');
-    }
-  }, [isTL, selectedBarangay]);
+    if (!isTL) setBarangayFilter('all');
+  }, [isTL]);
 
   const mothersWithStatus = useMemo(() => mothers.map(m => ({
     ...m,

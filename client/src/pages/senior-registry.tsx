@@ -15,17 +15,13 @@ import { useBarangay } from "@/contexts/barangay-context";
 
 export default function SeniorRegistry() {
   const [, navigate] = useLocation();
-  const { user, isTL } = useAuth();
-  const { selectedBarangay } = useBarangay();
-  const { data: allSeniors = [], isLoading } = useQuery<Senior[]>({ queryKey: ['/api/seniors'] });
+  const { user } = useAuth();
+  const { scopedPath } = useBarangay();
+  const { data: seniors = [], isLoading } = useQuery<Senior[]>({ queryKey: [scopedPath('/api/seniors')] });
   const [search, setSearch] = useState('');
   const [importOpen, setImportOpen] = useState(false);
 
   const canImport = user ? permissions.canImportReports(user.role) : false;
-
-  const seniors = isTL && selectedBarangay
-    ? allSeniors.filter(s => s.barangay === selectedBarangay)
-    : allSeniors;
 
   const filtered = seniors.filter(s =>
     `${s.firstName ?? ''} ${s.lastName ?? ''}`.toLowerCase().includes(search.toLowerCase()) ||
