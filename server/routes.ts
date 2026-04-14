@@ -45,11 +45,13 @@ export async function registerRoutes(
     if (userInfo.role === UserRole.TL) {
       if (explicitBarangay) {
         if (!userInfo.assignedBarangays.includes(explicitBarangay)) {
-          return null; // forbidden
+          return null; // forbidden – requested barangay not assigned
         }
         return data.filter(item => item.barangay === explicitBarangay);
       }
-      return data.filter(item => userInfo.assignedBarangays.includes(item.barangay));
+      // TL without explicit barangay: return empty to prevent merged-data leakage.
+      // Frontend must always pass ?barangay= for TL users via scopedPath().
+      return [];
     }
     // Non-TL roles: if explicit barangay requested, just filter to it (no restriction)
     if (explicitBarangay) {
@@ -88,7 +90,10 @@ export async function registerRoutes(
     const q = String(req.query.q || "").trim().toLowerCase();
     if (q.length < 2) return res.json([]);
     const data = await storage.getMothers();
-    const scoped = filterByBarangay(data, req.userInfo) ?? [];
+    // For TL users, search within their assigned barangays (cross-barangay search within their scope)
+    const scoped = req.userInfo?.role === UserRole.TL
+      ? data.filter(m => req.userInfo!.assignedBarangays.includes(m.barangay))
+      : data;
     const currentYear = new Date().getFullYear();
     const results = scoped
       .filter(m => `${m.firstName} ${m.lastName}`.toLowerCase().includes(q))
@@ -398,10 +403,13 @@ export async function registerRoutes(
     res.json(data);
   });
 
-  app.get(api.diseaseCases.get.path, ar(async (req, res) => {
+  app.get(api.diseaseCases.get.path, loadUserInfo, requireAuth, ar(async (req, res) => {
     const id = parseId(req.params.id, res); if (id === null) return;
     const diseaseCase = await storage.getDiseaseCase(id);
     if (!diseaseCase) return res.status(404).json({ message: "Disease case not found" });
+    if (req.userInfo!.role === UserRole.TL && !req.userInfo!.assignedBarangays.includes(diseaseCase.barangay)) {
+      return res.status(403).json({ message: "Access denied to this barangay" });
+    }
     res.json(diseaseCase);
   }));
 
@@ -445,10 +453,13 @@ export async function registerRoutes(
     res.json(filtered);
   });
 
-  app.get(api.tbPatients.get.path, ar(async (req, res) => {
+  app.get(api.tbPatients.get.path, loadUserInfo, requireAuth, ar(async (req, res) => {
     const id = parseId(req.params.id, res); if (id === null) return;
     const patient = await storage.getTBPatient(id);
     if (!patient) return res.status(404).json({ message: "TB patient not found" });
+    if (req.userInfo!.role === UserRole.TL && !req.userInfo!.assignedBarangays.includes(patient.barangay)) {
+      return res.status(403).json({ message: "Access denied to this barangay" });
+    }
     res.json(patient);
   }));
 

@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect } from "react";
+import { createContext, useContext, useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
 
 const STORAGE_KEY = "healthsync_selected_barangay";
@@ -18,38 +18,32 @@ const BarangayContext = createContext<BarangayContextValue>({
 export function BarangayProvider({ children }: { children: React.ReactNode }) {
   const { isTL, assignedBarangays } = useAuth();
 
-  // Initialize synchronously from sessionStorage to avoid unscoped first render
-  const [selectedBarangay, setSelectedBarangayState] = useState<string | null>(() => {
-    try {
-      return sessionStorage.getItem(STORAGE_KEY);
-    } catch {
-      return null;
-    }
+  // Track the user's explicit preference (persisted in sessionStorage)
+  const [preferredBarangay, setPreferredBarangay] = useState<string | null>(() => {
+    try { return sessionStorage.getItem(STORAGE_KEY); } catch { return null; }
   });
 
-  // Validate stored value against assignedBarangays when auth loads
-  useEffect(() => {
-    if (!isTL || assignedBarangays.length === 0) {
-      setSelectedBarangayState(null);
-      return;
+  // Compute effective barangay synchronously during render — no useEffect needed.
+  // If auth data is already cached (normal case for logged-in users), this resolves
+  // on the very first render, preventing any unscoped API call.
+  const effectiveBarangay: string | null = (() => {
+    if (!isTL || assignedBarangays.length === 0) return null;
+    if (preferredBarangay && assignedBarangays.includes(preferredBarangay)) {
+      return preferredBarangay;
     }
-    setSelectedBarangayState(prev => {
-      if (prev && assignedBarangays.includes(prev)) return prev;
-      const fallback = assignedBarangays[0];
-      try { sessionStorage.setItem(STORAGE_KEY, fallback); } catch {}
-      return fallback;
-    });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isTL, assignedBarangays.join(",")]);
+    // Fall back to first assigned barangay (stores it for next session)
+    const fallback = assignedBarangays[0];
+    try { sessionStorage.setItem(STORAGE_KEY, fallback); } catch {}
+    return fallback;
+  })();
 
   const setSelectedBarangay = (b: string) => {
     try { sessionStorage.setItem(STORAGE_KEY, b); } catch {}
-    setSelectedBarangayState(b);
+    setPreferredBarangay(b);
   };
 
-  const effectiveBarangay = isTL ? selectedBarangay : null;
-
-  // Returns a URL with ?barangay= param appended for TL users
+  // Returns a URL with ?barangay= param appended for TL users with a resolved barangay.
+  // When effectiveBarangay is null (non-TL or auth not yet loaded), returns base path.
   const scopedPath = (basePath: string, extraParams?: Record<string, string>): string => {
     const params = new URLSearchParams(extraParams);
     if (effectiveBarangay) params.set("barangay", effectiveBarangay);

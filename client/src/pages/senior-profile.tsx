@@ -14,7 +14,7 @@ import { ArrowLeft, Pill, Heart, MessageSquare, Check, ShieldCheck, AlertTriangl
 import ConsultationHistoryCard from "@/components/consultation-history-card";
 import VisitHistoryCard from "@/components/visit-history-card";
 import { useState } from "react";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, invalidateScopedQueries } from "@/lib/queryClient";
 import type { SeniorVisit } from "@shared/schema";
 
 interface EligibilityResult {
@@ -73,7 +73,7 @@ export default function SeniorProfile() {
       return apiRequest('PUT', `/api/seniors/${id}`, updates);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/seniors'] });
+      invalidateScopedQueries('/api/seniors');
       queryClient.invalidateQueries({ queryKey: ['/api/seniors', id] });
       toast({ title: "Saved", description: "Record updated successfully" });
       setConfirmOpen(false);
@@ -85,7 +85,7 @@ export default function SeniorProfile() {
       return apiRequest('DELETE', `/api/seniors/${id}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/seniors'] });
+      invalidateScopedQueries('/api/seniors');
       toast({ title: "Deleted", description: "Senior record permanently deleted" });
       navigate('/senior');
     },

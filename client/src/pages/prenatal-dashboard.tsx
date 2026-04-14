@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import type { Mother } from "@shared/schema";
+import { useBarangay } from "@/contexts/barangay-context";
 import { getTTStatus } from "@/lib/healthLogic";
 import KpiCard from "@/components/kpi-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -66,7 +67,8 @@ function getTrimester(gaWeeks: number): "1st" | "2nd" | "3rd" {
 
 export default function PrenatalDashboard() {
   const [, navigate] = useLocation();
-  const { data: mothers = [] } = useQuery<Mother[]>({ queryKey: ["/api/mothers"] });
+  const { scopedPath } = useBarangay();
+  const { data: mothers = [] } = useQuery<Mother[]>({ queryKey: [scopedPath("/api/mothers")] });
 
   const statuses = mothers.map((m) => getTTStatus(m).status);
   const overdue = statuses.filter((s) => s === "overdue").length;

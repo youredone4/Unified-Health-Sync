@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation, useParams } from "wouter";
-import { queryClient, apiRequest } from "@/lib/queryClient";
+import { queryClient, apiRequest, invalidateScopedQueries } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { Senior } from "@shared/schema";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -82,7 +82,7 @@ export default function SeniorForm() {
   const createMutation = useMutation({
     mutationFn: (data: any) => apiRequest("POST", "/api/seniors", data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/seniors'] });
+      invalidateScopedQueries('/api/seniors');
       toast({ title: "Success", description: "Senior registered successfully" });
       navigate("/senior/registry");
     },
@@ -94,7 +94,7 @@ export default function SeniorForm() {
   const updateMutation = useMutation({
     mutationFn: (data: any) => apiRequest("PUT", `/api/seniors/${params.id}`, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/seniors'] });
+      invalidateScopedQueries('/api/seniors');
       toast({ title: "Success", description: "Senior updated successfully" });
       navigate(`/senior/${params.id}`);
     },

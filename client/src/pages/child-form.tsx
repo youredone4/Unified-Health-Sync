@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation, useParams } from "wouter";
-import { queryClient, apiRequest } from "@/lib/queryClient";
+import { queryClient, apiRequest, invalidateScopedQueries } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { Child, Mother } from "@shared/schema";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -85,7 +85,7 @@ export default function ChildForm() {
   const createMutation = useMutation({
     mutationFn: (data: any) => apiRequest("POST", "/api/children", data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/children'] });
+      invalidateScopedQueries('/api/children');
       toast({ title: "Success", description: "Child registered successfully" });
       navigate("/child/registry");
     },
@@ -97,7 +97,7 @@ export default function ChildForm() {
   const updateMutation = useMutation({
     mutationFn: (data: any) => apiRequest("PUT", `/api/children/${params.id}`, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/children'] });
+      invalidateScopedQueries('/api/children');
       toast({ title: "Success", description: "Child updated successfully" });
       navigate(`/child/${params.id}`);
     },

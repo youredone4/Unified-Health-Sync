@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, Phone, MapPin, FileText, Calendar, MessageSquare, Edit, Trash2, Link2, ExternalLink } from "lucide-react";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest, queryClient, invalidateScopedQueries } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
 import SmsModal from "@/components/sms-modal";
@@ -40,7 +40,7 @@ export default function DiseaseProfile() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/disease-cases', id] });
-      queryClient.invalidateQueries({ queryKey: ['/api/disease-cases'] });
+      invalidateScopedQueries('/api/disease-cases');
       toast({ title: "Case updated successfully" });
     }
   });
@@ -50,7 +50,7 @@ export default function DiseaseProfile() {
       return apiRequest('DELETE', `/api/disease-cases/${id}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/disease-cases'] });
+      invalidateScopedQueries('/api/disease-cases');
       toast({ title: "Disease case deleted" });
       navigate('/disease/registry');
     },

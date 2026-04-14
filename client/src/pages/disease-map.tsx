@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import type { DiseaseCase } from "@shared/schema";
+import { useBarangay } from "@/contexts/barangay-context";
 import { isOutbreakCondition } from "@/lib/healthLogic";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -77,7 +78,8 @@ const centerIcon = L.divIcon({
 });
 
 export default function DiseaseMap() {
-  const { data: cases = [], isLoading } = useQuery<DiseaseCase[]>({ queryKey: ['/api/disease-cases'] });
+  const { scopedPath } = useBarangay();
+  const { data: cases = [], isLoading } = useQuery<DiseaseCase[]>({ queryKey: [scopedPath('/api/disease-cases')] });
 
   const outbreak = isOutbreakCondition(cases);
 

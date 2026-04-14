@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { ArrowLeft, Phone, MapPin, Calendar, Pill, AlertTriangle, CheckCircle, MessageSquare, Trash2 } from "lucide-react";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest, queryClient, invalidateScopedQueries } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
 import SmsModal from "@/components/sms-modal";
@@ -41,7 +41,7 @@ export default function TBProfile() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/tb-patients', id] });
-      queryClient.invalidateQueries({ queryKey: ['/api/tb-patients'] });
+      invalidateScopedQueries('/api/tb-patients');
       toast({ title: "Patient record updated" });
     }
   });
@@ -51,7 +51,7 @@ export default function TBProfile() {
       return apiRequest('DELETE', `/api/tb-patients/${id}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/tb-patients'] });
+      invalidateScopedQueries('/api/tb-patients');
       toast({ title: "TB DOTS record deleted" });
       navigate('/tb');
     }

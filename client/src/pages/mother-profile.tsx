@@ -14,7 +14,7 @@ import { ArrowLeft, Heart, Stethoscope, MessageSquare, Check, Pencil, Trash2, He
 import ConsultationHistoryCard from "@/components/consultation-history-card";
 import VisitHistoryCard from "@/components/visit-history-card";
 import { useState } from "react";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, invalidateScopedQueries } from "@/lib/queryClient";
 import type { PrenatalVisit } from "@shared/schema";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
@@ -131,7 +131,7 @@ export default function MotherProfile() {
       return apiRequest('PUT', `/api/mothers/${id}`, updates);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/mothers'] });
+      invalidateScopedQueries('/api/mothers');
       queryClient.invalidateQueries({ queryKey: ['/api/mothers', id] });
       toast({ title: "Saved", description: "Record updated successfully" });
       setConfirmOpen(false);
@@ -143,7 +143,7 @@ export default function MotherProfile() {
       return apiRequest('DELETE', `/api/mothers/${id}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/mothers'] });
+      invalidateScopedQueries('/api/mothers');
       toast({ title: "Deleted", description: "Patient record permanently deleted" });
       navigate('/prenatal');
     },

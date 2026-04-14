@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import type { Senior } from "@shared/schema";
+import { useBarangay } from "@/contexts/barangay-context";
 import { getSeniorPickupStatus, isMedsReadyForPickup, formatDate } from "@/lib/healthLogic";
 import KpiCard from "@/components/kpi-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -61,7 +62,8 @@ function QuickActionCard({
 
 export default function SeniorDashboard() {
   const [, navigate] = useLocation();
-  const { data: seniors = [] } = useQuery<Senior[]>({ queryKey: ['/api/seniors'] });
+  const { scopedPath } = useBarangay();
+  const { data: seniors = [] } = useQuery<Senior[]>({ queryKey: [scopedPath('/api/seniors')] });
   const [activeFilter, setActiveFilter] = useState<FilterKey>(null);
 
   const statuses = seniors.map(s => getSeniorPickupStatus(s).status);

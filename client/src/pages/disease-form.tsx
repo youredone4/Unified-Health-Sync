@@ -5,7 +5,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { useLocation, useRoute } from "wouter";
 import { z } from "zod";
 import type { DiseaseCase, Barangay, Mother, Child, Senior } from "@shared/schema";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest, queryClient, invalidateScopedQueries } from "@/lib/queryClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -95,7 +95,7 @@ export default function DiseaseForm() {
       return apiRequest("POST", "/api/disease-cases", data);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/disease-cases'] });
+      invalidateScopedQueries('/api/disease-cases');
       toast({ title: "Case created successfully" });
       navigate("/disease/registry");
     },
@@ -109,7 +109,7 @@ export default function DiseaseForm() {
       return apiRequest("PUT", `/api/disease-cases/${params?.id}`, data);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/disease-cases'] });
+      invalidateScopedQueries('/api/disease-cases');
       toast({ title: "Case updated successfully" });
       navigate(`/disease/${params?.id}`);
     },

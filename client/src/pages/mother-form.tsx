@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation, useParams } from "wouter";
-import { queryClient, apiRequest } from "@/lib/queryClient";
+import { queryClient, apiRequest, invalidateScopedQueries } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { Mother } from "@shared/schema";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -79,7 +79,7 @@ export default function MotherForm() {
   const createMutation = useMutation({
     mutationFn: (data: any) => apiRequest("POST", "/api/mothers", data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/mothers'] });
+      invalidateScopedQueries('/api/mothers');
       toast({ title: "Success", description: "Mother registered successfully" });
       navigate("/prenatal/registry");
     },
@@ -91,7 +91,7 @@ export default function MotherForm() {
   const updateMutation = useMutation({
     mutationFn: (data: any) => apiRequest("PUT", `/api/mothers/${params.id}`, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/mothers'] });
+      invalidateScopedQueries('/api/mothers');
       toast({ title: "Success", description: "Mother updated successfully" });
       navigate(`/mother/${params.id}`);
     },

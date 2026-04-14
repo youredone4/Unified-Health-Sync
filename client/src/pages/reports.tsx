@@ -4,11 +4,13 @@ import { getTTStatus, getNextVaccineStatus, getSeniorPickupStatus, isUnderweight
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { FileText, Download, Printer } from "lucide-react";
+import { useBarangay } from "@/contexts/barangay-context";
 
 export default function ReportsPage() {
-  const { data: mothers = [] } = useQuery<Mother[]>({ queryKey: ['/api/mothers'] });
-  const { data: children = [] } = useQuery<Child[]>({ queryKey: ['/api/children'] });
-  const { data: seniors = [] } = useQuery<Senior[]>({ queryKey: ['/api/seniors'] });
+  const { scopedPath } = useBarangay();
+  const { data: mothers = [] } = useQuery<Mother[]>({ queryKey: [scopedPath('/api/mothers')] });
+  const { data: children = [] } = useQuery<Child[]>({ queryKey: [scopedPath('/api/children')] });
+  const { data: seniors = [] } = useQuery<Senior[]>({ queryKey: [scopedPath('/api/seniors')] });
   const { data: inventory = [] } = useQuery<InventoryItem[]>({ queryKey: ['/api/inventory'] });
 
   const reports = [

@@ -4,7 +4,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { useLocation, useRoute } from "wouter";
 import { z } from "zod";
 import type { TBPatient, Barangay } from "@shared/schema";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest, queryClient, invalidateScopedQueries } from "@/lib/queryClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -76,7 +76,7 @@ export default function TBForm() {
       return apiRequest("POST", "/api/tb-patients", data);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/tb-patients'] });
+      invalidateScopedQueries('/api/tb-patients');
       toast({ title: "TB patient registered successfully" });
       navigate("/tb/registry");
     },
@@ -90,7 +90,7 @@ export default function TBForm() {
       return apiRequest("PUT", `/api/tb-patients/${params?.id}`, data);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/tb-patients'] });
+      invalidateScopedQueries('/api/tb-patients');
       toast({ title: "Patient updated successfully" });
       navigate(`/tb/${params?.id}`);
     },

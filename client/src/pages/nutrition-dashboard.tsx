@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import type { Child } from "@shared/schema";
+import { useBarangay } from "@/contexts/barangay-context";
 import { getWeightZScore, hasMissingGrowthCheck, getAgeInMonths, formatDate } from "@/lib/healthLogic";
 import KpiCard from "@/components/kpi-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -58,7 +59,8 @@ function QuickActionCard({
 
 export default function NutritionDashboard() {
   const [, navigate] = useLocation();
-  const { data: children = [], isLoading } = useQuery<Child[]>({ queryKey: ["/api/children"] });
+  const { scopedPath } = useBarangay();
+  const { data: children = [], isLoading } = useQuery<Child[]>({ queryKey: [scopedPath("/api/children")] });
   const [barangayFilter, setBarangayFilter] = useState<string>("all");
   const [activeFilter, setActiveFilter] = useState<FilterKey>(null);
 

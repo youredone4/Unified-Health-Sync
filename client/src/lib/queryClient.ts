@@ -41,6 +41,19 @@ export const getQueryFn: <T>(options: {
     return await res.json();
   };
 
+/**
+ * Invalidates all queries whose first queryKey element starts with the given basePath.
+ * This handles both plain paths ('/api/mothers') and scoped paths ('/api/mothers?barangay=X').
+ */
+export function invalidateScopedQueries(basePath: string): Promise<void> {
+  return queryClient.invalidateQueries({
+    predicate: (query) => {
+      const key = query.queryKey[0];
+      return typeof key === "string" && key.startsWith(basePath);
+    },
+  });
+}
+
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {

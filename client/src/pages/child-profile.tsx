@@ -14,7 +14,7 @@ import { ArrowLeft, Baby, Calendar, MessageSquare, Check, Scale, AlertTriangle, 
 import ConsultationHistoryCard from "@/components/consultation-history-card";
 import VisitHistoryCard from "@/components/visit-history-card";
 import { useState, useMemo } from "react";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, invalidateScopedQueries } from "@/lib/queryClient";
 import { ComposedChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import type { ChildVisit } from "@shared/schema";
 
@@ -51,7 +51,7 @@ export default function ChildProfile() {
       return apiRequest('PUT', `/api/children/${id}`, updates);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/children'] });
+      invalidateScopedQueries('/api/children');
       queryClient.invalidateQueries({ queryKey: ['/api/children', id] });
       toast({ title: "Saved", description: "Record updated successfully" });
       setConfirmOpen(false);
@@ -63,7 +63,7 @@ export default function ChildProfile() {
       return apiRequest('DELETE', `/api/children/${id}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/children'] });
+      invalidateScopedQueries('/api/children');
       toast({ title: "Deleted", description: "Child record permanently deleted" });
       navigate('/child');
     },
