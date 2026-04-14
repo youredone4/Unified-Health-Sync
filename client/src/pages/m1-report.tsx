@@ -104,16 +104,6 @@ export default function M1ReportPage() {
     }
   }, [isTL, assignedBarangays, barangays, selectedBarangayId]);
 
-  // Auto-load existing report instance whenever the query result changes (avoids stale closure)
-  useEffect(() => {
-    if (reportInstances.length > 0) {
-      setActiveReportId(prev => prev ?? reportInstances[0].id);
-    } else {
-      setActiveReportId(null);
-      setEditedValues({});
-    }
-  }, [reportInstances]);
-
   const activeTemplate = templates.find(t => t.isActive) || templates[0];
 
   const { data: catalog = [], isLoading: catalogLoading } = useQuery<M1IndicatorCatalog[]>({
@@ -148,6 +138,16 @@ export default function M1ReportPage() {
     queryKey: [reportInstancesQueryKey],
     enabled: !!selectedBarangayId && !!reportInstancesQueryKey,
   });
+
+  // Auto-load first instance when report list changes (declared AFTER reportInstances)
+  useEffect(() => {
+    if (reportInstances.length > 0) {
+      setActiveReportId(prev => prev ?? reportInstances[0].id);
+    } else {
+      setActiveReportId(null);
+      setEditedValues({});
+    }
+  }, [reportInstances]);
 
   const { data: activeReport } = useQuery<{ instance: M1ReportInstance; values: M1IndicatorValue[] }>({
     queryKey: [`/api/m1/reports/${activeReportId}`],
@@ -1516,9 +1516,7 @@ export default function M1ReportPage() {
                             </span>
                           )}
                           <span className="px-2 py-1 rounded bg-muted text-muted-foreground">
-                            Empty: {(catalog.length * 2) - computedCount - encodedCount - importedCount > 0
-                              ? Math.max(0, catalog.length - computedCount - encodedCount - importedCount)
-                              : 0} indicators
+                            Total saved: {computedCount + encodedCount + importedCount} values
                           </span>
                         </div>
                         <p className="text-[10px] text-muted-foreground">
