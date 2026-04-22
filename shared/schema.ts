@@ -179,6 +179,20 @@ export const insertMedicineInventorySchema = createInsertSchema(medicineInventor
 export type MedicineInventoryItem = typeof medicineInventory.$inferSelect;
 export type InsertMedicineInventoryItem = z.infer<typeof insertMedicineInventorySchema>;
 
+// === INVENTORY SNAPSHOTS (historical stock trend tracking) ===
+export const inventorySnapshots = pgTable("inventory_snapshots", {
+  id: serial("id").primaryKey(),
+  barangay: text("barangay").notNull(),
+  snapshotDate: text("snapshot_date").notNull(), // YYYY-MM-DD (first day of month)
+  itemType: text("item_type").notNull(), // 'vaccine' | 'medicine'
+  itemKey: text("item_key").notNull(), // 'bcg'|'hepB'|'penta'|'opv'|'mr' or medicine name
+  qty: integer("qty").notNull().default(0),
+});
+
+export const insertInventorySnapshotSchema = createInsertSchema(inventorySnapshots).omit({ id: true });
+export type InventorySnapshot = typeof inventorySnapshots.$inferSelect;
+export type InsertInventorySnapshot = z.infer<typeof insertInventorySnapshotSchema>;
+
 // === HEALTH STATIONS (Map) ===
 export const healthStations = pgTable("health_stations", {
   id: serial("id").primaryKey(),

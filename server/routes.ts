@@ -308,6 +308,15 @@ export async function registerRoutes(
     res.json(data);
   });
 
+  app.get('/api/inventory/snapshots', async (req, res) => {
+    const { barangay, itemType, itemKey } = req.query as Record<string, string>;
+    if (!itemType || !itemKey) {
+      return res.status(400).json({ message: "itemType and itemKey are required" });
+    }
+    const data = await storage.getInventorySnapshots({ barangay: barangay || undefined, itemType, itemKey });
+    res.json(data);
+  });
+
   // === MEDICINE INVENTORY ===
   app.get(api.medicineInventory.list.path, async (req, res) => {
     const data = await storage.getMedicineInventory();

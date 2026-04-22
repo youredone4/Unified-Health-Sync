@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
-import type { InventoryItem, MedicineInventoryItem } from "@shared/schema";
+import type { InventoryItem, MedicineInventoryItem, InventorySnapshot } from "@shared/schema";
 import { getStockStatus } from "@/lib/healthLogic";
 import KpiCard from "@/components/kpi-card";
 import StatusBadge from "@/components/status-badge";
@@ -9,10 +9,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Package, AlertCircle, CheckCircle, TrendingUp, Plus, Pill, BarChart2, Syringe } from "lucide-react";
+import { Package, AlertCircle, CheckCircle, TrendingUp, Plus, Pill, BarChart2, Syringe, LineChart as LineChartIcon } from "lucide-react";
 import { formatDate } from "@/lib/healthLogic";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, ReferenceLine,
+  LineChart, Line, CartesianGrid,
   type TooltipProps,
 } from "recharts";
 import type { ValueType, NameType } from "recharts/types/component/DefaultTooltipContent";
@@ -38,6 +39,21 @@ const LOW_STOCK = 10;
 const OK_STOCK = 50;
 const MED_LOW_STOCK = 10;
 const MED_OK_STOCK = 50;
+
+// Snapshot item keys (used by inventory_snapshots table)
+const VACCINE_TREND_OPTIONS: { key: string; label: string }[] = [
+  { key: "bcg", label: "BCG" },
+  { key: "hepB", label: "HepB" },
+  { key: "penta", label: "Penta" },
+  { key: "opv", label: "OPV" },
+  { key: "mr", label: "MR" },
+];
+
+function formatSnapshotDate(dateStr: string): string {
+  const [year, month] = dateStr.split("-");
+  const d = new Date(parseInt(year), parseInt(month) - 1, 1);
+  return d.toLocaleDateString("en-US", { month: "short", year: "2-digit" });
+}
 
 function getBarColor(qty: number, low = LOW_STOCK, ok = OK_STOCK) {
   if (qty === 0) return "#ef4444";
@@ -73,6 +89,12 @@ export default function InventoryPage() {
   const [chartTab, setChartTab] = useState<"vaccines" | "medicines">("vaccines");
   const [selectedMedicine, setSelectedMedicine] = useState<string>("");
 
+  // Trend mode state
+  const [viewMode, setViewMode] = useState<"snapshot" | "trend">("snapshot");
+  const [trendBarangay, setTrendBarangay] = useState<string>("");
+  const [trendItemType, setTrendItemType] = useState<"vaccine" | "medicine">("vaccine");
+  const [trendItemKey, setTrendItemKey] = useState<string>("bcg");
+
   const { data: inventory = [], isLoading } = useQuery<InventoryItem[]>({ queryKey: ['/api/inventory'] });
   const { data: medicines = [], isLoading: medLoading } = useQuery<MedicineInventoryItem[]>({ queryKey: ['/api/medicine-inventory'] });
 
@@ -102,6 +124,30 @@ export default function InventoryPage() {
       threshold,
     })).sort((a, b) => a.barangay.localeCompare(b.barangay));
   }, [medicines, effectiveMedicine]);
+
+  // Barangay list derived from inventory data for trend selector
+  const barangayList = useMemo(() => inventory.map(i => i.barangay).sort(), [inventory]);
+  const effectiveTrendBarangay = trendBarangay || barangayList[0] || "";
+  const effectiveTrendMedicine = trendItemType === "medicine" ? (trendItemKey || uniqueMedicineNames[0] || "") : trendItemKey;
+
+  // Snapshot query URL — full path so default fetcher uses it directly
+  const snapshotQueryKey = viewMode === "trend" && effectiveTrendBarangay && effectiveTrendMedicine
+    ? `/api/inventory/snapshots?barangay=${encodeURIComponent(effectiveTrendBarangay)}&itemType=${trendItemType}&itemKey=${encodeURIComponent(trendItemType === "vaccine" ? trendItemKey || "bcg" : effectiveTrendMedicine)}`
+    : null;
+
+  const { data: snapshots = [], isLoading: snapLoading } = useQuery<InventorySnapshot[]>({
+    queryKey: [snapshotQueryKey],
+    enabled: !!snapshotQueryKey,
+  });
+
+  // Format snapshot rows for the LineChart
+  const trendChartData = useMemo(() =>
+    snapshots.map(s => ({
+      month: formatSnapshotDate(s.snapshotDate),
+      qty: s.qty,
+    })),
+    [snapshots]
+  );
 
   const stockOutBarangays = inventory.filter(inv => {
     const v = inv.vaccines as VaccineShape | null;
@@ -157,154 +203,298 @@ export default function InventoryPage() {
         <KpiCard title="Total Barangays" value={inventory.length} icon={CheckCircle} />
       </div>
 
-      {/* Stock Level Chart — tabbed: Vaccines | Medicines */}
+      {/* Stock Level Chart — Snapshot or Trend views */}
       <Card data-testid="card-stock-trend-chart">
         <CardHeader className="flex flex-row items-center justify-between flex-wrap gap-3">
           <CardTitle className="text-base flex items-center gap-2">
-            <BarChart2 className="w-4 h-4 text-green-400" />
-            Stock Levels by Barangay
+            {viewMode === "trend" ? <LineChartIcon className="w-4 h-4 text-purple-400" /> : <BarChart2 className="w-4 h-4 text-green-400" />}
+            {viewMode === "trend" ? "Stock Trend Over Time" : "Stock Levels by Barangay"}
           </CardTitle>
           <div className="flex items-center gap-3 flex-wrap">
-            {/* Tab toggle */}
-            <div className="flex rounded-md border border-border overflow-hidden text-xs" data-testid="chart-tab-toggle">
+
+            {/* Primary view mode toggle: Snapshot | Trend */}
+            <div className="flex rounded-md border border-border overflow-hidden text-xs" data-testid="view-mode-toggle">
               <button
-                onClick={() => setChartTab("vaccines")}
+                onClick={() => setViewMode("snapshot")}
                 className={`px-3 py-1.5 flex items-center gap-1.5 transition-colors ${
-                  chartTab === "vaccines"
+                  viewMode === "snapshot"
                     ? "bg-green-600 text-white font-medium"
                     : "text-muted-foreground hover:text-foreground hover:bg-muted"
                 }`}
-                data-testid="button-tab-vaccines"
+                data-testid="button-view-snapshot"
               >
-                <Syringe className="w-3 h-3" />
-                Vaccines
+                <BarChart2 className="w-3 h-3" />
+                Snapshot
               </button>
               <button
-                onClick={() => setChartTab("medicines")}
+                onClick={() => setViewMode("trend")}
                 className={`px-3 py-1.5 flex items-center gap-1.5 transition-colors border-l border-border ${
-                  chartTab === "medicines"
-                    ? "bg-blue-600 text-white font-medium"
+                  viewMode === "trend"
+                    ? "bg-purple-600 text-white font-medium"
                     : "text-muted-foreground hover:text-foreground hover:bg-muted"
                 }`}
-                data-testid="button-tab-medicines"
+                data-testid="button-view-trend"
               >
-                <Pill className="w-3 h-3" />
-                Medicines
+                <LineChartIcon className="w-3 h-3" />
+                Trend
               </button>
             </div>
 
-            {/* Legend */}
-            <div className="flex items-center gap-2 text-xs">
-              <span className="inline-block w-3 h-3 rounded-sm bg-green-500" /> Adequate
-              <span className="inline-block w-3 h-3 rounded-sm bg-yellow-400 ml-1" /> Low
-              <span className="inline-block w-3 h-3 rounded-sm bg-orange-400 ml-1" /> Critical
-              <span className="inline-block w-3 h-3 rounded-sm bg-red-500 ml-1" /> Stock-out
-            </div>
+            {/* Snapshot mode controls */}
+            {viewMode === "snapshot" && (<>
+              {/* Tab toggle */}
+              <div className="flex rounded-md border border-border overflow-hidden text-xs" data-testid="chart-tab-toggle">
+                <button
+                  onClick={() => setChartTab("vaccines")}
+                  className={`px-3 py-1.5 flex items-center gap-1.5 transition-colors ${
+                    chartTab === "vaccines"
+                      ? "bg-green-600 text-white font-medium"
+                      : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                  }`}
+                  data-testid="button-tab-vaccines"
+                >
+                  <Syringe className="w-3 h-3" />
+                  Vaccines
+                </button>
+                <button
+                  onClick={() => setChartTab("medicines")}
+                  className={`px-3 py-1.5 flex items-center gap-1.5 transition-colors border-l border-border ${
+                    chartTab === "medicines"
+                      ? "bg-blue-600 text-white font-medium"
+                      : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                  }`}
+                  data-testid="button-tab-medicines"
+                >
+                  <Pill className="w-3 h-3" />
+                  Medicines
+                </button>
+              </div>
 
-            {/* Vaccine selector */}
-            {chartTab === "vaccines" && (
-              <Select value={selectedVaccine} onValueChange={(v) => setSelectedVaccine(v as VaccineKey)} data-testid="select-vaccine">
-                <SelectTrigger className="w-28 h-8 text-xs" data-testid="select-trigger-vaccine">
-                  <SelectValue />
+              {/* Legend */}
+              <div className="flex items-center gap-2 text-xs">
+                <span className="inline-block w-3 h-3 rounded-sm bg-green-500" /> Adequate
+                <span className="inline-block w-3 h-3 rounded-sm bg-yellow-400 ml-1" /> Low
+                <span className="inline-block w-3 h-3 rounded-sm bg-orange-400 ml-1" /> Critical
+                <span className="inline-block w-3 h-3 rounded-sm bg-red-500 ml-1" /> Stock-out
+              </div>
+
+              {/* Vaccine selector */}
+              {chartTab === "vaccines" && (
+                <Select value={selectedVaccine} onValueChange={(v) => setSelectedVaccine(v as VaccineKey)} data-testid="select-vaccine">
+                  <SelectTrigger className="w-28 h-8 text-xs" data-testid="select-trigger-vaccine">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {VACCINE_OPTIONS.map(opt => (
+                      <SelectItem key={opt.key} value={opt.key} data-testid={`select-option-${opt.key}`}>
+                        {opt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+
+              {/* Medicine selector */}
+              {chartTab === "medicines" && uniqueMedicineNames.length > 0 && (
+                <Select
+                  value={effectiveMedicine}
+                  onValueChange={setSelectedMedicine}
+                  data-testid="select-medicine"
+                >
+                  <SelectTrigger className="w-44 h-8 text-xs" data-testid="select-trigger-medicine">
+                    <SelectValue placeholder="Select medicine" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {uniqueMedicineNames.map(name => (
+                      <SelectItem key={name} value={name} data-testid={`select-option-${name.replace(/\s+/g, "-").toLowerCase()}`}>
+                        {name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </>)}
+
+            {/* Trend mode controls */}
+            {viewMode === "trend" && (<>
+              {/* Barangay selector */}
+              <Select value={effectiveTrendBarangay} onValueChange={setTrendBarangay} data-testid="select-trend-barangay">
+                <SelectTrigger className="w-44 h-8 text-xs" data-testid="select-trigger-trend-barangay">
+                  <SelectValue placeholder="Select barangay" />
                 </SelectTrigger>
                 <SelectContent>
-                  {VACCINE_OPTIONS.map(opt => (
-                    <SelectItem key={opt.key} value={opt.key} data-testid={`select-option-${opt.key}`}>
-                      {opt.label}
+                  {barangayList.map(b => (
+                    <SelectItem key={b} value={b} data-testid={`select-option-barangay-${b.replace(/\s+/g, "-").toLowerCase()}`}>
+                      {b}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-            )}
 
-            {/* Medicine selector */}
-            {chartTab === "medicines" && uniqueMedicineNames.length > 0 && (
-              <Select
-                value={effectiveMedicine}
-                onValueChange={setSelectedMedicine}
-                data-testid="select-medicine"
-              >
-                <SelectTrigger className="w-44 h-8 text-xs" data-testid="select-trigger-medicine">
-                  <SelectValue placeholder="Select medicine" />
-                </SelectTrigger>
-                <SelectContent>
-                  {uniqueMedicineNames.map(name => (
-                    <SelectItem key={name} value={name} data-testid={`select-option-${name.replace(/\s+/g, "-").toLowerCase()}`}>
-                      {name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
+              {/* Item type toggle */}
+              <div className="flex rounded-md border border-border overflow-hidden text-xs" data-testid="trend-item-type-toggle">
+                <button
+                  onClick={() => { setTrendItemType("vaccine"); setTrendItemKey("bcg"); }}
+                  className={`px-3 py-1.5 flex items-center gap-1 transition-colors ${trendItemType === "vaccine" ? "bg-purple-600 text-white font-medium" : "text-muted-foreground hover:bg-muted"}`}
+                  data-testid="button-trend-vaccine"
+                >
+                  <Syringe className="w-3 h-3" /> Vaccine
+                </button>
+                <button
+                  onClick={() => { setTrendItemType("medicine"); setTrendItemKey(uniqueMedicineNames[0] || ""); }}
+                  className={`px-3 py-1.5 flex items-center gap-1 border-l border-border transition-colors ${trendItemType === "medicine" ? "bg-purple-600 text-white font-medium" : "text-muted-foreground hover:bg-muted"}`}
+                  data-testid="button-trend-medicine"
+                >
+                  <Pill className="w-3 h-3" /> Medicine
+                </button>
+              </div>
+
+              {/* Item name selector */}
+              {trendItemType === "vaccine" ? (
+                <Select value={trendItemKey || "bcg"} onValueChange={setTrendItemKey} data-testid="select-trend-item">
+                  <SelectTrigger className="w-28 h-8 text-xs" data-testid="select-trigger-trend-item">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {VACCINE_TREND_OPTIONS.map(opt => (
+                      <SelectItem key={opt.key} value={opt.key} data-testid={`select-option-trend-${opt.key}`}>
+                        {opt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <Select value={trendItemKey || uniqueMedicineNames[0] || ""} onValueChange={setTrendItemKey} data-testid="select-trend-item">
+                  <SelectTrigger className="w-44 h-8 text-xs" data-testid="select-trigger-trend-item">
+                    <SelectValue placeholder="Select medicine" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {uniqueMedicineNames.map(name => (
+                      <SelectItem key={name} value={name} data-testid={`select-option-trend-${name.replace(/\s+/g, "-").toLowerCase()}`}>
+                        {name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </>)}
           </div>
         </CardHeader>
 
         <CardContent>
-          {/* Vaccines chart */}
-          {chartTab === "vaccines" && (
-            inventory.length === 0 ? (
-              <div className="flex items-center justify-center h-48 text-muted-foreground text-sm" data-testid="text-chart-empty">
-                No inventory data available. Add inventory records to see the chart.
-              </div>
-            ) : (
-              <div data-testid="chart-vaccine-stock">
-              <ResponsiveContainer width="100%" height={280}>
-                <BarChart
-                  data={inventory.map(inv => ({
-                    barangay: inv.barangay.replace(/\s*\(.*?\)/, ""),
-                    qty: getVaccineQty(inv.vaccines as VaccineShape | null, selectedVaccine),
-                  }))}
-                  margin={{ top: 4, right: 12, left: 0, bottom: 60 }}
-                >
-                  <XAxis dataKey="barangay" tick={{ fontSize: 10 }} angle={-45} textAnchor="end" interval={0} />
-                  <YAxis tick={{ fontSize: 11 }} width={36} />
-                  <Tooltip content={<CustomTooltip />} />
-                  <ReferenceLine y={LOW_STOCK} stroke="#f97316" strokeDasharray="4 2" label={{ value: "Low", fontSize: 10, fill: "#f97316" }} />
-                  <Bar dataKey="qty" name={VACCINE_OPTIONS.find(o => o.key === selectedVaccine)?.label ?? "Qty"} radius={[3, 3, 0, 0]}>
-                    {inventory.map((inv, idx) => {
-                      const qty = getVaccineQty(inv.vaccines as VaccineShape | null, selectedVaccine);
-                      return <Cell key={idx} fill={getBarColor(qty)} />;
-                    })}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-            )
-          )}
+          {/* Snapshot mode: Vaccines/Medicines bar charts */}
+          {viewMode === "snapshot" && (<>
+            {/* Vaccines chart */}
+            {chartTab === "vaccines" && (
+              inventory.length === 0 ? (
+                <div className="flex items-center justify-center h-48 text-muted-foreground text-sm" data-testid="text-chart-empty">
+                  No inventory data available. Add inventory records to see the chart.
+                </div>
+              ) : (
+                <div data-testid="chart-vaccine-stock">
+                  <ResponsiveContainer width="100%" height={280}>
+                    <BarChart
+                      data={inventory.map(inv => ({
+                        barangay: inv.barangay.replace(/\s*\(.*?\)/, ""),
+                        qty: getVaccineQty(inv.vaccines as VaccineShape | null, selectedVaccine),
+                      }))}
+                      margin={{ top: 4, right: 12, left: 0, bottom: 60 }}
+                    >
+                      <XAxis dataKey="barangay" tick={{ fontSize: 10 }} angle={-45} textAnchor="end" interval={0} />
+                      <YAxis tick={{ fontSize: 11 }} width={36} />
+                      <Tooltip content={<CustomTooltip />} />
+                      <ReferenceLine y={LOW_STOCK} stroke="#f97316" strokeDasharray="4 2" label={{ value: "Low", fontSize: 10, fill: "#f97316" }} />
+                      <Bar dataKey="qty" name={VACCINE_OPTIONS.find(o => o.key === selectedVaccine)?.label ?? "Qty"} radius={[3, 3, 0, 0]}>
+                        {inventory.map((inv, idx) => {
+                          const qty = getVaccineQty(inv.vaccines as VaccineShape | null, selectedVaccine);
+                          return <Cell key={idx} fill={getBarColor(qty)} />;
+                        })}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              )
+            )}
 
-          {/* Medicines chart */}
-          {chartTab === "medicines" && (
-            medicineChartData.length === 0 ? (
-              <div className="flex items-center justify-center h-48 text-muted-foreground text-sm" data-testid="text-medicine-chart-empty">
-                {uniqueMedicineNames.length === 0
-                  ? "No medicine inventory data. Add medicine records to see the chart."
-                  : "No data for the selected medicine."}
+            {/* Medicines chart */}
+            {chartTab === "medicines" && (
+              medicineChartData.length === 0 ? (
+                <div className="flex items-center justify-center h-48 text-muted-foreground text-sm" data-testid="text-medicine-chart-empty">
+                  {uniqueMedicineNames.length === 0
+                    ? "No medicine inventory data. Add medicine records to see the chart."
+                    : "No data for the selected medicine."}
+                </div>
+              ) : (
+                (() => {
+                  const medLow = medicineChartData[0]?.threshold ?? MED_LOW_STOCK;
+                  return (
+                    <div data-testid="chart-medicine-stock">
+                      <ResponsiveContainer width="100%" height={280}>
+                        <BarChart
+                          data={medicineChartData}
+                          margin={{ top: 4, right: 12, left: 0, bottom: 60 }}
+                        >
+                          <XAxis dataKey="barangay" tick={{ fontSize: 10 }} angle={-45} textAnchor="end" interval={0} />
+                          <YAxis tick={{ fontSize: 11 }} width={36} />
+                          <Tooltip content={<CustomTooltip low={medLow} ok={MED_OK_STOCK} />} />
+                          <ReferenceLine y={medLow} stroke="#f97316" strokeDasharray="4 2" label={{ value: "Low", fontSize: 10, fill: "#f97316" }} />
+                          <Bar dataKey="qty" name={effectiveMedicine} radius={[3, 3, 0, 0]}>
+                            {medicineChartData.map((row, idx) => (
+                              <Cell key={idx} fill={getBarColor(row.qty, row.threshold, MED_OK_STOCK)} />
+                            ))}
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  );
+                })()
+              )
+            )}
+          </>)}
+
+          {/* Trend mode: historical line chart */}
+          {viewMode === "trend" && (
+            snapLoading ? (
+              <div className="flex items-center justify-center h-64 text-muted-foreground text-sm" data-testid="text-trend-loading">
+                Loading trend data…
+              </div>
+            ) : trendChartData.length === 0 ? (
+              <div className="flex items-center justify-center h-64 text-muted-foreground text-sm" data-testid="text-trend-empty">
+                No historical data available for this selection.
               </div>
             ) : (
-              (() => {
-                // Use the medicine's actual low-stock threshold for reference line and coloring
-                const medLow = medicineChartData[0]?.threshold ?? MED_LOW_STOCK;
-                return (
-                  <div data-testid="chart-medicine-stock">
-                    <ResponsiveContainer width="100%" height={280}>
-                      <BarChart
-                        data={medicineChartData}
-                        margin={{ top: 4, right: 12, left: 0, bottom: 60 }}
-                      >
-                        <XAxis dataKey="barangay" tick={{ fontSize: 10 }} angle={-45} textAnchor="end" interval={0} />
-                        <YAxis tick={{ fontSize: 11 }} width={36} />
-                        <Tooltip content={<CustomTooltip low={medLow} ok={MED_OK_STOCK} />} />
-                        <ReferenceLine y={medLow} stroke="#f97316" strokeDasharray="4 2" label={{ value: "Low", fontSize: 10, fill: "#f97316" }} />
-                        <Bar dataKey="qty" name={effectiveMedicine} radius={[3, 3, 0, 0]}>
-                          {medicineChartData.map((row, idx) => (
-                            <Cell key={idx} fill={getBarColor(row.qty, row.threshold, MED_OK_STOCK)} />
-                          ))}
-                        </Bar>
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                );
-              })()
+              <div data-testid="chart-trend-line">
+                <p className="text-xs text-muted-foreground mb-3">
+                  Monthly stock level for <strong>{trendItemType === "vaccine" ? VACCINE_TREND_OPTIONS.find(o => o.key === (trendItemKey || "bcg"))?.label : trendItemKey}</strong> in <strong>{effectiveTrendBarangay}</strong>
+                </p>
+                <ResponsiveContainer width="100%" height={300}>
+                  <LineChart data={trendChartData} margin={{ top: 4, right: 24, left: 0, bottom: 16 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
+                    <XAxis dataKey="month" tick={{ fontSize: 10 }} />
+                    <YAxis tick={{ fontSize: 11 }} width={36} />
+                    <Tooltip
+                      contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 6 }}
+                      labelStyle={{ fontWeight: 600, fontSize: 12 }}
+                      itemStyle={{ fontSize: 12 }}
+                    />
+                    <ReferenceLine
+                      y={trendItemType === "vaccine" ? LOW_STOCK : MED_LOW_STOCK}
+                      stroke="#f97316"
+                      strokeDasharray="4 2"
+                      label={{ value: "Low stock", fontSize: 10, fill: "#f97316", position: "insideTopRight" }}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="qty"
+                      name="Stock qty"
+                      stroke="#a855f7"
+                      strokeWidth={2}
+                      dot={{ r: 3, fill: "#a855f7" }}
+                      activeDot={{ r: 5 }}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
             )
           )}
         </CardContent>

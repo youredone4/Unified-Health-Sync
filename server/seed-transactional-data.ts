@@ -37,6 +37,7 @@ import {
   fpServiceRecords,
   inventory,
   medicineInventory,
+  inventorySnapshots,
   FP_METHODS,
   FP_STATUSES,
   InsertPrenatalVisit,
@@ -45,6 +46,7 @@ import {
   InsertFpServiceRecord,
   InsertInventoryItem,
   InsertMedicineInventoryItem,
+  InsertInventorySnapshot,
 } from "@shared/schema";
 import { sql } from "drizzle-orm";
 
@@ -427,6 +429,71 @@ async function seedFpServiceRecords(months: MonthEntry[]): Promise<number> {
   return count;
 }
 
+const VACCINE_SNAPSHOT_KEYS = ["bcg", "hepB", "penta", "opv", "mr"] as const;
+const MEDICINE_SNAPSHOT_NAMES = [
+  "Amlodipine", "Losartan", "Hydrochlorothiazide", "Enalapril", "Metoprolol",
+  "Paracetamol", "Amoxicillin", "Cotrimoxazole", "Iron + Folic Acid", "Vitamin A", "ORS Sachet",
+] as const;
+
+async function seedInventorySnapshots(): Promise<number> {
+  console.log("  Generating inventory_snapshots rows...");
+  const rows: InsertInventorySnapshot[] = [];
+
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth() + 1;
+  const months = monthsInRange(SEED_START_YEAR, 1, currentYear, currentMonth);
+
+  for (const barangay of BARANGAYS) {
+    for (const key of VACCINE_SNAPSHOT_KEYS) {
+      let qty = randInt(50, 120);
+      let monthsSinceRestock = randInt(0, 2);
+      for (const { year, month } of months) {
+        qty = Math.max(0, qty - randInt(3, 12));
+        monthsSinceRestock++;
+        if (monthsSinceRestock >= randInt(3, 5)) {
+          qty = Math.min(150, qty + randInt(40, 100));
+          monthsSinceRestock = 0;
+        }
+        rows.push({
+          barangay,
+          snapshotDate: `${year}-${String(month).padStart(2, "0")}-01`,
+          itemType: "vaccine",
+          itemKey: key,
+          qty,
+        });
+      }
+    }
+
+    for (const medName of MEDICINE_SNAPSHOT_NAMES) {
+      let qty = randInt(30, 90);
+      let monthsSinceRestock = randInt(0, 2);
+      for (const { year, month } of months) {
+        qty = Math.max(0, qty - randInt(2, 8));
+        monthsSinceRestock++;
+        if (monthsSinceRestock >= randInt(2, 4)) {
+          qty = Math.min(120, qty + randInt(30, 80));
+          monthsSinceRestock = 0;
+        }
+        rows.push({
+          barangay,
+          snapshotDate: `${year}-${String(month).padStart(2, "0")}-01`,
+          itemType: "medicine",
+          itemKey: medName,
+          qty,
+        });
+      }
+    }
+  }
+
+  const count = await chunkInsert(
+    rows,
+    (chunk) => db.insert(inventorySnapshots).values(chunk)
+  );
+  console.log(`  Inserted ${count} inventory_snapshot rows`);
+  return count;
+}
+
 async function main() {
   console.log("=".repeat(60));
   console.log("HealthSync Transactional Data Seeder");
@@ -468,7 +535,7 @@ async function main() {
   if (totals > 0 && isForce) {
     console.log("\n--force detected: truncating target tables before reseeding...");
     await db.execute(sql.raw(
-      `TRUNCATE prenatal_visits, child_visits, consults, fp_service_records, inventory, medicine_inventory RESTART IDENTITY CASCADE`
+      `TRUNCATE prenatal_visits, child_visits, consults, fp_service_records, inventory, medicine_inventory, inventory_snapshots RESTART IDENTITY CASCADE`
     ));
     console.log("Tables cleared. Proceeding with fresh seed.");
   }
@@ -498,15 +565,17 @@ async function main() {
   console.log("\nSeeding inventory data...");
   const invInserted = await seedInventory();
   const medInvInserted = await seedMedicineInventory();
+  const snapshotsInserted = await seedInventorySnapshots();
 
   console.log("\n=== Seeding Complete ===");
-  console.log(`  prenatal_visits:    ${pvInserted}`);
-  console.log(`  child_visits:       ${cvInserted}`);
-  console.log(`  consults:           ${cInserted}`);
-  console.log(`  fp_service_records: ${fpInserted}`);
-  console.log(`  inventory:          ${invInserted}`);
-  console.log(`  medicine_inventory: ${medInvInserted}`);
-  console.log(`  Total rows:         ${pvInserted + cvInserted + cInserted + fpInserted + invInserted + medInvInserted}`);
+  console.log(`  prenatal_visits:       ${pvInserted}`);
+  console.log(`  child_visits:          ${cvInserted}`);
+  console.log(`  consults:              ${cInserted}`);
+  console.log(`  fp_service_records:    ${fpInserted}`);
+  console.log(`  inventory:             ${invInserted}`);
+  console.log(`  medicine_inventory:    ${medInvInserted}`);
+  console.log(`  inventory_snapshots:   ${snapshotsInserted}`);
+  console.log(`  Total rows:            ${pvInserted + cvInserted + cInserted + fpInserted + invInserted + medInvInserted + snapshotsInserted}`);
   console.log("\nSchema was NOT modified. No drizzle-kit push required.");
 
   await pool.end();

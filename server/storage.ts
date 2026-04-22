@@ -1,6 +1,6 @@
 import { db } from "./db";
 import { 
-  mothers, children, seniors, inventory, medicineInventory, healthStations, smsOutbox, diseaseCases, tbPatients, themeSettings,
+  mothers, children, seniors, inventory, medicineInventory, inventorySnapshots, healthStations, smsOutbox, diseaseCases, tbPatients, themeSettings,
   barangays, users, userBarangays, municipalitySettings, UserRole, consults, seniorMedClaims,
   m1TemplateVersions, m1IndicatorCatalog, m1ReportInstances, m1ReportHeader, m1IndicatorValues, barangaySettings,
   directMessages,
@@ -12,6 +12,7 @@ import {
   type Senior, type InsertSenior,
   type InventoryItem,
   type MedicineInventoryItem, type InsertMedicineInventoryItem,
+  type InventorySnapshot, type InsertInventorySnapshot,
   type HealthStation,
   type SmsMessage, type InsertSmsMessage,
   type DiseaseCase, type InsertDiseaseCase,
@@ -56,6 +57,8 @@ export interface IStorage {
   getMedicineInventoryById(id: number): Promise<MedicineInventoryItem | undefined>;
   createMedicineInventory(item: InsertMedicineInventoryItem): Promise<MedicineInventoryItem>;
   updateMedicineInventory(id: number, updates: Partial<InsertMedicineInventoryItem>): Promise<MedicineInventoryItem>;
+  getInventorySnapshots(params: { barangay?: string; itemType: string; itemKey: string }): Promise<InventorySnapshot[]>;
+  bulkInsertInventorySnapshots(rows: InsertInventorySnapshot[]): Promise<number>;
   getHealthStations(): Promise<HealthStation[]>;
 
   getSmsMessages(): Promise<SmsMessage[]>;
@@ -264,6 +267,32 @@ export class DatabaseStorage implements IStorage {
       .where(eq(medicineInventory.id, id))
       .returning();
     return updated;
+  }
+
+  async getInventorySnapshots(params: { barangay?: string; itemType: string; itemKey: string }): Promise<InventorySnapshot[]> {
+    const conditions = [
+      eq(inventorySnapshots.itemType, params.itemType),
+      eq(inventorySnapshots.itemKey, params.itemKey),
+    ];
+    if (params.barangay) {
+      conditions.push(eq(inventorySnapshots.barangay, params.barangay));
+    }
+    return await db
+      .select()
+      .from(inventorySnapshots)
+      .where(and(...conditions))
+      .orderBy(inventorySnapshots.snapshotDate);
+  }
+
+  async bulkInsertInventorySnapshots(rows: InsertInventorySnapshot[]): Promise<number> {
+    if (rows.length === 0) return 0;
+    const chunkSize = 500;
+    let total = 0;
+    for (let i = 0; i < rows.length; i += chunkSize) {
+      await db.insert(inventorySnapshots).values(rows.slice(i, i + chunkSize));
+      total += Math.min(chunkSize, rows.length - i);
+    }
+    return total;
   }
 
   async getHealthStations(): Promise<HealthStation[]> {
