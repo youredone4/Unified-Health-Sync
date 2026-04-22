@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
 import type { InventoryItem, MedicineInventoryItem } from "@shared/schema";
@@ -7,16 +8,69 @@ import StatusBadge from "@/components/status-badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Package, AlertCircle, CheckCircle, TrendingUp, Plus, Pill } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Package, AlertCircle, CheckCircle, TrendingUp, Plus, Pill, BarChart2 } from "lucide-react";
 import { formatDate } from "@/lib/healthLogic";
+import {
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, ReferenceLine,
+  type TooltipProps,
+} from "recharts";
+import type { ValueType, NameType } from "recharts/types/component/DefaultTooltipContent";
+
+type VaccineShape = {
+  bcgQty: number;
+  hepBQty: number;
+  pentaQty: number;
+  opvQty: number;
+  mrQty: number;
+};
+type VaccineKey = keyof VaccineShape;
+
+const VACCINE_OPTIONS: { key: VaccineKey; label: string }[] = [
+  { key: "bcgQty", label: "BCG" },
+  { key: "hepBQty", label: "HepB" },
+  { key: "pentaQty", label: "Penta" },
+  { key: "opvQty", label: "OPV" },
+  { key: "mrQty", label: "MR" },
+];
+
+const LOW_STOCK = 10;
+const OK_STOCK = 50;
+
+function getBarColor(qty: number) {
+  if (qty === 0) return "#ef4444";
+  if (qty < LOW_STOCK) return "#f97316";
+  if (qty < OK_STOCK) return "#eab308";
+  return "#22c55e";
+}
+
+function getVaccineQty(vaccines: VaccineShape | null | undefined, key: VaccineKey): number {
+  if (!vaccines) return 0;
+  return vaccines[key] ?? 0;
+}
+
+function CustomTooltip({ active, payload, label }: TooltipProps<ValueType, NameType>) {
+  if (!active || !payload?.length) return null;
+  const qty = typeof payload[0].value === "number" ? payload[0].value : 0;
+  const status = qty === 0 ? "Stock-out" : qty < LOW_STOCK ? "Critical Low" : qty < OK_STOCK ? "Low" : "Adequate";
+  const statusColor = qty === 0 ? "text-red-400" : qty < LOW_STOCK ? "text-orange-400" : qty < OK_STOCK ? "text-yellow-400" : "text-green-400";
+  return (
+    <div className="bg-card border border-border rounded p-2 text-sm shadow">
+      <p className="font-medium mb-1">{label}</p>
+      <p>Qty: <span className="font-bold">{qty}</span></p>
+      <p>Status: <span className={`font-medium ${statusColor}`}>{status}</span></p>
+    </div>
+  );
+}
 
 export default function InventoryPage() {
   const [, navigate] = useLocation();
+  const [selectedVaccine, setSelectedVaccine] = useState<VaccineKey>("bcgQty");
   const { data: inventory = [], isLoading } = useQuery<InventoryItem[]>({ queryKey: ['/api/inventory'] });
   const { data: medicines = [], isLoading: medLoading } = useQuery<MedicineInventoryItem[]>({ queryKey: ['/api/medicine-inventory'] });
 
   const stockOutBarangays = inventory.filter(inv => {
-    const v = inv.vaccines as any;
+    const v = inv.vaccines as VaccineShape | null;
     const h = (inv.htnMeds || []) as Array<{ name: string; doseMg: number; qty: number }>;
     const vaccineStockout = v && (v.bcgQty === 0 || v.pentaQty === 0 || v.opvQty === 0 || v.hepBQty === 0 || v.mrQty === 0);
     const htnStockout = h.some(med => med.qty === 0);
@@ -24,7 +78,7 @@ export default function InventoryPage() {
   }).length;
 
   const lowStockBarangays = inventory.filter(inv => {
-    const v = inv.vaccines as any;
+    const v = inv.vaccines as VaccineShape | null;
     return v && (v.bcgQty < 10 || v.pentaQty < 10 || v.opvQty < 10 || v.hepBQty < 10 || v.mrQty < 10);
   }).length;
 
@@ -69,6 +123,70 @@ export default function InventoryPage() {
         <KpiCard title="Total Barangays" value={inventory.length} icon={CheckCircle} />
       </div>
 
+      {/* Stock Trend Chart */}
+      <Card data-testid="card-stock-trend-chart">
+        <CardHeader className="flex flex-row items-center justify-between flex-wrap gap-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <BarChart2 className="w-4 h-4 text-green-400" />
+            Vaccine Stock by Barangay
+          </CardTitle>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 text-xs">
+              <span className="inline-block w-3 h-3 rounded-sm bg-green-500" /> Adequate (≥50)
+              <span className="inline-block w-3 h-3 rounded-sm bg-yellow-400 ml-1" /> Low (10–49)
+              <span className="inline-block w-3 h-3 rounded-sm bg-orange-400 ml-1" /> Critical (&lt;10)
+              <span className="inline-block w-3 h-3 rounded-sm bg-red-500 ml-1" /> Stock-out
+            </div>
+            <Select value={selectedVaccine} onValueChange={setSelectedVaccine} data-testid="select-vaccine">
+              <SelectTrigger className="w-28 h-8 text-xs" data-testid="select-trigger-vaccine">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {VACCINE_OPTIONS.map(opt => (
+                  <SelectItem key={opt.key} value={opt.key} data-testid={`select-option-${opt.key}`}>
+                    {opt.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {inventory.length === 0 ? (
+            <div className="flex items-center justify-center h-48 text-muted-foreground text-sm" data-testid="text-chart-empty">
+              No inventory data available. Add inventory records to see the chart.
+            </div>
+          ) : (
+            <ResponsiveContainer width="100%" height={280} data-testid="chart-vaccine-stock">
+              <BarChart
+                data={inventory.map(inv => ({
+                  barangay: inv.barangay.replace(/\s*\(.*?\)/, ""),
+                  qty: getVaccineQty(inv.vaccines as VaccineShape | null, selectedVaccine),
+                }))}
+                margin={{ top: 4, right: 12, left: 0, bottom: 60 }}
+              >
+                <XAxis
+                  dataKey="barangay"
+                  tick={{ fontSize: 10 }}
+                  angle={-45}
+                  textAnchor="end"
+                  interval={0}
+                />
+                <YAxis tick={{ fontSize: 11 }} width={36} />
+                <Tooltip content={<CustomTooltip />} />
+                <ReferenceLine y={LOW_STOCK} stroke="#f97316" strokeDasharray="4 2" label={{ value: "Low", fontSize: 10, fill: "#f97316" }} />
+                <Bar dataKey="qty" name={VACCINE_OPTIONS.find(o => o.key === selectedVaccine)?.label ?? "Qty"} radius={[3, 3, 0, 0]}>
+                  {inventory.map((inv, idx) => {
+                    const qty = getVaccineQty(inv.vaccines as VaccineShape | null, selectedVaccine);
+                    return <Cell key={idx} fill={getBarColor(qty)} />;
+                  })}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Vaccine Stock</CardTitle>
@@ -94,7 +212,7 @@ export default function InventoryPage() {
                     </td>
                   </tr>
                 ) : inventory.map(inv => {
-                  const v = (inv.vaccines || {}) as any;
+                  const v = (inv.vaccines ?? {}) as VaccineShape;
                   return (
                     <tr key={inv.id} className="border-b border-border/50" data-testid={`row-inv-${inv.id}`}>
                       <td className="py-3 px-3 font-medium">{inv.barangay}</td>
