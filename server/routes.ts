@@ -3,7 +3,7 @@ import type { Server } from "http";
 import { storage } from "./storage";
 import { db } from "./db";
 import { max, eq } from "drizzle-orm";
-import { prenatalVisits, childVisits, seniorVisits, insertFpServiceRecordSchema } from "@shared/schema";
+import { prenatalVisits, childVisits, seniorVisits, insertFpServiceRecordSchema, insertNutritionFollowUpSchema } from "@shared/schema";
 import { api } from "@shared/routes";
 import { z } from "zod";
 import { setupAuth, registerAuthRoutes } from "./auth";
@@ -1327,6 +1327,79 @@ export async function registerRoutes(
     if (!existing) return res.status(404).json({ message: "FP record not found" });
     await storage.deleteFpServiceRecord(id);
     res.json({ success: true });
+  }));
+
+  // === NUTRITION FOLLOW-UPS (PIMAM / OPT-Plus register) ===
+  const nutritionRBAC = [loadUserInfo, requireAuth];
+  const nutritionWriteRBAC = [loadUserInfo, requireAuth, requireRole(UserRole.SYSTEM_ADMIN, UserRole.MHO, UserRole.TL)];
+
+  app.get("/api/nutrition-followups", nutritionRBAC, ar(async (req, res) => {
+    const { childId, barangay } = req.query as { childId?: string; barangay?: string };
+    const user = req.userInfo!;
+    const childIdNum = childId ? Number(childId) : undefined;
+
+    if (user.role === UserRole.TL) {
+      if (barangay && !user.assignedBarangays.includes(barangay)) {
+        return res.status(403).json({ message: "Not authorized for this barangay" });
+      }
+      const rows = await storage.getNutritionFollowUps({
+        childId: childIdNum,
+        barangays: barangay ? [barangay] : user.assignedBarangays,
+      });
+      return res.json(rows);
+    }
+    const rows = await storage.getNutritionFollowUps({
+      childId: childIdNum,
+      barangay,
+    });
+    res.json(rows);
+  }));
+
+  // Bulk latest-per-child lookup used by the worklist chip.
+  app.get("/api/nutrition-followups/latest", nutritionRBAC, ar(async (req, res) => {
+    const raw = (req.query.childIds as string | undefined) ?? "";
+    const ids = raw.split(",").map(s => Number(s.trim())).filter(n => Number.isFinite(n) && n > 0);
+    if (ids.length === 0) return res.json({});
+    const map = await storage.getLatestFollowUpsByChildIds(ids);
+
+    // TL scoping: drop entries for barangays they don't own
+    if (req.userInfo?.role === UserRole.TL) {
+      const allowed = new Set(req.userInfo.assignedBarangays);
+      for (const k of Object.keys(map)) {
+        if (!allowed.has(map[Number(k)].barangay)) delete map[Number(k)];
+      }
+    }
+    res.json(map);
+  }));
+
+  app.post("/api/nutrition-followups", nutritionWriteRBAC, ar(async (req, res) => {
+    const user = req.userInfo!;
+    const parsed = insertNutritionFollowUpSchema.safeParse({
+      ...req.body,
+      recordedBy: user.username,
+      createdAt: new Date().toISOString(),
+    });
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0]?.message || "Invalid data" });
+    }
+    if (user.role === UserRole.TL && !user.assignedBarangays.includes(parsed.data.barangay)) {
+      return res.status(403).json({ message: "Not authorized for this barangay" });
+    }
+    const record = await storage.createNutritionFollowUp(parsed.data);
+    res.status(201).json(record);
+  }));
+
+  app.put("/api/nutrition-followups/:id", nutritionWriteRBAC, ar(async (req, res) => {
+    const id = parseId(req.params.id, res); if (id === null) return;
+    const existing = (await storage.getNutritionFollowUps({ childId: undefined })).find(r => r.id === id);
+    if (!existing) return res.status(404).json({ message: "Follow-up not found" });
+    if (req.userInfo?.role === UserRole.TL && !req.userInfo.assignedBarangays.includes(existing.barangay)) {
+      return res.status(403).json({ message: "Not authorized for this barangay" });
+    }
+    const parsed = insertNutritionFollowUpSchema.partial().safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message || "Invalid data" });
+    const updated = await storage.updateNutritionFollowUp(id, parsed.data);
+    res.json(updated);
   }));
 
   // === GENERAL CHAT (Global shared internal chat room) ===
