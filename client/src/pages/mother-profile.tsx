@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useParams, useLocation } from "wouter";
-import type { Mother, FpServiceRecord } from "@shared/schema";
+import type { Mother, FpServiceRecord, Child } from "@shared/schema";
 import { FP_METHODS, FP_STATUSES } from "@shared/schema";
 import { getTTStatus, getPrenatalCheckStatus, formatDate } from "@/lib/healthLogic";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,7 +10,7 @@ import ConfirmModal from "@/components/confirm-modal";
 import SmsModal from "@/components/sms-modal";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth, permissions } from "@/hooks/use-auth";
-import { ArrowLeft, Heart, Stethoscope, MessageSquare, Check, Pencil, Trash2, HeartHandshake, Plus, ExternalLink } from "lucide-react";
+import { ArrowLeft, Heart, Stethoscope, MessageSquare, Check, Pencil, Trash2, HeartHandshake, Plus, ExternalLink, Baby } from "lucide-react";
 import ConsultationHistoryCard from "@/components/consultation-history-card";
 import VisitHistoryCard from "@/components/visit-history-card";
 import { useState } from "react";
@@ -83,6 +83,12 @@ export default function MotherProfile() {
   const { data: fpRecords = [] } = useQuery<FpServiceRecord[]>({
     queryKey: ["/api/fp-records"],
     select: (records) => records.filter(r => r.linkedPersonId === Number(id) && r.linkedPersonType === "MOTHER"),
+    enabled: !!id,
+  });
+
+  const { data: linkedChildren = [] } = useQuery<Child[]>({
+    queryKey: ["/api/children"],
+    select: (all) => all.filter(c => c.motherId === Number(id)),
     enabled: !!id,
   });
 
@@ -282,6 +288,45 @@ export default function MotherProfile() {
           </Card>
         </div>
       </div>
+
+      <Card data-testid="card-linked-children">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base flex items-center justify-between">
+            <span className="flex items-center gap-2">
+              <Baby className="w-4 h-4 text-blue-400" />
+              Linked Children ({linkedChildren.length})
+            </span>
+            <Button size="sm" variant="outline" onClick={() => navigate("/child/new")} className="gap-1" data-testid="button-add-linked-child">
+              <Plus className="w-3 h-3" />
+              Add Child
+            </Button>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {linkedChildren.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-2">
+              No children linked to this mother yet.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {linkedChildren.map(c => (
+                <div key={c.id} className="flex items-center justify-between p-2 rounded-md bg-muted/30 border border-border" data-testid={`linked-child-${c.id}`}>
+                  <div>
+                    <p className="font-medium">{c.name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {c.sex ? (c.sex === "male" ? "Male" : "Female") : "Sex not recorded"}
+                      {c.dob ? ` • DOB ${formatDate(c.dob)}` : ""}
+                    </p>
+                  </div>
+                  <Button size="sm" variant="ghost" onClick={() => navigate(`/child/${c.id}`)} className="gap-1" data-testid={`button-view-child-${c.id}`}>
+                    View Profile <ExternalLink className="w-3 h-3" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
