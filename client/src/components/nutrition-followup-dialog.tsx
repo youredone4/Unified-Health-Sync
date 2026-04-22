@@ -89,8 +89,13 @@ export default function NutritionFollowUpDialog({ child, open, onClose }: Props)
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/nutrition-followups/latest"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/nutrition-followups"] });
+      // Every nutrition-followup cache variant embeds its parameters in the URL
+      // (e.g. "/api/nutrition-followups?childId=5", "/api/nutrition-followups/latest?childIds=1,2,3"),
+      // so a literal queryKey array can never match. Invalidate by URL prefix instead.
+      queryClient.invalidateQueries({
+        predicate: (q) => typeof q.queryKey[0] === "string"
+          && (q.queryKey[0] as string).startsWith("/api/nutrition-followups"),
+      });
       toast({ title: "Follow-up recorded", description: `${child.name}: ${CLASSIFICATION_LABELS[classification]}` });
       onClose();
     },
