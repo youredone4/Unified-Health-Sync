@@ -203,7 +203,7 @@ export default function InventoryPage() {
 
             {/* Vaccine selector */}
             {chartTab === "vaccines" && (
-              <Select value={selectedVaccine} onValueChange={setSelectedVaccine} data-testid="select-vaccine">
+              <Select value={selectedVaccine} onValueChange={(v) => setSelectedVaccine(v as VaccineKey)} data-testid="select-vaccine">
                 <SelectTrigger className="w-28 h-8 text-xs" data-testid="select-trigger-vaccine">
                   <SelectValue />
                 </SelectTrigger>
@@ -281,24 +281,30 @@ export default function InventoryPage() {
                   : "No data for the selected medicine."}
               </div>
             ) : (
-              <div data-testid="chart-medicine-stock">
-              <ResponsiveContainer width="100%" height={280}>
-                <BarChart
-                  data={medicineChartData}
-                  margin={{ top: 4, right: 12, left: 0, bottom: 60 }}
-                >
-                  <XAxis dataKey="barangay" tick={{ fontSize: 10 }} angle={-45} textAnchor="end" interval={0} />
-                  <YAxis tick={{ fontSize: 11 }} width={36} />
-                  <Tooltip content={<CustomTooltip low={MED_LOW_STOCK} ok={MED_OK_STOCK} />} />
-                  <ReferenceLine y={MED_LOW_STOCK} stroke="#f97316" strokeDasharray="4 2" label={{ value: "Low", fontSize: 10, fill: "#f97316" }} />
-                  <Bar dataKey="qty" name={effectiveMedicine} radius={[3, 3, 0, 0]}>
-                    {medicineChartData.map((row, idx) => (
-                      <Cell key={idx} fill={getBarColor(row.qty, MED_LOW_STOCK, MED_OK_STOCK)} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
+              (() => {
+                // Use the medicine's actual low-stock threshold for reference line and coloring
+                const medLow = medicineChartData[0]?.threshold ?? MED_LOW_STOCK;
+                return (
+                  <div data-testid="chart-medicine-stock">
+                    <ResponsiveContainer width="100%" height={280}>
+                      <BarChart
+                        data={medicineChartData}
+                        margin={{ top: 4, right: 12, left: 0, bottom: 60 }}
+                      >
+                        <XAxis dataKey="barangay" tick={{ fontSize: 10 }} angle={-45} textAnchor="end" interval={0} />
+                        <YAxis tick={{ fontSize: 11 }} width={36} />
+                        <Tooltip content={<CustomTooltip low={medLow} ok={MED_OK_STOCK} />} />
+                        <ReferenceLine y={medLow} stroke="#f97316" strokeDasharray="4 2" label={{ value: "Low", fontSize: 10, fill: "#f97316" }} />
+                        <Bar dataKey="qty" name={effectiveMedicine} radius={[3, 3, 0, 0]}>
+                          {medicineChartData.map((row, idx) => (
+                            <Cell key={idx} fill={getBarColor(row.qty, row.threshold, MED_OK_STOCK)} />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                );
+              })()
             )
           )}
         </CardContent>
