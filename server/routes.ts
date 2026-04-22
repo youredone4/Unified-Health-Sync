@@ -636,6 +636,26 @@ export async function registerRoutes(
     res.json(reports);
   });
 
+  // Consolidated "All Barangays" read-only M1 view for a period.
+  // Must be registered BEFORE /api/m1/reports/:id so "consolidated" is not
+  // treated as a numeric id.
+  app.get("/api/m1/reports/consolidated", loadUserInfo, requireAuth, ar(async (req, res) => {
+    if (req.userInfo?.role === UserRole.TL) {
+      return res.status(403).json({ message: "Consolidated view is not available to TL users" });
+    }
+    const month = Number(req.query.month);
+    const year = Number(req.query.year);
+    if (!Number.isInteger(month) || month < 1 || month > 12) {
+      return res.status(400).json({ message: "Invalid month" });
+    }
+    if (!Number.isInteger(year) || year < 2000 || year > 2100) {
+      return res.status(400).json({ message: "Invalid year" });
+    }
+    const onlySubmitted = req.query.onlySubmitted === "true";
+    const result = await storage.getConsolidatedM1Values(month, year, { onlySubmitted });
+    res.json(result);
+  }));
+
   // Get single M1 report instance with values
   app.get("/api/m1/reports/:id", loadUserInfo, requireAuth, ar(async (req, res) => {
     const id = parseId(req.params.id, res); if (id === null) return;

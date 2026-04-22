@@ -165,6 +165,24 @@ export default function M1ReportPage() {
     enabled: !isTL,
   });
 
+  // Consolidated view: non-TL users viewing "All Barangays" option
+  const isConsolidatedView = !isTL && selectedBarangayId === null;
+  const consolidatedQueryKey = isConsolidatedView
+    ? `/api/m1/reports/consolidated?month=${selectedMonth}&year=${selectedYear}`
+    : null;
+  const { data: consolidatedData } = useQuery<{
+    values: M1IndicatorValue[];
+    sourceReportCount: number;
+    submittedCount: number;
+  }>({
+    queryKey: [consolidatedQueryKey],
+    queryFn: () =>
+      fetch(`/api/m1/reports/consolidated?month=${selectedMonth}&year=${selectedYear}`, {
+        credentials: "include",
+      }).then((r) => r.json()),
+    enabled: isConsolidatedView,
+  });
+
   const { data: mothers = [] } = useQuery<Mother[]>({ queryKey: [scopedPath("/api/mothers")] });
   const { data: children = [] } = useQuery<Child[]>({ queryKey: [scopedPath("/api/children")] });
   const { data: seniors = [] } = useQuery<Senior[]>({ queryKey: [scopedPath("/api/seniors")] });
@@ -335,6 +353,13 @@ export default function M1ReportPage() {
 
   const savedValuesMap = useMemo(() => {
     const map: IndicatorValueMap = {};
+    if (isConsolidatedView && consolidatedData?.values) {
+      consolidatedData.values.forEach(v => {
+        const key = v.columnKey ? `${v.rowKey}:${v.columnKey}` : v.rowKey;
+        map[key] = { valueNumber: v.valueNumber, valueText: v.valueText, valueSource: v.valueSource || "CONSOLIDATED" };
+      });
+      return map;
+    }
     if (activeReport?.values) {
       activeReport.values.forEach(v => {
         const key = v.columnKey ? `${v.rowKey}:${v.columnKey}` : v.rowKey;
@@ -342,7 +367,7 @@ export default function M1ReportPage() {
       });
     }
     return map;
-  }, [activeReport]);
+  }, [activeReport, isConsolidatedView, consolidatedData]);
 
   const getAgeGroup = (age: number) => {
     if (age >= 10 && age <= 14) return "10-14";
@@ -833,6 +858,7 @@ export default function M1ReportPage() {
     if (source === "COMPUTED") return <span className="text-[9px] px-1 rounded bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-200">Auto</span>;
     if (source === "ENCODED") return <span className="text-[9px] px-1 rounded bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200">Manual</span>;
     if (source === "IMPORTED") return <span className="text-[9px] px-1 rounded bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-200">Imported</span>;
+    if (source === "CONSOLIDATED") return <span className="text-[9px] px-1 rounded bg-teal-100 text-teal-700 dark:bg-teal-900 dark:text-teal-200">Σ</span>;
     if (showMissing) return <span className="text-[9px] px-1 rounded bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-400">Missing</span>;
     return null;
   };
@@ -1314,7 +1340,14 @@ export default function M1ReportPage() {
               {selectedBarangay?.name || "All Barangays (Consolidated)"} — {MONTHS.find(m => m.value === selectedMonth)?.label} {selectedYear}
               {isLocked && <Lock className="h-4 w-4 text-muted-foreground" />}
             </CardTitle>
-              {existingReport ? (
+              {isConsolidatedView ? (
+                <Badge
+                  className="mt-1 bg-teal-100 text-teal-800 border-teal-300 dark:bg-teal-900 dark:text-teal-200 dark:border-teal-700 hover:bg-teal-100"
+                  data-testid="badge-consolidated"
+                >
+                  Consolidated (read-only)
+                </Badge>
+              ) : existingReport ? (
                 <Badge
                   variant={existingReport.status === "SUBMITTED_LOCKED" ? "default" : "secondary"}
                   className="mt-1"
@@ -1407,7 +1440,7 @@ export default function M1ReportPage() {
           </CardHeader>
           <CardContent>
             <Tabs value={currentPage.toString()} onValueChange={(v) => setCurrentPage(parseInt(v, 10))}>
-              {activeReportId && (
+              {(activeReportId || isConsolidatedView) && (
                 <div className="flex items-center justify-between mb-4">
                   <TabsList>
                     <TabsTrigger value="1" data-testid="tab-page-1">Page 1</TabsTrigger>
@@ -1425,7 +1458,7 @@ export default function M1ReportPage() {
                 </div>
               )}
 
-              {activeReportId && (
+              {activeReportId && !isConsolidatedView && (
                 <div className="mb-2 space-y-1">
                   <div className="flex items-center justify-between text-xs text-muted-foreground">
                     <span>Page {currentPage} completeness — <span className="font-medium">{completeness.filled} / {completeness.total} indicators filled</span></span>
@@ -1534,7 +1567,43 @@ export default function M1ReportPage() {
                 </div>
               )}
 
-              {!selectedBarangayId ? (
+              {isConsolidatedView ? (
+                consolidatedData && consolidatedData.sourceReportCount > 0 ? (
+                  <>
+                    <div
+                      className="mb-4 rounded-md border border-teal-300 bg-teal-50 dark:bg-teal-950/30 dark:border-teal-800 px-4 py-3 text-sm text-teal-800 dark:text-teal-200"
+                      data-testid="banner-consolidated"
+                    >
+                      Showing consolidated values from {consolidatedData.sourceReportCount} barangay report{consolidatedData.sourceReportCount === 1 ? "" : "s"} for {MONTHS.find(m => m.value === selectedMonth)?.label} {selectedYear}, {consolidatedData.submittedCount} submitted, {consolidatedData.sourceReportCount - consolidatedData.submittedCount} draft.
+                    </div>
+                    {[1, 2, 3].map(page => (
+                      <TabsContent key={page} value={page.toString()} className="space-y-6">
+                        <h3 className="font-semibold text-lg border-b pb-2">{PAGE_TITLES[page]}</h3>
+                        {Object.entries(groupedIndicators)
+                          .filter(([_, indicators]) => indicators[0]?.pageNumber === page)
+                          .sort(([, a], [, b]) => (a[0]?.rowOrder || 0) - (b[0]?.rowOrder || 0))
+                          .map(([sectionCode, indicators]) => (
+                            <div key={sectionCode} className="space-y-3">
+                              <h4 className="font-medium text-sm text-primary uppercase tracking-wide flex items-center gap-2">
+                                <span className="bg-primary text-primary-foreground px-2 py-0.5 rounded text-xs">{sectionCode}</span>
+                                {SECTION_TITLES[sectionCode] || sectionCode}
+                              </h4>
+                              <div className="border rounded-md overflow-x-auto">
+                                {renderIndicatorTable(sectionCode, indicators)}
+                              </div>
+                            </div>
+                          ))}
+                      </TabsContent>
+                    ))}
+                  </>
+                ) : (
+                  <div className="flex flex-col items-center justify-center py-16 text-muted-foreground gap-3" data-testid="empty-state-no-consolidated">
+                    <FileText className="h-12 w-12 opacity-30" />
+                    <p className="text-lg font-medium">No reports for this period</p>
+                    <p className="text-sm">No barangay reports have been created for {MONTHS.find(m => m.value === selectedMonth)?.label} {selectedYear} yet.</p>
+                  </div>
+                )
+              ) : !selectedBarangayId ? (
                 <div className="flex flex-col items-center justify-center py-16 text-muted-foreground gap-3" data-testid="empty-state-no-barangay">
                   <Building2 className="h-12 w-12 opacity-30" />
                   <p className="text-lg font-medium">Select a barangay to view or create reports</p>
