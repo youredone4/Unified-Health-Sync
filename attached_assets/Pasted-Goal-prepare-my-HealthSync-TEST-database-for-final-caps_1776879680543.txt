@@ -1,0 +1,113 @@
+Goal: prepare my HealthSync TEST database for final capstone defense so every
+module works — especially the M1 reporting — by (1) cleaning test data,
+(2) re-seeding patient registries, and (3) seeding transactional data
+(visits, consults, FP) across Jan 2025 to the current month so M1 reports
+produce non-zero values for every month.
+
+IMPORTANT — READ FIRST
+- TEST database ONLY. DO NOT touch production.
+- The SENIOR REGISTRY contains 3,000+ REAL records from DSWD.
+  Do NOT clear seniors, senior_visits, or senior_med_claims.
+- Confirm the DATABASE_URL host before any destructive step.
+
+==================================================
+A. Create three scripts under server/
+==================================================
+
+1) server/reset-test-data.ts — Truncate-only reset
+   TRUNCATE ... RESTART IDENTITY CASCADE on these tables, in order:
+     Visits:        prenatal_visits, child_visits
+     Registries:    mothers, children
+     Clinical:      consults, disease_cases, tb_patients,
+                    fp_service_records, death_events
+     Inventory:     inventory, medicine_inventory
+     M1 instances:  m1_indicator_values, m1_report_header, m1_report_instances
+     Messaging:     sms_outbox, messages, conversations,
+                    global_chat_messages, direct_messages
+   Preserve (do NOT touch):
+     DSWD data:     seniors, senior_visits, senior_med_claims
+     Auth/config:   users, sessions, barangays, user_barangays,
+                    barangay_settings, municipality_settings, theme_settings,
+                    health_stations, audit_logs
+     M1 lookups:    m1_template_versions, m1_indicator_catalog
+   Safety gates (all required):
+     - Env var ALLOW_TEST_RESET=true
+     - CLI flag --confirm  (also support --dry-run that only prints counts)
+     - Optional env PRODUCTION_DB_HOST — refuse if DATABASE_URL host matches
+     - Print DATABASE_URL host + db name, wait 5 seconds, then execute
+     - Run inside a single transaction; rollback on any error
+     - Print before/after row counts and exit non-zero if anything is non-zero
+
+2) server/seed-patients.ts — KEEP EXISTING
+   This already seeds mothers, children, disease_cases, tb_patients.
+   Do not modify except to confirm it skips seniors (DSWD data is untouched).
+
+3) server/seed-transactional-data.ts — NEW
+   Reads existing mothers + children from DB, then generates data distributed
+   from 2025-01-01 through the current month:
+     - prenatal_visits   : 3–6 per mother, ~4 weeks apart, TT-indicative notes
+     - child_visits      : 2–5 per child, distinct months, immunization notes
+     - consults          : ~10 per barangay per month (ranges 7–13), mixed
+                           consult types, ages, barangays, diagnoses
+     - fp_service_records: ~8 per barangay per month (ranges 5–11), mixed
+                           FP_METHODS + FP_STATUSES, reportingMonth = YYYY-MM
+   Constraints:
+     - prenatal_visits has unique(motherId, visitNumber) — honor it
+     - child_visits has unique(childId, visitNumber) — honor it
+     - fp_service_records.reportingMonth must be YYYY-MM for M1 scoping
+     - fp_service_records.fpMethod must be one of FP_METHODS (see schema)
+     - fp_service_records.fpStatus must be one of FP_STATUSES
+   Safety gates:
+     - ALLOW_TEST_RESET=true AND --confirm required
+     - Refuses if prenatal_visits/child_visits/consults/fp_service_records
+       already have rows, unless --force is passed
+   Bulk-insert in chunks of 500 for performance.
+
+==================================================
+B. Execution order (in Replit Shell)
+==================================================
+# Step 1 — confirm you are on the test DB
+npx tsx server/reset-test-data.ts --dry-run
+
+# Step 2 — reset test data (keeps DSWD seniors)
+ALLOW_TEST_RESET=true npx tsx server/reset-test-data.ts --confirm
+
+# Step 3 — seed mother / child / disease / TB registries
+npx tsx server/seed-patients.ts
+
+# Step 4 — seed visits, consults, FP spanning Jan 2025 → current month
+ALLOW_TEST_RESET=true npx tsx server/seed-transactional-data.ts --confirm
+
+==================================================
+C. Acceptance checks after the above four steps
+==================================================
+1. SELECT COUNT(*) FROM seniors;             --> still shows the 3,000+ DSWD rows
+2. SELECT COUNT(*) FROM senior_visits;       --> untouched DSWD count
+3. SELECT COUNT(*) FROM senior_med_claims;   --> untouched DSWD count
+4. SELECT COUNT(*) FROM mothers;             --> matches seed-patients.ts
+5. SELECT COUNT(*) FROM children;            --> matches seed-patients.ts
+6. SELECT COUNT(*) FROM prenatal_visits;     --> several hundred / thousand
+7. SELECT COUNT(*) FROM child_visits;        --> several hundred / thousand
+8. SELECT DISTINCT reporting_month FROM fp_service_records ORDER BY 1;
+   --> returns 2025-01 through the current month (no gaps)
+9. Load the M1 report UI for any barangay + any month in 2025/2026 and
+   confirm indicator rows (TT, Immunization, FP, Consults) populate.
+
+==================================================
+D. Deliverables
+==================================================
+- Confirmation of tables cleared, with before/after row counts
+- Confirmation seniors + senior_visits + senior_med_claims are untouched
+- Counts of rows inserted per seeded table
+- A note confirming schema was NOT modified (no drizzle-kit push required)
+- Any issues encountered (constraint errors, missing env vars, etc.)
+
+==================================================
+E. Success criteria
+==================================================
+- TEST database is clean and internally consistent
+- DSWD senior data is fully preserved
+- 16 months (Jan 2025 – current) of transactional data spread across all
+  20 Placer barangays
+- M1 reporting shows non-zero indicators for every month in the demo window
+- Production database not affected
