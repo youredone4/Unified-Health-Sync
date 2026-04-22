@@ -2,7 +2,12 @@
  * reset-test-data.ts
  * Safe truncate-only reset for the HealthSync TEST database.
  *
- * Usage:
+ * This script is the FIRST step in the full demo reset+seed pipeline.
+ * To reset and reseed everything (including inventory) in one command, use:
+ *
+ *   ALLOW_TEST_RESET=true bash scripts/demo-reset.sh
+ *
+ * Standalone usage:
  *   npx tsx server/reset-test-data.ts --dry-run          (prints row counts, no changes)
  *   ALLOW_TEST_RESET=true npx tsx server/reset-test-data.ts --confirm
  *

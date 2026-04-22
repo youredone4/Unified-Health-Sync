@@ -1,3 +1,20 @@
+/**
+ * seed-patients.ts
+ * Seeds Mothers, Children, Disease Cases, and TB Patient profiles across
+ * all 20 barangays.
+ *
+ * This script is the SECOND step in the full demo reset+seed pipeline.
+ * To reset and reseed everything (including inventory) in one command, use:
+ *
+ *   ALLOW_TEST_RESET=true bash scripts/demo-reset.sh
+ *
+ * Standalone usage:
+ *   npx tsx server/seed-patients.ts
+ *
+ * Note: Run after reset-test-data.ts and before seed-transactional-data.ts.
+ * The transactional seeder reads mothers and children seeded here.
+ */
+
 import { db } from "./db";
 import { mothers, children, diseaseCases, tbPatients, InsertMother } from "@shared/schema";
 

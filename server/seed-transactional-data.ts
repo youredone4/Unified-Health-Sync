@@ -1,9 +1,21 @@
 /**
  * seed-transactional-data.ts
- * Seeds prenatal_visits, child_visits, consults, and fp_service_records
- * spanning January 2025 through the current month across all 20 barangays.
+ * Seeds prenatal_visits, child_visits, consults, fp_service_records,
+ * inventory (vaccines + HTN meds), and medicine_inventory spanning
+ * January 2025 through the current month across all 20 barangays.
  *
- * Usage:
+ * This script is the THIRD step in the full demo reset+seed pipeline.
+ * Run the full pipeline in order using the master script:
+ *
+ *   ALLOW_TEST_RESET=true bash scripts/demo-reset.sh
+ *
+ * Which executes:
+ *   1. server/reset-test-data.ts         — truncates all transactional tables
+ *   2. server/seed-patients.ts           — seeds Mothers, Children, Disease Cases, TB
+ *   3. server/seed-transactional-data.ts — seeds visits, consults, FP records,
+ *                                          and INVENTORY (vaccines + HTN meds)
+ *
+ * To run this script alone (standalone usage):
  *   ALLOW_TEST_RESET=true npx tsx server/seed-transactional-data.ts --confirm
  *   ALLOW_TEST_RESET=true npx tsx server/seed-transactional-data.ts --confirm --force
  *
