@@ -300,7 +300,7 @@ export const consults = pgTable("consults", {
   diagnosis: text("diagnosis").notNull(),
   icdCode: text("icd_code"), // ICD-10 code if applicable
   treatment: text("treatment"),
-  disposition: text("disposition").default("Treated"), // Treated, Referred, Admitted
+  disposition: text("disposition").default("Treated"), // Treated, Referred (to specialist/hospital), Other
   referredTo: text("referred_to"), // Facility name if referred
   consultType: text("consult_type").default("General"), // General, Prenatal, Child, Senior
   linkedPersonType: text("linked_person_type"), // Mother, Child, Senior

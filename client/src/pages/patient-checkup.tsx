@@ -32,7 +32,6 @@ const BARANGAYS = [
 const dispositionColors: Record<string, string> = {
   Treated: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
   Referred: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
-  Admitted: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
   Other: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200",
 };
 
@@ -382,7 +381,6 @@ export default function PatientCheckupPage() {
     total: consults.length,
     treated: consults.filter(c => c.disposition === "Treated").length,
     referred: consults.filter(c => c.disposition === "Referred").length,
-    admitted: consults.filter(c => c.disposition === "Admitted").length,
     patients: patientGroups.length,
   };
 
@@ -582,8 +580,7 @@ export default function PatientCheckupPage() {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="Treated">Treated (sent home)</SelectItem>
-                        <SelectItem value="Referred">Referred to RHU/Hospital</SelectItem>
-                        <SelectItem value="Admitted">Admitted</SelectItem>
+                        <SelectItem value="Referred">Referred to specialist / hospital</SelectItem>
                         <SelectItem value="Other">Other (specify)</SelectItem>
                       </SelectContent>
                     </Select>
@@ -709,7 +706,7 @@ export default function PatientCheckupPage() {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-3 gap-4">
         <Card>
           <CardContent className="pt-6">
             <div className="text-2xl font-bold">{stats.total}</div>
@@ -726,12 +723,6 @@ export default function PatientCheckupPage() {
           <CardContent className="pt-6">
             <div className="text-2xl font-bold text-blue-600">{stats.referred}</div>
             <p className="text-sm text-muted-foreground">Referred</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="text-2xl font-bold text-red-600">{stats.admitted}</div>
-            <p className="text-sm text-muted-foreground">Admitted</p>
           </CardContent>
         </Card>
       </div>
