@@ -225,14 +225,21 @@ export default function ChildProfile() {
               )}
             </div>
 
-            {mother && (
-              <div className="pt-2 border-t border-border mt-2">
-                <p className="text-sm text-muted-foreground mb-1">Linked Mother:</p>
+            <div className="pt-2 border-t border-border mt-2">
+              <p className="text-sm text-muted-foreground mb-1">Linked Mother:</p>
+              {mother ? (
                 <Button variant="outline" size="sm" onClick={() => navigate(`/mother/${mother.id}`)} className="gap-1" data-testid="button-view-mother">
                   <User className="w-3 h-3" /> {mother.firstName} {mother.lastName}
                 </Button>
-              </div>
-            )}
+              ) : (
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-sm text-orange-400" data-testid="text-mother-unlinked">Not linked</span>
+                  <Button variant="outline" size="sm" onClick={() => navigate(`/child/${id}/edit`)} className="gap-1" data-testid="button-link-mother">
+                    <User className="w-3 h-3" /> Link mother
+                  </Button>
+                </div>
+              )}
+            </div>
           </CardContent>
         </Card>
 
