@@ -287,6 +287,9 @@ export default function M1ReportPage() {
       if (reportInstancesQueryKey) {
         queryClient.invalidateQueries({ queryKey: [reportInstancesQueryKey] });
       }
+      if (overviewQueryKey) {
+        queryClient.invalidateQueries({ queryKey: [overviewQueryKey] });
+      }
     },
     onError: (err: any) => {
       toast({ title: "Error", description: extractApiError(err, "Failed to update report status."), variant: "destructive" });
