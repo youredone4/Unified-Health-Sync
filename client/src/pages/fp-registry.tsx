@@ -10,6 +10,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import TablePager from "@/components/table-pager";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
@@ -414,6 +415,8 @@ export default function FpRegistry() {
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [sortField, setSortField] = useState<string>("createdAt");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   const { data: records = [], isLoading } = useQuery<FpServiceRecord[]>({
     queryKey: ["/api/fp-records"],
@@ -450,6 +453,13 @@ export default function FpRegistry() {
       return sortDir === "asc" ? av.localeCompare(bv) : bv.localeCompare(av);
     });
   }, [records, search, filterBarangay, filterMethod, filterStatus, sortField, sortDir]);
+
+  useEffect(() => { setPage(1); }, [search, filterBarangay, filterMethod, filterStatus, pageSize]);
+
+  const pagedFiltered = useMemo(
+    () => filtered.slice((page - 1) * pageSize, page * pageSize),
+    [filtered, page, pageSize],
+  );
 
   const summary = useMemo(() => ({
     total: records.length,
@@ -617,7 +627,7 @@ export default function FpRegistry() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filtered.map(record => (
+                {pagedFiltered.map(record => (
                   <>
                     <TableRow
                       key={record.id}
@@ -689,6 +699,16 @@ export default function FpRegistry() {
                 ))}
               </TableBody>
             </Table>
+          )}
+          {filtered.length > 0 && (
+            <TablePager
+              page={page}
+              pageSize={pageSize}
+              total={filtered.length}
+              onPageChange={setPage}
+              onPageSizeChange={setPageSize}
+              label="records"
+            />
           )}
         </CardContent>
       </Card>

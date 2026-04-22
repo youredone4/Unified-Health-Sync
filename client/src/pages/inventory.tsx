@@ -1,15 +1,17 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
 import type { InventoryItem, MedicineInventoryItem, InventorySnapshot } from "@shared/schema";
 import { getStockStatus } from "@/lib/healthLogic";
 import KpiCard from "@/components/kpi-card";
 import StatusBadge from "@/components/status-badge";
+import TablePager from "@/components/table-pager";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Package, AlertCircle, CheckCircle, TrendingUp, Plus, Pill, BarChart2, Syringe, LineChart as LineChartIcon } from "lucide-react";
+import { Package, AlertCircle, CheckCircle, TrendingUp, Plus, Pill, BarChart2, Syringe, LineChart as LineChartIcon, Search } from "lucide-react";
 import { formatDate } from "@/lib/healthLogic";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, ReferenceLine,
@@ -124,6 +126,106 @@ export default function InventoryPage() {
       threshold,
     })).sort((a, b) => a.barangay.localeCompare(b.barangay));
   }, [medicines, effectiveMedicine]);
+
+  // === Filters + pagination state for the three inventory tables ===
+  const [vaxFilterBarangay, setVaxFilterBarangay] = useState("all");
+  const [vaxFilterStatus, setVaxFilterStatus] = useState("all");
+  const [vaxPage, setVaxPage] = useState(1);
+  const [vaxPageSize, setVaxPageSize] = useState(10);
+
+  const [htnFilterBarangay, setHtnFilterBarangay] = useState("all");
+  const [htnSearch, setHtnSearch] = useState("");
+  const [htnPage, setHtnPage] = useState(1);
+  const [htnPageSize, setHtnPageSize] = useState(10);
+
+  const [medFilterBarangay, setMedFilterBarangay] = useState("all");
+  const [medFilterStatus, setMedFilterStatus] = useState("all");
+  const [medFilterCategory, setMedFilterCategory] = useState("all");
+  const [medSearch, setMedSearch] = useState("");
+  const [medPage, setMedPage] = useState(1);
+  const [medPageSize, setMedPageSize] = useState(10);
+
+  // Status bucket used by both vaccine-row and medicine filters.
+  // "stockout" = 0, "critical" = <low, "low" = <ok, "adequate" = >=ok
+  const bucketForQty = (qty: number, low: number, ok: number): "stockout" | "critical" | "low" | "adequate" => {
+    if (qty === 0) return "stockout";
+    if (qty < low) return "critical";
+    if (qty < ok) return "low";
+    return "adequate";
+  };
+
+  const vaccineBarangayOptions = useMemo(
+    () => Array.from(new Set(inventory.map(i => i.barangay))).sort(),
+    [inventory],
+  );
+  const medicineBarangayOptions = useMemo(
+    () => Array.from(new Set(medicines.map(m => m.barangay))).sort(),
+    [medicines],
+  );
+  const medicineCategoryOptions = useMemo(
+    () => Array.from(new Set(medicines.map(m => m.category).filter((c): c is string => !!c))).sort(),
+    [medicines],
+  );
+
+  const filteredVaccineRows = useMemo(() => {
+    return inventory.filter(inv => {
+      if (vaxFilterBarangay !== "all" && inv.barangay !== vaxFilterBarangay) return false;
+      if (vaxFilterStatus !== "all") {
+        const v = (inv.vaccines ?? {}) as VaccineShape;
+        const quantities = [v.bcgQty || 0, v.pentaQty || 0, v.opvQty || 0, v.hepBQty || 0, v.mrQty || 0];
+        const hasMatch = quantities.some(q => bucketForQty(q, LOW_STOCK, OK_STOCK) === vaxFilterStatus);
+        if (!hasMatch) return false;
+      }
+      return true;
+    });
+  }, [inventory, vaxFilterBarangay, vaxFilterStatus]);
+
+  const filteredHtnRows = useMemo(() => {
+    const q = htnSearch.trim().toLowerCase();
+    return inventory.filter(inv => {
+      if (htnFilterBarangay !== "all" && inv.barangay !== htnFilterBarangay) return false;
+      if (q) {
+        const h = (inv.htnMeds || []) as Array<{ name: string; doseMg: number; qty: number }>;
+        const hit = h.some(m => m.name.toLowerCase().includes(q));
+        if (!hit) return false;
+      }
+      return true;
+    });
+  }, [inventory, htnFilterBarangay, htnSearch]);
+
+  const filteredMedicines = useMemo(() => {
+    const q = medSearch.trim().toLowerCase();
+    return medicines.filter(med => {
+      if (medFilterBarangay !== "all" && med.barangay !== medFilterBarangay) return false;
+      if (medFilterCategory !== "all" && (med.category || "") !== medFilterCategory) return false;
+      if (medFilterStatus !== "all") {
+        const b = bucketForQty(med.qty, med.lowStockThreshold || 10, 200);
+        if (b !== medFilterStatus) return false;
+      }
+      if (q) {
+        const hay = `${med.medicineName} ${med.strength ?? ""} ${med.unit ?? ""}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [medicines, medFilterBarangay, medFilterCategory, medFilterStatus, medSearch]);
+
+  useEffect(() => { setVaxPage(1); }, [vaxFilterBarangay, vaxFilterStatus, vaxPageSize]);
+  useEffect(() => { setHtnPage(1); }, [htnFilterBarangay, htnSearch, htnPageSize]);
+  useEffect(() => { setMedPage(1); }, [medFilterBarangay, medFilterStatus, medFilterCategory, medSearch, medPageSize]);
+
+  const pagedVaccineRows = useMemo(
+    () => filteredVaccineRows.slice((vaxPage - 1) * vaxPageSize, vaxPage * vaxPageSize),
+    [filteredVaccineRows, vaxPage, vaxPageSize],
+  );
+  const pagedHtnRows = useMemo(
+    () => filteredHtnRows.slice((htnPage - 1) * htnPageSize, htnPage * htnPageSize),
+    [filteredHtnRows, htnPage, htnPageSize],
+  );
+  const pagedMedicines = useMemo(
+    () => filteredMedicines.slice((medPage - 1) * medPageSize, medPage * medPageSize),
+    [filteredMedicines, medPage, medPageSize],
+  );
 
   // Barangay list derived from inventory data for trend selector
   const barangayList = useMemo(() => inventory.map(i => i.barangay).sort(), [inventory]);
@@ -505,6 +607,31 @@ export default function InventoryPage() {
           <CardTitle className="text-base">Vaccine Stock</CardTitle>
         </CardHeader>
         <CardContent>
+          <div className="flex flex-wrap gap-2 mb-3">
+            <Select value={vaxFilterBarangay} onValueChange={setVaxFilterBarangay}>
+              <SelectTrigger className="h-8 w-[180px]" data-testid="vax-filter-barangay">
+                <SelectValue placeholder="All barangays" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All barangays</SelectItem>
+                {vaccineBarangayOptions.map(b => (
+                  <SelectItem key={b} value={b}>{b}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={vaxFilterStatus} onValueChange={setVaxFilterStatus}>
+              <SelectTrigger className="h-8 w-[160px]" data-testid="vax-filter-status">
+                <SelectValue placeholder="Any status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Any status</SelectItem>
+                <SelectItem value="stockout">Stock-out (0)</SelectItem>
+                <SelectItem value="critical">Critical (&lt;10)</SelectItem>
+                <SelectItem value="low">Low (&lt;50)</SelectItem>
+                <SelectItem value="adequate">Adequate</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -518,13 +645,15 @@ export default function InventoryPage() {
                 </tr>
               </thead>
               <tbody>
-                {inventory.length === 0 ? (
+                {filteredVaccineRows.length === 0 ? (
                   <tr>
                     <td colSpan={6} className="text-center py-8 text-muted-foreground" data-testid="text-no-vaccine-records">
-                      No inventory records found. Use "Add Inventory" to add stock for a barangay.
+                      {inventory.length === 0
+                        ? `No inventory records found. Use "Add Inventory" to add stock for a barangay.`
+                        : "No vaccine rows match the current filters."}
                     </td>
                   </tr>
-                ) : inventory.map(inv => {
+                ) : pagedVaccineRows.map(inv => {
                   const v = (inv.vaccines ?? {}) as VaccineShape;
                   return (
                     <tr key={inv.id} className="border-b border-border/50" data-testid={`row-inv-${inv.id}`}>
@@ -550,6 +679,16 @@ export default function InventoryPage() {
               </tbody>
             </table>
           </div>
+          {filteredVaccineRows.length > 0 && (
+            <TablePager
+              page={vaxPage}
+              pageSize={vaxPageSize}
+              total={filteredVaccineRows.length}
+              onPageChange={setVaxPage}
+              onPageSizeChange={setVaxPageSize}
+              label="barangays"
+            />
+          )}
         </CardContent>
       </Card>
 
@@ -558,6 +697,29 @@ export default function InventoryPage() {
           <CardTitle className="text-base">HTN Medication Stock</CardTitle>
         </CardHeader>
         <CardContent>
+          <div className="flex flex-wrap gap-2 mb-3">
+            <Select value={htnFilterBarangay} onValueChange={setHtnFilterBarangay}>
+              <SelectTrigger className="h-8 w-[180px]" data-testid="htn-filter-barangay">
+                <SelectValue placeholder="All barangays" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All barangays</SelectItem>
+                {vaccineBarangayOptions.map(b => (
+                  <SelectItem key={b} value={b}>{b}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <div className="relative">
+              <Search className="absolute left-2 top-2 h-4 w-4 text-muted-foreground" />
+              <Input
+                value={htnSearch}
+                onChange={e => setHtnSearch(e.target.value)}
+                placeholder="Search medication name"
+                className="h-8 w-[220px] pl-8"
+                data-testid="htn-search"
+              />
+            </div>
+          </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -567,13 +729,15 @@ export default function InventoryPage() {
                 </tr>
               </thead>
               <tbody>
-                {inventory.length === 0 ? (
+                {filteredHtnRows.length === 0 ? (
                   <tr>
                     <td colSpan={2} className="text-center py-8 text-muted-foreground" data-testid="text-no-htn-records">
-                      No inventory records found. Use "Add Inventory" to add stock for a barangay.
+                      {inventory.length === 0
+                        ? `No inventory records found. Use "Add Inventory" to add stock for a barangay.`
+                        : "No HTN rows match the current filters."}
                     </td>
                   </tr>
-                ) : inventory.map(inv => {
+                ) : pagedHtnRows.map(inv => {
                   const h = (inv.htnMeds || []) as Array<{ name: string; doseMg: number; qty: number }>;
                   return (
                     <tr key={inv.id} className="border-b border-border/50">
@@ -596,6 +760,16 @@ export default function InventoryPage() {
               </tbody>
             </table>
           </div>
+          {filteredHtnRows.length > 0 && (
+            <TablePager
+              page={htnPage}
+              pageSize={htnPageSize}
+              total={filteredHtnRows.length}
+              onPageChange={setHtnPage}
+              onPageSizeChange={setHtnPageSize}
+              label="barangays"
+            />
+          )}
         </CardContent>
       </Card>
 
@@ -607,6 +781,52 @@ export default function InventoryPage() {
           </CardTitle>
         </CardHeader>
         <CardContent>
+          <div className="flex flex-wrap gap-2 mb-3">
+            <Select value={medFilterBarangay} onValueChange={setMedFilterBarangay}>
+              <SelectTrigger className="h-8 w-[180px]" data-testid="med-filter-barangay">
+                <SelectValue placeholder="All barangays" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All barangays</SelectItem>
+                {medicineBarangayOptions.map(b => (
+                  <SelectItem key={b} value={b}>{b}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={medFilterStatus} onValueChange={setMedFilterStatus}>
+              <SelectTrigger className="h-8 w-[160px]" data-testid="med-filter-status">
+                <SelectValue placeholder="Any status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Any status</SelectItem>
+                <SelectItem value="stockout">Stock-out (0)</SelectItem>
+                <SelectItem value="critical">Critical</SelectItem>
+                <SelectItem value="low">Low</SelectItem>
+                <SelectItem value="adequate">Adequate</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={medFilterCategory} onValueChange={setMedFilterCategory}>
+              <SelectTrigger className="h-8 w-[160px]" data-testid="med-filter-category">
+                <SelectValue placeholder="All categories" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All categories</SelectItem>
+                {medicineCategoryOptions.map(c => (
+                  <SelectItem key={c} value={c}>{c}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <div className="relative">
+              <Search className="absolute left-2 top-2 h-4 w-4 text-muted-foreground" />
+              <Input
+                value={medSearch}
+                onChange={e => setMedSearch(e.target.value)}
+                placeholder="Search medicine / strength / unit"
+                className="h-8 w-[240px] pl-8"
+                data-testid="med-search"
+              />
+            </div>
+          </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -622,13 +842,15 @@ export default function InventoryPage() {
                 </tr>
               </thead>
               <tbody>
-                {medicines.length === 0 ? (
+                {filteredMedicines.length === 0 ? (
                   <tr>
                     <td colSpan={8} className="text-center py-8 text-muted-foreground" data-testid="text-no-medicine-records">
-                      No medicine records found. Use "Add Inventory" and select "Medicine / Other Supply" to add records.
+                      {medicines.length === 0
+                        ? `No medicine records found. Use "Add Inventory" and select "Medicine / Other Supply" to add records.`
+                        : "No medicines match the current filters."}
                     </td>
                   </tr>
-                ) : medicines.map(med => (
+                ) : pagedMedicines.map(med => (
                   <tr key={med.id} className="border-b border-border/50" data-testid={`row-med-${med.id}`}>
                     <td className="py-3 px-3 font-medium">{med.barangay}</td>
                     <td className="py-3 px-3">{med.medicineName}</td>
@@ -669,6 +891,16 @@ export default function InventoryPage() {
               </tbody>
             </table>
           </div>
+          {filteredMedicines.length > 0 && (
+            <TablePager
+              page={medPage}
+              pageSize={medPageSize}
+              total={filteredMedicines.length}
+              onPageChange={setMedPage}
+              onPageSizeChange={setMedPageSize}
+              label="medicines"
+            />
+          )}
         </CardContent>
       </Card>
     </div>

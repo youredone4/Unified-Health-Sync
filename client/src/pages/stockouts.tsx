@@ -1,11 +1,14 @@
-import { useState } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { InventoryItem, MedicineInventoryItem } from "@shared/schema";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { AlertTriangle, Package, MapPin, X } from "lucide-react";
+import { AlertTriangle, Package, MapPin, X, Search } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
 import KpiCard from "@/components/kpi-card";
+import TablePager from "@/components/table-pager";
 
 interface StockIssue {
   barangay: string;
@@ -21,6 +24,12 @@ export default function StockoutsPage() {
   const { data: inventory = [] } = useQuery<InventoryItem[]>({ queryKey: ['/api/inventory'] });
   const { data: medicines = [] } = useQuery<MedicineInventoryItem[]>({ queryKey: ['/api/medicine-inventory'] });
   const [activeFilter, setActiveFilter] = useState<FilterKey>(null);
+  const [barangayFilter, setBarangayFilter] = useState("all");
+  const [search, setSearch] = useState("");
+  const [outPage, setOutPage] = useState(1);
+  const [outPageSize, setOutPageSize] = useState(10);
+  const [lowPage, setLowPage] = useState(1);
+  const [lowPageSize, setLowPageSize] = useState(10);
 
   const issues: StockIssue[] = [];
 
@@ -61,6 +70,30 @@ export default function StockoutsPage() {
 
   const affectedBarangays = new Set(issues.map(i => i.barangay));
   const affectedBarangayList = Array.from(affectedBarangays).sort();
+
+  const applyFilters = (list: StockIssue[]): StockIssue[] => {
+    const q = search.trim().toLowerCase();
+    return list.filter(i => {
+      if (barangayFilter !== "all" && i.barangay !== barangayFilter) return false;
+      if (q && !i.item.toLowerCase().includes(q) && !i.barangay.toLowerCase().includes(q)) return false;
+      return true;
+    });
+  };
+
+  const filteredOut = useMemo(() => applyFilters(outOfStock), [outOfStock, barangayFilter, search]);
+  const filteredLow = useMemo(() => applyFilters(lowStock), [lowStock, barangayFilter, search]);
+
+  useEffect(() => { setOutPage(1); }, [barangayFilter, search, outPageSize]);
+  useEffect(() => { setLowPage(1); }, [barangayFilter, search, lowPageSize]);
+
+  const pagedOut = useMemo(
+    () => filteredOut.slice((outPage - 1) * outPageSize, outPage * outPageSize),
+    [filteredOut, outPage, outPageSize],
+  );
+  const pagedLow = useMemo(
+    () => filteredLow.slice((lowPage - 1) * lowPageSize, lowPage * lowPageSize),
+    [filteredLow, lowPage, lowPageSize],
+  );
 
   const handleCardClick = (filter: FilterKey) => {
     setActiveFilter(prev => prev === filter ? null : filter);
@@ -132,6 +165,30 @@ export default function StockoutsPage() {
         </div>
       )}
 
+      <div className="flex flex-wrap gap-2">
+        <Select value={barangayFilter} onValueChange={setBarangayFilter}>
+          <SelectTrigger className="h-8 w-[200px]" data-testid="stockouts-filter-barangay">
+            <SelectValue placeholder="All barangays" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All barangays</SelectItem>
+            {affectedBarangayList.map(b => (
+              <SelectItem key={b} value={b}>{b}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <div className="relative">
+          <Search className="absolute left-2 top-2 h-4 w-4 text-muted-foreground" />
+          <Input
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Search item or barangay"
+            className="h-8 w-[260px] pl-8"
+            data-testid="stockouts-search"
+          />
+        </div>
+      </div>
+
       {showBarangay && (
         <Card className="border-border">
           <CardHeader>
@@ -170,16 +227,18 @@ export default function StockoutsPage() {
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2 text-red-400">
               <Package className="w-4 h-4" />
-              Out of Stock ({outOfStock.length})
+              Out of Stock ({filteredOut.length}{filteredOut.length !== outOfStock.length ? ` of ${outOfStock.length}` : ""})
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {outOfStock.length === 0 && (
-              <p className="text-muted-foreground text-center py-4">No stock-outs</p>
+            {filteredOut.length === 0 && (
+              <p className="text-muted-foreground text-center py-4">
+                {outOfStock.length === 0 ? "No stock-outs" : "No stock-outs match the current filters"}
+              </p>
             )}
             <div className="space-y-2">
-              {outOfStock.map((issue, idx) => (
-                <div key={idx} className="flex items-center justify-between p-3 rounded-md bg-red-500/10 border border-red-500/20" data-testid={`stockout-${issue.barangay}-${issue.item}`}>
+              {pagedOut.map((issue, idx) => (
+                <div key={`${issue.barangay}-${issue.item}-${idx}`} className="flex items-center justify-between p-3 rounded-md bg-red-500/10 border border-red-500/20" data-testid={`stockout-${issue.barangay}-${issue.item}`}>
                   <div>
                     <p className="font-medium">{issue.item}</p>
                     <p className="text-sm text-muted-foreground">{issue.barangay}{issue.source === 'medicine' && <span className="ml-1 text-blue-400">(medicine)</span>}</p>
@@ -188,6 +247,16 @@ export default function StockoutsPage() {
                 </div>
               ))}
             </div>
+            {filteredOut.length > 0 && (
+              <TablePager
+                page={outPage}
+                pageSize={outPageSize}
+                total={filteredOut.length}
+                onPageChange={setOutPage}
+                onPageSizeChange={setOutPageSize}
+                label="items"
+              />
+            )}
           </CardContent>
         </Card>
       )}
@@ -197,16 +266,18 @@ export default function StockoutsPage() {
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2 text-orange-400">
               <Package className="w-4 h-4" />
-              Low Stock ({lowStock.length})
+              Low Stock ({filteredLow.length}{filteredLow.length !== lowStock.length ? ` of ${lowStock.length}` : ""})
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {lowStock.length === 0 && (
-              <p className="text-muted-foreground text-center py-4">No low stock items</p>
+            {filteredLow.length === 0 && (
+              <p className="text-muted-foreground text-center py-4">
+                {lowStock.length === 0 ? "No low stock items" : "No low-stock items match the current filters"}
+              </p>
             )}
             <div className="space-y-2">
-              {lowStock.map((issue, idx) => (
-                <div key={idx} className="flex items-center justify-between p-3 rounded-md bg-orange-500/10 border border-orange-500/20" data-testid={`lowstock-${issue.barangay}-${issue.item}`}>
+              {pagedLow.map((issue, idx) => (
+                <div key={`${issue.barangay}-${issue.item}-${idx}`} className="flex items-center justify-between p-3 rounded-md bg-orange-500/10 border border-orange-500/20" data-testid={`lowstock-${issue.barangay}-${issue.item}`}>
                   <div>
                     <p className="font-medium">{issue.item}</p>
                     <p className="text-sm text-muted-foreground">{issue.barangay}{issue.source === 'medicine' && <span className="ml-1 text-blue-400">(medicine)</span>}</p>
@@ -215,6 +286,16 @@ export default function StockoutsPage() {
                 </div>
               ))}
             </div>
+            {filteredLow.length > 0 && (
+              <TablePager
+                page={lowPage}
+                pageSize={lowPageSize}
+                total={filteredLow.length}
+                onPageChange={setLowPage}
+                onPageSizeChange={setLowPageSize}
+                label="items"
+              />
+            )}
           </CardContent>
         </Card>
       )}
