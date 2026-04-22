@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { mothers, children, seniors, diseaseCases, tbPatients } from "@shared/schema";
+import { mothers, children, diseaseCases, tbPatients } from "@shared/schema";
 
 const barangays = [
   "Amoslog", "Anislagan", "Bad-as", "Boyongan", "Bugas-bugas",
@@ -29,7 +29,6 @@ const maleFirstNames = [
 ];
 
 const diseases = ["Diarrhea", "Chickenpox", "ARI", "Dengue suspected", "Measles suspected"];
-const htnMeds = ["Amlodipine", "Losartan", "Metoprolol", "Lisinopril", "Hydrochlorothiazide"];
 
 function randomElement<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];
@@ -58,7 +57,7 @@ function randomPhone(): string {
 
 async function seedMothers() {
   console.log("Seeding mothers...");
-  const mothersData = [];
+  const mothersData: any[] = [];
   
   for (const barangay of barangays) {
     const count = randomInt(15, 30);
@@ -201,64 +200,6 @@ async function seedChildren() {
   return childrenData.length;
 }
 
-async function seedSeniors() {
-  console.log("Seeding seniors...");
-  const seniorsData = [];
-  
-  for (const barangay of barangays) {
-    const count = randomInt(25, 50);
-    
-    for (let i = 0; i < count; i++) {
-      const age = randomInt(60, 95);
-      const sex = Math.random() > 0.55 ? "F" : "M";
-      const firstName = sex === "F" ? randomElement(firstNames) : randomElement(maleFirstNames);
-      const lastName = randomElement(lastNames);
-      
-      const birthYear = 2026 - age;
-      const dob = `${birthYear}-${String(randomInt(1, 12)).padStart(2, "0")}-${String(randomInt(1, 28)).padStart(2, "0")}`;
-      
-      const systolic = randomInt(110, 180);
-      const diastolic = randomInt(70, 110);
-      const lastBPDate = randomDate(2025, 2025);
-      
-      const medName = randomElement(htnMeds);
-      const doses = [5, 10, 25, 50, 100];
-      const doseMg = randomElement(doses);
-      const quantity = randomElement([30, 60, 90]);
-      const lastMedDate = randomDate(2025, 2025);
-      const nextPickup = addDays(lastMedDate, 30);
-      
-      const uniqueId = `${firstName.substring(0, 2)}${lastName.substring(0, 2)}${birthYear}${String(i).padStart(3, "0")}`.toUpperCase();
-      
-      seniorsData.push({
-        seniorUniqueId: uniqueId,
-        seniorCitizenId: Math.random() > 0.3 ? `OSCA-${randomInt(10000, 99999)}` : null,
-        firstName,
-        lastName,
-        dob,
-        sex,
-        age,
-        barangay,
-        addressLine: `Purok ${randomInt(1, 8)}`,
-        phone: Math.random() > 0.4 ? randomPhone() : null,
-        lastBP: `${systolic}/${diastolic}`,
-        lastBPDate,
-        lastMedicationName: medName,
-        lastMedicationDoseMg: doseMg,
-        lastMedicationQuantity: quantity,
-        lastMedicationGivenDate: lastMedDate,
-        nextPickupDate: new Date(nextPickup) > new Date("2026-01-27") ? nextPickup : addDays("2026-01-27", randomInt(1, 30)),
-        htnMedsReady: Math.random() > 0.3,
-        pickedUp: Math.random() > 0.5,
-      });
-    }
-  }
-  
-  await db.insert(seniors).values(seniorsData);
-  console.log(`Inserted ${seniorsData.length} seniors`);
-  return seniorsData.length;
-}
-
 async function seedDiseaseCases() {
   console.log("Seeding disease cases...");
   const casesData = [];
@@ -355,22 +296,22 @@ async function seedTBPatients() {
 }
 
 async function main() {
-  console.log("Starting patient data seeding for all 20 Placer barangays...\n");
+  console.log("Starting patient data seeding for all 20 Placer barangays...");
+  console.log("NOTE: Seniors (DSWD data) are intentionally skipped by this script.\n");
   
   try {
     const motherCount = await seedMothers();
     const childCount = await seedChildren();
-    const seniorCount = await seedSeniors();
     const diseaseCount = await seedDiseaseCases();
     const tbCount = await seedTBPatients();
     
     console.log("\n=== Seeding Complete ===");
-    console.log(`Total Mothers: ${motherCount}`);
-    console.log(`Total Children: ${childCount}`);
-    console.log(`Total Seniors: ${seniorCount}`);
+    console.log(`Total Mothers:       ${motherCount}`);
+    console.log(`Total Children:      ${childCount}`);
     console.log(`Total Disease Cases: ${diseaseCount}`);
-    console.log(`Total TB Patients: ${tbCount}`);
+    console.log(`Total TB Patients:   ${tbCount}`);
     console.log(`\nData distributed across ${barangays.length} barangays`);
+    console.log("Seniors (DSWD data) were NOT touched.");
     
   } catch (error) {
     console.error("Error seeding data:", error);
