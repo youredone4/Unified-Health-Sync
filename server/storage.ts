@@ -695,8 +695,10 @@ export class DatabaseStorage implements IStorage {
     year: number,
     options: { onlySubmitted?: boolean } = {},
   ): Promise<{ values: M1IndicatorValue[]; sourceReportCount: number; submittedCount: number }> {
+    // Filter to barangay-scoped reports (barangayId IS NOT NULL is the robust
+    // signal — scope_type may be NULL on legacy rows that pre-date the default).
     const conditions = [
-      eq(m1ReportInstances.scopeType, "BARANGAY"),
+      sql`${m1ReportInstances.barangayId} IS NOT NULL`,
       eq(m1ReportInstances.month, month),
       eq(m1ReportInstances.year, year),
     ];
