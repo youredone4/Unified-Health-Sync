@@ -5,7 +5,7 @@ import {
   m1TemplateVersions, m1IndicatorCatalog, m1ReportInstances, m1ReportHeader, m1IndicatorValues, barangaySettings,
   directMessages,
   prenatalVisits, childVisits, seniorVisits,
-  fpServiceRecords,
+  fpServiceRecords, FP_METHOD_ROW_KEY,
   globalChatMessages,
   type Mother, type InsertMother,
   type Child, type InsertChild,
@@ -604,12 +604,40 @@ export class DatabaseStorage implements IStorage {
     add("H-01",  "TOTAL", await countQ(mothers, [...mDelivered, sql`outcome = 'live_birth'`]));
     add("H-02",  "TOTAL", await countQ(mothers, [...mDelivered, sql`outcome = 'stillbirth'`]));
 
+    // ANC 4+ visits (deliveries with 4+ ANC this month)
+    const mAnc4 = [...mDelivered, sql`anc_visits >= 4`];
+    add("A-01a", "10-14", await countQ(mothers, [...mAnc4, sql`age BETWEEN 10 AND 14`]));
+    add("A-01a", "15-19", await countQ(mothers, [...mAnc4, sql`age BETWEEN 15 AND 19`]));
+    add("A-01a", "20-49", await countQ(mothers, [...mAnc4, sql`age BETWEEN 20 AND 49`]));
+    add("A-01a", "TOTAL",  await countQ(mothers, mAnc4));
+
     // ANC 8+ visits (deliveries with 8+ ANC this month)
     const mAnc8 = [...mDelivered, sql`anc_visits >= 8`];
     add("A-01b", "10-14", await countQ(mothers, [...mAnc8, sql`age BETWEEN 10 AND 14`]));
     add("A-01b", "15-19", await countQ(mothers, [...mAnc8, sql`age BETWEEN 15 AND 19`]));
     add("A-01b", "20-49", await countQ(mothers, [...mAnc8, sql`age BETWEEN 20 AND 49`]));
     add("A-01b", "TOTAL",  await countQ(mothers, mAnc8));
+
+    // Td2+ protected (delivered with at least 2 TT doses on record)
+    const tt2Plus = sql`(
+      (CASE WHEN tt1_date IS NOT NULL THEN 1 ELSE 0 END) +
+      (CASE WHEN tt2_date IS NOT NULL THEN 1 ELSE 0 END) +
+      (CASE WHEN tt3_date IS NOT NULL THEN 1 ELSE 0 END) +
+      (CASE WHEN tt4_date IS NOT NULL THEN 1 ELSE 0 END) +
+      (CASE WHEN tt5_date IS NOT NULL THEN 1 ELSE 0 END)
+    ) >= 2`;
+    const mTT = [...mDelivered, tt2Plus];
+    add("A-03", "10-14", await countQ(mothers, [...mTT, sql`age BETWEEN 10 AND 14`]));
+    add("A-03", "15-19", await countQ(mothers, [...mTT, sql`age BETWEEN 15 AND 19`]));
+    add("A-03", "20-49", await countQ(mothers, [...mTT, sql`age BETWEEN 20 AND 49`]));
+    add("A-03", "TOTAL", await countQ(mothers, mTT));
+
+    // Facility-based delivery (hospital or birthing center)
+    const mFac = [...mDelivered, sql`delivery_location IN ('hospital', 'birthing_center')`];
+    add("A-04", "10-14", await countQ(mothers, [...mFac, sql`age BETWEEN 10 AND 14`]));
+    add("A-04", "15-19", await countQ(mothers, [...mFac, sql`age BETWEEN 15 AND 19`]));
+    add("A-04", "20-49", await countQ(mothers, [...mFac, sql`age BETWEEN 20 AND 49`]));
+    add("A-04", "TOTAL", await countQ(mothers, mFac));
 
     // BMI status (mothers registered this month)
     const mReg = [...mBase, sql`registration_date LIKE ${monthLike}`];
@@ -673,6 +701,50 @@ export class DatabaseStorage implements IStorage {
     // I-07: TB Cases — from tbPatients table (treatment_start_date in period)
     const tbBase = barangayName ? [eq(tbPatients.barangay, barangayName)] : [];
     add("I-07", "TOTAL", await countQ(tbPatients, [...tbBase, sql`treatment_start_date LIKE ${monthLike}`]));
+
+    // === FAMILY PLANNING ===
+    // Aggregate fp_service_records for this barangay+reporting_month by method × status × age group.
+    // Status maps: CURRENT_USER → CU_*, NEW_ACCEPTOR → NA_*. DROPOUT excluded from M1 counts.
+    const fpReportingMonth = `${year}-${String(month).padStart(2, "0")}`;
+    const fpConds = [eq(fpServiceRecords.reportingMonth, fpReportingMonth)];
+    if (barangayName) fpConds.push(eq(fpServiceRecords.barangay, barangayName));
+    const fpRows = await db
+      .select({
+        fpMethod: fpServiceRecords.fpMethod,
+        fpStatus: fpServiceRecords.fpStatus,
+        dob: fpServiceRecords.dob,
+      })
+      .from(fpServiceRecords)
+      .where(and(...fpConds));
+
+    // Age is calculated as of the last day of the reporting month.
+    const endOfMonth = new Date(Date.UTC(year, month, 0));
+    const fpTally: Record<string, number> = {};
+    for (const r of fpRows) {
+      if (!r.dob) continue;
+      const dob = new Date(r.dob);
+      if (isNaN(dob.getTime())) continue;
+      let ageYrs = endOfMonth.getUTCFullYear() - dob.getUTCFullYear();
+      const mDiff = endOfMonth.getUTCMonth() - dob.getUTCMonth();
+      if (mDiff < 0 || (mDiff === 0 && endOfMonth.getUTCDate() < dob.getUTCDate())) ageYrs--;
+      let bucket: "10-14" | "15-19" | "20-49" | null = null;
+      if (ageYrs >= 10 && ageYrs <= 14) bucket = "10-14";
+      else if (ageYrs >= 15 && ageYrs <= 19) bucket = "15-19";
+      else if (ageYrs >= 20 && ageYrs <= 49) bucket = "20-49";
+      if (!bucket) continue;
+      const rowKey = (FP_METHOD_ROW_KEY as Record<string, string | null>)[r.fpMethod];
+      if (!rowKey) continue;
+      const prefix = r.fpStatus === "CURRENT_USER" ? "CU" : r.fpStatus === "NEW_ACCEPTOR" ? "NA" : null;
+      if (!prefix) continue;
+      const bucketKey = `${rowKey}|${prefix}_${bucket}`;
+      const totalKey = `${rowKey}|${prefix}_TOTAL`;
+      fpTally[bucketKey] = (fpTally[bucketKey] ?? 0) + 1;
+      fpTally[totalKey] = (fpTally[totalKey] ?? 0) + 1;
+    }
+    for (const [k, v] of Object.entries(fpTally)) {
+      const [rowKey, columnKey] = k.split("|");
+      add(rowKey, columnKey, v);
+    }
 
     // Save all computed values (ENCODED already excluded via `add`)
     if (computedRaw.length > 0) {
