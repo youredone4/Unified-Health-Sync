@@ -5,6 +5,7 @@ import {
   m1TemplateVersions, m1IndicatorCatalog, m1ReportInstances, m1ReportHeader, m1IndicatorValues, barangaySettings,
   directMessages,
   prenatalVisits, childVisits, seniorVisits,
+  nutritionFollowUps,
   fpServiceRecords, FP_METHOD_ROW_KEY,
   globalChatMessages,
   type Mother, type InsertMother,
@@ -27,6 +28,7 @@ import {
   type PrenatalVisit, type InsertPrenatalVisit,
   type ChildVisit, type InsertChildVisit,
   type SeniorVisit, type InsertSeniorVisit,
+  type NutritionFollowUp, type InsertNutritionFollowUp,
   type FpServiceRecord, type InsertFpServiceRecord,
   type GlobalChatMessage,
 } from "@shared/schema";
@@ -136,6 +138,12 @@ export interface IStorage {
   createChildVisit(visit: InsertChildVisit): Promise<ChildVisit>;
   getSeniorVisits(seniorId: number): Promise<SeniorVisit[]>;
   createSeniorVisit(visit: InsertSeniorVisit): Promise<SeniorVisit>;
+
+  // Nutrition Follow-Ups (PIMAM / OPT-Plus register)
+  getNutritionFollowUps(filters?: { childId?: number; barangay?: string; barangays?: string[] }): Promise<NutritionFollowUp[]>;
+  createNutritionFollowUp(record: InsertNutritionFollowUp): Promise<NutritionFollowUp>;
+  updateNutritionFollowUp(id: number, updates: Partial<InsertNutritionFollowUp>): Promise<NutritionFollowUp | undefined>;
+  getLatestFollowUpsByChildIds(childIds: number[]): Promise<Record<number, NutritionFollowUp>>;
 
   // FP Service Records
   getFpServiceRecords(filters?: { barangay?: string; barangays?: string[]; month?: string }): Promise<FpServiceRecord[]>;
@@ -1595,6 +1603,51 @@ export class DatabaseStorage implements IStorage {
   async createSeniorVisit(visit: InsertSeniorVisit): Promise<SeniorVisit> {
     const [created] = await db.insert(seniorVisits).values(visit).returning();
     return created;
+  }
+
+  // === NUTRITION FOLLOW-UPS ===
+  async getNutritionFollowUps(filters?: { childId?: number; barangay?: string; barangays?: string[] }): Promise<NutritionFollowUp[]> {
+    // TL with zero assigned barangays → empty result (least-privilege)
+    if (filters?.barangays !== undefined && filters.barangays.length === 0) return [];
+    const conditions = [];
+    if (filters?.childId) conditions.push(eq(nutritionFollowUps.childId, filters.childId));
+    if (filters?.barangay) conditions.push(eq(nutritionFollowUps.barangay, filters.barangay));
+    if (filters?.barangays && filters.barangays.length > 0) {
+      conditions.push(inArray(nutritionFollowUps.barangay, filters.barangays));
+    }
+    const q = db.select().from(nutritionFollowUps).orderBy(desc(nutritionFollowUps.followUpDate));
+    const rows = conditions.length > 0 ? await q.where(and(...conditions)) : await q;
+    return rows;
+  }
+
+  async createNutritionFollowUp(record: InsertNutritionFollowUp): Promise<NutritionFollowUp> {
+    const [created] = await db.insert(nutritionFollowUps).values(record as any).returning();
+    return created;
+  }
+
+  async updateNutritionFollowUp(id: number, updates: Partial<InsertNutritionFollowUp>): Promise<NutritionFollowUp | undefined> {
+    const [updated] = await db
+      .update(nutritionFollowUps)
+      .set(updates as any)
+      .where(eq(nutritionFollowUps.id, id))
+      .returning();
+    return updated;
+  }
+
+  // Returns map: childId → most-recent follow-up. Used by the worklist to show
+  // the latest classification + date chip on each row without N+1 queries.
+  async getLatestFollowUpsByChildIds(childIds: number[]): Promise<Record<number, NutritionFollowUp>> {
+    if (childIds.length === 0) return {};
+    const rows = await db
+      .select()
+      .from(nutritionFollowUps)
+      .where(inArray(nutritionFollowUps.childId, childIds))
+      .orderBy(desc(nutritionFollowUps.followUpDate));
+    const out: Record<number, NutritionFollowUp> = {};
+    for (const r of rows) {
+      if (!out[r.childId]) out[r.childId] = r;  // desc order ⇒ first seen is latest
+    }
+    return out;
   }
 
   // === FP SERVICE RECORDS ===

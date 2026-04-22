@@ -544,6 +544,88 @@ export const insertSeniorVisitSchema = createInsertSchema(seniorVisits).omit({ i
 export type SeniorVisit = typeof seniorVisits.$inferSelect;
 export type InsertSeniorVisit = z.infer<typeof insertSeniorVisitSchema>;
 
+// === NUTRITION FOLLOW-UPS (PIMAM / OPT-Plus register for under-5 underweight) ===
+// DOH AO 2015-0055 (PIMAM), NNC OPT-Plus Operations Manual 2022.
+
+export const NUTRITION_CLASSIFICATIONS = [
+  "SAM_COMPLICATED",        // WHZ < -3 OR MUAC < 11.5 + danger signs
+  "SAM_UNCOMPLICATED",      // WHZ < -3 OR MUAC < 11.5, appetite OK
+  "MAM",                    // WHZ -3 to -2 OR MUAC 11.5 to <12.5
+  "SEVERELY_UNDERWEIGHT",   // WAZ < -3
+  "UNDERWEIGHT",            // WAZ < -2
+  "NORMAL_RECOVERED",       // WHZ >= -2 for 2 consecutive visits
+  "DEFAULTER",              // 2 consecutive missed visits
+] as const;
+export type NutritionClassification = typeof NUTRITION_CLASSIFICATIONS[number];
+
+export const NUTRITION_ACTIONS = [
+  // Clinical referral
+  "REFER_RHU",
+  "REFER_HOSPITAL_SAM",
+  // Supplementation / treatment
+  "ENROLL_OTC",
+  "ENROLL_SFP",
+  "PROVIDE_RUTF",
+  "PROVIDE_RUSF",
+  "VITAMIN_A",
+  "DEWORMING",
+  "MNP_SUPPLEMENT",
+  "IRON_SUPPLEMENT",
+  // Counselling
+  "IYCF_COUNSELLING",
+  "BREASTFEEDING_SUPPORT",
+  "NUTRITION_COUNSELLING",
+  "WASH_COUNSELLING",
+  // Monitoring
+  "GROWTH_MONITORING",
+  "HOME_VISIT_MUAC",
+  "IMMUNIZATION_CATCHUP",
+  // Social protection
+  "PANTAWID_4PS_REFERRAL",
+  "PHILHEALTH_ENROLLMENT",
+] as const;
+export type NutritionAction = typeof NUTRITION_ACTIONS[number];
+
+// PIMAM register exit codes
+export const NUTRITION_OUTCOMES = [
+  "CURED",
+  "DEFAULTED",
+  "NON_RESPONDER",
+  "DIED",
+  "TRANSFER_IN",
+  "TRANSFER_OUT",
+  "MEDICAL_TRANSFER",
+] as const;
+export type NutritionOutcome = typeof NUTRITION_OUTCOMES[number];
+
+export const nutritionFollowUps = pgTable("nutrition_followups", {
+  id: serial("id").primaryKey(),
+  childId: integer("child_id").notNull().references(() => children.id, { onDelete: "cascade" }),
+  barangay: text("barangay").notNull(),                     // denormalized for barangay-scoped queries
+  followUpDate: text("follow_up_date").notNull(),           // YYYY-MM-DD
+  classification: text("classification").notNull(),         // NutritionClassification
+  weightKg: text("weight_kg"),
+  heightCm: text("height_cm"),
+  muacCm: text("muac_cm"),                                  // mid-upper arm circumference
+  actions: jsonb("actions").$type<NutritionAction[]>().notNull().default([]),
+  nextStep: text("next_step"),                              // free-text plan
+  nextFollowUpDate: text("next_follow_up_date"),            // YYYY-MM-DD (protocol-suggested)
+  outcome: text("outcome"),                                 // NutritionOutcome — null until case closed
+  notes: text("notes"),
+  recordedBy: text("recorded_by"),                          // user id / name
+  createdAt: text("created_at").notNull(),
+});
+
+export const insertNutritionFollowUpSchema = createInsertSchema(nutritionFollowUps)
+  .omit({ id: true })
+  .extend({
+    classification: z.enum(NUTRITION_CLASSIFICATIONS),
+    actions: z.array(z.enum(NUTRITION_ACTIONS)).default([]),
+    outcome: z.enum(NUTRITION_OUTCOMES).optional().nullable(),
+  });
+export type NutritionFollowUp = typeof nutritionFollowUps.$inferSelect;
+export type InsertNutritionFollowUp = z.infer<typeof insertNutritionFollowUpSchema>;
+
 // === FP SERVICE RECORDS (Family Planning enrollment tracking) ===
 export const FP_METHODS = ["BTL", "NSV", "CONDOM", "PILLS_POP", "PILLS_COC", "DMPA", "IMPLANT", "IUD_INTERVAL", "IUD_PP", "LAM", "BBT", "CMM", "STM", "SDM", "OTHERS"] as const;
 export type FpMethod = typeof FP_METHODS[number];
