@@ -1389,6 +1389,59 @@ export async function registerRoutes(
     res.status(201).json(record);
   }));
 
+  // CSV export of the PIMAM register (for Caraga PNAO roll-up)
+  app.get("/api/nutrition-followups/export.csv", nutritionRBAC, ar(async (req, res) => {
+    const { barangay, from, to } = req.query as { barangay?: string; from?: string; to?: string };
+    const user = req.userInfo!;
+    let rows = user.role === UserRole.TL
+      ? await storage.getNutritionFollowUps({
+          barangays: barangay ? [barangay] : user.assignedBarangays,
+        })
+      : await storage.getNutritionFollowUps(barangay ? { barangay } : undefined);
+
+    // Optional date window
+    if (from) rows = rows.filter(r => r.followUpDate >= from);
+    if (to)   rows = rows.filter(r => r.followUpDate <= to);
+
+    const headers = [
+      "follow_up_date", "barangay", "child_id", "classification",
+      "weight_kg", "height_cm", "muac_cm",
+      "actions", "next_step", "next_follow_up_date",
+      "outcome", "recorded_by", "notes",
+    ];
+
+    const esc = (v: unknown): string => {
+      if (v === null || v === undefined) return "";
+      const s = String(v).replace(/"/g, '""');
+      return /[",\n\r]/.test(s) ? `"${s}"` : s;
+    };
+
+    const body = rows.map(r => [
+      esc(r.followUpDate),
+      esc(r.barangay),
+      esc(r.childId),
+      esc(r.classification),
+      esc(r.weightKg),
+      esc(r.heightCm),
+      esc(r.muacCm),
+      esc((r.actions || []).join(";")),
+      esc(r.nextStep),
+      esc(r.nextFollowUpDate),
+      esc(r.outcome),
+      esc(r.recordedBy),
+      esc(r.notes),
+    ].join(",")).join("\n");
+
+    const filenameDate = new Date().toISOString().slice(0, 10);
+    const filename = barangay
+      ? `PIMAM_register_${barangay.replace(/\s+/g, "_")}_${filenameDate}.csv`
+      : `PIMAM_register_${filenameDate}.csv`;
+
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.send([headers.join(","), body].filter(Boolean).join("\n"));
+  }));
+
   app.put("/api/nutrition-followups/:id", nutritionWriteRBAC, ar(async (req, res) => {
     const id = parseId(req.params.id, res); if (id === null) return;
     const existing = (await storage.getNutritionFollowUps({ childId: undefined })).find(r => r.id === id);
