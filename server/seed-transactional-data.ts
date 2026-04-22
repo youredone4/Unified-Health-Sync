@@ -2,7 +2,8 @@
  * seed-transactional-data.ts
  * Seeds prenatal_visits, child_visits, consults, fp_service_records,
  * inventory (vaccines + HTN meds), and medicine_inventory spanning
- * January 2025 through the current month across all 20 barangays.
+ * January of the previous year through the current month across all 20 barangays.
+ * The date window is always computed dynamically from new Date().getFullYear() - 1.
  *
  * This script is the THIRD step in the full demo reset+seed pipeline.
  * Run the full pipeline in order using the master script:
@@ -56,6 +57,10 @@ const BARANGAYS = [
   "Macalaya", "Magsaysay (Poblacion)", "Magupange", "Pananay-an", "Panhutongan",
   "San Isidro", "Sani-sani", "Santa Cruz", "Suyoc", "Tagbongabong",
 ];
+
+// Dynamic seed window: always covers the previous calendar year through the current month.
+// This keeps demo data fresh regardless of when the script is run.
+const SEED_START_YEAR = new Date().getFullYear() - 1;
 
 const FIRST_NAMES_F = [
   "Maria", "Ana", "Rosa", "Elena", "Carmen", "Luz", "Gloria", "Josefa", "Teresa", "Rosario",
@@ -173,7 +178,7 @@ async function seedPrenatalVisits(allMothers: MotherRow[]): Promise<number> {
 
   for (const mother of allMothers) {
     const numVisits = randInt(3, 6);
-    const startDate = dateForMonth(2025, randInt(1, 3));
+    const startDate = dateForMonth(SEED_START_YEAR, randInt(1, 3));
     let currentDate = startDate;
 
     for (let v = 1; v <= numVisits; v++) {
@@ -471,8 +476,8 @@ async function main() {
   const now = new Date();
   const currentYear = now.getFullYear();
   const currentMonth = now.getMonth() + 1;
-  const months = monthsInRange(2025, 1, currentYear, currentMonth);
-  console.log(`\nDate range: 2025-01 → ${yyyyMm(currentYear, currentMonth)} (${months.length} months)`);
+  const months = monthsInRange(SEED_START_YEAR, 1, currentYear, currentMonth);
+  console.log(`\nDate range: ${yyyyMm(SEED_START_YEAR, 1)} → ${yyyyMm(currentYear, currentMonth)} (${months.length} months)`);
   console.log(`Barangays: ${BARANGAYS.length}`);
 
   console.log("\nLoading existing mothers and children from DB...");
