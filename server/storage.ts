@@ -99,6 +99,11 @@ export interface IStorage {
   getMunicipalitySettings(): Promise<MunicipalitySettings | undefined>;
   getBarangaySettings(barangayId: number): Promise<BarangaySettings | undefined>;
   computeM1Values(reportId: number): Promise<{ computed: number; skipped: number }>;
+  getConsolidatedM1Values(
+    month: number,
+    year: number,
+    options?: { onlySubmitted?: boolean },
+  ): Promise<{ values: M1IndicatorValue[]; sourceReportCount: number; submittedCount: number }>;
 
   // Senior Medication Claims (Cross-barangay verification)
   getSeniorMedClaims(seniorId?: number): Promise<SeniorMedClaim[]>;
@@ -682,6 +687,66 @@ export class DatabaseStorage implements IStorage {
     return {
       computed: computedRaw.length,
       skipped: existing.filter(v => v.valueSource === "ENCODED").length,
+    };
+  }
+
+  async getConsolidatedM1Values(
+    month: number,
+    year: number,
+    options: { onlySubmitted?: boolean } = {},
+  ): Promise<{ values: M1IndicatorValue[]; sourceReportCount: number; submittedCount: number }> {
+    const conditions = [
+      eq(m1ReportInstances.scopeType, "BARANGAY"),
+      eq(m1ReportInstances.month, month),
+      eq(m1ReportInstances.year, year),
+    ];
+    if (options.onlySubmitted) {
+      conditions.push(eq(m1ReportInstances.status, "SUBMITTED_LOCKED"));
+    }
+
+    const instances = await db
+      .select()
+      .from(m1ReportInstances)
+      .where(and(...conditions));
+
+    const submittedCount = instances.filter(i => i.status === "SUBMITTED_LOCKED").length;
+
+    if (instances.length === 0) {
+      return { values: [], sourceReportCount: 0, submittedCount: 0 };
+    }
+
+    const instanceIds = instances.map(i => i.id);
+    const rows = await db
+      .select({
+        rowKey: m1IndicatorValues.rowKey,
+        columnKey: m1IndicatorValues.columnKey,
+        sumValue: sql<number>`SUM(COALESCE(${m1IndicatorValues.valueNumber}, 0))::int`,
+      })
+      .from(m1IndicatorValues)
+      .where(inArray(m1IndicatorValues.reportInstanceId, instanceIds))
+      .groupBy(m1IndicatorValues.rowKey, m1IndicatorValues.columnKey);
+
+    const now = new Date().toISOString();
+    const values: M1IndicatorValue[] = rows.map((r, idx) => ({
+      id: -(idx + 1),
+      reportInstanceId: -1,
+      rowKey: r.rowKey,
+      columnKey: r.columnKey,
+      valueNumber: r.sumValue ?? 0,
+      valueDecimal: null,
+      valueText: null,
+      valueSource: "CONSOLIDATED",
+      computedAt: now,
+      locked: false,
+      createdByUserId: null,
+      createdAt: now,
+      updatedAt: now,
+    }));
+
+    return {
+      values,
+      sourceReportCount: instances.length,
+      submittedCount,
     };
   }
 
