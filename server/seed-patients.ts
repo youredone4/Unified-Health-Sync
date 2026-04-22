@@ -74,6 +74,7 @@ function randomPhone(): string {
 
 const todayStr = new Date().toISOString().split("T")[0];
 const today = new Date(todayStr);
+const currentYear = today.getFullYear();
 
 async function seedMothers() {
   console.log("Seeding mothers...");
@@ -83,7 +84,7 @@ async function seedMothers() {
     const count = randomInt(15, 30);
     
     for (let i = 0; i < count; i++) {
-      const registrationDate = randomDate(2024, 2025);
+      const registrationDate = randomDate(currentYear - 1, currentYear);
       const gaWeeks = randomInt(8, 32);
       const age = randomInt(18, 42);
       const ancVisits = randomInt(0, 6);
@@ -147,7 +148,7 @@ async function seedChildren() {
     const count = randomInt(20, 40);
     
     for (let i = 0; i < count; i++) {
-      const dob = randomDate(2022, 2025);
+      const dob = randomDate(currentYear - 3, currentYear);
       const ageInMonths = Math.floor((today.getTime() - new Date(dob).getTime()) / (1000 * 60 * 60 * 24 * 30));
       const sex = Math.random() > 0.5 ? "male" : "female";
       const birthWeight = (2.2 + Math.random() * 1.8).toFixed(2);
@@ -248,7 +249,7 @@ async function seedDiseaseCases() {
         addressLine: `Purok ${randomInt(1, 8)}`,
         phone: Math.random() > 0.5 ? randomPhone() : null,
         condition: randomElement(diseases),
-        dateReported: randomDate(2025, 2025),
+        dateReported: randomDate(currentYear, currentYear),
         status: statuses[statusIndex],
         notes: Math.random() > 0.7 ? "Under observation" : null,
       });
@@ -272,7 +273,7 @@ async function seedTBPatients() {
       const firstName = sex === "male" ? randomElement(maleFirstNames) : randomElement(firstNames);
       const age = randomInt(18, 75);
       
-      const treatmentStart = randomDate(2024, 2025);
+      const treatmentStart = randomDate(currentYear - 1, currentYear);
       const startDate = new Date(treatmentStart);
       const now = today;
       const monthsOnTreatment = Math.floor((now.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24 * 30));
@@ -283,7 +284,7 @@ async function seedTBPatients() {
         ? (Math.random() > 0.7 ? "Completed" : randomElement(outcomes))
         : "Ongoing";
       
-      const lastDoseDate = randomDate(2025, 2025);
+      const lastDoseDate = randomDate(currentYear, currentYear);
       
       tbData.push({
         firstName,
