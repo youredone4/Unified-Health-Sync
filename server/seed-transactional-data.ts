@@ -516,17 +516,19 @@ async function main() {
   const fpCount = await checkEmpty("fp_service_records");
   const invCount = await checkEmpty("inventory");
   const medInvCount = await checkEmpty("medicine_inventory");
-  const totals = pvCount + cvCount + cCount + fpCount + invCount + medInvCount;
+  const snapCount = await checkEmpty("inventory_snapshots");
+  const totals = pvCount + cvCount + cCount + fpCount + invCount + medInvCount + snapCount;
 
   if (totals > 0 && !isForce) {
     console.error(
       `\nERROR: Target tables already contain data:\n` +
-      `  prenatal_visits:    ${pvCount}\n` +
-      `  child_visits:       ${cvCount}\n` +
-      `  consults:           ${cCount}\n` +
-      `  fp_service_records: ${fpCount}\n` +
-      `  inventory:          ${invCount}\n` +
-      `  medicine_inventory: ${medInvCount}\n\n` +
+      `  prenatal_visits:      ${pvCount}\n` +
+      `  child_visits:         ${cvCount}\n` +
+      `  consults:             ${cCount}\n` +
+      `  fp_service_records:   ${fpCount}\n` +
+      `  inventory:            ${invCount}\n` +
+      `  medicine_inventory:   ${medInvCount}\n` +
+      `  inventory_snapshots:  ${snapCount}\n\n` +
       `Pass --force to truncate these tables and reseed.`
     );
     process.exit(1);

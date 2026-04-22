@@ -313,6 +313,14 @@ export async function registerRoutes(
     if (!itemType || !itemKey) {
       return res.status(400).json({ message: "itemType and itemKey are required" });
     }
+    const VALID_ITEM_TYPES = ["vaccine", "medicine"] as const;
+    const VALID_VACCINE_KEYS = ["bcg", "hepB", "penta", "opv", "mr"] as const;
+    if (!(VALID_ITEM_TYPES as readonly string[]).includes(itemType)) {
+      return res.status(400).json({ message: `itemType must be one of: ${VALID_ITEM_TYPES.join(", ")}` });
+    }
+    if (itemType === "vaccine" && !(VALID_VACCINE_KEYS as readonly string[]).includes(itemKey)) {
+      return res.status(400).json({ message: `For itemType 'vaccine', itemKey must be one of: ${VALID_VACCINE_KEYS.join(", ")}` });
+    }
     const data = await storage.getInventorySnapshots({ barangay: barangay || undefined, itemType, itemKey });
     res.json(data);
   });

@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, boolean, timestamp, jsonb, unique } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, timestamp, jsonb, unique, uniqueIndex } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -187,7 +187,10 @@ export const inventorySnapshots = pgTable("inventory_snapshots", {
   itemType: text("item_type").notNull(), // 'vaccine' | 'medicine'
   itemKey: text("item_key").notNull(), // 'bcg'|'hepB'|'penta'|'opv'|'mr' or medicine name
   qty: integer("qty").notNull().default(0),
-});
+}, (t) => ({
+  uniqueSnapshot: uniqueIndex("inventory_snapshots_unique_idx")
+    .on(t.barangay, t.snapshotDate, t.itemType, t.itemKey),
+}));
 
 export const insertInventorySnapshotSchema = createInsertSchema(inventorySnapshots).omit({ id: true });
 export type InventorySnapshot = typeof inventorySnapshots.$inferSelect;
