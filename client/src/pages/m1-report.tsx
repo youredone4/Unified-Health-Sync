@@ -768,8 +768,16 @@ export default function M1ReportPage() {
       doc.text(`Barangay: ${barangayName}`, logoImage ? 32 : 14, headerY);
       doc.text(`Municipality: ${municipalitySettings?.municipalityName || settings?.lguName || ""}`, logoImage ? 32 : 14, headerY + 5);
       doc.text(`Month/Year: ${monthName} ${selectedYear}`, logoImage ? 32 : 14, headerY + 10);
+      if (isConsolidatedView && consolidatedData) {
+        doc.text(
+          `Aggregated from ${consolidatedData.sourceReportCount} barangay report(s) (${consolidatedData.submittedCount} submitted & locked)`,
+          logoImage ? 32 : 14,
+          headerY + 15,
+        );
+      }
 
       let yPos = logoImage ? 45 : 35;
+      if (isConsolidatedView) yPos += 5;
       const pageInds = catalog.filter(ind => ind.pageNumber === page);
       const groups: Record<string, M1IndicatorCatalog[]> = {};
       pageInds.forEach(ind => {
@@ -851,7 +859,8 @@ export default function M1ReportPage() {
       doc.text(`Page ${page} of 3 | GeoHealthSync - DOH FHSIS M1 Brgy`, 105, 290, { align: "center" });
     }
 
-    doc.save(`M1_Report_${barangayName}_${monthName}_${selectedYear}.pdf`);
+    const fileSlug = isConsolidatedView ? "All_Barangays_Consolidated" : barangayName.replace(/\s+/g, "_");
+    doc.save(`M1_Report_${fileSlug}_${monthName}_${selectedYear}.pdf`);
     toast({ title: "PDF Downloaded", description: "M1 report has been generated." });
   };
 
@@ -1378,6 +1387,12 @@ export default function M1ReportPage() {
                 >
                   <Plus className="h-4 w-4 mr-1" />
                   Create Report
+                </Button>
+              )}
+              {isConsolidatedView && consolidatedData && consolidatedData.sourceReportCount > 0 && (
+                <Button size="sm" variant="outline" onClick={handleExportPDF} data-testid="button-export-pdf-consolidated">
+                  <Download className="h-4 w-4 mr-1" />
+                  Export PDF
                 </Button>
               )}
               {activeReportId && (
