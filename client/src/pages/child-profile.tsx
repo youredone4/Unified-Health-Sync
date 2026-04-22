@@ -13,6 +13,7 @@ import { useAuth, permissions } from "@/hooks/use-auth";
 import { ArrowLeft, Baby, Calendar, MessageSquare, Check, Scale, AlertTriangle, User, Pencil, Trash2 } from "lucide-react";
 import ConsultationHistoryCard from "@/components/consultation-history-card";
 import VisitHistoryCard from "@/components/visit-history-card";
+import NutritionFollowUpHistoryCard from "@/components/nutrition-followup-history-card";
 import { useState, useMemo } from "react";
 import { apiRequest, invalidateScopedQueries } from "@/lib/queryClient";
 import { useBarangay } from "@/contexts/barangay-context";
@@ -406,6 +407,8 @@ export default function ChildProfile() {
       )}
 
       <ConsultationHistoryCard profileType="Child" profileId={child.id} />
+
+      <NutritionFollowUpHistoryCard childId={child.id} />
 
       <VisitHistoryCard profileType="Child" profileId={child.id} />
 

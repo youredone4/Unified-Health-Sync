@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import type { Child } from "@shared/schema";
+import type { Child, NutritionFollowUp } from "@shared/schema";
 import { useBarangay } from "@/contexts/barangay-context";
 import { getWeightZScore, hasMissingGrowthCheck, getAgeInMonths, formatDate } from "@/lib/healthLogic";
 import KpiCard from "@/components/kpi-card";
@@ -61,6 +61,9 @@ export default function NutritionDashboard() {
   const [, navigate] = useLocation();
   const { scopedPath } = useBarangay();
   const { data: children = [], isLoading } = useQuery<Child[]>({ queryKey: [scopedPath("/api/children")] });
+  const { data: followUps = [] } = useQuery<NutritionFollowUp[]>({
+    queryKey: [scopedPath("/api/nutrition-followups")],
+  });
   const [barangayFilter, setBarangayFilter] = useState<string>("all");
   const [activeFilter, setActiveFilter] = useState<FilterKey>(null);
 
@@ -194,6 +197,9 @@ export default function NutritionDashboard() {
         />
       </div>
 
+      {/* PIMAM / OPT-Plus follow-up metrics — rolled up from nutrition_followups */}
+      <PimamKpisCard followUps={followUps} />
+
       <Card>
         <CardHeader>
           <CardTitle className="text-base">
@@ -272,6 +278,127 @@ export default function NutritionDashboard() {
           <TablePagination pagination={pagination} />
         </CardContent>
       </Card>
+    </div>
+  );
+}
+
+// Renders the PIMAM follow-up metrics: cure rate, defaulter rate, new
+// admissions this month, and per-barangay active-case breakdown.
+// Inputs are the full nutrition_followups rows already scoped by the page.
+function PimamKpisCard({ followUps }: { followUps: NutritionFollowUp[] }) {
+  const now = new Date();
+  const ninetyDaysAgo = new Date(now);
+  ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+  const ninetyStr = ninetyDaysAgo.toISOString().slice(0, 10);
+
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
+
+  // One row per child: most-recent follow-up by child id
+  const latestByChild = new Map<number, NutritionFollowUp>();
+  for (const f of [...followUps].sort((a, b) => b.followUpDate.localeCompare(a.followUpDate))) {
+    if (!latestByChild.has(f.childId)) latestByChild.set(f.childId, f);
+  }
+  const latestList = Array.from(latestByChild.values());
+
+  // Closed cases in last 90 days
+  const recentClosed = followUps.filter(f => !!f.outcome && f.followUpDate >= ninetyStr);
+  const cured      = recentClosed.filter(f => f.outcome === "CURED").length;
+  const defaulted  = recentClosed.filter(f => f.outcome === "DEFAULTED").length;
+  const totalClosed = recentClosed.length;
+  const cureRate     = totalClosed > 0 ? Math.round((cured / totalClosed) * 100) : null;
+  const defaulterRate = totalClosed > 0 ? Math.round((defaulted / totalClosed) * 100) : null;
+
+  // New admissions this month: first-ever follow-up row per child that falls in this month
+  const firstByChild = new Map<number, NutritionFollowUp>();
+  for (const f of [...followUps].sort((a, b) => a.followUpDate.localeCompare(b.followUpDate))) {
+    if (!firstByChild.has(f.childId)) firstByChild.set(f.childId, f);
+  }
+  const newAdmissions = Array.from(firstByChild.values()).filter(f => f.followUpDate >= monthStart).length;
+
+  const activeCases = latestList.filter(f => !f.outcome).length;
+
+  // Per-barangay active case counts
+  const perBarangay = new Map<string, number>();
+  for (const f of latestList) {
+    if (f.outcome) continue;
+    perBarangay.set(f.barangay, (perBarangay.get(f.barangay) ?? 0) + 1);
+  }
+  const barangaySorted = Array.from(perBarangay.entries()).sort(([, a], [, b]) => b - a);
+
+  return (
+    <Card data-testid="pimam-kpis-card">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-base flex items-center gap-2">
+          <TrendingUp className="w-4 h-4 text-green-400" />
+          PIMAM Follow-up Outcomes
+          <span className="text-xs font-normal text-muted-foreground">(last 90 days · PPAN indicators)</span>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <KpiTile label="Active cases" value={activeCases} />
+          <KpiTile label="New admissions (this month)" value={newAdmissions} />
+          <KpiTile
+            label="Cure rate (90d)"
+            value={cureRate !== null ? `${cureRate}%` : "—"}
+            sub={cureRate !== null ? `${cured}/${totalClosed} closed` : "no closed cases yet"}
+            tone={cureRate !== null && cureRate >= 75 ? "good" : cureRate !== null && cureRate < 50 ? "warn" : "neutral"}
+          />
+          <KpiTile
+            label="Defaulter rate (90d)"
+            value={defaulterRate !== null ? `${defaulterRate}%` : "—"}
+            sub={defaulterRate !== null ? `${defaulted}/${totalClosed} closed` : "no closed cases yet"}
+            tone={defaulterRate !== null && defaulterRate > 15 ? "warn" : "neutral"}
+          />
+        </div>
+
+        {barangaySorted.length > 0 && (
+          <div>
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">
+              Active cases by barangay
+            </p>
+            <div className="space-y-1.5">
+              {barangaySorted.slice(0, 10).map(([brgy, count]) => {
+                const pct = Math.round((count / activeCases) * 100);
+                return (
+                  <div key={brgy} className="flex items-center gap-3 text-sm">
+                    <span className="w-32 truncate flex-shrink-0">{brgy}</span>
+                    <div className="flex-1 h-2 bg-muted rounded-sm overflow-hidden">
+                      <div className="h-full bg-orange-500/70" style={{ width: `${pct}%` }} />
+                    </div>
+                    <span className="w-8 text-right text-xs text-muted-foreground">{count}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {totalClosed === 0 && (
+          <p className="text-xs text-muted-foreground italic">
+            No PIMAM cases have been closed yet — cure/defaulter rates become meaningful once follow-ups are marked CURED or DEFAULTED.
+          </p>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function KpiTile({ label, value, sub, tone = "neutral" }: {
+  label: string;
+  value: string | number;
+  sub?: string;
+  tone?: "good" | "warn" | "neutral";
+}) {
+  const toneClass =
+    tone === "good" ? "text-green-500" :
+    tone === "warn" ? "text-orange-400" :
+    "text-foreground";
+  return (
+    <div className="border rounded-md p-3 bg-muted/20">
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className={`text-2xl font-bold ${toneClass}`}>{value}</p>
+      {sub && <p className="text-[10px] text-muted-foreground mt-0.5">{sub}</p>}
     </div>
   );
 }

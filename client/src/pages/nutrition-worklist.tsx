@@ -9,7 +9,7 @@ import NutritionFollowUpDialog from "@/components/nutrition-followup-dialog";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { AlertCircle, Clock, Scale, Users, Search, ClipboardCheck, CalendarClock } from "lucide-react";
+import { AlertCircle, Clock, Scale, Users, Search, ClipboardCheck, CalendarClock, Download } from "lucide-react";
 import { useState, useEffect, useMemo } from "react";
 import { Badge } from "@/components/ui/badge";
 import { usePagination } from "@/hooks/use-pagination";
@@ -71,12 +71,24 @@ export default function NutritionWorklist() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold flex items-center gap-2" data-testid="text-page-title">
-          <Scale className="w-6 h-6 text-orange-400" />
-          Underweight Follow-ups
-        </h1>
-        <p className="text-muted-foreground">Nutrition worklist — Children needing attention (PIMAM / OPT-Plus)</p>
+      <div className="flex items-start justify-between gap-2 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-bold flex items-center gap-2" data-testid="text-page-title">
+            <Scale className="w-6 h-6 text-orange-400" />
+            Underweight Follow-ups
+          </h1>
+          <p className="text-muted-foreground">Nutrition worklist — Children needing attention (PIMAM / OPT-Plus)</p>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-1"
+          onClick={() => { window.location.href = "/api/nutrition-followups/export.csv"; }}
+          data-testid="button-export-pimam"
+        >
+          <Download className="w-4 h-4" />
+          Export PIMAM register (CSV)
+        </Button>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
