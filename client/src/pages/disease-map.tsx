@@ -135,10 +135,10 @@ export default function DiseaseMap() {
         </Card>
       )}
 
-      <div className="grid md:grid-cols-4 gap-4">
-        <Card className="md:col-span-3">
+      <div className="space-y-4">
+        <Card>
           <CardHeader className="pb-2">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between flex-wrap gap-2">
               <CardTitle className="text-base">Placer, Surigao del Norte — 20 Barangays</CardTitle>
               <div className="flex items-center gap-1 text-xs text-muted-foreground">
                 <div className="flex items-center gap-1">
@@ -157,7 +157,7 @@ export default function DiseaseMap() {
             </div>
           </CardHeader>
           <CardContent className="p-0">
-            <div className="h-[500px] rounded-b-md overflow-hidden">
+            <div className="h-[600px] rounded-b-md overflow-hidden">
               <MapContainer
                 center={mapCenter}
                 zoom={13}
@@ -225,13 +225,13 @@ export default function DiseaseMap() {
           </CardContent>
         </Card>
 
-        <div className="space-y-4">
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm">Heat Index by Barangay</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+              <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
                 {heatPoints
                   .sort((a, b) => b.count - a.count)
                   .map(({ barangay, count, intensity }) => {
@@ -258,7 +258,7 @@ export default function DiseaseMap() {
               <CardTitle className="text-sm">Cases by Condition</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="space-y-2">
+              <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
                 {Object.entries(conditionCounts)
                   .sort(([, a], [, b]) => b - a)
                   .map(([condition, count]) => (
