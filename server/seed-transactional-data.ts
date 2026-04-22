@@ -333,9 +333,17 @@ async function main() {
       `  child_visits:       ${cvCount}\n` +
       `  consults:           ${cCount}\n` +
       `  fp_service_records: ${fpCount}\n\n` +
-      `Pass --force to override and insert anyway.`
+      `Pass --force to truncate these tables and reseed.`
     );
     process.exit(1);
+  }
+
+  if (totals > 0 && isForce) {
+    console.log("\n--force detected: truncating target tables before reseeding...");
+    await db.execute(sql.raw(
+      `TRUNCATE prenatal_visits, child_visits, consults, fp_service_records RESTART IDENTITY CASCADE`
+    ));
+    console.log("Tables cleared. Proceeding with fresh seed.");
   }
 
   const now = new Date();

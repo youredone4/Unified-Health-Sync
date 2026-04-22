@@ -21,6 +21,7 @@
  *   m1_template_versions, m1_indicator_catalog
  */
 
+import type { PoolClient } from "pg";
 import { pool } from "./db";
 
 const isDryRun = process.argv.includes("--dry-run");
@@ -58,7 +59,7 @@ function parseDbUrl(url: string): { host: string; database: string } {
   }
 }
 
-async function getRowCount(client: any, table: string): Promise<number> {
+async function getRowCount(client: PoolClient, table: string): Promise<number> {
   try {
     const res = await client.query(`SELECT COUNT(*) AS n FROM "${table}"`);
     return parseInt(res.rows[0].n, 10);
