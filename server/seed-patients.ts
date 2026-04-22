@@ -55,6 +55,9 @@ function randomPhone(): string {
   return `09${randomInt(10, 99)}${randomInt(1000000, 9999999)}`;
 }
 
+const todayStr = new Date().toISOString().split("T")[0];
+const today = new Date(todayStr);
+
 async function seedMothers() {
   console.log("Seeding mothers...");
   const mothersData: InsertMother[] = [];
@@ -75,7 +78,7 @@ async function seedMothers() {
       const tt5Date = ancVisits >= 5 && tt4Date ? addDays(tt4Date, randomInt(365, 730)) : null;
       
       const eddDate = addDays(registrationDate, (40 - gaWeeks) * 7);
-      const delivered = new Date(eddDate) < new Date("2026-01-27");
+      const delivered = new Date(eddDate) < today;
       
       const bmiStatuses = ["normal", "low", "high"] as const;
       const attendants = ["physician", "nurse", "midwife", "hilot"] as const;
@@ -93,7 +96,7 @@ async function seedMothers() {
         registrationDate,
         gaWeeks,
         expectedDeliveryDate: eddDate,
-        nextPrenatalCheckDate: delivered ? null : addDays("2026-01-27", randomInt(-7, 21)),
+        nextPrenatalCheckDate: delivered ? null : addDays(todayStr, randomInt(-7, 21)),
         ancVisits,
         bmiStatus: randomElement(bmiStatuses),
         tt1Date,
@@ -128,7 +131,7 @@ async function seedChildren() {
     
     for (let i = 0; i < count; i++) {
       const dob = randomDate(2022, 2025);
-      const ageInMonths = Math.floor((new Date("2026-01-27").getTime() - new Date(dob).getTime()) / (1000 * 60 * 60 * 24 * 30));
+      const ageInMonths = Math.floor((today.getTime() - new Date(dob).getTime()) / (1000 * 60 * 60 * 24 * 30));
       const sex = Math.random() > 0.5 ? "male" : "female";
       const birthWeight = (2.2 + Math.random() * 1.8).toFixed(2);
       
@@ -186,7 +189,7 @@ async function seedChildren() {
         ironSuppComplete: parseFloat(birthWeight) < 2.5 && Math.random() > 0.5,
         breastfedExclusively: ageInMonths <= 6 && Math.random() > 0.3,
         growth,
-        nextVisitDate: addDays("2026-01-27", randomInt(-14, 30)),
+        nextVisitDate: addDays(todayStr, randomInt(-14, 30)),
       });
     }
   }
@@ -254,7 +257,7 @@ async function seedTBPatients() {
       
       const treatmentStart = randomDate(2024, 2025);
       const startDate = new Date(treatmentStart);
-      const now = new Date("2026-01-27");
+      const now = today;
       const monthsOnTreatment = Math.floor((now.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24 * 30));
       
       const phase = monthsOnTreatment < 2 ? "Intensive" : "Continuation";
