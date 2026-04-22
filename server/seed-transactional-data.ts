@@ -22,12 +22,16 @@ import {
   childVisits,
   consults,
   fpServiceRecords,
+  inventory,
+  medicineInventory,
   FP_METHODS,
   FP_STATUSES,
   InsertPrenatalVisit,
   InsertChildVisit,
   InsertConsult,
   InsertFpServiceRecord,
+  InsertInventoryItem,
+  InsertMedicineInventoryItem,
 } from "@shared/schema";
 import { sql } from "drizzle-orm";
 
@@ -270,6 +274,108 @@ async function seedConsults(months: MonthEntry[]): Promise<number> {
   return count;
 }
 
+const HTN_MEDS = [
+  { name: "Amlodipine", doseMg: 5 },
+  { name: "Amlodipine", doseMg: 10 },
+  { name: "Losartan", doseMg: 50 },
+  { name: "Losartan", doseMg: 100 },
+  { name: "Hydrochlorothiazide", doseMg: 25 },
+  { name: "Enalapril", doseMg: 5 },
+  { name: "Metoprolol", doseMg: 50 },
+];
+
+function realisticQty(): number {
+  const roll = Math.random();
+  if (roll < 0.15) return randInt(2, 9);
+  if (roll < 0.75) return randInt(20, 80);
+  return randInt(105, 180);
+}
+
+async function seedInventory(): Promise<number> {
+  console.log("  Generating inventory rows (vaccines + HTN meds)...");
+  const lastUpdated = new Date().toISOString().split("T")[0];
+  const rows: InsertInventoryItem[] = [];
+
+  for (const barangay of BARANGAYS) {
+    rows.push({
+      barangay,
+      vaccines: {
+        bcgQty: realisticQty(),
+        hepBQty: realisticQty(),
+        pentaQty: realisticQty(),
+        opvQty: realisticQty(),
+        mrQty: realisticQty(),
+      },
+      htnMeds: HTN_MEDS.map((m) => ({
+        name: m.name,
+        doseMg: m.doseMg,
+        qty: realisticQty(),
+      })),
+      lowStockThreshold: 10,
+      surplusThreshold: 100,
+      lastUpdated,
+    });
+  }
+
+  const count = await chunkInsert(
+    rows,
+    (chunk) => db.insert(inventory).values(chunk)
+  );
+  console.log(`  Inserted ${count} inventory rows`);
+  return count;
+}
+
+async function seedMedicineInventory(): Promise<number> {
+  console.log("  Generating medicine_inventory rows...");
+  const lastUpdated = new Date().toISOString().split("T")[0];
+  const futureDate = (offsetMonths: number): string => {
+    const d = new Date();
+    d.setMonth(d.getMonth() + offsetMonths);
+    return d.toISOString().split("T")[0];
+  };
+
+  const medicines = [
+    { name: "Amlodipine", strength: "5mg", unit: "tablet", category: "HTN", expiryOffset: 18 },
+    { name: "Amlodipine", strength: "10mg", unit: "tablet", category: "HTN", expiryOffset: 18 },
+    { name: "Losartan", strength: "50mg", unit: "tablet", category: "HTN", expiryOffset: 24 },
+    { name: "Losartan", strength: "100mg", unit: "tablet", category: "HTN", expiryOffset: 24 },
+    { name: "Hydrochlorothiazide", strength: "25mg", unit: "tablet", category: "HTN", expiryOffset: 20 },
+    { name: "Enalapril", strength: "5mg", unit: "tablet", category: "HTN", expiryOffset: 16 },
+    { name: "Metoprolol", strength: "50mg", unit: "tablet", category: "HTN", expiryOffset: 14 },
+    { name: "Paracetamol", strength: "500mg", unit: "tablet", category: "Analgesic", expiryOffset: 30 },
+    { name: "Amoxicillin", strength: "500mg", unit: "capsule", category: "Antibiotic", expiryOffset: 12 },
+    { name: "Cotrimoxazole", strength: "400/80mg", unit: "tablet", category: "Antibiotic", expiryOffset: 12 },
+    { name: "Iron + Folic Acid", strength: "60mg/400mcg", unit: "tablet", category: "Supplement", expiryOffset: 24 },
+    { name: "Vitamin A", strength: "100,000 IU", unit: "capsule", category: "Supplement", expiryOffset: 18 },
+    { name: "ORS Sachet", strength: "N/A", unit: "sachet", category: "Rehydration", expiryOffset: 36 },
+  ];
+
+  const rows: InsertMedicineInventoryItem[] = [];
+  for (const barangay of BARANGAYS) {
+    for (const med of medicines) {
+      rows.push({
+        barangay,
+        medicineName: med.name,
+        strength: med.strength,
+        unit: med.unit,
+        qty: realisticQty(),
+        expirationDate: futureDate(med.expiryOffset),
+        category: med.category,
+        notes: null,
+        lowStockThreshold: 10,
+        lastUpdated,
+      });
+    }
+  }
+
+  const count = await chunkInsert(
+    rows,
+    (chunk) => db.insert(medicineInventory).values(chunk)
+  );
+  console.log(`  Inserted ${count} medicine_inventory rows`);
+  return count;
+}
+
 async function seedFpServiceRecords(months: MonthEntry[]): Promise<number> {
   console.log("  Generating FP service records...");
   const rows: InsertFpServiceRecord[] = [];
@@ -324,7 +430,9 @@ async function main() {
   const cvCount = await checkEmpty("child_visits");
   const cCount = await checkEmpty("consults");
   const fpCount = await checkEmpty("fp_service_records");
-  const totals = pvCount + cvCount + cCount + fpCount;
+  const invCount = await checkEmpty("inventory");
+  const medInvCount = await checkEmpty("medicine_inventory");
+  const totals = pvCount + cvCount + cCount + fpCount + invCount + medInvCount;
 
   if (totals > 0 && !isForce) {
     console.error(
@@ -332,7 +440,9 @@ async function main() {
       `  prenatal_visits:    ${pvCount}\n` +
       `  child_visits:       ${cvCount}\n` +
       `  consults:           ${cCount}\n` +
-      `  fp_service_records: ${fpCount}\n\n` +
+      `  fp_service_records: ${fpCount}\n` +
+      `  inventory:          ${invCount}\n` +
+      `  medicine_inventory: ${medInvCount}\n\n` +
       `Pass --force to truncate these tables and reseed.`
     );
     process.exit(1);
@@ -341,7 +451,7 @@ async function main() {
   if (totals > 0 && isForce) {
     console.log("\n--force detected: truncating target tables before reseeding...");
     await db.execute(sql.raw(
-      `TRUNCATE prenatal_visits, child_visits, consults, fp_service_records RESTART IDENTITY CASCADE`
+      `TRUNCATE prenatal_visits, child_visits, consults, fp_service_records, inventory, medicine_inventory RESTART IDENTITY CASCADE`
     ));
     console.log("Tables cleared. Proceeding with fresh seed.");
   }
@@ -368,12 +478,18 @@ async function main() {
   const cInserted = await seedConsults(months);
   const fpInserted = await seedFpServiceRecords(months);
 
+  console.log("\nSeeding inventory data...");
+  const invInserted = await seedInventory();
+  const medInvInserted = await seedMedicineInventory();
+
   console.log("\n=== Seeding Complete ===");
   console.log(`  prenatal_visits:    ${pvInserted}`);
   console.log(`  child_visits:       ${cvInserted}`);
   console.log(`  consults:           ${cInserted}`);
   console.log(`  fp_service_records: ${fpInserted}`);
-  console.log(`  Total rows:         ${pvInserted + cvInserted + cInserted + fpInserted}`);
+  console.log(`  inventory:          ${invInserted}`);
+  console.log(`  medicine_inventory: ${medInvInserted}`);
+  console.log(`  Total rows:         ${pvInserted + cvInserted + cInserted + fpInserted + invInserted + medInvInserted}`);
   console.log("\nSchema was NOT modified. No drizzle-kit push required.");
 
   await pool.end();
