@@ -90,7 +90,7 @@ async function main() {
   }
 
   if (!isDryRun) {
-    if (!process.env.ALLOW_TEST_RESET) {
+    if (process.env.ALLOW_TEST_RESET !== "true") {
       console.error("\nERROR: Set ALLOW_TEST_RESET=true to proceed with a live reset.");
       process.exit(1);
     }

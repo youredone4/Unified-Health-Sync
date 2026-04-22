@@ -8,7 +8,7 @@
  *   ALLOW_TEST_RESET=true npx tsx server/seed-transactional-data.ts --confirm --force
  *
  * Safety gates:
- *   - ALLOW_TEST_RESET=true env var required
+ *   - ALLOW_TEST_RESET=true (exact value) env var required
  *   - --confirm flag required
  *   - Refuses if target tables already have rows (unless --force is passed)
  *   - Bulk-inserts in chunks of 500 for performance
@@ -24,6 +24,10 @@ import {
   fpServiceRecords,
   FP_METHODS,
   FP_STATUSES,
+  InsertPrenatalVisit,
+  InsertChildVisit,
+  InsertConsult,
+  InsertFpServiceRecord,
 } from "@shared/schema";
 import { sql } from "drizzle-orm";
 
@@ -93,8 +97,13 @@ function isoNow(): string {
   return new Date().toISOString();
 }
 
-function monthsInRange(startYear: number, startMonth: number, endYear: number, endMonth: number): { year: number; month: number }[] {
-  const months: { year: number; month: number }[] = [];
+type MonthEntry = { year: number; month: number };
+
+function monthsInRange(
+  startYear: number, startMonth: number,
+  endYear: number, endMonth: number
+): MonthEntry[] {
+  const months: MonthEntry[] = [];
   let y = startYear, m = startMonth;
   while (y < endYear || (y === endYear && m <= endMonth)) {
     months.push({ year: y, month: m });
@@ -119,11 +128,15 @@ function yyyyMm(year: number, month: number): string {
   return `${year}-${String(month).padStart(2, "0")}`;
 }
 
-async function chunkInsert<T extends object>(table: any, rows: T[], chunkSize = 500): Promise<number> {
+async function chunkInsert<T>(
+  rows: T[],
+  insertFn: (chunk: T[]) => Promise<unknown>,
+  chunkSize = 500
+): Promise<number> {
   let inserted = 0;
   for (let i = 0; i < rows.length; i += chunkSize) {
     const chunk = rows.slice(i, i + chunkSize);
-    await db.insert(table).values(chunk as any);
+    await insertFn(chunk);
     inserted += chunk.length;
   }
   return inserted;
@@ -131,12 +144,16 @@ async function chunkInsert<T extends object>(table: any, rows: T[], chunkSize = 
 
 async function checkEmpty(tableName: string): Promise<number> {
   const res = await db.execute(sql.raw(`SELECT COUNT(*) AS n FROM "${tableName}"`));
-  return parseInt((res.rows[0] as any).n, 10);
+  const row = res.rows[0] as { n: string };
+  return parseInt(row.n, 10);
 }
 
-async function seedPrenatalVisits(allMothers: any[]): Promise<number> {
+type MotherRow = { id: number; barangay: string; gaWeeks: number | null };
+type ChildRow = { id: number; barangay: string };
+
+async function seedPrenatalVisits(allMothers: MotherRow[]): Promise<number> {
   console.log("  Generating prenatal visits...");
-  const rows: any[] = [];
+  const rows: InsertPrenatalVisit[] = [];
 
   for (const mother of allMothers) {
     const numVisits = randInt(3, 6);
@@ -144,16 +161,17 @@ async function seedPrenatalVisits(allMothers: any[]): Promise<number> {
     let currentDate = startDate;
 
     for (let v = 1; v <= numVisits; v++) {
+      const riskOptions = ["low", "low", "low", "moderate", "high"] as const;
       rows.push({
         motherId: mother.id,
         visitNumber: v,
         visitDate: currentDate,
-        gaWeeks: Math.min(40, (mother.gaWeeks || 12) + (v - 1) * 4),
+        gaWeeks: Math.min(40, (mother.gaWeeks ?? 12) + (v - 1) * 4),
         weightKg: (45 + Math.random() * 20).toFixed(1),
         bloodPressure: `${randInt(100, 130)}/${randInt(60, 85)}`,
         fundalHeight: `${randInt(16, 38)}`,
         fetalHeartTone: `${randInt(130, 160)}`,
-        riskStatus: pick(["low", "low", "low", "moderate", "high"]),
+        riskStatus: pick(riskOptions),
         notes: pick(PRENATAL_NOTES),
         nextScheduledVisit: addDays(currentDate, 28),
         recordedBy: "seeder",
@@ -163,19 +181,22 @@ async function seedPrenatalVisits(allMothers: any[]): Promise<number> {
     }
   }
 
-  const count = await chunkInsert(prenatalVisits, rows);
+  const count = await chunkInsert(
+    rows,
+    (chunk) => db.insert(prenatalVisits).values(chunk)
+  );
   console.log(`  Inserted ${count} prenatal visits`);
   return count;
 }
 
-async function seedChildVisits(allChildren: any[], months: { year: number; month: number }[]): Promise<number> {
+async function seedChildVisits(allChildren: ChildRow[], months: MonthEntry[]): Promise<number> {
   console.log("  Generating child visits...");
-  const rows: any[] = [];
+  const rows: InsertChildVisit[] = [];
 
   for (const child of allChildren) {
     const numVisits = randInt(2, 5);
     const usedMonths = new Set<string>();
-    const visitMonths: { year: number; month: number }[] = [];
+    const visitMonths: MonthEntry[] = [];
 
     while (visitMonths.length < numVisits) {
       const m = pick(months);
@@ -205,14 +226,17 @@ async function seedChildVisits(allChildren: any[], months: { year: number; month
     }
   }
 
-  const count = await chunkInsert(childVisits, rows);
+  const count = await chunkInsert(
+    rows,
+    (chunk) => db.insert(childVisits).values(chunk)
+  );
   console.log(`  Inserted ${count} child visits`);
   return count;
 }
 
-async function seedConsults(months: { year: number; month: number }[]): Promise<number> {
+async function seedConsults(months: MonthEntry[]): Promise<number> {
   console.log("  Generating consult records...");
-  const rows: any[] = [];
+  const rows: InsertConsult[] = [];
 
   for (const barangay of BARANGAYS) {
     for (const { year, month } of months) {
@@ -220,7 +244,6 @@ async function seedConsults(months: { year: number; month: number }[]): Promise<
       for (let i = 0; i < numConsults; i++) {
         const sex = Math.random() > 0.5 ? "M" : "F";
         const firstName = sex === "F" ? pick(FIRST_NAMES_F) : pick(FIRST_NAMES_M);
-        const consultType = pick(CONSULT_TYPES);
         rows.push({
           patientName: `${firstName} ${pick(LAST_NAMES)}`,
           age: randInt(1, 80),
@@ -232,21 +255,24 @@ async function seedConsults(months: { year: number; month: number }[]): Promise<
           diagnosis: pick(DIAGNOSES),
           treatment: "Medications prescribed and dispensed.",
           disposition: pick(DISPOSITIONS),
-          consultType,
+          consultType: pick(CONSULT_TYPES),
           createdAt: isoNow(),
         });
       }
     }
   }
 
-  const count = await chunkInsert(consults, rows);
+  const count = await chunkInsert(
+    rows,
+    (chunk) => db.insert(consults).values(chunk)
+  );
   console.log(`  Inserted ${count} consult records`);
   return count;
 }
 
-async function seedFpServiceRecords(months: { year: number; month: number }[]): Promise<number> {
+async function seedFpServiceRecords(months: MonthEntry[]): Promise<number> {
   console.log("  Generating FP service records...");
-  const rows: any[] = [];
+  const rows: InsertFpServiceRecord[] = [];
 
   for (const barangay of BARANGAYS) {
     for (const { year, month } of months) {
@@ -270,7 +296,10 @@ async function seedFpServiceRecords(months: { year: number; month: number }[]): 
     }
   }
 
-  const count = await chunkInsert(fpServiceRecords, rows);
+  const count = await chunkInsert(
+    rows,
+    (chunk) => db.insert(fpServiceRecords).values(chunk)
+  );
   console.log(`  Inserted ${count} FP service records`);
   return count;
 }
@@ -285,7 +314,7 @@ async function main() {
     process.exit(1);
   }
 
-  if (!process.env.ALLOW_TEST_RESET) {
+  if (process.env.ALLOW_TEST_RESET !== "true") {
     console.error("ERROR: Set ALLOW_TEST_RESET=true to proceed.");
     process.exit(1);
   }
@@ -300,9 +329,9 @@ async function main() {
   if (totals > 0 && !isForce) {
     console.error(
       `\nERROR: Target tables already contain data:\n` +
-      `  prenatal_visits: ${pvCount}\n` +
-      `  child_visits: ${cvCount}\n` +
-      `  consults: ${cCount}\n` +
+      `  prenatal_visits:    ${pvCount}\n` +
+      `  child_visits:       ${cvCount}\n` +
+      `  consults:           ${cCount}\n` +
       `  fp_service_records: ${fpCount}\n\n` +
       `Pass --force to override and insert anyway.`
     );
@@ -317,8 +346,12 @@ async function main() {
   console.log(`Barangays: ${BARANGAYS.length}`);
 
   console.log("\nLoading existing mothers and children from DB...");
-  const allMothers = await db.select({ id: mothers.id, barangay: mothers.barangay, gaWeeks: mothers.gaWeeks }).from(mothers);
-  const allChildren = await db.select({ id: children.id, barangay: children.barangay }).from(children);
+  const allMothers: MotherRow[] = await db
+    .select({ id: mothers.id, barangay: mothers.barangay, gaWeeks: mothers.gaWeeks })
+    .from(mothers);
+  const allChildren: ChildRow[] = await db
+    .select({ id: children.id, barangay: children.barangay })
+    .from(children);
   console.log(`  Found ${allMothers.length} mothers, ${allChildren.length} children`);
 
   console.log("\nSeeding transactional data...");

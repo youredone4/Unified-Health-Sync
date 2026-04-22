@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { mothers, children, diseaseCases, tbPatients } from "@shared/schema";
+import { mothers, children, diseaseCases, tbPatients, InsertMother } from "@shared/schema";
 
 const barangays = [
   "Amoslog", "Anislagan", "Bad-as", "Boyongan", "Bugas-bugas",
@@ -30,7 +30,7 @@ const maleFirstNames = [
 
 const diseases = ["Diarrhea", "Chickenpox", "ARI", "Dengue suspected", "Measles suspected"];
 
-function randomElement<T>(arr: T[]): T {
+function randomElement<T>(arr: readonly T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
@@ -57,7 +57,7 @@ function randomPhone(): string {
 
 async function seedMothers() {
   console.log("Seeding mothers...");
-  const mothersData: any[] = [];
+  const mothersData: InsertMother[] = [];
   
   for (const barangay of barangays) {
     const count = randomInt(15, 30);
@@ -77,9 +77,11 @@ async function seedMothers() {
       const eddDate = addDays(registrationDate, (40 - gaWeeks) * 7);
       const delivered = new Date(eddDate) < new Date("2026-01-27");
       
-      const bmiStatuses = ["normal", "low", "high"];
-      const attendants = ["physician", "nurse", "midwife", "hilot"];
-      const locations = ["hospital", "birthing_center", "home"];
+      const bmiStatuses = ["normal", "low", "high"] as const;
+      const attendants = ["physician", "nurse", "midwife", "hilot"] as const;
+      const locations = ["hospital", "birthing_center", "home"] as const;
+      
+      const bwKg = delivered ? (2.2 + Math.random() * 1.8).toFixed(2) : null;
       
       mothersData.push({
         firstName: randomElement(firstNames),
@@ -104,17 +106,11 @@ async function seedMothers() {
         outcomeDate: delivered ? eddDate : null,
         deliveryAttendant: delivered ? randomElement(attendants) : null,
         deliveryLocation: delivered ? randomElement(locations) : null,
-        birthWeightKg: delivered ? (2.2 + Math.random() * 1.8).toFixed(2) : null,
-        birthWeightCategory: null,
+        birthWeightKg: bwKg,
+        birthWeightCategory: bwKg ? (parseFloat(bwKg) >= 2.5 ? "normal" : "low") : null,
         breastfedWithin1hr: delivered ? Math.random() > 0.2 : false,
         ironSuppGiven: delivered && Math.random() > 0.7,
       });
-    }
-  }
-  
-  for (const mother of mothersData) {
-    if (mother.birthWeightKg) {
-      mother.birthWeightCategory = parseFloat(mother.birthWeightKg) >= 2.5 ? "normal" : "low";
     }
   }
   
