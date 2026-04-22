@@ -17,6 +17,7 @@
 
 import { db } from "./db";
 import { mothers, children, diseaseCases, tbPatients, InsertMother } from "@shared/schema";
+import { eq, isNull } from "drizzle-orm";
 
 const barangays = [
   "Amoslog", "Anislagan", "Bad-as", "Boyongan", "Bugas-bugas",
@@ -135,12 +136,22 @@ async function seedMothers() {
     }
   }
   
-  await db.insert(mothers).values(mothersData);
+  const inserted = await db
+    .insert(mothers)
+    .values(mothersData)
+    .returning({ id: mothers.id, barangay: mothers.barangay });
   console.log(`Inserted ${mothersData.length} mothers`);
-  return mothersData.length;
+
+  // Bucket mother IDs by barangay so children can be linked to a same-barangay mother.
+  const mothersByBarangay: Record<string, number[]> = {};
+  for (const m of inserted) {
+    if (!mothersByBarangay[m.barangay]) mothersByBarangay[m.barangay] = [];
+    mothersByBarangay[m.barangay].push(m.id);
+  }
+  return { count: mothersData.length, mothersByBarangay };
 }
 
-async function seedChildren() {
+async function seedChildren(mothersByBarangay: Record<string, number[]>) {
   console.log("Seeding children...");
   const childrenData = [];
   
@@ -192,12 +203,22 @@ async function seedChildren() {
       }
       
       const firstName = sex === "male" ? randomElement(maleFirstNames) : randomElement(firstNames);
-      
+
+      // Link every child to a mother from the same barangay. Falls back to any
+      // mother if the barangay bucket is somehow empty so we never leave a
+      // child with a null motherId.
+      const sameBarangayMothers = mothersByBarangay[barangay] ?? [];
+      const motherPool = sameBarangayMothers.length > 0
+        ? sameBarangayMothers
+        : Object.values(mothersByBarangay).flat();
+      const motherId = motherPool.length > 0 ? randomElement(motherPool) : null;
+
       childrenData.push({
         name: `${firstName} ${randomElement(lastNames)}`,
         dob,
         sex,
         barangay,
+        motherId,
         addressLine: `Purok ${randomInt(1, 8)}`,
         birthWeightKg: birthWeight,
         birthWeightCategory: parseFloat(birthWeight) >= 2.5 ? "normal" : "low",
@@ -312,13 +333,72 @@ async function seedTBPatients() {
   return tbData.length;
 }
 
+/**
+ * Link every child that has a null motherId to a random mother from the same
+ * barangay. Run in-place on the live DB via `tsx server/seed-patients.ts
+ * --link-orphans` when the schema change is not enough and existing records
+ * need patching.
+ */
+async function linkOrphanChildrenToMothers(): Promise<{ linked: number; skipped: number }> {
+  console.log("Linking orphan children (motherId IS NULL) to same-barangay mothers...");
+
+  const orphans = await db
+    .select({ id: children.id, barangay: children.barangay })
+    .from(children)
+    .where(isNull(children.motherId));
+
+  if (orphans.length === 0) {
+    console.log("No orphan children found — every child already has a motherId.");
+    return { linked: 0, skipped: 0 };
+  }
+
+  const allMothers = await db
+    .select({ id: mothers.id, barangay: mothers.barangay })
+    .from(mothers);
+
+  const byBarangay: Record<string, number[]> = {};
+  for (const m of allMothers) {
+    if (!byBarangay[m.barangay]) byBarangay[m.barangay] = [];
+    byBarangay[m.barangay].push(m.id);
+  }
+
+  const fallback = Object.values(byBarangay).flat();
+  let linked = 0;
+  let skipped = 0;
+
+  for (const child of orphans) {
+    const pool = byBarangay[child.barangay]?.length ? byBarangay[child.barangay] : fallback;
+    if (pool.length === 0) { skipped++; continue; }
+    const motherId = pool[Math.floor(Math.random() * pool.length)];
+    await db.update(children).set({ motherId }).where(eq(children.id, child.id));
+    linked++;
+  }
+
+  console.log(`Linked ${linked} children; skipped ${skipped} (no mothers available).`);
+  return { linked, skipped };
+}
+
 async function main() {
+  const args = process.argv.slice(2);
+  if (args.includes("--link-orphans")) {
+    try {
+      const result = await linkOrphanChildrenToMothers();
+      console.log("\n=== Backfill Complete ===");
+      console.log(`Linked: ${result.linked}`);
+      console.log(`Skipped: ${result.skipped}`);
+      process.exit(0);
+    } catch (error) {
+      console.error("Error linking orphan children:", error);
+      process.exit(1);
+    }
+  }
+
   console.log("Starting patient data seeding for all 20 Placer barangays...");
   console.log("NOTE: Seniors (DSWD data) are intentionally skipped by this script.\n");
-  
+
   try {
-    const motherCount = await seedMothers();
-    const childCount = await seedChildren();
+    const { count: motherCount, mothersByBarangay } = await seedMothers();
+    const childCount = await seedChildren(mothersByBarangay);
     const diseaseCount = await seedDiseaseCases();
     const tbCount = await seedTBPatients();
     
