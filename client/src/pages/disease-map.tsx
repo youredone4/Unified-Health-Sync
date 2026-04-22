@@ -1,10 +1,12 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import type { DiseaseCase } from "@shared/schema";
 import { useBarangay } from "@/contexts/barangay-context";
 import { isOutbreakCondition } from "@/lib/healthLogic";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { MapPin, AlertTriangle, Thermometer } from "lucide-react";
+import { MapPin, AlertTriangle, Thermometer, ChevronRight, ChevronDown } from "lucide-react";
 import { MapContainer, TileLayer, Circle, Popup, Marker } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -78,24 +80,40 @@ const centerIcon = L.divIcon({
 });
 
 export default function DiseaseMap() {
+  const [, navigate] = useLocation();
   const { scopedPath } = useBarangay();
   const { data: cases = [], isLoading } = useQuery<DiseaseCase[]>({ queryKey: [scopedPath('/api/disease-cases')] });
+  const [expandedBarangay, setExpandedBarangay] = useState<string | null>(null);
+  const [expandedCondition, setExpandedCondition] = useState<string | null>(null);
 
   const outbreak = isOutbreakCondition(cases);
 
-  const barangayCaseCounts = cases.reduce((acc, c) => {
-    if (c.status !== 'Closed') {
-      acc[c.barangay] = (acc[c.barangay] || 0) + 1;
-    }
+  const activeCases = cases.filter(c => c.status !== 'Closed');
+
+  const barangayCaseCounts = activeCases.reduce((acc, c) => {
+    acc[c.barangay] = (acc[c.barangay] || 0) + 1;
     return acc;
   }, {} as Record<string, number>);
 
-  const conditionCounts = cases.reduce((acc, c) => {
-    if (c.status !== 'Closed') {
-      acc[c.condition] = (acc[c.condition] || 0) + 1;
-    }
+  const conditionCounts = activeCases.reduce((acc, c) => {
+    acc[c.condition] = (acc[c.condition] || 0) + 1;
     return acc;
   }, {} as Record<string, number>);
+
+  // Two pivot tables for the drilldowns:
+  //   - conditionsByBarangay: for each barangay, a count per condition
+  //   - barangaysByCondition: for each condition, a count per barangay
+  const conditionsByBarangay = activeCases.reduce((acc, c) => {
+    if (!acc[c.barangay]) acc[c.barangay] = {};
+    acc[c.barangay][c.condition] = (acc[c.barangay][c.condition] || 0) + 1;
+    return acc;
+  }, {} as Record<string, Record<string, number>>);
+
+  const barangaysByCondition = activeCases.reduce((acc, c) => {
+    if (!acc[c.condition]) acc[c.condition] = {};
+    acc[c.condition][c.barangay] = (acc[c.condition][c.barangay] || 0) + 1;
+    return acc;
+  }, {} as Record<string, Record<string, number>>);
 
   const maxCases = Math.max(...Object.values(barangayCaseCounts), 1);
 
@@ -193,7 +211,7 @@ export default function DiseaseMap() {
                         pathOptions={{ color: color, fillColor: color, fillOpacity: 0.55, weight: 1 }}
                       >
                         <Popup>
-                          <div className="p-1 min-w-[140px]">
+                          <div className="p-1 min-w-[180px]">
                             <p className="font-semibold flex items-center gap-1">
                               <MapPin className="w-3 h-3" />
                               {barangay}
@@ -205,6 +223,30 @@ export default function DiseaseMap() {
                                 {risk.label}
                               </span>
                             </p>
+                            {count > 0 && conditionsByBarangay[barangay] && (
+                              <div className="mt-2 pt-2 border-t border-gray-200">
+                                <p className="text-xs font-medium text-gray-600 mb-1">Conditions</p>
+                                <div className="space-y-0.5 max-h-32 overflow-y-auto pr-1">
+                                  {Object.entries(conditionsByBarangay[barangay])
+                                    .sort(([, a], [, b]) => b - a)
+                                    .map(([condition, n]) => (
+                                      <div key={condition} className="flex items-center justify-between text-xs gap-2">
+                                        <span className="truncate">{condition}</span>
+                                        <strong className="flex-shrink-0">{n}</strong>
+                                      </div>
+                                    ))}
+                                </div>
+                              </div>
+                            )}
+                            {count > 0 && (
+                              <button
+                                type="button"
+                                onClick={() => navigate(`/disease/registry?barangay=${encodeURIComponent(barangay)}`)}
+                                className="mt-2 text-xs text-blue-600 hover:underline font-medium"
+                              >
+                                View all cases →
+                              </button>
+                            )}
                           </div>
                         </Popup>
                       </Circle>
@@ -231,21 +273,60 @@ export default function DiseaseMap() {
               <CardTitle className="text-sm">Heat Index by Barangay</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
+              <div className="space-y-1 max-h-80 overflow-y-auto pr-1">
                 {heatPoints
                   .sort((a, b) => b.count - a.count)
                   .map(({ barangay, count, intensity }) => {
                     const risk = riskLabel(intensity);
+                    const isExpanded = expandedBarangay === barangay;
+                    const conds = conditionsByBarangay[barangay] || {};
                     return (
-                      <div key={barangay} className="flex items-center justify-between text-sm gap-2">
-                        <div className="flex items-center gap-1.5 min-w-0">
-                          <span
-                            className="inline-block w-2.5 h-2.5 rounded-full flex-shrink-0"
-                            style={{ background: heatColor(intensity) }}
-                          />
-                          <span className="truncate">{barangay}</span>
-                        </div>
-                        <Badge variant={risk.variant} className="flex-shrink-0 text-xs">{count}</Badge>
+                      <div key={barangay}>
+                        <button
+                          type="button"
+                          onClick={() => setExpandedBarangay(isExpanded ? null : barangay)}
+                          disabled={count === 0}
+                          className="w-full flex items-center justify-between text-sm gap-2 px-2 py-1.5 rounded-md hover:bg-muted focus:bg-muted focus:outline-none focus:ring-2 focus:ring-ring transition-colors group disabled:opacity-60 disabled:cursor-default disabled:hover:bg-transparent"
+                          data-testid={`heat-index-row-${barangay}`}
+                          aria-expanded={isExpanded}
+                          title={count === 0 ? "No active cases" : isExpanded ? "Hide breakdown" : "Show condition breakdown"}
+                        >
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <span
+                              className="inline-block w-2.5 h-2.5 rounded-full flex-shrink-0"
+                              style={{ background: heatColor(intensity) }}
+                            />
+                            <span className="truncate">{barangay}</span>
+                          </div>
+                          <div className="flex items-center gap-1 flex-shrink-0">
+                            <Badge variant={risk.variant} className="text-xs">{count}</Badge>
+                            {count > 0 && (
+                              isExpanded
+                                ? <ChevronDown className="w-3 h-3 text-muted-foreground" />
+                                : <ChevronRight className="w-3 h-3 text-muted-foreground opacity-60 group-hover:opacity-100 transition-opacity" />
+                            )}
+                          </div>
+                        </button>
+                        {isExpanded && count > 0 && (
+                          <div className="ml-5 mt-1 mb-2 border-l-2 pl-3 space-y-1" data-testid={`heat-index-breakdown-${barangay}`}>
+                            {Object.entries(conds)
+                              .sort(([, a], [, b]) => b - a)
+                              .map(([condition, n]) => (
+                                <div key={condition} className="flex items-center justify-between text-xs gap-2">
+                                  <span className="truncate text-muted-foreground">{condition}</span>
+                                  <Badge variant="outline" className="text-[10px] h-4 flex-shrink-0">{n}</Badge>
+                                </div>
+                              ))}
+                            <button
+                              type="button"
+                              onClick={() => navigate(`/disease/registry?barangay=${encodeURIComponent(barangay)}`)}
+                              className="text-xs text-blue-600 hover:underline font-medium mt-1"
+                              data-testid={`heat-index-view-cases-${barangay}`}
+                            >
+                              View all cases →
+                            </button>
+                          </div>
+                        )}
                       </div>
                     );
                   })}
@@ -258,15 +339,52 @@ export default function DiseaseMap() {
               <CardTitle className="text-sm">Cases by Condition</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
+              <div className="space-y-1 max-h-80 overflow-y-auto pr-1">
                 {Object.entries(conditionCounts)
                   .sort(([, a], [, b]) => b - a)
-                  .map(([condition, count]) => (
-                    <div key={condition} className="flex items-center justify-between text-sm">
-                      <span className="truncate">{condition}</span>
-                      <Badge variant="outline">{count}</Badge>
-                    </div>
-                  ))}
+                  .map(([condition, count]) => {
+                    const isExpanded = expandedCondition === condition;
+                    const brgys = barangaysByCondition[condition] || {};
+                    return (
+                      <div key={condition}>
+                        <button
+                          type="button"
+                          onClick={() => setExpandedCondition(isExpanded ? null : condition)}
+                          className="w-full flex items-center justify-between text-sm gap-2 px-2 py-1.5 rounded-md hover:bg-muted focus:bg-muted focus:outline-none focus:ring-2 focus:ring-ring transition-colors group"
+                          data-testid={`condition-row-${condition}`}
+                          aria-expanded={isExpanded}
+                          title={isExpanded ? "Hide barangay breakdown" : "Show barangay breakdown"}
+                        >
+                          <span className="truncate">{condition}</span>
+                          <div className="flex items-center gap-1 flex-shrink-0">
+                            <Badge variant="outline">{count}</Badge>
+                            {isExpanded
+                              ? <ChevronDown className="w-3 h-3 text-muted-foreground" />
+                              : <ChevronRight className="w-3 h-3 text-muted-foreground opacity-60 group-hover:opacity-100 transition-opacity" />}
+                          </div>
+                        </button>
+                        {isExpanded && (
+                          <div className="ml-3 mt-1 mb-2 border-l-2 pl-3 space-y-1" data-testid={`condition-breakdown-${condition}`}>
+                            {Object.entries(brgys)
+                              .sort(([, a], [, b]) => b - a)
+                              .map(([brgy, n]) => (
+                                <button
+                                  key={brgy}
+                                  type="button"
+                                  onClick={() => navigate(`/disease/registry?barangay=${encodeURIComponent(brgy)}&condition=${encodeURIComponent(condition)}`)}
+                                  className="w-full flex items-center justify-between text-xs gap-2 px-1 py-1 rounded hover:bg-muted transition-colors"
+                                  data-testid={`condition-brgy-${condition}-${brgy}`}
+                                  title={`View ${condition} cases in ${brgy}`}
+                                >
+                                  <span className="truncate text-muted-foreground">{brgy}</span>
+                                  <Badge variant="secondary" className="text-[10px] h-4 flex-shrink-0">{n}</Badge>
+                                </button>
+                              ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 {Object.keys(conditionCounts).length === 0 && (
                   <p className="text-sm text-muted-foreground">No active cases</p>
                 )}
