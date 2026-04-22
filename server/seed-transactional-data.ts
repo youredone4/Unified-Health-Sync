@@ -90,7 +90,7 @@ const DIAGNOSES = [
   "Influenza", "Diarrhea NOS", "Wound Infection", "Arthralgia", "Fever NOS",
 ];
 const CONSULT_TYPES = ["General", "Prenatal", "Child", "Senior"] as const;
-const DISPOSITIONS = ["Treated", "Referred", "Admitted"] as const;
+const DISPOSITIONS = ["Treated", "Referred"] as const;
 const PRENATAL_NOTES = [
   "TT1 administered. Patient counseled on nutrition.",
   "TT2 administered. BP normal. Continue iron supplementation.",
