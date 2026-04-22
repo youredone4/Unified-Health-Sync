@@ -695,10 +695,11 @@ export class DatabaseStorage implements IStorage {
     year: number,
     options: { onlySubmitted?: boolean } = {},
   ): Promise<{ values: M1IndicatorValue[]; sourceReportCount: number; submittedCount: number }> {
-    // Filter to barangay-scoped reports (barangayId IS NOT NULL is the robust
-    // signal — scope_type may be NULL on legacy rows that pre-date the default).
+    // Match the same scoping as the Barangay Overview panel (GET /api/m1/reports):
+    // filter by month + year only. Any extra scope filter (scope_type or
+    // barangayId IS NOT NULL) can silently exclude legacy rows where those
+    // columns were never populated, which was the bug behind the empty grid.
     const conditions = [
-      sql`${m1ReportInstances.barangayId} IS NOT NULL`,
       eq(m1ReportInstances.month, month),
       eq(m1ReportInstances.year, year),
     ];
@@ -710,6 +711,16 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(m1ReportInstances)
       .where(and(...conditions));
+
+    console.log(
+      `[getConsolidatedM1Values] month=${month} year=${year} onlySubmitted=${options.onlySubmitted ?? false} → ${instances.length} instance(s)`,
+    );
+    if (instances.length > 0) {
+      console.log(
+        "[getConsolidatedM1Values] instances:",
+        instances.map(i => ({ id: i.id, brgy: i.barangayName, brgyId: i.barangayId, scope: i.scopeType, status: i.status })),
+      );
+    }
 
     const submittedCount = instances.filter(i => i.status === "SUBMITTED_LOCKED").length;
 
