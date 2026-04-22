@@ -1,10 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import type { DiseaseCase } from "@shared/schema";
 import { useBarangay } from "@/contexts/barangay-context";
 import { isOutbreakCondition } from "@/lib/healthLogic";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { MapPin, AlertTriangle, Thermometer } from "lucide-react";
+import { MapPin, AlertTriangle, Thermometer, ChevronRight } from "lucide-react";
 import { MapContainer, TileLayer, Circle, Popup, Marker } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -78,6 +79,7 @@ const centerIcon = L.divIcon({
 });
 
 export default function DiseaseMap() {
+  const [, navigate] = useLocation();
   const { scopedPath } = useBarangay();
   const { data: cases = [], isLoading } = useQuery<DiseaseCase[]>({ queryKey: [scopedPath('/api/disease-cases')] });
 
@@ -231,22 +233,32 @@ export default function DiseaseMap() {
               <CardTitle className="text-sm">Heat Index by Barangay</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
+              <div className="space-y-1 max-h-80 overflow-y-auto pr-1">
                 {heatPoints
                   .sort((a, b) => b.count - a.count)
                   .map(({ barangay, count, intensity }) => {
                     const risk = riskLabel(intensity);
                     return (
-                      <div key={barangay} className="flex items-center justify-between text-sm gap-2">
+                      <button
+                        key={barangay}
+                        type="button"
+                        onClick={() => navigate(`/disease/registry?barangay=${encodeURIComponent(barangay)}`)}
+                        className="w-full flex items-center justify-between text-sm gap-2 px-2 py-1.5 rounded-md hover:bg-muted focus:bg-muted focus:outline-none focus:ring-2 focus:ring-ring transition-colors group"
+                        data-testid={`heat-index-row-${barangay}`}
+                        title={`View disease cases for ${barangay}`}
+                      >
                         <div className="flex items-center gap-1.5 min-w-0">
                           <span
                             className="inline-block w-2.5 h-2.5 rounded-full flex-shrink-0"
                             style={{ background: heatColor(intensity) }}
                           />
-                          <span className="truncate">{barangay}</span>
+                          <span className="truncate group-hover:underline">{barangay}</span>
                         </div>
-                        <Badge variant={risk.variant} className="flex-shrink-0 text-xs">{count}</Badge>
-                      </div>
+                        <div className="flex items-center gap-1 flex-shrink-0">
+                          <Badge variant={risk.variant} className="text-xs">{count}</Badge>
+                          <ChevronRight className="w-3 h-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                        </div>
+                      </button>
                     );
                   })}
               </div>

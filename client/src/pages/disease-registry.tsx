@@ -21,7 +21,13 @@ export default function DiseaseRegistry() {
   const { data: cases = [], isLoading } = useQuery<DiseaseCase[]>({ queryKey: [scopedPath('/api/disease-cases')] });
   const [search, setSearch] = useState("");
   const [conditionFilter, setConditionFilter] = useState("all");
-  const [barangayFilter, setBarangayFilter] = useState("all");
+  // Initialise barangay filter from the ?barangay= query param if present so
+  // deep links from the outbreak map land on a pre-filtered registry view.
+  const [barangayFilter, setBarangayFilter] = useState(() => {
+    if (typeof window === "undefined") return "all";
+    const param = new URLSearchParams(window.location.search).get("barangay");
+    return param && param.trim() ? param : "all";
+  });
 
   const conditions = Array.from(new Set(cases.map(c => c.condition)));
   const barangays = Array.from(new Set(cases.map(c => c.barangay)));
