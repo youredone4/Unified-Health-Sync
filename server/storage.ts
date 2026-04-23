@@ -61,7 +61,7 @@ export interface IStorage {
   updateMedicineInventory(id: number, updates: Partial<InsertMedicineInventoryItem>): Promise<MedicineInventoryItem>;
   getInventorySnapshots(params: { barangay?: string; itemType: string; itemKey: string }): Promise<InventorySnapshot[]>;
   bulkInsertInventorySnapshots(rows: InsertInventorySnapshot[]): Promise<number>;
-  getHealthStations(filter?: { facilityType?: string }): Promise<HealthStation[]>;
+  getHealthStations(filter?: { facilityType?: string; hasTbDots?: boolean }): Promise<HealthStation[]>;
 
   getSmsMessages(): Promise<SmsMessage[]>;
   sendSms(sms: InsertSmsMessage): Promise<SmsMessage>;
@@ -308,12 +308,12 @@ export class DatabaseStorage implements IStorage {
     return total;
   }
 
-  async getHealthStations(filter?: { facilityType?: string }): Promise<HealthStation[]> {
-    if (filter?.facilityType) {
-      return await db.select().from(healthStations)
-        .where(eq(healthStations.facilityType, filter.facilityType as any));
-    }
-    return await db.select().from(healthStations);
+  async getHealthStations(filter?: { facilityType?: string; hasTbDots?: boolean }): Promise<HealthStation[]> {
+    const conditions = [];
+    if (filter?.facilityType) conditions.push(eq(healthStations.facilityType, filter.facilityType as any));
+    if (filter?.hasTbDots !== undefined) conditions.push(eq(healthStations.hasTbDots, filter.hasTbDots));
+    if (conditions.length === 0) return await db.select().from(healthStations);
+    return await db.select().from(healthStations).where(and(...conditions));
   }
 
   async getSmsMessages(): Promise<SmsMessage[]> {
@@ -1041,6 +1041,16 @@ export class DatabaseStorage implements IStorage {
       END
       WHERE facility_type IS NULL
     `);
+    // Placer's municipal RHU is a confirmed NTP TB DOTS facility; mark it so
+    // the TB DOTS referral picker has at least one verified option on pre-
+    // existing databases. Idempotent.
+    await db.execute(sql`
+      UPDATE health_stations
+      SET has_tb_dots = TRUE
+      WHERE facility_type = 'RHU'
+        AND facility_name ILIKE '%central%poblacion%rural health unit%'
+        AND has_tb_dots = FALSE
+    `);
 
     const existingMothers = await this.getMothers();
     if (existingMothers.length > 0) return;
@@ -1266,13 +1276,15 @@ export class DatabaseStorage implements IStorage {
       },
     ]);
 
-    // HEALTH STATIONS
+    // HEALTH STATIONS — `hasTbDots` flags facilities the MHO has confirmed as
+    // active NTP TB DOTS providers. Placer has one municipal RHU (Central /
+    // Poblacion), which is the verified TB DOTS facility for the municipality.
     await db.insert(healthStations).values([
-      { facilityName: "Bugas-bugas Barangay Health Station", facilityType: "BHS", barangay: "Bugas-bugas", latitude: "9.6450", longitude: "125.6520" },
-      { facilityName: "San Isidro Barangay Health Station", facilityType: "BHS", barangay: "San Isidro", latitude: "9.6520", longitude: "125.6680" },
-      { facilityName: "Central (Poblacion) Rural Health Unit", facilityType: "RHU", barangay: "Central (Poblacion)", latitude: "9.6600", longitude: "125.6850" },
-      { facilityName: "Mabini Barangay Health Station", facilityType: "BHS", barangay: "Mabini", latitude: "9.6380", longitude: "125.6400" },
-      { facilityName: "Lakandula Barangay Health Station", facilityType: "BHS", barangay: "Lakandula", latitude: "9.6700", longitude: "125.6950" },
+      { facilityName: "Bugas-bugas Barangay Health Station", facilityType: "BHS", hasTbDots: false, barangay: "Bugas-bugas", latitude: "9.6450", longitude: "125.6520" },
+      { facilityName: "San Isidro Barangay Health Station", facilityType: "BHS", hasTbDots: false, barangay: "San Isidro", latitude: "9.6520", longitude: "125.6680" },
+      { facilityName: "Central (Poblacion) Rural Health Unit", facilityType: "RHU", hasTbDots: true, barangay: "Central (Poblacion)", latitude: "9.6600", longitude: "125.6850" },
+      { facilityName: "Mabini Barangay Health Station", facilityType: "BHS", hasTbDots: false, barangay: "Mabini", latitude: "9.6380", longitude: "125.6400" },
+      { facilityName: "Lakandula Barangay Health Station", facilityType: "BHS", hasTbDots: false, barangay: "Lakandula", latitude: "9.6700", longitude: "125.6950" },
     ]);
 
     // DISEASE CASES - Communicable Disease Surveillance
