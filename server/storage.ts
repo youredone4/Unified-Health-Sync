@@ -1051,6 +1051,19 @@ export class DatabaseStorage implements IStorage {
         AND facility_name ILIKE '%central%poblacion%rural health unit%'
         AND has_tb_dots = FALSE
     `);
+    // Backfill legacy TB referrals that were recorded before the picker
+    // existed: patients with referral_to_rhu=true but referred_rhu_id=null.
+    // Safe only when the municipality has exactly one verified TB DOTS RHU —
+    // then there's no ambiguity about where the operator sent them. Idempotent.
+    await db.execute(sql`
+      UPDATE tb_patients
+      SET referred_rhu_id = (SELECT id FROM health_stations
+                             WHERE facility_type = 'RHU' AND has_tb_dots = TRUE)
+      WHERE referral_to_rhu = TRUE
+        AND referred_rhu_id IS NULL
+        AND (SELECT COUNT(*) FROM health_stations
+             WHERE facility_type = 'RHU' AND has_tb_dots = TRUE) = 1
+    `);
 
     const existingMothers = await this.getMothers();
     if (existingMothers.length > 0) return;
