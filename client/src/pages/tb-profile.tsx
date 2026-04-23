@@ -46,7 +46,14 @@ export default function TBProfile() {
   const { data: patient, isLoading, isError } = useQuery<TBPatient>({
     queryKey: ['/api/tb-patients', id],
     queryFn: async () => {
-      const res = await fetch(`/api/tb-patients/${id}`, { credentials: 'include' });
+      // `cache: 'no-store'` forbids the browser's HTTP cache and any
+      // intermediate proxy from replaying a stale body for this patient —
+      // otherwise a 304 after a PUT can hide the referredRhuId we just
+      // saved.
+      const res = await fetch(`/api/tb-patients/${id}`, {
+        credentials: 'include',
+        cache: 'no-store',
+      });
       if (!res.ok) throw new Error('Not found');
       return res.json();
     }
@@ -57,12 +64,42 @@ export default function TBProfile() {
       const res = await apiRequest('PUT', `/api/tb-patients/${id}`, updates);
       return (await res.json()) as TBPatient;
     },
+    onMutate: async (updates) => {
+      // Flip the UI before the network round-trip so the orange "specify
+      // RHU" banner disappears the moment the operator confirms — no
+      // dependency on the refetch winning the race.
+      await queryClient.cancelQueries({ queryKey: ['/api/tb-patients', id] });
+      const previous = queryClient.getQueryData<TBPatient>(['/api/tb-patients', id]);
+      if (previous) {
+        queryClient.setQueryData<TBPatient>(['/api/tb-patients', id], {
+          ...previous,
+          ...updates,
+        });
+      }
+      return { previous };
+    },
+    onError: (_err, _updates, ctx) => {
+      if (ctx?.previous) {
+        queryClient.setQueryData(['/api/tb-patients', id], ctx.previous);
+      }
+      toast({ title: "Could not save", description: "Try again in a moment.", variant: "destructive" });
+    },
     onSuccess: (updated) => {
-      // Push the server's reply straight into the cache so the alert card
-      // flips to "Referred to <RHU name>" on the same frame the picker
-      // closes, instead of waiting for a refetch round-trip.
+      // Use the server's canonical reply as the source of truth so any
+      // defaults or coerced values (e.g. new dates) land in the cache.
       queryClient.setQueryData(['/api/tb-patients', id], updated);
-      invalidateScopedQueries('/api/tb-patients');
+      // Invalidate *only* the worklist / list queries — not the detail
+      // query we just wrote. Refetching the detail here would race with
+      // this write and, if a proxy ever returns a stale 304, could
+      // overwrite the fresh patient with pre-update data.
+      queryClient.invalidateQueries({
+        predicate: (q) => {
+          const key = q.queryKey[0];
+          return typeof key === 'string'
+            && key.startsWith('/api/tb-patients')
+            && q.queryKey.length === 1;
+        },
+      });
       toast({ title: "Patient record updated" });
     }
   });
