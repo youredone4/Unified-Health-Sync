@@ -22,8 +22,11 @@ export async function registerRoutes(
   // Register admin routes (user management, audit logs, etc.)
   registerAdminRoutes(app);
 
-  // Seed data on startup
-  await storage.seedData();
+  // Seed data on startup — run asynchronously so the server can start
+  // listening and pass the health check before seeding completes.
+  storage.seedData().catch((err) =>
+    console.error("[seed] seedData failed:", err)
+  );
 
   // RBAC middleware for registry read - all authenticated users can read
   const registryReadRBAC = [loadUserInfo, requireAuth];
