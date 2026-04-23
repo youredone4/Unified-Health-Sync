@@ -308,6 +308,10 @@ function AddVisitDialog({
       if (profileType === "Child") {
         queryClient.invalidateQueries({ queryKey: ["/api/children", String(profileId)] });
       }
+      // Refresh senior profile so the BP card mirrors the newest reading
+      if (profileType === "Senior") {
+        invalidateScopedQueries("/api/seniors");
+      }
       toast({ title: "Visit recorded", description: "The monitoring visit has been saved." });
       onOpenChange(false);
     },

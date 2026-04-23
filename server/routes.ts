@@ -1302,6 +1302,13 @@ export async function registerRoutes(
         throw err;
       }
     }
+    // Mirror the BP onto the senior so the registry profile card reflects the
+    // newest reading. Guarded on date so a back-dated visit can't overwrite a
+    // more-recent value that's already on file.
+    const bp = typeof bloodPressure === "string" ? bloodPressure.trim() : "";
+    if (bp && (!senior.lastBPDate || visitDate >= senior.lastBPDate)) {
+      await storage.updateSenior(id, { lastBP: bp, lastBPDate: visitDate });
+    }
     res.status(201).json(visit);
   }));
 
