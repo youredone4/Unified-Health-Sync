@@ -358,7 +358,11 @@ export async function registerRoutes(
   // === HEALTH STATIONS ===
   app.get(api.healthStations.list.path, async (req, res) => {
     const type = typeof req.query.type === "string" ? req.query.type : undefined;
-    const data = await storage.getHealthStations(type ? { facilityType: type } : undefined);
+    const tbDotsParam = typeof req.query.tbDots === "string" ? req.query.tbDots : undefined;
+    const filter: { facilityType?: string; hasTbDots?: boolean } = {};
+    if (type) filter.facilityType = type;
+    if (tbDotsParam === "1" || tbDotsParam === "true") filter.hasTbDots = true;
+    const data = await storage.getHealthStations(Object.keys(filter).length ? filter : undefined);
     res.json(data);
   });
 
@@ -463,6 +467,25 @@ export async function registerRoutes(
   }));
 
   // === TB PATIENTS ===
+  // If a TB patient is marked as referred to RHU they must also point at a
+  // specific, verified TB DOTS facility. Mirrors the pattern used by the
+  // nutrition follow-up register.
+  async function validateTbRhuReferral(
+    referralToRHU: boolean,
+    referredRhuId: number | null,
+  ): Promise<string | null> {
+    if (referralToRHU) {
+      if (!referredRhuId) return "Select which RHU the patient was referred to.";
+      const dotsRhus = await storage.getHealthStations({ facilityType: "RHU", hasTbDots: true });
+      if (!dotsRhus.some(r => r.id === referredRhuId)) {
+        return "The selected facility is not a verified TB DOTS RHU.";
+      }
+    } else if (referredRhuId) {
+      return "Referred RHU can only be set when the patient is marked as referred.";
+    }
+    return null;
+  }
+
   app.get(api.tbPatients.list.path, loadUserInfo, requireAuth, async (req, res) => {
     let data = await storage.getTBPatients();
     const explicitBarangay = req.query.barangay ? String(req.query.barangay) : undefined;
@@ -483,6 +506,8 @@ export async function registerRoutes(
 
   app.post(api.tbPatients.create.path, registryRBAC, ar(async (req, res) => {
     const input = api.tbPatients.create.input.parse(req.body);
+    const rhuError = await validateTbRhuReferral(!!input.referralToRHU, input.referredRhuId ?? null);
+    if (rhuError) return res.status(400).json({ message: rhuError });
     const created = await storage.createTBPatient(input);
     res.status(201).json(created);
   }));
@@ -490,6 +515,14 @@ export async function registerRoutes(
   app.put(api.tbPatients.update.path, registryRBAC, ar(async (req, res) => {
     const id = parseId(req.params.id, res); if (id === null) return;
     const input = api.tbPatients.update.input.parse(req.body);
+    // Validate the (referralToRHU, referredRhuId) pair against the merged
+    // view so partial patches can't leave the row inconsistent.
+    const existing = await storage.getTBPatient(id);
+    if (!existing) return res.status(404).json({ message: "TB patient not found" });
+    const mergedRefer = input.referralToRHU !== undefined ? input.referralToRHU : existing.referralToRHU;
+    const mergedRhuId = input.referredRhuId !== undefined ? input.referredRhuId : existing.referredRhuId;
+    const rhuError = await validateTbRhuReferral(!!mergedRefer, mergedRhuId ?? null);
+    if (rhuError) return res.status(400).json({ message: rhuError });
     const updated = await storage.updateTBPatient(id, input);
     res.json(updated);
   }));

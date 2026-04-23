@@ -1,15 +1,18 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useParams, useLocation } from "wouter";
-import type { TBPatient } from "@shared/schema";
+import type { HealthStation, TBPatient } from "@shared/schema";
 import { formatDate, getTBDotsVisitStatus, getTreatmentProgress, getTreatmentDaysRemaining, getTBSputumCheckStatus, TODAY_STR } from "@/lib/healthLogic";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { ArrowLeft, Phone, MapPin, Calendar, Pill, AlertTriangle, CheckCircle, MessageSquare, Trash2 } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ArrowLeft, Phone, MapPin, Calendar, Pill, AlertTriangle, CheckCircle, MessageSquare, Trash2, Loader2 } from "lucide-react";
 import { apiRequest, queryClient, invalidateScopedQueries } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import SmsModal from "@/components/sms-modal";
 import ConfirmModal from "@/components/confirm-modal";
 import { useAuth, permissions } from "@/hooks/use-auth";
@@ -24,6 +27,20 @@ export default function TBProfile() {
   const [deleteOpen, setDeleteOpen] = useState(false);
 
   const canDelete = permissions.canDelete(user?.role);
+  const [referOpen, setReferOpen] = useState(false);
+  const [pendingRhuId, setPendingRhuId] = useState<number | null>(null);
+
+  // Only facilities the MHO has verified as active NTP TB DOTS providers show
+  // up in the picker — so operators can't accidentally send a patient to a
+  // BHS that doesn't actually run DOTS.
+  const { data: dotsRhus = [] } = useQuery<HealthStation[]>({
+    queryKey: ["/api/health-stations?type=RHU&tbDots=1"],
+  });
+  const rhuNameById = useMemo(() => {
+    const m = new Map<number, string>();
+    dotsRhus.forEach(r => m.set(r.id, r.facilityName));
+    return m;
+  }, [dotsRhus]);
 
   const id = Number(params.id);
   const { data: patient, isLoading, isError } = useQuery<TBPatient>({
@@ -71,8 +88,22 @@ export default function TBProfile() {
     });
   };
 
-  const handleReferToRHU = () => {
-    updateMutation.mutate({ referralToRHU: true });
+  const openReferDialog = () => {
+    // Pre-pick the only option when there's only one verified RHU (typical of
+    // single-RHU municipalities like Placer).
+    setPendingRhuId(dotsRhus.length === 1 ? dotsRhus[0].id : null);
+    setReferOpen(true);
+  };
+
+  const handleConfirmRefer = () => {
+    if (!pendingRhuId) {
+      toast({ title: "Pick an RHU", description: "Select which RHU the patient is being referred to.", variant: "destructive" });
+      return;
+    }
+    updateMutation.mutate(
+      { referralToRHU: true, referredRhuId: pendingRhuId } as any,
+      { onSuccess: () => setReferOpen(false) },
+    );
   };
 
   if (isLoading) {
@@ -131,13 +162,17 @@ export default function TBProfile() {
       )}
 
       {patient.referralToRHU && (
-        <Card className="border-orange-500 bg-orange-500/5">
+        <Card className="border-orange-500 bg-orange-500/5" data-testid="card-rhu-referral">
           <CardContent className="py-4">
             <div className="flex items-center gap-3">
               <AlertTriangle className="w-6 h-6 text-orange-500" />
               <div>
                 <p className="font-semibold text-orange-600">Referred to RHU</p>
-                <p className="text-sm text-muted-foreground">Patient has been referred for additional evaluation</p>
+                <p className="text-sm text-muted-foreground" data-testid="text-referral-target">
+                  {patient.referredRhuId
+                    ? <>Referred to <span className="font-medium text-foreground">{rhuNameById.get(patient.referredRhuId) ?? `RHU #${patient.referredRhuId}`}</span> for additional evaluation</>
+                    : "Patient has been referred for additional evaluation"}
+                </p>
               </div>
             </div>
           </CardContent>
@@ -247,7 +282,7 @@ export default function TBProfile() {
               Record Missed Dose
             </Button>
             {!patient.referralToRHU && (
-              <Button variant="outline" onClick={handleReferToRHU} disabled={updateMutation.isPending} data-testid="button-refer">
+              <Button variant="outline" onClick={openReferDialog} disabled={updateMutation.isPending} data-testid="button-refer">
                 Refer to RHU
               </Button>
             )}
@@ -287,6 +322,54 @@ export default function TBProfile() {
         isLoading={deleteMutation.isPending}
         onConfirm={() => deleteMutation.mutate()}
       />
+
+      <Dialog open={referOpen} onOpenChange={setReferOpen}>
+        <DialogContent data-testid="dialog-refer-rhu">
+          <DialogHeader>
+            <DialogTitle>Refer to RHU</DialogTitle>
+            <DialogDescription>
+              Select which Rural Health Unit this patient is being referred to for continued
+              TB DOTS management. Only MHO-verified TB DOTS facilities are listed.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 py-2">
+            <Label htmlFor="referral-rhu">Rural Health Unit</Label>
+            <Select
+              value={pendingRhuId ? String(pendingRhuId) : ""}
+              onValueChange={(v) => setPendingRhuId(v ? Number(v) : null)}
+            >
+              <SelectTrigger id="referral-rhu" data-testid="select-referral-rhu">
+                <SelectValue placeholder={dotsRhus.length === 0 ? "No TB DOTS RHU configured" : "Select an RHU"} />
+              </SelectTrigger>
+              <SelectContent>
+                {dotsRhus.map(r => (
+                  <SelectItem key={r.id} value={String(r.id)}>
+                    {r.facilityName}
+                    {r.barangay ? <span className="text-muted-foreground"> · {r.barangay}</span> : null}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {dotsRhus.length === 0 && (
+              <p className="text-xs text-destructive">
+                No verified TB DOTS RHU is configured. Ask an admin to mark at least one
+                facility as a TB DOTS provider under Health Stations.
+              </p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setReferOpen(false)}>Cancel</Button>
+            <Button
+              onClick={handleConfirmRefer}
+              disabled={!pendingRhuId || updateMutation.isPending}
+              data-testid="button-confirm-refer"
+            >
+              {updateMutation.isPending ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : null}
+              Confirm referral
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

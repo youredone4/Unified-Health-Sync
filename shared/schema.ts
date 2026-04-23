@@ -208,6 +208,10 @@ export const healthStations = pgTable("health_stations", {
   id: serial("id").primaryKey(),
   facilityName: text("facility_name").notNull(),
   facilityType: text("facility_type").$type<FacilityType>(),
+  // Marks facilities the MHO has verified as active TB DOTS providers
+  // (NTP + PhilHealth TB-DOTS Package). Drives the "Refer to RHU" picker on
+  // the TB DOTS profile so only real DOTS facilities show up.
+  hasTbDots: boolean("has_tb_dots").default(false).notNull(),
   barangay: text("barangay").notNull(),
   latitude: text("latitude").notNull(),
   longitude: text("longitude").notNull(),
@@ -215,7 +219,10 @@ export const healthStations = pgTable("health_stations", {
 
 export const insertHealthStationSchema = createInsertSchema(healthStations)
   .omit({ id: true })
-  .extend({ facilityType: z.enum(FACILITY_TYPES).optional().nullable() });
+  .extend({
+    facilityType: z.enum(FACILITY_TYPES).optional().nullable(),
+    hasTbDots: z.boolean().optional(),
+  });
 export type HealthStation = typeof healthStations.$inferSelect;
 
 // === SMS OUTBOX (Demo audit trail) ===
@@ -271,13 +278,20 @@ export const tbPatients = pgTable("tb_patients", {
   missedDosesCount: integer("missed_doses_count").default(0),
   medsRegimenName: text("meds_regimen_name"),
   referralToRHU: boolean("referral_to_rhu").default(false),
+  // Which RHU (or other TB-DOTS-verified facility) the patient was referred
+  // to. Only meaningful when `referralToRHU` is true; null otherwise.
+  referredRhuId: integer("referred_rhu_id").references(() => healthStations.id),
   nextSputumCheckDate: text("next_sputum_check_date"),
   outcomeStatus: text("outcome_status").default("Ongoing"), // Ongoing, Completed, Transferred, LTFU
   latitude: text("latitude"),
   longitude: text("longitude"),
 });
 
-export const insertTBPatientSchema = createInsertSchema(tbPatients).omit({ id: true });
+export const insertTBPatientSchema = createInsertSchema(tbPatients)
+  .omit({ id: true })
+  .extend({
+    referredRhuId: z.number().int().positive().optional().nullable(),
+  });
 export type TBPatient = typeof tbPatients.$inferSelect;
 export type InsertTBPatient = z.infer<typeof insertTBPatientSchema>;
 
