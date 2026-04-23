@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
-import type { NutritionFollowUp, NutritionOutcome } from "@shared/schema";
+import type { HealthStation, NutritionFollowUp, NutritionOutcome } from "@shared/schema";
 import { NUTRITION_OUTCOMES } from "@shared/schema";
 import {
   ACTION_METADATA, CLASSIFICATION_LABELS, CLASSIFICATION_COLORS,
@@ -50,6 +50,16 @@ export default function NutritionFollowUpHistoryCard({ childId }: Props) {
     queryKey: [`/api/nutrition-followups?childId=${childId}`],
     enabled: !!childId,
   });
+
+  // Single, cached lookup so every row can resolve `referredRhuId` → name.
+  const { data: rhus = [] } = useQuery<HealthStation[]>({
+    queryKey: ["/api/health-stations?type=RHU"],
+  });
+  const rhuNameById = useMemo(() => {
+    const m = new Map<number, string>();
+    rhus.forEach(r => m.set(r.id, r.facilityName));
+    return m;
+  }, [rhus]);
 
   const sorted = useMemo(
     () => [...followUps].sort((a, b) => {
@@ -132,14 +142,23 @@ export default function NutritionFollowUpHistoryCard({ childId }: Props) {
 
                 {fu.actions && fu.actions.length > 0 && (
                   <div className="flex flex-wrap gap-1 mt-1.5">
-                    {fu.actions.map(a => (
-                      <span
-                        key={a}
-                        className="text-[10px] bg-muted px-1.5 py-0.5 rounded-sm text-muted-foreground"
-                      >
-                        {ACTION_METADATA[a]?.label ?? a}
-                      </span>
-                    ))}
+                    {fu.actions.map(a => {
+                      const isRhuRef = a === "REFER_RHU" && fu.referredRhuId;
+                      const label = ACTION_METADATA[a]?.label ?? a;
+                      return (
+                        <span
+                          key={a}
+                          className="text-[10px] bg-muted px-1.5 py-0.5 rounded-sm text-muted-foreground"
+                        >
+                          {label}
+                          {isRhuRef && (
+                            <span className="text-foreground font-medium">
+                              {" · "}{rhuNameById.get(fu.referredRhuId!) ?? `RHU #${fu.referredRhuId}`}
+                            </span>
+                          )}
+                        </span>
+                      );
+                    })}
                   </div>
                 )}
 

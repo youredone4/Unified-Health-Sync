@@ -357,7 +357,8 @@ export async function registerRoutes(
 
   // === HEALTH STATIONS ===
   app.get(api.healthStations.list.path, async (req, res) => {
-    const data = await storage.getHealthStations();
+    const type = typeof req.query.type === "string" ? req.query.type : undefined;
+    const data = await storage.getHealthStations(type ? { facilityType: type } : undefined);
     res.json(data);
   });
 
@@ -1333,6 +1334,25 @@ export async function registerRoutes(
   const nutritionRBAC = [loadUserInfo, requireAuth];
   const nutritionWriteRBAC = [loadUserInfo, requireAuth, requireRole(UserRole.SYSTEM_ADMIN, UserRole.MHO, UserRole.TL)];
 
+  // If the operator checks REFER_RHU they must pick an actual RHU facility.
+  // Returns an error message when the pairing is invalid, or null when OK.
+  async function validateRhuReferral(
+    actions: readonly string[] | null | undefined,
+    referredRhuId: number | null | undefined,
+  ): Promise<string | null> {
+    const mentionsRhu = Array.isArray(actions) && actions.includes("REFER_RHU");
+    if (mentionsRhu) {
+      if (!referredRhuId) return "Select which RHU the child was referred to.";
+      const rhus = await storage.getHealthStations({ facilityType: "RHU" });
+      if (!rhus.some(r => r.id === referredRhuId)) {
+        return "The selected referral facility is not a Rural Health Unit.";
+      }
+    } else if (referredRhuId) {
+      return "Referred RHU can only be set when 'Refer to RHU' is selected.";
+    }
+    return null;
+  }
+
   app.get("/api/nutrition-followups", nutritionRBAC, ar(async (req, res) => {
     const { childId, barangay } = req.query as { childId?: string; barangay?: string };
     const user = req.userInfo!;
@@ -1385,6 +1405,8 @@ export async function registerRoutes(
     if (user.role === UserRole.TL && !user.assignedBarangays.includes(parsed.data.barangay)) {
       return res.status(403).json({ message: "Not authorized for this barangay" });
     }
+    const rhuError = await validateRhuReferral(parsed.data.actions, parsed.data.referredRhuId);
+    if (rhuError) return res.status(400).json({ message: rhuError });
     const record = await storage.createNutritionFollowUp(parsed.data);
     res.status(201).json(record);
   }));
@@ -1403,10 +1425,16 @@ export async function registerRoutes(
     if (from) rows = rows.filter(r => r.followUpDate >= from);
     if (to)   rows = rows.filter(r => r.followUpDate <= to);
 
+    // Pre-load RHU facility names so the CSV can render the referral target.
+    const rhuNameById = new Map<number, string>();
+    for (const rhu of await storage.getHealthStations({ facilityType: "RHU" })) {
+      rhuNameById.set(rhu.id, rhu.facilityName);
+    }
+
     const headers = [
       "follow_up_date", "barangay", "child_id", "classification",
       "weight_kg", "height_cm", "muac_cm",
-      "actions", "next_step", "next_follow_up_date",
+      "actions", "referred_rhu", "next_step", "next_follow_up_date",
       "outcome", "recorded_by", "notes",
     ];
 
@@ -1425,6 +1453,7 @@ export async function registerRoutes(
       esc(r.heightCm),
       esc(r.muacCm),
       esc((r.actions || []).join(";")),
+      esc(r.referredRhuId ? rhuNameById.get(r.referredRhuId) ?? "" : ""),
       esc(r.nextStep),
       esc(r.nextFollowUpDate),
       esc(r.outcome),
@@ -1451,6 +1480,11 @@ export async function registerRoutes(
     }
     const parsed = insertNutritionFollowUpSchema.partial().safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message || "Invalid data" });
+    // Validate RHU referral against the merged (existing + patch) view.
+    const mergedActions = parsed.data.actions ?? existing.actions ?? [];
+    const mergedRhuId = parsed.data.referredRhuId !== undefined ? parsed.data.referredRhuId : existing.referredRhuId;
+    const rhuError = await validateRhuReferral(mergedActions, mergedRhuId);
+    if (rhuError) return res.status(400).json({ message: rhuError });
     const updated = await storage.updateNutritionFollowUp(id, parsed.data);
     res.json(updated);
   }));
