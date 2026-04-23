@@ -61,7 +61,7 @@ export interface IStorage {
   updateMedicineInventory(id: number, updates: Partial<InsertMedicineInventoryItem>): Promise<MedicineInventoryItem>;
   getInventorySnapshots(params: { barangay?: string; itemType: string; itemKey: string }): Promise<InventorySnapshot[]>;
   bulkInsertInventorySnapshots(rows: InsertInventorySnapshot[]): Promise<number>;
-  getHealthStations(): Promise<HealthStation[]>;
+  getHealthStations(filter?: { facilityType?: string }): Promise<HealthStation[]>;
 
   getSmsMessages(): Promise<SmsMessage[]>;
   sendSms(sms: InsertSmsMessage): Promise<SmsMessage>;
@@ -308,7 +308,11 @@ export class DatabaseStorage implements IStorage {
     return total;
   }
 
-  async getHealthStations(): Promise<HealthStation[]> {
+  async getHealthStations(filter?: { facilityType?: string }): Promise<HealthStation[]> {
+    if (filter?.facilityType) {
+      return await db.select().from(healthStations)
+        .where(eq(healthStations.facilityType, filter.facilityType as any));
+    }
     return await db.select().from(healthStations);
   }
 
@@ -1025,6 +1029,19 @@ export class DatabaseStorage implements IStorage {
   }
 
   async seedData(): Promise<void> {
+    // Idempotent backfill: every health_stations row needs a facilityType now
+    // that REFER_RHU records the referred facility. Runs on every startup but
+    // becomes a no-op once every row has a type.
+    await db.execute(sql`
+      UPDATE health_stations
+      SET facility_type = CASE
+        WHEN facility_name ILIKE '%rural health unit%' THEN 'RHU'
+        WHEN facility_name ILIKE '%hospital%'          THEN 'HOSPITAL'
+        ELSE 'BHS'
+      END
+      WHERE facility_type IS NULL
+    `);
+
     const existingMothers = await this.getMothers();
     if (existingMothers.length > 0) return;
 
@@ -1251,11 +1268,11 @@ export class DatabaseStorage implements IStorage {
 
     // HEALTH STATIONS
     await db.insert(healthStations).values([
-      { facilityName: "Bugas-bugas Barangay Health Station", barangay: "Bugas-bugas", latitude: "9.6450", longitude: "125.6520" },
-      { facilityName: "San Isidro Barangay Health Station", barangay: "San Isidro", latitude: "9.6520", longitude: "125.6680" },
-      { facilityName: "Central (Poblacion) Rural Health Unit", barangay: "Central (Poblacion)", latitude: "9.6600", longitude: "125.6850" },
-      { facilityName: "Mabini Barangay Health Station", barangay: "Mabini", latitude: "9.6380", longitude: "125.6400" },
-      { facilityName: "Lakandula Barangay Health Station", barangay: "Lakandula", latitude: "9.6700", longitude: "125.6950" },
+      { facilityName: "Bugas-bugas Barangay Health Station", facilityType: "BHS", barangay: "Bugas-bugas", latitude: "9.6450", longitude: "125.6520" },
+      { facilityName: "San Isidro Barangay Health Station", facilityType: "BHS", barangay: "San Isidro", latitude: "9.6520", longitude: "125.6680" },
+      { facilityName: "Central (Poblacion) Rural Health Unit", facilityType: "RHU", barangay: "Central (Poblacion)", latitude: "9.6600", longitude: "125.6850" },
+      { facilityName: "Mabini Barangay Health Station", facilityType: "BHS", barangay: "Mabini", latitude: "9.6380", longitude: "125.6400" },
+      { facilityName: "Lakandula Barangay Health Station", facilityType: "BHS", barangay: "Lakandula", latitude: "9.6700", longitude: "125.6950" },
     ]);
 
     // DISEASE CASES - Communicable Disease Surveillance

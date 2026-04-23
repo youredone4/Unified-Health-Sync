@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
-import type { Child, NutritionAction, NutritionClassification, NutritionFollowUp } from "@shared/schema";
+import type { Child, HealthStation, NutritionAction, NutritionClassification, NutritionFollowUp } from "@shared/schema";
 import { NUTRITION_CLASSIFICATIONS } from "@shared/schema";
 import { getWeightZScore } from "@/lib/healthLogic";
 import {
@@ -50,12 +50,28 @@ export default function NutritionFollowUpDialog({ child, open, onClose }: Props)
   const [heightCm, setHeightCm] = useState("");
   const [muacCm, setMuacCm] = useState("");
   const [actions, setActions] = useState<NutritionAction[]>(() => protocolDefaults(suggested).actions);
+  const [referredRhuId, setReferredRhuId] = useState<number | null>(null);
   const [nextStep, setNextStep] = useState(() => protocolDefaults(suggested).nextStepText);
   const [nextFollowUpDate, setNextFollowUpDate] = useState(
     () => addDays(new Date(), protocolDefaults(suggested).nextFollowUpDays),
   );
   const [notes, setNotes] = useState("");
   const [userEditedPlan, setUserEditedPlan] = useState(false);
+
+  const { data: rhus = [] } = useQuery<HealthStation[]>({
+    queryKey: ["/api/health-stations?type=RHU"],
+    enabled: open,
+  });
+
+  // Auto-pick the only RHU so single-RHU municipalities don't force a tap.
+  useEffect(() => {
+    if (actions.includes("REFER_RHU") && !referredRhuId && rhus.length === 1) {
+      setReferredRhuId(rhus[0].id);
+    }
+    if (!actions.includes("REFER_RHU") && referredRhuId !== null) {
+      setReferredRhuId(null);
+    }
+  }, [actions, rhus, referredRhuId]);
 
   // When classification changes, refresh the protocol defaults — but don't clobber
   // edits the operator has already made by hand.
@@ -83,6 +99,7 @@ export default function NutritionFollowUpDialog({ child, open, onClose }: Props)
         heightCm: heightCm || null,
         muacCm: muacCm || null,
         actions,
+        referredRhuId: actions.includes("REFER_RHU") ? referredRhuId : null,
         nextStep: nextStep || null,
         nextFollowUpDate: nextFollowUpDate || null,
         notes: notes || null,
@@ -108,6 +125,10 @@ export default function NutritionFollowUpDialog({ child, open, onClose }: Props)
     e.preventDefault();
     if (actions.length === 0) {
       toast({ title: "At least one action required", description: "Pick one or more follow-up actions.", variant: "destructive" });
+      return;
+    }
+    if (actions.includes("REFER_RHU") && !referredRhuId) {
+      toast({ title: "Pick the referral RHU", description: "Select which RHU the child was referred to.", variant: "destructive" });
       return;
     }
     mutation.mutate();
@@ -213,6 +234,34 @@ export default function NutritionFollowUpDialog({ child, open, onClose }: Props)
               ))}
             </div>
           </div>
+
+          {/* RHU picker — only relevant when "Refer to RHU" is selected */}
+          {actions.includes("REFER_RHU") && (
+            <div data-testid="rhu-referral-picker">
+              <Label htmlFor="referredRhu">Referred to (Rural Health Unit)</Label>
+              <Select
+                value={referredRhuId ? String(referredRhuId) : ""}
+                onValueChange={(v) => setReferredRhuId(v ? Number(v) : null)}
+              >
+                <SelectTrigger id="referredRhu" data-testid="select-referred-rhu">
+                  <SelectValue placeholder={rhus.length === 0 ? "No RHU configured — contact admin" : "Select an RHU"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {rhus.map(r => (
+                    <SelectItem key={r.id} value={String(r.id)}>
+                      {r.facilityName}
+                      {r.barangay ? <span className="text-muted-foreground"> · {r.barangay}</span> : null}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {rhus.length === 0 && (
+                <p className="text-[10px] text-destructive mt-1">
+                  No RHU facilities are configured. Ask an admin to add one under Health Stations.
+                </p>
+              )}
+            </div>
+          )}
 
           {/* Row 3: plan */}
           <div className="grid grid-cols-2 gap-3">

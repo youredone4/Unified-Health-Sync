@@ -197,15 +197,25 @@ export type InventorySnapshot = typeof inventorySnapshots.$inferSelect;
 export type InsertInventorySnapshot = z.infer<typeof insertInventorySnapshotSchema>;
 
 // === HEALTH STATIONS (Map) ===
+// facilityType distinguishes BHS (barangay station, the catchment-level clinic)
+// from RHU (the municipal Rural Health Unit a case gets referred up to) and
+// HOSPITAL (inpatient-capable referral target). Nullable so pre-type-column
+// rows keep working, but the seed backfills it.
+export const FACILITY_TYPES = ["BHS", "RHU", "HOSPITAL"] as const;
+export type FacilityType = typeof FACILITY_TYPES[number];
+
 export const healthStations = pgTable("health_stations", {
   id: serial("id").primaryKey(),
   facilityName: text("facility_name").notNull(),
+  facilityType: text("facility_type").$type<FacilityType>(),
   barangay: text("barangay").notNull(),
   latitude: text("latitude").notNull(),
   longitude: text("longitude").notNull(),
 });
 
-export const insertHealthStationSchema = createInsertSchema(healthStations).omit({ id: true });
+export const insertHealthStationSchema = createInsertSchema(healthStations)
+  .omit({ id: true })
+  .extend({ facilityType: z.enum(FACILITY_TYPES).optional().nullable() });
 export type HealthStation = typeof healthStations.$inferSelect;
 
 // === SMS OUTBOX (Demo audit trail) ===
@@ -614,6 +624,9 @@ export const nutritionFollowUps = pgTable("nutrition_followups", {
   notes: text("notes"),
   recordedBy: text("recorded_by"),                          // user id / name
   createdAt: text("created_at").notNull(),
+  // Which RHU the child was referred to. Only meaningful when the REFER_RHU
+  // action is present; nullable otherwise.
+  referredRhuId: integer("referred_rhu_id").references(() => healthStations.id),
 });
 
 export const insertNutritionFollowUpSchema = createInsertSchema(nutritionFollowUps)
@@ -622,6 +635,7 @@ export const insertNutritionFollowUpSchema = createInsertSchema(nutritionFollowU
     classification: z.enum(NUTRITION_CLASSIFICATIONS),
     actions: z.array(z.enum(NUTRITION_ACTIONS)).default([]),
     outcome: z.enum(NUTRITION_OUTCOMES).optional().nullable(),
+    referredRhuId: z.number().int().positive().optional().nullable(),
   });
 export type NutritionFollowUp = typeof nutritionFollowUps.$inferSelect;
 export type InsertNutritionFollowUp = z.infer<typeof insertNutritionFollowUpSchema>;
