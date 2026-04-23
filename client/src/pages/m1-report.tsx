@@ -871,12 +871,12 @@ export default function M1ReportPage() {
     if (source === "ENCODED") return <span className="text-[9px] px-1 rounded bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200">Manual</span>;
     if (source === "IMPORTED") return <span className="text-[9px] px-1 rounded bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-200">Imported</span>;
     if (source === "CONSOLIDATED") return <span className="text-[9px] px-1 rounded bg-teal-100 text-teal-700 dark:bg-teal-900 dark:text-teal-200">Σ</span>;
-    if (showMissing) return <span className="text-[9px] px-1 rounded bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-400">Missing</span>;
+    if (showMissing) return <span className="text-[9px] px-1 rounded bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-400">No data</span>;
     return null;
   };
 
   // Cell content: value + source badge stacked, shown in every value cell
-  // isPrimary: only primary/summary columns show the red "Missing" badge (gates to required indicator cells)
+  // isPrimary: only primary/summary columns show the red "No data" badge (gates to required indicator cells)
   const CellValue = ({ rowKey, col, isPrimary = false, children }: { rowKey: string; col: string; isPrimary?: boolean; children: React.ReactNode }) => (
     <div className="flex flex-col items-center gap-0.5">
       {children}
