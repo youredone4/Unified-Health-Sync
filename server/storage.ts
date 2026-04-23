@@ -1095,6 +1095,25 @@ export class DatabaseStorage implements IStorage {
         AND (SELECT COUNT(*) FROM health_stations
              WHERE facility_type = 'RHU' AND has_tb_dots = TRUE) = 1
     `);
+    // One-shot (idempotent) backfill: mirror the newest nurse-visit BP reading
+    // onto seniors.last_bp / last_bp_date. Heals records whose visits were
+    // created before the POST handler started keeping the two in sync. The
+    // IS DISTINCT FROM guard makes it a no-op once applied.
+    await db.execute(sql`
+      UPDATE seniors s
+      SET last_bp = v.bp, last_bp_date = v.visit_date
+      FROM (
+        SELECT DISTINCT ON (senior_id)
+          senior_id, blood_pressure AS bp, visit_date
+        FROM senior_visits
+        WHERE blood_pressure IS NOT NULL AND blood_pressure <> ''
+        ORDER BY senior_id, visit_date DESC
+      ) v
+      WHERE s.id = v.senior_id
+        AND (s.last_bp_date IS NULL OR v.visit_date >= s.last_bp_date)
+        AND (s.last_bp IS DISTINCT FROM v.bp
+             OR s.last_bp_date IS DISTINCT FROM v.visit_date)
+    `);
 
     const existingMothers = await this.getMothers();
     if (existingMothers.length > 0) return;
