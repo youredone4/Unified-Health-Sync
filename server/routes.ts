@@ -506,8 +506,13 @@ export async function registerRoutes(
 
   app.post(api.tbPatients.create.path, registryRBAC, ar(async (req, res) => {
     const input = api.tbPatients.create.input.parse(req.body);
-    const rhuError = await validateTbRhuReferral(!!input.referralToRHU, input.referredRhuId ?? null);
-    if (rhuError) return res.status(400).json({ message: rhuError });
+    // Only run the referral consistency check when the write actually touches
+    // those fields — legacy rows where referralToRHU=true but referredRhuId is
+    // null would otherwise block every unrelated update (e.g. dose logging).
+    if (input.referralToRHU !== undefined || input.referredRhuId !== undefined) {
+      const rhuError = await validateTbRhuReferral(!!input.referralToRHU, input.referredRhuId ?? null);
+      if (rhuError) return res.status(400).json({ message: rhuError });
+    }
     const created = await storage.createTBPatient(input);
     res.status(201).json(created);
   }));
@@ -515,14 +520,17 @@ export async function registerRoutes(
   app.put(api.tbPatients.update.path, registryRBAC, ar(async (req, res) => {
     const id = parseId(req.params.id, res); if (id === null) return;
     const input = api.tbPatients.update.input.parse(req.body);
-    // Validate the (referralToRHU, referredRhuId) pair against the merged
-    // view so partial patches can't leave the row inconsistent.
-    const existing = await storage.getTBPatient(id);
-    if (!existing) return res.status(404).json({ message: "TB patient not found" });
-    const mergedRefer = input.referralToRHU !== undefined ? input.referralToRHU : existing.referralToRHU;
-    const mergedRhuId = input.referredRhuId !== undefined ? input.referredRhuId : existing.referredRhuId;
-    const rhuError = await validateTbRhuReferral(!!mergedRefer, mergedRhuId ?? null);
-    if (rhuError) return res.status(400).json({ message: rhuError });
+    // Skip validation entirely for patches that don't touch referral fields.
+    // A legacy row carrying (referralToRHU=true, referredRhuId=null) must
+    // still be able to record doses, sputum checks, etc.
+    if (input.referralToRHU !== undefined || input.referredRhuId !== undefined) {
+      const existing = await storage.getTBPatient(id);
+      if (!existing) return res.status(404).json({ message: "TB patient not found" });
+      const mergedRefer = input.referralToRHU !== undefined ? input.referralToRHU : existing.referralToRHU;
+      const mergedRhuId = input.referredRhuId !== undefined ? input.referredRhuId : existing.referredRhuId;
+      const rhuError = await validateTbRhuReferral(!!mergedRefer, mergedRhuId ?? null);
+      if (rhuError) return res.status(400).json({ message: rhuError });
+    }
     const updated = await storage.updateTBPatient(id, input);
     res.json(updated);
   }));

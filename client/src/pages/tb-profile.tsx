@@ -54,10 +54,14 @@ export default function TBProfile() {
 
   const updateMutation = useMutation({
     mutationFn: async (updates: Partial<TBPatient>) => {
-      return apiRequest('PUT', `/api/tb-patients/${id}`, updates);
+      const res = await apiRequest('PUT', `/api/tb-patients/${id}`, updates);
+      return (await res.json()) as TBPatient;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/tb-patients', id] });
+    onSuccess: (updated) => {
+      // Push the server's reply straight into the cache so the alert card
+      // flips to "Referred to <RHU name>" on the same frame the picker
+      // closes, instead of waiting for a refetch round-trip.
+      queryClient.setQueryData(['/api/tb-patients', id], updated);
       invalidateScopedQueries('/api/tb-patients');
       toast({ title: "Patient record updated" });
     }
