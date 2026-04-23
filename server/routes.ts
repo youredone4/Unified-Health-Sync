@@ -555,10 +555,10 @@ export async function registerRoutes(
       settings = await storage.updateThemeSettings({
         lguName: "Placer Municipality",
         lguSubtitle: "Province of Surigao del Norte",
-        colorScheme: "healthcare-green",
-        primaryHue: 152,
+        colorScheme: "placer-brand",
+        primaryHue: 142,
         primarySaturation: 60,
-        primaryLightness: 40,
+        primaryLightness: 38,
       });
     }
     res.json(settings);

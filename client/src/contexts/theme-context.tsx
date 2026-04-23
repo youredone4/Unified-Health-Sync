@@ -13,6 +13,7 @@ interface ThemeContextType {
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 const colorSchemePresets: Record<string, { hue: number; saturation: number; lightness: number; name: string }> = {
+  "placer-brand": { hue: 142, saturation: 60, lightness: 38, name: "Placer Brand (Green · Gold · Blue)" },
   "healthcare-green": { hue: 152, saturation: 60, lightness: 40, name: "Healthcare Green" },
   "government-blue": { hue: 210, saturation: 65, lightness: 45, name: "Government Blue" },
   "community-red": { hue: 0, saturation: 70, lightness: 50, name: "Community Red" },
@@ -24,6 +25,25 @@ const colorSchemePresets: Record<string, { hue: number; saturation: number; ligh
 };
 
 export { colorSchemePresets };
+
+// Placer Municipality's brand is a tri-color of Green + Gold + Blue. The
+// single-hue pipeline takes Green as primary; we inject Gold into the accent
+// slot and Blue into the chart-2 slot so the trio shows up across cards,
+// focus rings, and dashboard charts.
+const PLACER_BRAND_OVERRIDES = {
+  goldHsl: "45 92% 50%",
+  goldFgHsl: "40 90% 15%",
+  blueHsl: "210 75% 45%",
+} as const;
+
+function applyPlacerBrandOverrides() {
+  const root = document.documentElement;
+  root.style.setProperty('--accent', PLACER_BRAND_OVERRIDES.goldHsl);
+  root.style.setProperty('--accent-foreground', PLACER_BRAND_OVERRIDES.goldFgHsl);
+  root.style.setProperty('--secondary', PLACER_BRAND_OVERRIDES.goldHsl);
+  root.style.setProperty('--secondary-foreground', PLACER_BRAND_OVERRIDES.goldFgHsl);
+  root.style.setProperty('--chart-2', PLACER_BRAND_OVERRIDES.blueHsl);
+}
 
 function applyThemeColors(hue: number, saturation: number, lightness: number) {
   const root = document.documentElement;
@@ -89,10 +109,13 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (settings) {
-      const hue = settings.primaryHue ?? 152;
+      const hue = settings.primaryHue ?? 142;
       const saturation = settings.primarySaturation ?? 60;
-      const lightness = settings.primaryLightness ?? 40;
+      const lightness = settings.primaryLightness ?? 38;
       applyThemeColors(hue, saturation, lightness);
+      if (settings.colorScheme === "placer-brand") {
+        applyPlacerBrandOverrides();
+      }
     }
   }, [settings]);
 

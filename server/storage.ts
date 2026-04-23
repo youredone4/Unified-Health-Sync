@@ -1115,6 +1115,22 @@ export class DatabaseStorage implements IStorage {
              OR s.last_bp_date IS DISTINCT FROM v.visit_date)
     `);
 
+    // Auto-migrate the active theme from the old "healthcare-green" default to
+    // Placer's Green/Gold/Blue brand. Only touches rows still on the exact
+    // prior default HSL — a user who explicitly picked any other scheme (or
+    // tuned the sliders) keeps their pick.
+    await db.execute(sql`
+      UPDATE theme_settings
+      SET color_scheme = 'placer-brand',
+          primary_hue = 142,
+          primary_saturation = 60,
+          primary_lightness = 38
+      WHERE color_scheme = 'healthcare-green'
+        AND primary_hue = 152
+        AND primary_saturation = 60
+        AND primary_lightness = 40
+    `);
+
     const existingMothers = await this.getMothers();
     if (existingMothers.length > 0) return;
 
@@ -1509,10 +1525,10 @@ export class DatabaseStorage implements IStorage {
         lguName: "Placer Municipality",
         lguSubtitle: "Province of Surigao del Norte",
         logoUrl: null,
-        colorScheme: "healthcare-green",
-        primaryHue: 152,
+        colorScheme: "placer-brand",
+        primaryHue: 142,
         primarySaturation: 60,
-        primaryLightness: 40,
+        primaryLightness: 38,
       }
     ]);
 
