@@ -301,10 +301,10 @@ export const themeSettings = pgTable("theme_settings", {
   lguName: text("lgu_name").notNull().default("Placer Municipality"),
   lguSubtitle: text("lgu_subtitle").default("Province of Surigao del Norte"),
   logoUrl: text("logo_url"),
-  colorScheme: text("color_scheme").notNull().default("healthcare-green"),
-  primaryHue: integer("primary_hue").default(152),
+  colorScheme: text("color_scheme").notNull().default("placer-brand"),
+  primaryHue: integer("primary_hue").default(142),
   primarySaturation: integer("primary_saturation").default(60),
-  primaryLightness: integer("primary_lightness").default(40),
+  primaryLightness: integer("primary_lightness").default(38),
 });
 
 export const insertThemeSettingsSchema = createInsertSchema(themeSettings).omit({ id: true });
