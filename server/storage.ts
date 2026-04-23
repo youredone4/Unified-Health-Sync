@@ -1615,7 +1615,11 @@ export class DatabaseStorage implements IStorage {
     if (filters?.barangays && filters.barangays.length > 0) {
       conditions.push(inArray(nutritionFollowUps.barangay, filters.barangays));
     }
-    const q = db.select().from(nutritionFollowUps).orderBy(desc(nutritionFollowUps.followUpDate));
+    // `id DESC` breaks ties when multiple follow-ups share a followUpDate —
+    // without it the newest same-day entry isn't reliably first, which makes
+    // the history card show the wrong "latest" row.
+    const q = db.select().from(nutritionFollowUps)
+      .orderBy(desc(nutritionFollowUps.followUpDate), desc(nutritionFollowUps.id));
     const rows = conditions.length > 0 ? await q.where(and(...conditions)) : await q;
     return rows;
   }
@@ -1638,11 +1642,15 @@ export class DatabaseStorage implements IStorage {
   // the latest classification + date chip on each row without N+1 queries.
   async getLatestFollowUpsByChildIds(childIds: number[]): Promise<Record<number, NutritionFollowUp>> {
     if (childIds.length === 0) return {};
+    // `id DESC` tiebreaker: when a child has multiple follow-ups on the same
+    // followUpDate, Postgres's natural order would otherwise leave the first-
+    // inserted row ahead of the newer one, making the worklist chip stick on
+    // the old classification after a same-day save.
     const rows = await db
       .select()
       .from(nutritionFollowUps)
       .where(inArray(nutritionFollowUps.childId, childIds))
-      .orderBy(desc(nutritionFollowUps.followUpDate));
+      .orderBy(desc(nutritionFollowUps.followUpDate), desc(nutritionFollowUps.id));
     const out: Record<number, NutritionFollowUp> = {};
     for (const r of rows) {
       if (!out[r.childId]) out[r.childId] = r;  // desc order ⇒ first seen is latest

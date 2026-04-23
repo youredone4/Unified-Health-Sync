@@ -52,7 +52,10 @@ export default function NutritionFollowUpHistoryCard({ childId }: Props) {
   });
 
   const sorted = useMemo(
-    () => [...followUps].sort((a, b) => b.followUpDate.localeCompare(a.followUpDate)),
+    () => [...followUps].sort((a, b) => {
+      const byDate = b.followUpDate.localeCompare(a.followUpDate);
+      return byDate !== 0 ? byDate : b.id - a.id;
+    }),
     [followUps],
   );
   const latest = sorted[0];
