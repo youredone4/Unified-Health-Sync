@@ -126,7 +126,7 @@ export default function TBProfile() {
   const smsMessage = `Hello ${patient.firstName}, this is a reminder for your TB DOTS visit scheduled on ${formatDate(patient.nextDotsVisitDate)}. Please come to your barangay health station to receive your observed dose.`;
 
   return (
-    <div className="space-y-6 max-w-4xl">
+    <div className="space-y-6">
       <Button variant="ghost" onClick={() => navigate('/tb')} data-testid="button-back">
         <ArrowLeft className="w-4 h-4 mr-2" />
         Back to Worklist
@@ -164,16 +164,27 @@ export default function TBProfile() {
       {patient.referralToRHU && (
         <Card className="border-orange-500 bg-orange-500/5" data-testid="card-rhu-referral">
           <CardContent className="py-4">
-            <div className="flex items-center gap-3">
-              <AlertTriangle className="w-6 h-6 text-orange-500" />
-              <div>
+            <div className="flex items-center gap-3 flex-wrap">
+              <AlertTriangle className="w-6 h-6 text-orange-500 shrink-0" />
+              <div className="flex-1 min-w-0">
                 <p className="font-semibold text-orange-600">Referred to RHU</p>
                 <p className="text-sm text-muted-foreground" data-testid="text-referral-target">
                   {patient.referredRhuId
                     ? <>Referred to <span className="font-medium text-foreground">{rhuNameById.get(patient.referredRhuId) ?? `RHU #${patient.referredRhuId}`}</span> for additional evaluation</>
-                    : "Patient has been referred for additional evaluation"}
+                    : "Patient has been referred, but the specific RHU wasn't recorded yet."}
                 </p>
               </div>
+              {!patient.referredRhuId && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={openReferDialog}
+                  disabled={updateMutation.isPending}
+                  data-testid="button-specify-rhu"
+                >
+                  Specify RHU
+                </Button>
+              )}
             </div>
           </CardContent>
         </Card>
