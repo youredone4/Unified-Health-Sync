@@ -467,21 +467,22 @@ export async function registerRoutes(
   }));
 
   // === TB PATIENTS ===
-  // If a TB patient is marked as referred to RHU they must also point at a
-  // specific, verified TB DOTS facility. Mirrors the pattern used by the
-  // nutrition follow-up register.
+  // Each municipality runs a single RHU, so referralToRHU is just a flag — we
+  // don't ask the operator to pick a facility. If a referredRhuId is supplied
+  // (legacy data, future multi-facility support) it must still be a verified
+  // TB DOTS RHU and is only meaningful when the referral flag is on.
   async function validateTbRhuReferral(
     referralToRHU: boolean,
     referredRhuId: number | null,
   ): Promise<string | null> {
-    if (referralToRHU) {
-      if (!referredRhuId) return "Select which RHU the patient was referred to.";
+    if (referredRhuId) {
+      if (!referralToRHU) {
+        return "Referred RHU can only be set when the patient is marked as referred.";
+      }
       const dotsRhus = await storage.getHealthStations({ facilityType: "RHU", hasTbDots: true });
       if (!dotsRhus.some(r => r.id === referredRhuId)) {
         return "The selected facility is not a verified TB DOTS RHU.";
       }
-    } else if (referredRhuId) {
-      return "Referred RHU can only be set when the patient is marked as referred.";
     }
     return null;
   }

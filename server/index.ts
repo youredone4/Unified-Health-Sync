@@ -7,12 +7,10 @@ const app = express();
 const httpServer = createServer(app);
 
 // Express sends a weak ETag on every JSON response. When the app is reverse-proxied
-// (Replit edge, corporate caches) a `GET /api/tb-patients/:id` issued right after
-// a PUT can be served stale with 304 + the pre-update body, which leaves the
-// React Query cache holding a patient whose `referredRhuId` is still null —
-// visible to the operator as "Patient has been referred, but the specific RHU
-// wasn't recorded yet" even though the write succeeded. Turn ETag off and mark
-// every /api response non-cacheable.
+// (Replit edge, corporate caches) a GET issued right after a PUT can be served
+// stale with 304 + the pre-update body, leaving the React Query cache holding
+// the old record even though the write succeeded. Turn ETag off and mark every
+// /api response non-cacheable.
 app.set("etag", false);
 app.use("/api", (_req, res, next) => {
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
