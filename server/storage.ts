@@ -1029,6 +1029,37 @@ export class DatabaseStorage implements IStorage {
   }
 
   async seedData(): Promise<void> {
+    // Auto-migrate: add columns introduced after the initial deployment.
+    // Every statement is fully idempotent (IF NOT EXISTS / IF EXISTS) so it is
+    // safe to re-run on every startup — it becomes a no-op once applied.
+    await db.execute(sql`
+      ALTER TABLE health_stations
+        ADD COLUMN IF NOT EXISTS facility_type TEXT,
+        ADD COLUMN IF NOT EXISTS has_tb_dots   BOOLEAN NOT NULL DEFAULT FALSE
+    `);
+    await db.execute(sql`
+      ALTER TABLE tb_patients
+        ADD COLUMN IF NOT EXISTS referred_rhu_id INTEGER REFERENCES health_stations(id)
+    `);
+    await db.execute(sql`
+      ALTER TABLE nutrition_followups
+        ADD COLUMN IF NOT EXISTS referred_rhu_id INTEGER REFERENCES health_stations(id)
+    `);
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS inventory_snapshots (
+        id            SERIAL PRIMARY KEY,
+        barangay      TEXT NOT NULL,
+        snapshot_date TEXT NOT NULL,
+        item_type     TEXT NOT NULL,
+        item_key      TEXT NOT NULL,
+        qty           INTEGER NOT NULL DEFAULT 0
+      )
+    `);
+    await db.execute(sql`
+      CREATE UNIQUE INDEX IF NOT EXISTS inventory_snapshots_unique_idx
+        ON inventory_snapshots (barangay, snapshot_date, item_type, item_key)
+    `);
+
     // Idempotent backfill: every health_stations row needs a facilityType now
     // that REFER_RHU records the referred facility. Runs on every startup but
     // becomes a no-op once every row has a type.
