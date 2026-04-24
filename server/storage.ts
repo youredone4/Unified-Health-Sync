@@ -1,6 +1,6 @@
 import { db } from "./db";
 import { 
-  mothers, children, seniors, inventory, medicineInventory, inventorySnapshots, healthStations, smsOutbox, diseaseCases, tbPatients, themeSettings,
+  mothers, children, seniors, inventory, medicineInventory, inventorySnapshots, coldChainLogs, healthStations, smsOutbox, diseaseCases, tbPatients, themeSettings,
   barangays, users, userBarangays, municipalitySettings, UserRole, consults, seniorMedClaims,
   m1TemplateVersions, m1IndicatorCatalog, m1ReportInstances, m1ReportHeader, m1IndicatorValues, barangaySettings,
   directMessages,
@@ -14,6 +14,7 @@ import {
   type InventoryItem,
   type MedicineInventoryItem, type InsertMedicineInventoryItem,
   type InventorySnapshot, type InsertInventorySnapshot,
+  type ColdChainLog, type InsertColdChainLog,
   type HealthStation,
   type SmsMessage, type InsertSmsMessage,
   type DiseaseCase, type InsertDiseaseCase,
@@ -61,6 +62,12 @@ export interface IStorage {
   updateMedicineInventory(id: number, updates: Partial<InsertMedicineInventoryItem>): Promise<MedicineInventoryItem>;
   getInventorySnapshots(params: { barangay?: string; itemType: string; itemKey: string }): Promise<InventorySnapshot[]>;
   bulkInsertInventorySnapshots(rows: InsertInventorySnapshot[]): Promise<number>;
+
+  // Cold-chain temperature log (DOH NIP/EPI Cold Chain Manual)
+  getColdChainLogs(params: { barangay?: string; fromDate?: string; toDate?: string }): Promise<ColdChainLog[]>;
+  getColdChainTodayStatus(barangay: string, date: string): Promise<{ am: ColdChainLog | null; pm: ColdChainLog | null }>;
+  createColdChainLog(log: InsertColdChainLog): Promise<ColdChainLog>;
+
   getHealthStations(filter?: { facilityType?: string; hasTbDots?: boolean }): Promise<HealthStation[]>;
 
   getSmsMessages(): Promise<SmsMessage[]>;
@@ -306,6 +313,34 @@ export class DatabaseStorage implements IStorage {
       total += Math.min(chunkSize, rows.length - i);
     }
     return total;
+  }
+
+  async getColdChainLogs(params: { barangay?: string; fromDate?: string; toDate?: string }): Promise<ColdChainLog[]> {
+    const conditions = [];
+    if (params.barangay) conditions.push(eq(coldChainLogs.barangay, params.barangay));
+    if (params.fromDate) conditions.push(gte(coldChainLogs.readingDate, params.fromDate));
+    if (params.toDate) conditions.push(lt(coldChainLogs.readingDate, params.toDate));
+    return await db
+      .select()
+      .from(coldChainLogs)
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .orderBy(desc(coldChainLogs.readingDate), desc(coldChainLogs.readingPeriod));
+  }
+
+  async getColdChainTodayStatus(barangay: string, date: string): Promise<{ am: ColdChainLog | null; pm: ColdChainLog | null }> {
+    const rows = await db
+      .select()
+      .from(coldChainLogs)
+      .where(and(eq(coldChainLogs.barangay, barangay), eq(coldChainLogs.readingDate, date)));
+    return {
+      am: rows.find(r => r.readingPeriod === "AM") ?? null,
+      pm: rows.find(r => r.readingPeriod === "PM") ?? null,
+    };
+  }
+
+  async createColdChainLog(log: InsertColdChainLog): Promise<ColdChainLog> {
+    const [created] = await db.insert(coldChainLogs).values(log).returning();
+    return created;
   }
 
   async getHealthStations(filter?: { facilityType?: string; hasTbDots?: boolean }): Promise<HealthStation[]> {

@@ -39,6 +39,7 @@ import {
   // Primary
   Sparkles,
   Scale,
+  Snowflake,
 } from "lucide-react";
 import { useTheme } from "@/contexts/theme-context";
 import { useAuth, sidebarPermissions, ALL_ROLES } from "@/hooks/use-auth";
@@ -145,6 +146,14 @@ const NAV_ITEMS: NavItem[] = [
     roles: rolesFor("/inventory"),
     activePrefixes: ["/inventory"],
     tier: "decision",
+  },
+  {
+    title: "Cold-chain",
+    url: "/cold-chain",
+    icon: Snowflake,
+    roles: rolesFor("/cold-chain"),
+    activePrefixes: ["/cold-chain"],
+    tier: "util",
   },
   {
     title: "Clinic Check-up",

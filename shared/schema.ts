@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, boolean, timestamp, jsonb, unique, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, timestamp, jsonb, unique, uniqueIndex, real, varchar } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -195,6 +195,44 @@ export const inventorySnapshots = pgTable("inventory_snapshots", {
 export const insertInventorySnapshotSchema = createInsertSchema(inventorySnapshots).omit({ id: true });
 export type InventorySnapshot = typeof inventorySnapshots.$inferSelect;
 export type InsertInventorySnapshot = z.infer<typeof insertInventorySnapshotSchema>;
+
+// === COLD-CHAIN TEMPERATURE LOGS ===
+// DOH NIP/EPI Cold Chain Manual: twice-daily fridge readings (AM + PM),
+// 2-8 °C target range. Plus VVM (Vaccine Vial Monitor) check.
+// One reading per (barangay, date, period) — uniqueness prevents duplicates.
+export const COLD_CHAIN_PERIODS = ["AM", "PM"] as const;
+export type ColdChainPeriod = typeof COLD_CHAIN_PERIODS[number];
+
+export const COLD_CHAIN_VVM_STATUSES = ["OK", "ALERT", "DISCARD"] as const;
+export type ColdChainVvmStatus = typeof COLD_CHAIN_VVM_STATUSES[number];
+
+export const COLD_CHAIN_MIN_C = 2;
+export const COLD_CHAIN_MAX_C = 8;
+
+export const coldChainLogs = pgTable("cold_chain_logs", {
+  id: serial("id").primaryKey(),
+  barangay: text("barangay").notNull(),
+  readingDate: text("reading_date").notNull(), // YYYY-MM-DD
+  readingPeriod: text("reading_period").$type<ColdChainPeriod>().notNull(),
+  tempCelsius: real("temp_celsius").notNull(),
+  vvmStatus: text("vvm_status").$type<ColdChainVvmStatus>().notNull().default("OK"),
+  notes: text("notes"),
+  recordedByUserId: varchar("recorded_by_user_id"),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (t) => ({
+  uniqueReading: uniqueIndex("cold_chain_logs_unique_idx")
+    .on(t.barangay, t.readingDate, t.readingPeriod),
+}));
+
+export const insertColdChainLogSchema = createInsertSchema(coldChainLogs)
+  .omit({ id: true, createdAt: true })
+  .extend({
+    readingPeriod: z.enum(COLD_CHAIN_PERIODS),
+    vvmStatus: z.enum(COLD_CHAIN_VVM_STATUSES),
+    tempCelsius: z.number().min(-40).max(50),
+  });
+export type ColdChainLog = typeof coldChainLogs.$inferSelect;
+export type InsertColdChainLog = z.infer<typeof insertColdChainLogSchema>;
 
 // === HEALTH STATIONS (Map) ===
 // facilityType distinguishes BHS (barangay station, the catchment-level clinic)

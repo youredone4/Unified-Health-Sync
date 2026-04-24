@@ -3,7 +3,7 @@ import type { Server } from "http";
 import { storage } from "./storage";
 import { db } from "./db";
 import { max, eq } from "drizzle-orm";
-import { prenatalVisits, childVisits, seniorVisits, insertFpServiceRecordSchema, insertNutritionFollowUpSchema } from "@shared/schema";
+import { prenatalVisits, childVisits, seniorVisits, insertFpServiceRecordSchema, insertNutritionFollowUpSchema, insertColdChainLogSchema } from "@shared/schema";
 import { api } from "@shared/routes";
 import { z } from "zod";
 import { setupAuth, registerAuthRoutes } from "./auth";
@@ -327,6 +327,65 @@ export async function registerRoutes(
     const data = await storage.getInventorySnapshots({ barangay: barangay || undefined, itemType, itemKey });
     res.json(data);
   });
+
+  // === COLD-CHAIN TEMPERATURE LOGS ===
+  // Per DOH NIP/EPI Cold Chain Manual: twice-daily fridge readings.
+  // TL: scoped to assigned barangays. MHO/SHA/Admin: full read.
+  app.get("/api/cold-chain/logs", loadUserInfo, requireAuth, ar(async (req, res) => {
+    const requestedBarangay = req.query.barangay ? String(req.query.barangay) : undefined;
+    const fromDate = req.query.fromDate ? String(req.query.fromDate) : undefined;
+    const toDate = req.query.toDate ? String(req.query.toDate) : undefined;
+
+    if (req.userInfo?.role === UserRole.TL) {
+      const assigned = req.userInfo.assignedBarangays;
+      if (assigned.length === 0) return res.json([]);
+      if (requestedBarangay && !assigned.includes(requestedBarangay)) {
+        return res.status(403).json({ message: "Access denied to this barangay" });
+      }
+      const all = await storage.getColdChainLogs({ barangay: requestedBarangay, fromDate, toDate });
+      const scoped = requestedBarangay ? all : all.filter(l => assigned.includes(l.barangay));
+      return res.json(scoped);
+    }
+    const data = await storage.getColdChainLogs({ barangay: requestedBarangay, fromDate, toDate });
+    res.json(data);
+  }));
+
+  app.get("/api/cold-chain/today", loadUserInfo, requireAuth, ar(async (req, res) => {
+    const barangay = req.query.barangay ? String(req.query.barangay) : undefined;
+    if (!barangay) return res.status(400).json({ message: "barangay query param is required" });
+    if (req.userInfo?.role === UserRole.TL && !req.userInfo.assignedBarangays.includes(barangay)) {
+      return res.status(403).json({ message: "Access denied to this barangay" });
+    }
+    const today = new Date().toISOString().slice(0, 10);
+    const status = await storage.getColdChainTodayStatus(barangay, today);
+    res.json(status);
+  }));
+
+  app.post("/api/cold-chain/logs", loadUserInfo, requireAuth,
+    requireRole(UserRole.SYSTEM_ADMIN, UserRole.MHO, UserRole.SHA, UserRole.TL),
+    ar(async (req, res) => {
+      const parsed = insertColdChainLogSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: "Invalid cold-chain log", issues: parsed.error.issues });
+      }
+      const input = parsed.data;
+      if (req.userInfo?.role === UserRole.TL && !req.userInfo.assignedBarangays.includes(input.barangay)) {
+        return res.status(403).json({ message: "Access denied to this barangay" });
+      }
+      const created = await storage.createColdChainLog({
+        ...input,
+        recordedByUserId: req.userInfo?.id ?? null,
+      });
+      await createAuditLog(
+        req.userInfo!.id, req.userInfo!.role,
+        "CREATE", "COLD_CHAIN_LOG", String(created.id),
+        created.barangay, undefined,
+        { readingDate: created.readingDate, readingPeriod: created.readingPeriod, tempCelsius: created.tempCelsius, vvmStatus: created.vvmStatus },
+        req,
+      );
+      res.status(201).json(created);
+    }),
+  );
 
   // === MEDICINE INVENTORY ===
   app.get(api.medicineInventory.list.path, async (req, res) => {
