@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Progress } from "@/components/ui/progress";
 import { AlertTriangle, TrendingUp, MapPin, Users, Baby, Heart, Pill, Package, Activity, ChevronRight, Shield, Siren } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from "recharts";
-import { DashboardShell, FilterBar, type AlertSpec } from "@/components/dashboard-shell";
+import { DashboardShell, FilterBar, type AlertSpec, type KpiSpec } from "@/components/dashboard-shell";
 
 const PLACER_BARANGAYS = [
   "Amoslog", "Anislagan", "Bad-as", "Boyongan", "Bugas-bugas",
@@ -47,43 +47,6 @@ function RiskBadge({ level, score }: { level: "high" | "medium" | "low"; score?:
     <Badge className={`${colors.bg} ${colors.text} ${colors.border} text-xs font-medium`} data-testid={`badge-risk-${level}`}>
       {labels[level]}{score !== undefined && ` (${score})`}
     </Badge>
-  );
-}
-
-function KpiSummaryCard({ title, value, subtitle, icon: Icon, variant, onClick }: {
-  title: string;
-  value: number;
-  subtitle: string;
-  icon: any;
-  variant: "danger" | "warning" | "success" | "info";
-  onClick?: () => void;
-}) {
-  const variants = {
-    danger: { bg: "bg-red-500/10", border: "border-red-500/30", icon: "text-red-400" },
-    warning: { bg: "bg-orange-500/10", border: "border-orange-500/30", icon: "text-orange-400" },
-    success: { bg: "bg-green-500/10", border: "border-green-500/30", icon: "text-green-400" },
-    info: { bg: "bg-blue-500/10", border: "border-blue-500/30", icon: "text-blue-400" },
-  };
-  const v = variants[variant];
-  return (
-    <Card
-      className={`${v.bg} ${v.border} ${onClick ? 'cursor-pointer hover:opacity-90 transition-all select-none' : ''}`}
-      onClick={onClick}
-      role={onClick ? 'button' : undefined}
-    >
-      <CardContent className="p-4">
-        <div className="flex items-center gap-3">
-          <div className={`p-2 rounded-full ${v.bg}`}>
-            <Icon className={`w-5 h-5 ${v.icon}`} />
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-2xl font-bold" data-testid={`kpi-value-${title.toLowerCase().replace(/\s+/g, '-')}`}>{value}</p>
-            <p className="text-sm font-medium truncate">{title}</p>
-            <p className="text-xs text-muted-foreground">{subtitle}</p>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
   );
 }
 
@@ -336,12 +299,6 @@ export default function Hotspots() {
   const totalTBAtRisk = hotspotData.reduce((sum, h) => sum + h.tbAtRisk, 0);
   const totalUnderweight = hotspotData.reduce((sum, h) => sum + h.underweight, 0);
 
-  const riskDistributionData = [
-    { name: "High Risk", value: highRiskCount, fill: RISK_COLORS.high.fill },
-    { name: "Needs Attention", value: mediumRiskCount, fill: RISK_COLORS.medium.fill },
-    { name: "On Track", value: lowRiskCount, fill: RISK_COLORS.low.fill },
-  ];
-
   const issueBreakdownData = [
     { name: "TT Overdue", count: totalTTOverdue, fill: "#ec4899" },
     { name: "Vaccines", count: totalVaxOverdue, fill: "#3b82f6" },
@@ -362,114 +319,124 @@ export default function Hotspots() {
     });
   }
 
+  // L1 KPIs — same shape as every other dashboard. Click-to-drill to the
+  // worklist with the right filter chip pre-selected.
+  const kpis: KpiSpec[] = [
+    {
+      label: "High-risk areas",
+      value: highRiskCount,
+      comparison: "need immediate action",
+      severity: highRiskCount > 0 ? "critical" : "normal",
+      icon: AlertTriangle,
+      testId: "kpi-high-risk",
+    },
+    {
+      label: "TT overdue",
+      value: totalTTOverdue,
+      comparison: "mothers need TT",
+      severity: totalTTOverdue > 0 ? "critical" : "normal",
+      icon: Heart,
+      onClick: () => navigate("/prenatal?status=overdue"),
+      testId: "kpi-tt",
+    },
+    {
+      label: "Vaccines overdue",
+      value: totalVaxOverdue,
+      comparison: "children need catch-up",
+      severity: totalVaxOverdue > 0 ? "critical" : "normal",
+      icon: Baby,
+      onClick: () => navigate("/child?status=overdue"),
+      testId: "kpi-vax",
+    },
+    {
+      label: "Meds pending",
+      value: totalMedsPending,
+      comparison: "seniors awaiting pickup",
+      severity: totalMedsPending > 0 ? "warning" : "normal",
+      icon: Pill,
+      onClick: () => navigate("/senior?status=ready"),
+      testId: "kpi-meds",
+    },
+    {
+      label: "Stock-outs",
+      value: totalStockouts,
+      comparison: "barangays with 0 stock",
+      severity: totalStockouts > 0 ? "critical" : "normal",
+      icon: Package,
+      onClick: () => navigate("/inventory/stockouts"),
+      testId: "kpi-stockouts",
+    },
+    {
+      label: "TB at risk",
+      value: totalTBAtRisk,
+      comparison: "missed DOTS doses",
+      severity: totalTBAtRisk > 0 ? "critical" : "normal",
+      icon: Activity,
+      onClick: () => navigate("/tb?status=atRisk"),
+      testId: "kpi-tb",
+    },
+  ];
+
   return (
     <DashboardShell
       title="Hotspots & Analytics"
       subtitle="Cross-program risk ranking across all 20 barangays"
       filterBar={<FilterBar dataAsOf={TODAY_STR} />}
       alerts={alerts}
+      kpis={kpis}
       diagnostic={
         <div className="space-y-6">
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-        <KpiSummaryCard
-          title="High Risk Areas"
-          value={highRiskCount}
-          subtitle="Need immediate action"
-          icon={AlertTriangle}
-          variant="danger"
-        />
-        <KpiSummaryCard
-          title="TT Overdue"
-          value={totalTTOverdue}
-          subtitle="Mothers need vaccination"
-          icon={Heart}
-          variant={totalTTOverdue > 0 ? "danger" : "success"}
-          onClick={() => navigate('/prenatal')}
-        />
-        <KpiSummaryCard
-          title="Vaccines Overdue"
-          value={totalVaxOverdue}
-          subtitle="Children need catch-up"
-          icon={Baby}
-          variant={totalVaxOverdue > 0 ? "danger" : "success"}
-          onClick={() => navigate('/child')}
-        />
-        <KpiSummaryCard
-          title="Meds Pending"
-          value={totalMedsPending}
-          subtitle="Seniors awaiting pickup"
-          icon={Pill}
-          variant={totalMedsPending > 0 ? "warning" : "success"}
-          onClick={() => navigate('/senior')}
-        />
-        <KpiSummaryCard
-          title="Stock-outs"
-          value={totalStockouts}
-          subtitle="Barangays with 0 stock"
-          icon={Package}
-          variant={totalStockouts > 0 ? "danger" : "success"}
-          onClick={() => navigate('/inventory/stockouts')}
-        />
-        <KpiSummaryCard
-          title="TB At Risk"
-          value={totalTBAtRisk}
-          subtitle="Missed doses"
-          icon={Activity}
-          variant={totalTBAtRisk > 0 ? "danger" : "success"}
-          onClick={() => navigate('/tb')}
-        />
-      </div>
-
       <div className="grid md:grid-cols-2 gap-6">
         <Card>
-          <CardHeader>
+          <CardHeader className="pb-2">
             <CardTitle className="text-base flex items-center gap-2">
-              <Shield className="w-4 h-4" />
-              Risk Distribution
+              <Shield className="w-4 h-4 text-primary" />
+              Risk distribution · 20 barangays
             </CardTitle>
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={220}>
-              <PieChart>
-                <Pie
-                  data={riskDistributionData}
-                  dataKey="value"
-                  nameKey="name"
-                  cx="50%"
-                  cy="50%"
-                  outerRadius={80}
-                  label={({ name, value }) => `${name}: ${value}`}
-                >
-                  {riskDistributionData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.fill} />
+              <BarChart
+                data={[
+                  { name: "High", count: highRiskCount, fill: "hsl(var(--destructive))" },
+                  { name: "Medium", count: mediumRiskCount, fill: "hsl(38 92% 50%)" },
+                  { name: "Low", count: lowRiskCount, fill: "hsl(var(--primary))" },
+                ]}
+                layout="vertical"
+                margin={{ top: 8, right: 12, bottom: 8, left: 4 }}
+              >
+                <XAxis type="number" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }} allowDecimals={false} />
+                <YAxis type="category" dataKey="name" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }} width={70} />
+                <Tooltip contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", fontSize: 12 }} formatter={(v) => [v, "Barangays"]} />
+                <Bar dataKey="count" radius={[0, 4, 4, 0]}>
+                  {[
+                    { fill: "hsl(var(--destructive))" },
+                    { fill: "hsl(38 92% 50%)" },
+                    { fill: "hsl(var(--primary))" },
+                  ].map((entry, index) => (
+                    <Cell key={`risk-cell-${index}`} fill={entry.fill} />
                   ))}
-                </Pie>
-                <Tooltip />
-                <Legend />
-              </PieChart>
+                </Bar>
+              </BarChart>
             </ResponsiveContainer>
           </CardContent>
         </Card>
 
         <Card>
-          <CardHeader>
+          <CardHeader className="pb-2">
             <CardTitle className="text-base flex items-center gap-2">
-              <Activity className="w-4 h-4" />
-              Issue Breakdown (All Barangays)
+              <Activity className="w-4 h-4 text-primary" />
+              Issue breakdown · all barangays
             </CardTitle>
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={220}>
-              <BarChart data={issueBreakdownData} layout="vertical">
-                <XAxis type="number" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }} />
-                <YAxis dataKey="name" type="category" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }} width={90} />
-                <Tooltip contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))" }} />
-                <Bar dataKey="count" radius={[0, 4, 4, 0]}>
-                  {issueBreakdownData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.fill} />
-                  ))}
-                </Bar>
+              <BarChart data={issueBreakdownData} layout="vertical" margin={{ top: 8, right: 12, bottom: 8, left: 4 }}>
+                <XAxis type="number" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }} allowDecimals={false} />
+                <YAxis dataKey="name" type="category" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }} width={100} />
+                <Tooltip contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", fontSize: 12 }} />
+                <Bar dataKey="count" fill="hsl(var(--destructive))" radius={[0, 4, 4, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </CardContent>
