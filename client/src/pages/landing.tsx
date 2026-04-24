@@ -10,6 +10,7 @@ import { queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { ThemeSettings, Barangay } from "@shared/schema";
 import { Loader2, Eye, EyeOff, CheckCircle, ArrowLeft, ArrowRight, Upload, X, Camera, RefreshCw } from "lucide-react";
+import { getDefaultLandingForRole } from "@/lib/role-landing";
 
 interface LastLoginInfo {
   role?: string;
@@ -108,10 +109,14 @@ export default function LandingPage() {
       }
       return data;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       setLoginError(null);
       queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
-      window.location.reload();
+      // Redirect to the role's default landing (see lib/role-landing.ts).
+      // window.location.href forces a full reload so the session cookie and
+      // auth context reinitialise — same effect as the prior reload(), but
+      // lands on a role-appropriate URL instead of always "/".
+      window.location.href = getDefaultLandingForRole(data?.role);
     },
     onError: (error: Error & { statusCode?: string }) => {
       const statusCode = error.statusCode;
