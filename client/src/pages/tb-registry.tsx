@@ -24,7 +24,9 @@ export default function TBRegistry() {
   const [phaseFilter, setPhaseFilter] = useState("all");
   const [barangayFilter, setBarangayFilter] = useState("all");
 
-  const barangays = Array.from(new Set(patients.map(p => p.barangay)));
+  // `.filter(Boolean)` drops empty/null barangays — Radix Select throws if a
+  // <SelectItem> receives value="".
+  const barangays = Array.from(new Set(patients.map(p => p.barangay).filter(Boolean) as string[]));
 
   const filteredPatients = patients.filter(p => {
     const fullName = `${p.firstName ?? ''} ${p.lastName ?? ''}`.toLowerCase();

@@ -35,8 +35,10 @@ export default function DiseaseRegistry() {
     return p && p.trim() ? p : "all";
   });
 
-  const conditions = Array.from(new Set(cases.map(c => c.condition)));
-  const barangays = Array.from(new Set(cases.map(c => c.barangay)));
+  // `.filter(Boolean)` drops empty/null values — Radix Select throws if a
+  // <SelectItem> receives value="".
+  const conditions = Array.from(new Set(cases.map(c => c.condition).filter(Boolean) as string[]));
+  const barangays = Array.from(new Set(cases.map(c => c.barangay).filter(Boolean) as string[]));
 
   const filteredCases = cases.filter(c => {
     const matchesSearch = (c.patientName ?? '').toLowerCase().includes(search.toLowerCase());
