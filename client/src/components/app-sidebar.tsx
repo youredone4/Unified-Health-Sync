@@ -7,235 +7,157 @@ import {
   SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
-  SidebarGroupLabel,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarHeader,
+  SidebarSeparator,
 } from "@/components/ui/sidebar";
 import { Badge } from "@/components/ui/badge";
 import {
-  LayoutDashboard,
-  MapPin,
-  Baby,
-  Heart,
-  Users,
-  Package,
-  Calendar,
-  Activity,
-  Stethoscope,
-  UserCircle,
-  Scale,
-  Pill,
-  TrendingUp,
-  AlertTriangle,
-  Bot,
-  Siren,
-  ClipboardList,
-  Settings,
-  Shield,
-  ClipboardPlus,
-  MessageCircle,
-  User,
+  Home as HomeIcon,
   HeartHandshake,
+  Baby,
+  UserCircle,
+  Siren,
+  Pill,
+  Scale,
+  Package,
+  ClipboardList,
+  Shield,
+  Stethoscope,
+  User,
 } from "lucide-react";
 import { useTheme } from "@/contexts/theme-context";
 import { useAuth, sidebarPermissions, ALL_ROLES } from "@/hooks/use-auth";
 
 interface NavItem {
   title: string;
+  // Where clicking the item lands. Each hub uses its "worklist" / default tab
+  // as the landing URL so a second click opens the most-used view.
   url: string;
   icon: React.ElementType;
-  // Explicit roles list derived from sidebarPermissions (or ALL_ROLES for unrestricted items).
-  // Used to filter items at render time — same data that RoleRoute uses for route guards.
+  // Roles derived from sidebarPermissions so sidebar visibility and RoleRoute
+  // guards always agree.
   roles: readonly string[];
+  // URL prefixes that should show this sidebar item as "active". Anything
+  // under /prenatal, /fp, /mother goes to Mothers, etc.
+  activePrefixes: readonly string[];
   isBadged?: boolean;
+  groupId: "main" | "admin";
 }
 
-interface NavGroup {
-  label: string | null; // null = no subgroup label rendered
-  items: NavItem[];
-}
-
-// Three zones map to the three modes of work (see docs/ui-design-system.md §2):
-//   TRANSACTIONS = record / update / log
-//   DASHBOARDS   = at-a-glance decision making
-//   REPORTS      = formal outputs to submit / export
-// Admin items sit in their own zone below the three, matching the design doc's
-// "— Admin —" separator.
-type ZoneKey = "TRANSACTIONS" | "DASHBOARDS" | "REPORTS" | "ADMIN";
-
-interface NavZone {
-  key: ZoneKey;
-  label: string;
-  groups: NavGroup[];
-}
-
-// Helper: returns the allowed roles for a path from the central sidebarPermissions map,
-// falling back to ALL_ROLES for paths that have no restriction.
 function rolesFor(url: string): readonly string[] {
   return sidebarPermissions[url] ?? ALL_ROLES;
 }
 
-// Central navigation config — roles on each item come from sidebarPermissions so that
-// sidebar visibility and RoleRoute guards share the same policy data.
-const NAV_ZONES: NavZone[] = [
+// MGMT_ROLES = any role that can see at least one item in a management hub.
+const MGMT = ["SYSTEM_ADMIN", "MHO", "SHA"] as const;
+
+// Flat list of program hubs. Each item is one sidebar click; inside the
+// destination page, the ProgramHub header's tab strip exposes the hub's
+// sub-views (Worklist / Registry / Dashboard / …).
+const NAV_ITEMS: NavItem[] = [
   {
-    key: "TRANSACTIONS",
-    label: "Transactions",
-    groups: [
-      {
-        label: "Maternal & Child Care",
-        items: [
-          { title: "TT Reminders", url: "/prenatal", icon: Heart, roles: rolesFor("/prenatal") },
-          { title: "Mother Registry", url: "/prenatal/registry", icon: Users, roles: rolesFor("/prenatal/registry") },
-          { title: "Vaccination Schedule", url: "/child", icon: Baby, roles: rolesFor("/child") },
-          { title: "Child Registry", url: "/child/registry", icon: Users, roles: rolesFor("/child/registry") },
-        ],
-      },
-      {
-        label: "Family Planning",
-        items: [
-          { title: "FP Registry", url: "/fp", icon: HeartHandshake, roles: rolesFor("/fp") },
-        ],
-      },
-      {
-        label: "Nutrition",
-        items: [
-          { title: "Underweight Follow-ups", url: "/nutrition", icon: Scale, roles: rolesFor("/nutrition") },
-        ],
-      },
-      {
-        label: "Senior Care",
-        items: [
-          { title: "HTN Meds Pickup", url: "/senior", icon: Pill, roles: rolesFor("/senior") },
-          { title: "Senior Registry", url: "/senior/registry", icon: UserCircle, roles: rolesFor("/senior/registry") },
-        ],
-      },
-      {
-        label: "Disease Surveillance",
-        items: [
-          { title: "Case Worklist", url: "/disease", icon: Siren, roles: rolesFor("/disease") },
-          { title: "Case Registry", url: "/disease/registry", icon: ClipboardList, roles: rolesFor("/disease/registry") },
-        ],
-      },
-      {
-        label: "TB DOTS",
-        items: [
-          { title: "DOTS Worklist", url: "/tb", icon: Pill, roles: rolesFor("/tb") },
-          { title: "TB Registry", url: "/tb/registry", icon: ClipboardList, roles: rolesFor("/tb/registry") },
-        ],
-      },
-      {
-        label: "Clinical Services",
-        items: [
-          { title: "Patient Check-up", url: "/patient-checkup", icon: ClipboardPlus, roles: rolesFor("/patient-checkup") },
-        ],
-      },
-      {
-        label: "Inventory",
-        items: [
-          { title: "Availability & Surplus", url: "/inventory", icon: Package, roles: rolesFor("/inventory") },
-        ],
-      },
-      {
-        label: "Scheduling",
-        items: [
-          { title: "Calendar", url: "/calendar", icon: Calendar, roles: rolesFor("/calendar") },
-        ],
-      },
-      {
-        label: "Monthly Encoding",
-        items: [
-          { title: "M1 Encoding", url: "/m1/encode", icon: ClipboardList, roles: rolesFor("/m1/encode") },
-        ],
-      },
-      {
-        label: "Communication",
-        items: [
-          { title: "Messages", url: "/messages", icon: MessageCircle, roles: rolesFor("/messages"), isBadged: true },
-        ],
-      },
-    ],
+    title: "Home",
+    url: "/",
+    icon: HomeIcon,
+    roles: rolesFor("/"),
+    activePrefixes: ["/", "/hotspots", "/calendar", "/messages", "/patient-checkup"],
+    groupId: "main",
   },
   {
-    key: "DASHBOARDS",
-    label: "Dashboards",
-    groups: [
-      {
-        label: "Municipal",
-        items: [
-          { title: "Municipal Dashboard", url: "/", icon: LayoutDashboard, roles: rolesFor("/") },
-          { title: "Hotspots & Analytics", url: "/hotspots", icon: TrendingUp, roles: rolesFor("/hotspots") },
-        ],
-      },
-      {
-        label: "Maternal & Child",
-        items: [
-          { title: "Prenatal Dashboard", url: "/prenatal/dashboard", icon: Activity, roles: rolesFor("/prenatal/dashboard") },
-          { title: "Child Dashboard", url: "/child/dashboard", icon: Activity, roles: rolesFor("/child/dashboard") },
-        ],
-      },
-      {
-        label: "Nutrition",
-        items: [
-          { title: "Growth Monitoring", url: "/nutrition/growth", icon: TrendingUp, roles: rolesFor("/nutrition/growth") },
-          { title: "Nutrition Dashboard", url: "/nutrition/dashboard", icon: Activity, roles: rolesFor("/nutrition/dashboard") },
-        ],
-      },
-      {
-        label: "Senior Care",
-        items: [
-          { title: "Senior Dashboard", url: "/senior/dashboard", icon: Activity, roles: rolesFor("/senior/dashboard") },
-        ],
-      },
-      {
-        label: "Disease Surveillance",
-        items: [
-          { title: "Outbreak Map", url: "/disease/map", icon: MapPin, roles: rolesFor("/disease/map") },
-        ],
-      },
-      {
-        label: "Inventory",
-        items: [
-          { title: "Stock-outs & Low Stock", url: "/inventory/stockouts", icon: AlertTriangle, roles: rolesFor("/inventory/stockouts") },
-        ],
-      },
-    ],
+    title: "Mothers",
+    url: "/prenatal",
+    icon: HeartHandshake,
+    roles: rolesFor("/prenatal"),
+    activePrefixes: ["/prenatal", "/mother", "/fp"],
+    groupId: "main",
   },
   {
-    key: "REPORTS",
-    label: "Reports",
-    groups: [
-      {
-        label: null,
-        items: [
-          { title: "M1 Brgy Summary & Export", url: "/reports/m1", icon: ClipboardList, roles: rolesFor("/reports/m1") },
-          { title: "Health Analytics", url: "/reports/ai", icon: Bot, roles: rolesFor("/reports/ai") },
-        ],
-      },
-    ],
+    title: "Children",
+    url: "/child",
+    icon: Baby,
+    roles: rolesFor("/child"),
+    activePrefixes: ["/child"],
+    groupId: "main",
   },
   {
-    key: "ADMIN",
-    label: "Admin",
-    groups: [
-      {
-        label: null,
-        items: [
-          { title: "User Management", url: "/admin/users", icon: Users, roles: rolesFor("/admin/users") },
-          { title: "Audit Logs", url: "/admin/audit", icon: Shield, roles: rolesFor("/admin/audit") },
-          { title: "Settings", url: "/settings", icon: Settings, roles: rolesFor("/settings") },
-        ],
-      },
-    ],
+    title: "Seniors",
+    url: "/senior",
+    icon: UserCircle,
+    roles: rolesFor("/senior"),
+    activePrefixes: ["/senior"],
+    groupId: "main",
+  },
+  {
+    title: "Disease",
+    url: "/disease",
+    icon: Siren,
+    roles: rolesFor("/disease"),
+    activePrefixes: ["/disease"],
+    groupId: "main",
+  },
+  {
+    title: "TB DOTS",
+    url: "/tb",
+    icon: Pill,
+    roles: rolesFor("/tb"),
+    activePrefixes: ["/tb"],
+    groupId: "main",
+  },
+  {
+    title: "Nutrition",
+    url: "/nutrition",
+    icon: Scale,
+    roles: rolesFor("/nutrition"),
+    activePrefixes: ["/nutrition"],
+    groupId: "main",
+  },
+  {
+    title: "Inventory",
+    url: "/inventory",
+    icon: Package,
+    roles: rolesFor("/inventory"),
+    activePrefixes: ["/inventory"],
+    groupId: "main",
+  },
+  {
+    title: "Reports",
+    url: "/reports/m1",
+    icon: ClipboardList,
+    roles: rolesFor("/reports/m1"),
+    activePrefixes: ["/reports", "/m1/encode"],
+    groupId: "main",
+  },
+  {
+    title: "Admin",
+    // Lands on the first tab the current role can access. Route-level RoleRoute
+    // picks up the slack — this URL is the most permissive of the three Admin
+    // tabs, so any MGMT role can always open Settings.
+    url: "/settings",
+    icon: Shield,
+    roles: MGMT,
+    activePrefixes: ["/admin", "/settings"],
+    groupId: "admin",
   },
 ];
+
+function isActiveFor(item: NavItem, location: string): boolean {
+  // Exact match on "/" must win — otherwise the Home prefix would steal every
+  // click (every URL starts with "/").
+  if (item.url === "/" && location !== "/") {
+    return item.activePrefixes.some((p) => p !== "/" && (location === p || location.startsWith(`${p}/`)));
+  }
+  return item.activePrefixes.some(
+    (p) => location === p || location.startsWith(`${p}/`),
+  );
+}
 
 export function AppSidebar() {
   const [location] = useLocation();
   const { settings } = useTheme();
-  const { role, isAuthenticated, isTL } = useAuth();
+  const { role, isAuthenticated } = useAuth();
   const [logoError, setLogoError] = useState(false);
 
   const { data: unreadData } = useQuery<{ count: number }>({
@@ -243,101 +165,122 @@ export function AppSidebar() {
     refetchInterval: 5000,
     enabled: isAuthenticated,
   });
+  const unreadCount = unreadData?.count ?? 0;
 
   const lguName = settings?.lguName || "HealthSync";
   const lguSubtitle = settings?.lguSubtitle || "Barangay Health System";
   const logoUrl = settings?.logoUrl;
   const showLogo = logoUrl && !logoError;
 
-  // Filter each zone's groups to items the current role can see; drop groups
-  // with no visible items; drop zones with no visible groups.
-  const visibleZones = NAV_ZONES.map((zone) => ({
-    ...zone,
-    groups: zone.groups
-      .map((group) => ({
-        ...group,
-        items: group.items.filter((item) =>
-          role ? (item.roles as string[]).includes(role) : false
-        ),
-      }))
-      .filter((group) => group.items.length > 0),
-  })).filter((zone) => zone.groups.length > 0);
+  const visible = NAV_ITEMS.filter((item) =>
+    role ? (item.roles as string[]).includes(role) : false,
+  );
+  const mainItems = visible.filter((i) => i.groupId === "main");
+  const adminItems = visible.filter((i) => i.groupId === "admin");
 
   return (
-    <Sidebar>
+    <Sidebar collapsible="icon">
       <SidebarHeader className="p-4 border-b border-sidebar-border">
         <div className="flex items-center gap-2">
           {showLogo ? (
             <img
               src={logoUrl}
               alt="LGU Logo"
-              className="w-8 h-8 object-contain rounded"
+              className="w-8 h-8 object-contain rounded shrink-0"
               onError={() => setLogoError(true)}
             />
           ) : (
-            <Stethoscope className="w-6 h-6 text-primary" />
+            <Stethoscope className="w-6 h-6 text-primary shrink-0" />
           )}
-          <div>
-            <h1 className="text-base font-semibold" data-testid="text-lgu-name">{lguName}</h1>
-            <p className="text-xs text-muted-foreground" data-testid="text-lgu-subtitle">{lguSubtitle}</p>
+          <div className="min-w-0 group-data-[collapsible=icon]:hidden">
+            <h1 className="text-base font-semibold truncate" data-testid="text-lgu-name">
+              {lguName}
+            </h1>
+            <p className="text-xs text-muted-foreground truncate" data-testid="text-lgu-subtitle">
+              {lguSubtitle}
+            </p>
           </div>
         </div>
       </SidebarHeader>
+
       <SidebarContent>
-        {visibleZones.map((zone, zoneIndex) => (
-          <div key={zone.key} data-testid={`zone-${zone.key.toLowerCase()}`}>
-            <div
-              className={
-                "px-3 pt-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground" +
-                (zoneIndex > 0 ? " mt-2 border-t border-sidebar-border" : "")
-              }
-            >
-              {zone.label}
-            </div>
-            {zone.groups.map((group, groupIndex) => (
-              <SidebarGroup key={`${zone.key}-${group.label ?? groupIndex}`}>
-                {group.label && <SidebarGroupLabel>{group.label}</SidebarGroupLabel>}
-                <SidebarGroupContent>
-                  <SidebarMenu>
-                    {group.items.map((item) => {
-                      const displayTitle = item.url === "/" && isTL
-                        ? "Barangay Dashboard"
-                        : item.title;
-                      return (
-                        <SidebarMenuItem key={item.title}>
-                          <SidebarMenuButton
-                            asChild
-                            data-active={location === item.url}
-                            className="data-[active=true]:bg-sidebar-accent"
+        <SidebarGroup>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {mainItems.map((item) => {
+                const active = isActiveFor(item, location);
+                const badge = item.isBadged && unreadCount > 0 ? unreadCount : null;
+                return (
+                  <SidebarMenuItem key={item.title}>
+                    <SidebarMenuButton
+                      asChild
+                      tooltip={item.title}
+                      data-active={active}
+                      className="data-[active=true]:bg-sidebar-accent data-[active=true]:font-medium"
+                    >
+                      <Link
+                        href={item.url}
+                        data-testid={`nav-${item.url.replace(/\//g, "-") || "home"}`}
+                      >
+                        <item.icon className="w-4 h-4" />
+                        <span>{item.title}</span>
+                        {badge !== null && (
+                          <Badge
+                            className="ml-auto h-5 min-w-5 flex items-center justify-center text-xs px-1"
+                            data-testid="badge-unread-messages"
                           >
-                            <Link href={item.url} data-testid={`nav-${item.url.replace(/\//g, "-")}`}>
-                              <item.icon className="w-4 h-4" />
-                              <span>{displayTitle}</span>
-                              {item.isBadged && (unreadData?.count ?? 0) > 0 && (
-                                <Badge
-                                  className="ml-auto h-5 min-w-5 flex items-center justify-center text-xs px-1"
-                                  data-testid="badge-unread-messages"
-                                >
-                                  {unreadData!.count}
-                                </Badge>
-                              )}
-                            </Link>
-                          </SidebarMenuButton>
-                        </SidebarMenuItem>
-                      );
-                    })}
-                  </SidebarMenu>
-                </SidebarGroupContent>
-              </SidebarGroup>
-            ))}
-          </div>
-        ))}
+                            {badge}
+                          </Badge>
+                        )}
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                );
+              })}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        {adminItems.length > 0 && (
+          <>
+            <SidebarSeparator />
+            <SidebarGroup>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  {adminItems.map((item) => {
+                    const active = isActiveFor(item, location);
+                    return (
+                      <SidebarMenuItem key={item.title}>
+                        <SidebarMenuButton
+                          asChild
+                          tooltip={item.title}
+                          data-active={active}
+                          className="data-[active=true]:bg-sidebar-accent data-[active=true]:font-medium"
+                        >
+                          <Link
+                            href={item.url}
+                            data-testid={`nav-${item.url.replace(/\//g, "-")}`}
+                          >
+                            <item.icon className="w-4 h-4" />
+                            <span>{item.title}</span>
+                          </Link>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    );
+                  })}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+          </>
+        )}
       </SidebarContent>
+
       <SidebarFooter className="border-t border-sidebar-border p-2">
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton
               asChild
+              tooltip="My Account"
               data-active={location === "/account"}
               className="data-[active=true]:bg-sidebar-accent"
             >
