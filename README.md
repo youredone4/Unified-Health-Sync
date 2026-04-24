@@ -8,10 +8,12 @@ disease surveillance, BHS inventory, and the monthly **M1 FHSIS** report — so
 worklists, analytics, and the statutory paperwork all come out of the same
 source of truth.
 
-The UI is action-first: every page opens on a worklist of who needs follow-up,
-not a data-entry form. Colour-coded status chips (`Overdue` / `Due Soon` /
-`Upcoming`), one-tap KPI filters, and patient-profile drill-ins are designed
-for low-literacy field use.
+The UI is action-first: field workers land on a **Today** view with the
+cross-program urgent queue for their barangay; managers land on
+**Dashboards** for municipal decision data. Colour-coded status chips
+(`Urgent` / `Overdue` / `Due Soon` / `Upcoming`), one-tap filter chips, and a
+unified patient-profile layout (Profile · Transactions · Clinical tabs) are
+designed for low-literacy field use and for Placer's Green/Gold/Blue brand.
 
 ---
 
@@ -19,20 +21,70 @@ for low-literacy field use.
 
 | Area | What it does |
 |---|---|
-| **Maternal Health (TT Reminders)** | Pregnant mothers' register. Tracks ANC visits, 5-dose TT/Td schedule, delivery outcomes, postpartum care. |
-| **Child Health / Immunisation** | BCG, HepB, Penta, OPV, IPV, MR per EPI schedule; growth monitoring; linked back to the mother record. |
-| **Family Planning** | 15 FP methods (BTL, NSV, DMPA, IUD, Implant, Pills, LAM, STM, …) with New Acceptor / Current User / Dropout status; feeds M1. |
-| **Community Nutrition** | Growth monitoring, Underweight Follow-ups (PIMAM / OPT-Plus register), vitamin A, iron for LBW, case closure with DOH exit outcomes. |
-| **Senior Care** | HTN medication pickup tracking, adherence monitoring, cross-barangay claim verification via `seniorUniqueId`. |
+| **Today** | Field-worker landing page. Cross-program queue of urgent patients (overdue TT, missed vaccines, overdue HTN pickup, missed DOTS doses, new disease cases) + today's schedule + quick-add tiles. Barangay-scoped for TL. |
+| **Mothers** | Pregnant mothers' register. Tracks ANC visits, 5-dose TT/Td schedule, delivery outcomes, postpartum care. Patients list + Family Planning tab. |
+| **Children** | BCG, HepB, Penta, OPV, IPV, MR per EPI schedule; growth monitoring; linked back to the mother record. |
+| **Family Planning** | 15 FP methods (BTL, NSV, DMPA, IUD, Implant, Pills, LAM, STM, …) with New Acceptor / Current User / Dropout status; feeds M1. Lives as a tab inside Mothers. |
+| **Nutrition** | Growth monitoring, Underweight Follow-ups (PIMAM / OPT-Plus register), vitamin A, iron for LBW, case closure with DOH exit outcomes. |
+| **Seniors** | HTN medication pickup tracking, adherence monitoring, cross-barangay claim verification via `seniorUniqueId`. |
 | **TB DOTS** | Directly-observed-therapy supervision and patient registry. |
 | **Disease Surveillance** | Communicable-disease case reporting, case registry, outbreak heat-map (per-barangay + per-condition breakdown). |
-| **BHS Inventory** | Per-barangay vaccine and medicine stock with surplus / stockout alerts and historical snapshots. |
-| **M1 Report (FHSIS M1Brgy)** | 121-indicator DOH form. DRAFT → SUBMITTED_LOCKED workflow per-barangay per-month, computed-field pipeline, CSV import, PDF export, consolidated "All Barangays" view. |
-| **Health Analytics** | 30-day trend engine: immunisation, TT, HTN compliance, TB adherence, disease incidence. Per-barangay risk score (HIGH / MEDIUM / LOW) with optional AI predictions. |
-| **Patient Check-up** | Clinical encounter / consult recording by the MHO. |
+| **Inventory** | Per-barangay vaccine and medicine stock with surplus / stockout alerts and historical snapshots. |
+| **Dashboards** | Manager landing hub. Tabs for Municipal overview, Maternal, Child, Senior, Nutrition, Disease Map, and Hotspots — every program's decision data in one place. |
+| **Reports (M1Brgy)** | 121-indicator DOH form split across two tabs: **Encode M1** (data entry with per-barangay per-month draft workflow) and **Summary & Export** (computed-field review, CSV import, PDF export, consolidated "All Barangays" view). Plus a Health Analytics tab with 30-day trend engine, HIGH/MEDIUM/LOW per-barangay risk, and optional AI predictions. |
+| **Clinic Check-up** | Clinical encounter / consult recording by the MHO. |
 | **Calendar** | Unified month / week / day view of every scheduled event across all modules, with filters and a paginated event list. |
 | **Messages** | Direct staff messaging with unread-count badges. |
-| **User Management** | Admin creates users, assigns roles and barangays, runs KYC with AI face-match review. |
+| **Admin** | User management (create users, assign roles and barangays, KYC with AI face-match review), Audit Logs, and LGU Settings. |
+
+## Navigation & layout
+
+Top-level sidebar (9 items visible, 14 with the Patients group expanded):
+
+```
+── Daily work ──
+  ✨ Today                   /today
+  🧑‍🤝‍🧑 Patients ▸            (collapsible group)
+     👩 Mothers              /prenatal
+     👶 Children             /child
+     💊 TB DOTS              /tb
+     👴 Seniors              /senior
+     🦠 Disease              /disease
+  🥣 Nutrition               /nutrition
+
+── Decision-making ──
+  📊 Dashboards              /dashboards
+  📋 Reports                 /reports/m1
+  📦 Inventory               /inventory        (MGMT)
+
+── Utilities ──
+  🏥 Clinic Check-up         /patient-checkup  (MHO/Admin)
+  📅 Calendar                /calendar
+  💬 Messages                /messages
+
+──────────
+  🛡️  Admin                  /settings         (MGMT)
+  👤 My Account              /account          (footer)
+```
+
+- **Role-based landing** (`client/src/lib/role-landing.ts`): TL / SHA field
+  staff land on `/today`; MHO / SYSTEM_ADMIN land on `/dashboards`.
+- **Hub + tab pattern**: every program page is wrapped in a `ProgramHub`
+  (`client/src/components/program-hub.tsx`) that gives it a consistent header
+  (icon · title · primary CTA · overflow menu) and tab strip. Adding a new
+  program is a matter of declaring the tabs; the header renders identically.
+- **Unified patient profile**: Mother, Child, Senior, TB and Disease profiles
+  all share `PatientProfileShell`
+  (`client/src/components/patient-profile-shell.tsx`) with three canonical
+  tabs — **Profile** (demographics), **Transactions** (chronological
+  events), **Clinical** (current state + quick actions). Mobile collapses
+  the tabs into a stacked accordion.
+- **Patients lists**: each patient program has one merged list with filter
+  chips (`Urgent` / `Overdue` / `Due Soon` / `Upcoming` / `All`, plus
+  program-specific chips like `Meds Ready` or `At Risk`), a name/barangay
+  search, and a barangay filter for non-TL roles.
+- **Collapsible sidebar** with `Ctrl+B` and an icon-only 3 rem rail; the
+  Patients sub-group's open state persists per user in `localStorage`.
 
 ## Roles
 
