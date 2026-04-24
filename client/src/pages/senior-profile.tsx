@@ -1,27 +1,72 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useParams, useLocation } from "wouter";
-import type { Senior, SeniorMedClaim, Barangay } from "@shared/schema";
-import { getSeniorPickupStatus, isMedsReadyForPickup, formatDate } from "@/lib/healthLogic";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import type { Senior, SeniorMedClaim, Barangay, SeniorVisit } from "@shared/schema";
+import {
+  getSeniorPickupStatus,
+  isMedsReadyForPickup,
+  formatDate,
+  TODAY_STR,
+} from "@/lib/healthLogic";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/components/ui/tabs";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import StatusBadge from "@/components/status-badge";
 import ConfirmModal from "@/components/confirm-modal";
 import SmsModal from "@/components/sms-modal";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth, permissions } from "@/hooks/use-auth";
-import { ArrowLeft, Pill, Heart, MessageSquare, Check, ShieldCheck, AlertTriangle, History, Pencil, Trash2 } from "lucide-react";
+import {
+  ArrowLeft,
+  Pill,
+  MessageSquare,
+  Check,
+  ShieldCheck,
+  AlertTriangle,
+  History,
+  Pencil,
+  Trash2,
+  MoreHorizontal,
+} from "lucide-react";
 import ConsultationHistoryCard from "@/components/consultation-history-card";
 import VisitHistoryCard from "@/components/visit-history-card";
 import { useState } from "react";
 import { apiRequest, invalidateScopedQueries } from "@/lib/queryClient";
-import type { SeniorVisit } from "@shared/schema";
 
 interface EligibilityResult {
   eligible: boolean;
   reason?: string;
   lastClaim?: SeniorMedClaim;
 }
+
+/** Days between two YYYY-MM-DD strings. Negative if `later` is before `earlier`. */
+function daysBetween(earlier: string | null | undefined, later: string): number | null {
+  if (!earlier) return null;
+  const a = Date.parse(earlier);
+  const b = Date.parse(later);
+  if (isNaN(a) || isNaN(b)) return null;
+  return Math.floor((b - a) / (1000 * 60 * 60 * 24));
+}
+
+const BP_OVERDUE_THRESHOLD_DAYS = 60;
 
 export default function SeniorProfile() {
   const { id } = useParams<{ id: string }>();
@@ -30,9 +75,9 @@ export default function SeniorProfile() {
   const { toast } = useToast();
   const { user } = useAuth();
 
-  const { data: senior, isLoading } = useQuery<Senior>({ queryKey: ['/api/seniors', id] });
-  
-  const { data: barangays = [] } = useQuery<Barangay[]>({ queryKey: ['/api/barangays'] });
+  const { data: senior, isLoading } = useQuery<Senior>({ queryKey: ["/api/seniors", id] });
+
+  const { data: barangays = [] } = useQuery<Barangay[]>({ queryKey: ["/api/barangays"] });
 
   const { data: seniorVisits = [] } = useQuery<SeniorVisit[]>({
     queryKey: ["/api/nurse-visits", "senior", id],
@@ -44,9 +89,9 @@ export default function SeniorProfile() {
     enabled: !!id,
   });
   const latestSeniorVisit = seniorVisits[0] ?? null;
-  
+
   const { data: claims = [] } = useQuery<SeniorMedClaim[]>({
-    queryKey: ['/api/senior-med-claims', { seniorId: id }],
+    queryKey: ["/api/senior-med-claims", { seniorId: id }],
     queryFn: async () => {
       const res = await fetch(`/api/senior-med-claims?seniorId=${id}`);
       return res.json();
@@ -55,14 +100,14 @@ export default function SeniorProfile() {
   });
 
   const { data: eligibility } = useQuery<EligibilityResult>({
-    queryKey: ['/api/senior-med-claims/check-eligibility', senior?.seniorUniqueId],
+    queryKey: ["/api/senior-med-claims/check-eligibility", senior?.seniorUniqueId],
     queryFn: async () => {
       const res = await fetch(`/api/senior-med-claims/check-eligibility/${senior?.seniorUniqueId}`);
       return res.json();
     },
     enabled: !!senior?.seniorUniqueId,
   });
-  
+
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [smsOpen, setSmsOpen] = useState(false);
@@ -70,45 +115,45 @@ export default function SeniorProfile() {
 
   const updateMutation = useMutation({
     mutationFn: async (updates: Partial<Senior>) => {
-      return apiRequest('PUT', `/api/seniors/${id}`, updates);
+      return apiRequest("PUT", `/api/seniors/${id}`, updates);
     },
     onSuccess: () => {
-      invalidateScopedQueries('/api/seniors');
-      queryClient.invalidateQueries({ queryKey: ['/api/seniors', id] });
+      invalidateScopedQueries("/api/seniors");
+      queryClient.invalidateQueries({ queryKey: ["/api/seniors", id] });
       toast({ title: "Saved", description: "Record updated successfully" });
       setConfirmOpen(false);
-    }
+    },
   });
 
   const deleteMutation = useMutation({
     mutationFn: async () => {
-      return apiRequest('DELETE', `/api/seniors/${id}`);
+      return apiRequest("DELETE", `/api/seniors/${id}`);
     },
     onSuccess: () => {
-      invalidateScopedQueries('/api/seniors');
+      invalidateScopedQueries("/api/seniors");
       toast({ title: "Deleted", description: "Senior record permanently deleted" });
-      navigate('/senior');
+      navigate("/senior");
     },
     onError: () => {
       toast({ title: "Error", description: "Could not delete record", variant: "destructive" });
-    }
+    },
   });
 
   const claimMutation = useMutation({
     mutationFn: async () => {
-      const seniorBarangay = barangays.find(b => b.name === senior?.barangay);
+      const seniorBarangay = barangays.find((b) => b.name === senior?.barangay);
       if (!seniorBarangay) {
         throw new Error(`Barangay "${senior?.barangay}" not found in registry`);
       }
       if (!senior?.seniorUniqueId) {
         throw new Error("Senior must have a unique ID to record cross-barangay claims");
       }
-      return apiRequest('POST', '/api/senior-med-claims', {
+      return apiRequest("POST", "/api/senior-med-claims", {
         seniorId: Number(id),
         seniorUniqueId: senior.seniorUniqueId,
         claimedBarangayId: seniorBarangay.id,
         claimedBarangayName: senior.barangay,
-        medicationName: senior.lastMedicationName || 'Hypertension medication',
+        medicationName: senior.lastMedicationName || "Hypertension medication",
         dose: senior.lastMedicationDoseMg ? `${senior.lastMedicationDoseMg}mg` : undefined,
         quantity: senior.lastMedicationQuantity || 30,
         cycleDays: 30,
@@ -116,21 +161,31 @@ export default function SeniorProfile() {
     },
     onSuccess: () => {
       if (id) {
-        queryClient.invalidateQueries({ queryKey: ['/api/senior-med-claims', { seniorId: id }] });
+        queryClient.invalidateQueries({ queryKey: ["/api/senior-med-claims", { seniorId: id }] });
       }
       if (senior?.seniorUniqueId) {
-        queryClient.invalidateQueries({ queryKey: ['/api/senior-med-claims/check-eligibility', senior.seniorUniqueId] });
+        queryClient.invalidateQueries({
+          queryKey: ["/api/senior-med-claims/check-eligibility", senior.seniorUniqueId],
+        });
       }
       toast({ title: "Medication Claimed", description: "Claim recorded successfully" });
       setClaimOpen(false);
     },
     onError: (error: any) => {
-      toast({ title: "Claim Failed", description: error.message || "This senior may have already claimed elsewhere", variant: "destructive" });
+      toast({
+        title: "Claim Failed",
+        description: error.message || "This senior may have already claimed elsewhere",
+        variant: "destructive",
+      });
     },
   });
 
   if (isLoading || !senior) {
-    return <div className="flex items-center justify-center h-64"><p className="text-muted-foreground">Loading...</p></div>;
+    return (
+      <div className="flex items-center justify-center h-64">
+        <p className="text-muted-foreground">Loading...</p>
+      </div>
+    );
   }
 
   const pickup = getSeniorPickupStatus(senior);
@@ -138,138 +193,170 @@ export default function SeniorProfile() {
   const canUpdate = permissions.canUpdate(user?.role);
   const canDelete = permissions.canDelete(user?.role);
 
+  const bpDaysSince = daysBetween(senior.lastBPDate, TODAY_STR);
+  const bpOverdue = bpDaysSince !== null && bpDaysSince > BP_OVERDUE_THRESHOLD_DAYS;
+
   const handleMarkPickedUp = () => {
     updateMutation.mutate({ pickedUp: true, htnMedsReady: false });
   };
 
   const smsMessage = `Hello ${senior.firstName}, your ${senior.lastMedicationName} (${senior.lastMedicationDoseMg}mg) is ready for pickup. Please visit your barangay health station.`;
 
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <Button variant="ghost" onClick={() => navigate('/senior')} className="gap-2" data-testid="button-back">
-          <ArrowLeft className="w-4 h-4" /> Back to Worklist
-        </Button>
-        <div className="flex gap-2">
-          {canUpdate && (
-            <Button variant="outline" size="sm" onClick={() => navigate(`/senior/${id}/edit`)} className="gap-1" data-testid="button-edit-senior">
-              <Pencil className="w-4 h-4" /> Edit
-            </Button>
+  // Tab content is factored into render functions so the same JSX serves both
+  // the desktop <Tabs> and the mobile <Accordion> without duplicating markup.
+
+  const renderOverviewTab = () => (
+    <div className="space-y-4">
+      <VisitHistoryCard profileType="Senior" profileId={senior.id} />
+      <ConsultationHistoryCard profileType="Senior" profileId={senior.id} />
+    </div>
+  );
+
+  const renderDemographicsTab = () => (
+    <Card>
+      <CardContent className="py-4">
+        <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 text-sm">
+          <div>
+            <dt className="text-muted-foreground text-xs">Age</dt>
+            <dd>{senior.age} years old</dd>
+          </div>
+          {senior.dob && (
+            <div>
+              <dt className="text-muted-foreground text-xs">Date of Birth</dt>
+              <dd>{senior.dob}</dd>
+            </div>
           )}
-          {canDelete && (
-            <Button variant="destructive" size="sm" onClick={() => setDeleteOpen(true)} className="gap-1" data-testid="button-delete-senior">
-              <Trash2 className="w-4 h-4" /> Delete
-            </Button>
+          <div>
+            <dt className="text-muted-foreground text-xs">Sex</dt>
+            <dd>{senior.sex === "M" ? "Male" : senior.sex === "F" ? "Female" : "—"}</dd>
+          </div>
+          {senior.civilStatus && (
+            <div>
+              <dt className="text-muted-foreground text-xs">Civil Status</dt>
+              <dd>{senior.civilStatus}</dd>
+            </div>
           )}
-        </div>
-      </div>
+          <div>
+            <dt className="text-muted-foreground text-xs">Barangay</dt>
+            <dd>{senior.barangay}</dd>
+          </div>
+          <div>
+            <dt className="text-muted-foreground text-xs">Address</dt>
+            <dd>{senior.addressLine || "—"}</dd>
+          </div>
+          <div>
+            <dt className="text-muted-foreground text-xs">Phone</dt>
+            <dd>{senior.phone || "—"}</dd>
+          </div>
+          {senior.seniorCitizenId && (
+            <div>
+              <dt className="text-muted-foreground text-xs">Senior Citizen ID</dt>
+              <dd>{senior.seniorCitizenId}</dd>
+            </div>
+          )}
+          {senior.seniorUniqueId && (
+            <div>
+              <dt className="text-muted-foreground text-xs">System Unique ID</dt>
+              <dd className="font-mono text-xs">{senior.seniorUniqueId}</dd>
+            </div>
+          )}
+        </dl>
+      </CardContent>
+    </Card>
+  );
 
-      <div className="flex flex-col md:flex-row gap-6">
-        <Card className="flex-1">
-          <CardHeader>
-            <CardTitle className="text-xl">{senior.firstName} {senior.lastName}</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            <p><span className="text-muted-foreground">Age:</span> {senior.age} years old</p>
-            {senior.dob && (
-              <p><span className="text-muted-foreground">Date of Birth:</span> {senior.dob}</p>
-            )}
-            <p><span className="text-muted-foreground">Sex:</span> {senior.sex === "M" ? "Male" : senior.sex === "F" ? "Female" : "-"}</p>
-            {senior.civilStatus && (
-              <p><span className="text-muted-foreground">Civil Status:</span> {senior.civilStatus}</p>
-            )}
-            {senior.seniorCitizenId && (
-              <p><span className="text-muted-foreground">ID #:</span> {senior.seniorCitizenId}</p>
-            )}
-            <p><span className="text-muted-foreground">Barangay:</span> {senior.barangay}</p>
-            <p><span className="text-muted-foreground">Address:</span> {senior.addressLine || '-'}</p>
-            <p><span className="text-muted-foreground">Phone:</span> {senior.phone || '-'}</p>
-            {latestSeniorVisit && (
-              <div className="pt-2 border-t border-border mt-2 space-y-1">
-                <p className="text-xs font-medium text-muted-foreground">Latest Nurse Visit ({latestSeniorVisit.visitDate})</p>
-                {latestSeniorVisit.bloodPressure && (
-                  <p className="text-sm"><span className="text-muted-foreground">BP:</span> {latestSeniorVisit.bloodPressure}</p>
-                )}
-                {latestSeniorVisit.weightKg && (
-                  <p className="text-sm"><span className="text-muted-foreground">Weight:</span> {latestSeniorVisit.weightKg} kg</p>
-                )}
-                {latestSeniorVisit.symptomsRemarks && (
-                  <p className="text-sm"><span className="text-muted-foreground">Remarks:</span> {latestSeniorVisit.symptomsRemarks}</p>
-                )}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+  const renderMedicationTab = () => (
+    <div className="space-y-4">
+      <Card
+        className={
+          pickup.status === "overdue"
+            ? "border-red-500/30"
+            : pickup.status === "due_soon"
+              ? "border-orange-500/30"
+              : ""
+        }
+      >
+        <CardContent className="py-4">
+          <div className="flex items-center gap-2 mb-3 text-sm font-medium">
+            <Pill className="w-4 h-4 text-primary" />
+            Hypertension medication
+          </div>
+          <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 text-sm">
+            <div>
+              <dt className="text-muted-foreground text-xs">Last Medication</dt>
+              <dd>{senior.lastMedicationName || "—"}</dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground text-xs">Dose</dt>
+              <dd>{senior.lastMedicationDoseMg ? `${senior.lastMedicationDoseMg}mg` : "—"}</dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground text-xs">Quantity</dt>
+              <dd>{senior.lastMedicationQuantity ? `${senior.lastMedicationQuantity} tablets` : "—"}</dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground text-xs">Last Given</dt>
+              <dd>{formatDate(senior.lastMedicationGivenDate)}</dd>
+            </div>
+            <div className="sm:col-span-2 flex items-center gap-2 pt-1">
+              <span className="text-muted-foreground text-xs">Next Pickup:</span>
+              <span className="text-sm">{formatDate(senior.nextPickupDate)}</span>
+              <StatusBadge status={pickup.status} />
+            </div>
+          </dl>
+          {medsReady && (
+            <div className="flex gap-2 mt-4">
+              <Button
+                size="sm"
+                onClick={() => setSmsOpen(true)}
+                variant="outline"
+                className="gap-1"
+                data-testid="button-send-sms"
+              >
+                <MessageSquare className="w-3 h-3" /> Send SMS
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => setConfirmOpen(true)}
+                className="gap-1"
+                data-testid="button-mark-picked-up"
+              >
+                <Check className="w-3 h-3" /> Mark Picked Up
+              </Button>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
-        <div className="flex-1 space-y-4">
-          <Card className={pickup.status === 'overdue' ? 'border-red-500/30' : pickup.status === 'due_soon' ? 'border-orange-500/30' : ''}>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base flex items-center gap-2">
-                <Pill className="w-4 h-4 text-purple-400" />
-                Medication
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2 mb-3">
-                <p><span className="text-muted-foreground">Last Medication:</span> {senior.lastMedicationName || '-'}</p>
-                <p><span className="text-muted-foreground">Dose:</span> {senior.lastMedicationDoseMg ? `${senior.lastMedicationDoseMg}mg` : '-'}</p>
-                <p><span className="text-muted-foreground">Quantity:</span> {senior.lastMedicationQuantity ? `${senior.lastMedicationQuantity} tablets` : '-'}</p>
-                <p><span className="text-muted-foreground">Last Given:</span> {formatDate(senior.lastMedicationGivenDate)}</p>
-                <div className="flex items-center gap-2 pt-2">
-                  <span className="text-muted-foreground">Next Pickup:</span>
-                  <span>{formatDate(senior.nextPickupDate)}</span>
-                  <StatusBadge status={pickup.status} />
-                </div>
-              </div>
-              {medsReady && (
-                <div className="flex gap-2">
-                  <Button size="sm" onClick={() => setSmsOpen(true)} variant="outline" className="gap-1" data-testid="button-send-sms">
-                    <MessageSquare className="w-3 h-3" /> Send SMS
-                  </Button>
-                  <Button size="sm" onClick={() => setConfirmOpen(true)} className="gap-1" data-testid="button-mark-picked-up">
-                    <Check className="w-3 h-3" /> Mark Picked Up
-                  </Button>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base flex items-center gap-2">
-                <Heart className="w-4 h-4 text-red-400" />
-                Blood Pressure
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p><span className="text-muted-foreground">Last BP:</span> {senior.lastBP || '-'}</p>
-              <p><span className="text-muted-foreground">Date:</span> {formatDate(senior.lastBPDate)}</p>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-
-      <Card className={eligibility?.eligible === false ? 'border-orange-500/30' : eligibility?.eligible === true ? 'border-green-500/30' : ''}>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base flex items-center justify-between">
-            <span className="flex items-center gap-2">
-              <ShieldCheck className="w-4 h-4 text-blue-400" />
-              Cross-Barangay Medication Verification
-            </span>
+      <Card
+        className={
+          eligibility?.eligible === false
+            ? "border-orange-500/30"
+            : eligibility?.eligible === true
+              ? "border-green-500/30"
+              : ""
+        }
+      >
+        <CardContent className="py-4 space-y-4">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 text-sm font-medium">
+              <ShieldCheck className="w-4 h-4 text-primary" />
+              Cross-barangay verification
+            </div>
             {eligibility?.eligible === true && (
-              <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">Eligible</Badge>
+              <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+                Eligible
+              </Badge>
             )}
             {eligibility?.eligible === false && (
-              <Badge className="bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200">Not Eligible</Badge>
+              <Badge className="bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200">
+                Not Eligible
+              </Badge>
             )}
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
+          </div>
+
           {senior.seniorUniqueId ? (
             <>
-              <p className="text-sm text-muted-foreground">
-                Unique ID: <span className="font-mono">{senior.seniorUniqueId}</span>
-              </p>
               {eligibility?.eligible === false && (
                 <div className="flex items-start gap-2 p-3 rounded-md bg-orange-500/10 border border-orange-500/30">
                   <AlertTriangle className="w-4 h-4 text-orange-500 mt-0.5" />
@@ -277,11 +364,14 @@ export default function SeniorProfile() {
                 </div>
               )}
               {eligibility?.eligible === true && (
-                <div className="flex items-center gap-2">
-                  <Button size="sm" onClick={() => setClaimOpen(true)} className="gap-1" data-testid="button-record-claim">
-                    <Pill className="w-3 h-3" /> Record Medication Claim
-                  </Button>
-                </div>
+                <Button
+                  size="sm"
+                  onClick={() => setClaimOpen(true)}
+                  className="gap-1"
+                  data-testid="button-record-claim"
+                >
+                  <Pill className="w-3 h-3" /> Record Medication Claim
+                </Button>
               )}
             </>
           ) : (
@@ -297,10 +387,16 @@ export default function SeniorProfile() {
               </h4>
               <div className="space-y-2 max-h-40 overflow-y-auto">
                 {claims.map((claim) => (
-                  <div key={claim.id} className="text-xs p-2 rounded-md bg-muted/50 flex justify-between items-center">
+                  <div
+                    key={claim.id}
+                    className="text-xs p-2 rounded-md bg-muted/50 flex justify-between items-center"
+                  >
                     <div>
                       <span className="font-medium">{claim.medicationName}</span>
-                      <span className="text-muted-foreground"> - {claim.quantity} units at {claim.claimedBarangayName}</span>
+                      <span className="text-muted-foreground">
+                        {" "}
+                        — {claim.quantity} units at {claim.claimedBarangayName}
+                      </span>
                     </div>
                     <span className="text-muted-foreground">{formatDate(claim.claimedAt)}</span>
                   </div>
@@ -310,10 +406,173 @@ export default function SeniorProfile() {
           )}
         </CardContent>
       </Card>
+    </div>
+  );
 
-      <ConsultationHistoryCard profileType="Senior" profileId={senior.id} />
+  return (
+    <div className="space-y-6">
+      {/* Header strip: back + identity + overflow actions */}
+      <div>
+        <Button variant="ghost" onClick={() => navigate("/senior")} className="gap-2 -ml-2 mb-2" data-testid="button-back">
+          <ArrowLeft className="w-4 h-4" /> Back to Worklist
+        </Button>
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <div>
+            <h1 className="text-2xl font-semibold" data-testid="text-senior-name">
+              {senior.firstName} {senior.lastName}
+            </h1>
+            <p className="text-sm text-muted-foreground">
+              {senior.age} yrs · {senior.sex === "M" ? "Male" : senior.sex === "F" ? "Female" : "—"} · Brgy {senior.barangay}
+              {senior.phone ? ` · ${senior.phone}` : ""}
+            </p>
+          </div>
+          {(canUpdate || canDelete) && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="gap-1" data-testid="button-more-actions">
+                  <MoreHorizontal className="w-4 h-4" />
+                  <span className="sr-only sm:not-sr-only sm:inline">More</span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {canUpdate && (
+                  <DropdownMenuItem onClick={() => navigate(`/senior/${id}/edit`)} data-testid="button-edit-senior">
+                    <Pencil className="w-4 h-4 mr-2" /> Edit
+                  </DropdownMenuItem>
+                )}
+                {canUpdate && canDelete && <DropdownMenuSeparator />}
+                {canDelete && (
+                  <DropdownMenuItem
+                    onClick={() => setDeleteOpen(true)}
+                    className="text-destructive focus:text-destructive"
+                    data-testid="button-delete-senior"
+                  >
+                    <Trash2 className="w-4 h-4 mr-2" /> Delete
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+        </div>
+      </div>
 
-      <VisitHistoryCard profileType="Senior" profileId={senior.id} />
+      {/* Status banner: only shown when there's something to flag */}
+      {(bpOverdue || pickup.status === "overdue" || pickup.status === "due_soon") && (
+        <div className="flex flex-wrap gap-2">
+          {bpOverdue && (
+            <Badge
+              variant="outline"
+              className="border-red-500/40 bg-red-500/10 text-red-700 dark:text-red-300 gap-1"
+              data-testid="pill-bp-overdue"
+            >
+              <AlertTriangle className="w-3 h-3" />
+              BP check overdue {bpDaysSince} d
+            </Badge>
+          )}
+          {pickup.status === "overdue" && (
+            <Badge
+              variant="outline"
+              className="border-red-500/40 bg-red-500/10 text-red-700 dark:text-red-300 gap-1"
+              data-testid="pill-meds-overdue"
+            >
+              <AlertTriangle className="w-3 h-3" />
+              Medication pickup overdue
+            </Badge>
+          )}
+          {pickup.status === "due_soon" && (
+            <Badge
+              variant="outline"
+              className="border-orange-500/40 bg-orange-500/10 text-orange-700 dark:text-orange-300 gap-1"
+              data-testid="pill-meds-due"
+            >
+              Medication due soon
+            </Badge>
+          )}
+        </div>
+      )}
+
+      {/* At-a-glance grid: always-visible key data */}
+      <Card>
+        <CardContent className="py-4">
+          <dl className="grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-3 text-sm">
+            <div>
+              <dt className="text-muted-foreground text-xs">Last BP</dt>
+              <dd className="font-medium">{senior.lastBP || "—"}</dd>
+              <dd className="text-xs text-muted-foreground">{formatDate(senior.lastBPDate)}</dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground text-xs">Weight</dt>
+              <dd className="font-medium">
+                {latestSeniorVisit?.weightKg ? `${latestSeniorVisit.weightKg} kg` : "—"}
+              </dd>
+              <dd className="text-xs text-muted-foreground">
+                {latestSeniorVisit?.weightKg ? formatDate(latestSeniorVisit.visitDate) : ""}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground text-xs">Last medication</dt>
+              <dd className="font-medium">
+                {senior.lastMedicationName || "—"}
+                {senior.lastMedicationDoseMg ? ` ${senior.lastMedicationDoseMg}mg` : ""}
+              </dd>
+              <dd className="text-xs text-muted-foreground">
+                {formatDate(senior.lastMedicationGivenDate)}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground text-xs">Next pickup</dt>
+              <dd className="font-medium">{formatDate(senior.nextPickupDate)}</dd>
+              <dd>
+                <StatusBadge status={pickup.status} />
+              </dd>
+            </div>
+          </dl>
+        </CardContent>
+      </Card>
+
+      {/* Tabs (md+) */}
+      <div className="hidden md:block">
+        <Tabs defaultValue="overview">
+          <TabsList>
+            <TabsTrigger value="overview" data-testid="tab-overview">
+              Overview
+            </TabsTrigger>
+            <TabsTrigger value="demographics" data-testid="tab-demographics">
+              Demographics
+            </TabsTrigger>
+            <TabsTrigger value="medication" data-testid="tab-medication">
+              Medication
+            </TabsTrigger>
+          </TabsList>
+          <TabsContent value="overview" className="mt-4">
+            {renderOverviewTab()}
+          </TabsContent>
+          <TabsContent value="demographics" className="mt-4">
+            {renderDemographicsTab()}
+          </TabsContent>
+          <TabsContent value="medication" className="mt-4">
+            {renderMedicationTab()}
+          </TabsContent>
+        </Tabs>
+      </div>
+
+      {/* Accordion (mobile) */}
+      <div className="md:hidden">
+        <Accordion type="single" collapsible defaultValue="overview">
+          <AccordionItem value="overview">
+            <AccordionTrigger data-testid="accordion-overview">Overview</AccordionTrigger>
+            <AccordionContent>{renderOverviewTab()}</AccordionContent>
+          </AccordionItem>
+          <AccordionItem value="demographics">
+            <AccordionTrigger data-testid="accordion-demographics">Demographics</AccordionTrigger>
+            <AccordionContent>{renderDemographicsTab()}</AccordionContent>
+          </AccordionItem>
+          <AccordionItem value="medication">
+            <AccordionTrigger data-testid="accordion-medication">Medication</AccordionTrigger>
+            <AccordionContent>{renderMedicationTab()}</AccordionContent>
+          </AccordionItem>
+        </Accordion>
+      </div>
 
       <ConfirmModal
         open={confirmOpen}
