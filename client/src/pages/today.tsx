@@ -25,7 +25,6 @@ import {
   UserCircle,
   Siren,
   Sparkles,
-  Snowflake,
   ListChecks,
   Stethoscope,
 } from "lucide-react";
@@ -34,6 +33,7 @@ import { M1ProgressStrip } from "@/components/today/M1ProgressStrip";
 import { ProgramWorklist, type WorklistItem } from "@/components/today/ProgramWorklist";
 import { DefaultersList } from "@/components/today/DefaultersList";
 import { ComingSoonCard } from "@/components/today/ComingSoonCard";
+import { ColdChainPanel } from "@/components/today/ColdChainPanel";
 import { QuickAddBar } from "@/components/today/QuickAddBar";
 
 /**
@@ -138,14 +138,9 @@ export default function TodayPage() {
       {/* Cross-program defaulters bucket */}
       <DefaultersList items={defaulters} />
 
-      {/* Honest "coming soon" gaps */}
+      {/* Cold-chain + remaining "coming soon" gaps */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <ComingSoonCard
-          title="Cold-chain log"
-          icon={Snowflake}
-          description="Twice-daily fridge temp (2–8 °C), VVM check, vaccine stock alerts. Required by DOH NIP/EPI Cold Chain Manual."
-          testId="coming-soon-cold-chain"
-        />
+        <ColdChainPanel />
         <ComingSoonCard
           title="TB DOTS dose tally"
           icon={ListChecks}

@@ -71,6 +71,7 @@ import SmsOutbox from "@/components/sms-outbox";
 import MessagesPage from "@/pages/messages";
 import AccountPage from "@/pages/account";
 import FpRegistry from "@/pages/fp-registry";
+import ColdChainPage from "@/pages/cold-chain";
 
 const roleLabels: Record<string, string> = {
   SYSTEM_ADMIN: "Admin",
@@ -343,6 +344,9 @@ function Router() {
       <Route path="/inventory/new"><RoleRoute component={InventoryForm} /></Route>
       <Route path="/inventory/:id/edit"><RoleRoute component={InventoryForm} /></Route>
       <Route path="/inventory/medicine/:id/edit"><RoleRoute component={InventoryForm} /></Route>
+
+      {/* Cold-chain temperature log */}
+      <Route path="/cold-chain"><ColdChainPage /></Route>
 
       {/* Reports hub */}
       <Route path="/m1/encode"><ReportsHub><RoleRoute component={M1ReportEncode} /></ReportsHub></Route>
