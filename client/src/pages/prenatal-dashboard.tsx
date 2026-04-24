@@ -3,61 +3,11 @@ import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import type { Mother } from "@shared/schema";
 import { useBarangay } from "@/contexts/barangay-context";
-import { getTTStatus } from "@/lib/healthLogic";
-import KpiCard from "@/components/kpi-card";
+import { getTTStatus, TODAY_STR } from "@/lib/healthLogic";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import {
-  Heart, Users, CheckCircle, AlertCircle, Plus, List,
-  ArrowRight, TrendingUp, Baby, BookOpen,
-} from "lucide-react";
-import {
-  PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip,
-  BarChart, Bar, XAxis, YAxis, CartesianGrid,
-} from "recharts";
-
-function QuickActionCard({
-  title,
-  subtitle,
-  icon: Icon,
-  onClick,
-  variant = "default",
-}: {
-  title: string;
-  subtitle: string;
-  icon: React.ElementType;
-  onClick: () => void;
-  variant?: "default" | "primary";
-}) {
-  return (
-    <Card
-      className={`cursor-pointer hover-elevate active-elevate-2 transition-all ${
-        variant === "primary" ? "border-primary/50" : ""
-      }`}
-      onClick={onClick}
-      role="button"
-      tabIndex={0}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          onClick();
-        }
-      }}
-      data-testid={`quickaction-${title.toLowerCase().replace(/\s+/g, "-")}`}
-    >
-      <CardContent className="p-4 flex items-center gap-3">
-        <div className={`p-2 rounded-lg ${variant === "primary" ? "bg-primary/20" : "bg-muted"}`}>
-          <Icon className={`w-5 h-5 ${variant === "primary" ? "text-primary" : "text-muted-foreground"}`} />
-        </div>
-        <div className="flex-1">
-          <div className="font-medium text-sm">{title}</div>
-          <div className="text-xs text-muted-foreground">{subtitle}</div>
-        </div>
-        <ArrowRight className="w-4 h-4 text-muted-foreground" />
-      </CardContent>
-    </Card>
-  );
-}
+import { Heart, Users, CheckCircle, AlertCircle, AlertTriangle } from "lucide-react";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
+import { DashboardShell, FilterBar, type KpiSpec, type AlertSpec } from "@/components/dashboard-shell";
 
 function getTrimester(gaWeeks: number): "1st" | "2nd" | "3rd" {
   if (gaWeeks < 14) return "1st";
@@ -65,32 +15,26 @@ function getTrimester(gaWeeks: number): "1st" | "2nd" | "3rd" {
   return "3rd";
 }
 
+/** Maternal dashboard — TT vaccination + prenatal overview. */
 export default function PrenatalDashboard() {
   const [, navigate] = useLocation();
   const { scopedPath } = useBarangay();
   const { data: mothers = [] } = useQuery<Mother[]>({ queryKey: [scopedPath("/api/mothers")] });
 
-  const statuses = mothers.map((m) => getTTStatus(m).status);
-  const overdue = statuses.filter((s) => s === "overdue").length;
-  const dueSoon = statuses.filter((s) => s === "due_soon").length;
-  const upcoming = statuses.filter((s) => s === "upcoming").length;
-  const completed = statuses.filter((s) => s === "completed").length;
-
-  const coverageRate = mothers.length > 0 ? Math.round((completed / mothers.length) * 100) : 0;
-  const overdueRate = mothers.length > 0 ? Math.round((overdue / mothers.length) * 100) : 0;
-
-  const pieData = [
-    { name: "Overdue", value: overdue, color: "hsl(0, 84%, 60%)" },
-    { name: "Due Soon", value: dueSoon, color: "hsl(38, 92%, 50%)" },
-    { name: "Upcoming", value: upcoming, color: "hsl(199, 89%, 48%)" },
-    { name: "Completed", value: completed, color: "hsl(142, 76%, 36%)" },
-  ].filter((d) => d.value > 0);
+  const stats = useMemo(() => {
+    const statuses = mothers.map((m) => getTTStatus(m).status);
+    const overdue = statuses.filter((s) => s === "overdue").length;
+    const dueSoon = statuses.filter((s) => s === "due_soon").length;
+    const upcoming = statuses.filter((s) => s === "upcoming").length;
+    const completed = statuses.filter((s) => s === "completed").length;
+    const coveragePct = mothers.length > 0 ? Math.round((completed / mothers.length) * 100) : 0;
+    const overduePct = mothers.length > 0 ? Math.round((overdue / mothers.length) * 100) : 0;
+    return { overdue, dueSoon, upcoming, completed, coveragePct, overduePct };
+  }, [mothers]);
 
   const trimesterData = useMemo(() => {
     const groups: Record<"1st" | "2nd" | "3rd", number> = { "1st": 0, "2nd": 0, "3rd": 0 };
-    mothers.forEach((m) => {
-      groups[getTrimester(m.gaWeeks)]++;
-    });
+    mothers.forEach((m) => groups[getTrimester(m.gaWeeks)]++);
     return [
       { name: "1st (0–13 wks)", count: groups["1st"] },
       { name: "2nd (14–27 wks)", count: groups["2nd"] },
@@ -102,13 +46,12 @@ export default function PrenatalDashboard() {
     const byBarangay: Record<string, { overdue: number; dueSoon: number; upcoming: number; completed: number }> = {};
     mothers.forEach((m) => {
       const status = getTTStatus(m).status;
-      if (!byBarangay[m.barangay]) {
-        byBarangay[m.barangay] = { overdue: 0, dueSoon: 0, upcoming: 0, completed: 0 };
-      }
-      if (status === "overdue") byBarangay[m.barangay].overdue++;
-      else if (status === "due_soon") byBarangay[m.barangay].dueSoon++;
-      else if (status === "upcoming") byBarangay[m.barangay].upcoming++;
-      else byBarangay[m.barangay].completed++;
+      const key = m.barangay || "Unknown";
+      if (!byBarangay[key]) byBarangay[key] = { overdue: 0, dueSoon: 0, upcoming: 0, completed: 0 };
+      if (status === "overdue") byBarangay[key].overdue++;
+      else if (status === "due_soon") byBarangay[key].dueSoon++;
+      else if (status === "upcoming") byBarangay[key].upcoming++;
+      else byBarangay[key].completed++;
     });
     return Object.entries(byBarangay)
       .map(([name, data]) => ({ name, ...data }))
@@ -116,169 +59,109 @@ export default function PrenatalDashboard() {
       .slice(0, 10);
   }, [mothers]);
 
-  return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2" data-testid="text-page-title">
-            <Heart className="w-6 h-6 text-primary" />
-            Prenatal Dashboard
-          </h1>
-          <p className="text-muted-foreground">TT vaccination and maternal care overview</p>
-        </div>
-        <div className="flex gap-2 flex-wrap">
-          <Badge variant="outline" className="text-sm" data-testid="badge-coverage-rate">
-            <TrendingUp className="w-3 h-3 mr-1" />
-            {coverageRate}% Complete
-          </Badge>
-          {overdueRate > 10 && (
-            <Badge variant="destructive" className="text-sm" data-testid="badge-overdue-alert">
-              <AlertCircle className="w-3 h-3 mr-1" />
-              {overdueRate}% Overdue
-            </Badge>
-          )}
-        </div>
-      </div>
+  const alerts: AlertSpec[] = [];
+  if (stats.overduePct > 10) {
+    alerts.push({
+      severity: "critical",
+      message: `${stats.overduePct}% of mothers have overdue TT vaccinations (${stats.overdue} of ${mothers.length}).`,
+      cta: { label: "Open Mothers", path: "/prenatal" },
+      testId: "alert-high-overdue",
+    });
+  }
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <KpiCard title="Total Mothers" value={mothers.length} icon={Users} onClick={() => navigate('/prenatal/registry')} />
-        <KpiCard title="Overdue" value={overdue} icon={AlertCircle} variant="danger" onClick={() => navigate('/prenatal')} />
-        <KpiCard title="Due Soon" value={dueSoon} icon={Heart} variant="warning" onClick={() => navigate('/prenatal')} />
-        <KpiCard title="Completed" value={completed} icon={CheckCircle} variant="success" onClick={() => navigate('/prenatal/registry')} />
-      </div>
+  const kpis: KpiSpec[] = [
+    {
+      label: "Total mothers",
+      value: mothers.length,
+      comparison: `${stats.coveragePct}% with complete TT`,
+      icon: Users,
+      onClick: () => navigate("/prenatal?status=all"),
+      testId: "kpi-total-mothers",
+    },
+    {
+      label: "Overdue",
+      value: stats.overdue,
+      comparison: `${stats.overduePct}% of total`,
+      severity: stats.overdue > 0 ? "critical" : "normal",
+      trend: stats.overdue > 0 ? "up-bad" : "flat",
+      icon: AlertCircle,
+      onClick: () => navigate("/prenatal?status=overdue"),
+      testId: "kpi-overdue",
+    },
+    {
+      label: "Due soon",
+      value: stats.dueSoon,
+      severity: stats.dueSoon > 0 ? "warning" : "normal",
+      icon: Heart,
+      onClick: () => navigate("/prenatal?status=dueSoon"),
+      testId: "kpi-due-soon",
+    },
+    {
+      label: "Completed",
+      value: stats.completed,
+      comparison: `${stats.coveragePct}% of mothers`,
+      icon: CheckCircle,
+      onClick: () => navigate("/prenatal?status=all"),
+      testId: "kpi-completed",
+    },
+  ];
 
-      {/* Quick Actions */}
-      <div className="grid md:grid-cols-3 gap-4">
-        <QuickActionCard
-          title="View Worklist"
-          subtitle={`${overdue + dueSoon} mothers need attention`}
-          icon={List}
-          onClick={() => navigate("/prenatal")}
-          variant="primary"
-        />
-        <QuickActionCard
-          title="Add New Mother"
-          subtitle="Register a new prenatal patient"
-          icon={Plus}
-          onClick={() => navigate("/mother/new")}
-        />
-        <QuickActionCard
-          title="View Registry"
-          subtitle={`${mothers.length} mothers on file`}
-          icon={BookOpen}
-          onClick={() => navigate("/prenatal/registry")}
-        />
-      </div>
-
-      {/* Charts Row */}
-      <div className="grid md:grid-cols-2 gap-6">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">TT Status Distribution</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {pieData.length > 0 ? (
-              <ResponsiveContainer width="100%" height={250}>
-                <PieChart>
-                  <Pie
-                    data={pieData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={60}
-                    outerRadius={80}
-                    paddingAngle={5}
-                    dataKey="value"
-                  >
-                    {pieData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: "hsl(var(--card))",
-                      border: "1px solid hsl(var(--border))",
-                    }}
-                  />
-                  <Legend />
-                </PieChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="h-[250px] flex items-center justify-center text-muted-foreground">
-                No data available
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Trimester Distribution</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={250}>
-              <BarChart data={trimesterData} margin={{ top: 8, right: 8, left: 0, bottom: 8 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                <XAxis
-                  dataKey="name"
-                  tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }}
-                  tickLine={false}
-                />
-                <YAxis tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }} />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: "hsl(var(--card))",
-                    border: "1px solid hsl(var(--border))",
-                  }}
-                />
-                <Bar dataKey="count" name="Mothers" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Barangay Breakdown */}
+  const diagnostic = (
+    <div className="grid md:grid-cols-2 gap-4">
       <Card>
-        <CardHeader>
-          <CardTitle className="text-base flex items-center gap-2">
-            TT Status by Barangay
-            <Badge variant="outline" className="font-normal">Top 10</Badge>
-          </CardTitle>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">Trimester distribution</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ResponsiveContainer width="100%" height={240}>
+            <BarChart data={trimesterData} margin={{ top: 8, right: 8, left: 0, bottom: 8 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+              <XAxis dataKey="name" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }} tickLine={false} />
+              <YAxis tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }} allowDecimals={false} />
+              <Tooltip contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", fontSize: 12 }} />
+              <Bar dataKey="count" name="Mothers" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">TT status by barangay · top 10</CardTitle>
         </CardHeader>
         <CardContent>
           {barangayData.length > 0 ? (
             <ResponsiveContainer width="100%" height={320}>
               <BarChart data={barangayData} layout="vertical">
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                <XAxis type="number" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }} />
-                <YAxis
-                  type="category"
-                  dataKey="name"
-                  tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }}
-                  width={110}
-                />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: "hsl(var(--card))",
-                    border: "1px solid hsl(var(--border))",
-                  }}
-                />
-                <Legend />
-                <Bar dataKey="overdue" stackId="a" fill="hsl(0, 84%, 60%)" name="Overdue" />
-                <Bar dataKey="dueSoon" stackId="a" fill="hsl(38, 92%, 50%)" name="Due Soon" />
-                <Bar dataKey="upcoming" stackId="a" fill="hsl(199, 89%, 48%)" name="Upcoming" />
-                <Bar dataKey="completed" stackId="a" fill="hsl(142, 76%, 36%)" name="Completed" radius={[0, 4, 4, 0]} />
+                <XAxis type="number" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }} allowDecimals={false} />
+                <YAxis type="category" dataKey="name" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }} width={110} />
+                <Tooltip contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", fontSize: 12 }} />
+                <Legend wrapperStyle={{ fontSize: 11 }} />
+                <Bar dataKey="overdue" stackId="a" fill="hsl(var(--destructive))" name="Overdue" />
+                <Bar dataKey="dueSoon" stackId="a" fill="hsl(38 92% 50%)" name="Due Soon" />
+                <Bar dataKey="upcoming" stackId="a" fill="hsl(var(--chart-2))" name="Upcoming" />
+                <Bar dataKey="completed" stackId="a" fill="hsl(var(--chart-1))" name="Completed" radius={[0, 4, 4, 0]} />
               </BarChart>
             </ResponsiveContainer>
           ) : (
-            <div className="h-[320px] flex items-center justify-center text-muted-foreground">
-              No barangay data available
+            <div className="h-[320px] flex items-center justify-center text-muted-foreground text-sm">
+              No mothers recorded this month
             </div>
           )}
         </CardContent>
       </Card>
     </div>
+  );
+
+  return (
+    <DashboardShell
+      title="Maternal Dashboard"
+      subtitle="TT vaccination + prenatal care"
+      filterBar={<FilterBar dataAsOf={TODAY_STR} />}
+      alerts={alerts}
+      kpis={kpis}
+      diagnostic={diagnostic}
+    />
   );
 }

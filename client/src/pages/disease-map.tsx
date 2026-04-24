@@ -3,13 +3,14 @@ import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import type { DiseaseCase } from "@shared/schema";
 import { useBarangay } from "@/contexts/barangay-context";
-import { isOutbreakCondition } from "@/lib/healthLogic";
+import { isOutbreakCondition, TODAY_STR } from "@/lib/healthLogic";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { MapPin, AlertTriangle, Thermometer, ChevronRight, ChevronDown } from "lucide-react";
+import { MapPin, ChevronRight, ChevronDown } from "lucide-react";
 import { MapContainer, TileLayer, Circle, Popup, Marker } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import { DashboardShell, FilterBar, type AlertSpec } from "@/components/dashboard-shell";
 
 const BARANGAY_COORDS: Record<string, [number, number]> = {
   "Amoslog":            [9.6392, 125.5980],
@@ -129,31 +130,24 @@ export default function DiseaseMap() {
 
   const mapCenter: [number, number] = [9.6564, 125.6023];
 
+  const alerts: AlertSpec[] = [];
+  if (outbreak.isOutbreak) {
+    alerts.push({
+      severity: "critical",
+      message: `Outbreak alert — ${outbreak.condition}: ${outbreak.count} cases in the last 14 days.`,
+      cta: { label: "Open Disease", path: "/disease" },
+      testId: "alert-outbreak",
+    });
+  }
+
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold flex items-center gap-2" data-testid="text-page-title">
-          <Thermometer className="w-6 h-6 text-orange-500" />
-          Disease Heat Index Map
-        </h1>
-        <p className="text-muted-foreground">Heat intensity shows disease case concentration across all 20 barangays</p>
-      </div>
-
-      {outbreak.isOutbreak && (
-        <Card className="border-destructive bg-destructive/5">
-          <CardContent className="py-4">
-            <div className="flex items-center gap-3">
-              <AlertTriangle className="w-6 h-6 text-destructive" />
-              <div>
-                <p className="font-semibold text-destructive">Outbreak Alert: {outbreak.condition}</p>
-                <p className="text-sm text-muted-foreground">{outbreak.count} cases in the last 14 days</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      <div className="space-y-4">
+    <DashboardShell
+      title="Disease Heat Index Map"
+      subtitle="Heat intensity shows disease case concentration across all 20 barangays"
+      filterBar={<FilterBar dataAsOf={TODAY_STR} />}
+      alerts={alerts}
+      diagnostic={
+        <div className="space-y-4">
         <Card>
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between flex-wrap gap-2">
@@ -414,7 +408,8 @@ export default function DiseaseMap() {
             </CardContent>
           </Card>
         </div>
-      </div>
-    </div>
+        </div>
+      }
+    />
   );
 }

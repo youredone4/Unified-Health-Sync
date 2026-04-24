@@ -3,13 +3,14 @@ import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { useBarangay } from "@/contexts/barangay-context";
 import type { Mother, Child, Senior, InventoryItem, DiseaseCase, TBPatient } from "@shared/schema";
-import { getTTStatus, getNextVaccineStatus, isMedsReadyForPickup, isUnderweightRisk, getTBMissedDoseRisk } from "@/lib/healthLogic";
+import { getTTStatus, getNextVaccineStatus, isMedsReadyForPickup, isUnderweightRisk, getTBMissedDoseRisk, TODAY_STR } from "@/lib/healthLogic";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Progress } from "@/components/ui/progress";
 import { AlertTriangle, TrendingUp, MapPin, Users, Baby, Heart, Pill, Package, Activity, ChevronRight, Shield, Siren } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from "recharts";
+import { DashboardShell, FilterBar, type AlertSpec } from "@/components/dashboard-shell";
 
 const PLACER_BARANGAYS = [
   "Amoslog", "Anislagan", "Bad-as", "Boyongan", "Bugas-bugas",
@@ -352,15 +353,23 @@ export default function Hotspots() {
 
   const top10Barangays = hotspotData.slice(0, 10);
 
+  const alerts: AlertSpec[] = [];
+  if (highRiskCount > 0) {
+    alerts.push({
+      severity: "critical",
+      message: `${highRiskCount} barangay${highRiskCount === 1 ? "" : "s"} flagged as HIGH risk — intervention recommended.`,
+      testId: "alert-high-risk",
+    });
+  }
+
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold flex items-center gap-2" data-testid="text-page-title">
-          <AlertTriangle className="w-6 h-6 text-orange-400" />
-          Hotspots & Analytics
-        </h1>
-        <p className="text-muted-foreground">Identify areas needing attention across all 20 barangays</p>
-      </div>
+    <DashboardShell
+      title="Hotspots & Analytics"
+      subtitle="Cross-program risk ranking across all 20 barangays"
+      filterBar={<FilterBar dataAsOf={TODAY_STR} />}
+      alerts={alerts}
+      diagnostic={
+        <div className="space-y-6">
 
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         <KpiSummaryCard
@@ -601,6 +610,8 @@ export default function Hotspots() {
         diseaseCases={diseaseCases}
         tbPatients={tbPatients}
       />
-    </div>
+        </div>
+      }
+    />
   );
 }
