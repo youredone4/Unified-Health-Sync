@@ -34,7 +34,9 @@ export default function PrenatalWorklist() {
 
   const barangays = useMemo(() => {
     const set = new Set<string>();
-    mothers.forEach(m => set.add(m.barangay));
+    // Guard against records whose barangay is empty/null — Radix Select throws
+    // if a <SelectItem> receives value="".
+    mothers.forEach(m => { if (m.barangay) set.add(m.barangay); });
     return Array.from(set).sort();
   }, [mothers]);
 
