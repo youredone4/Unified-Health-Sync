@@ -1,4 +1,4 @@
-import { differenceInDays, parseISO, addDays, format } from 'date-fns';
+import { differenceInDays, parseISO, addDays, format, getDay, getDate, endOfMonth, addMonths, startOfMonth } from 'date-fns';
 import type { Mother, Child, Senior, InventoryItem, DiseaseCase, TBPatient } from '@shared/schema';
 
 export const TODAY = new Date();
@@ -613,6 +613,75 @@ export function getTreatmentProgress(patient: TBPatient): number {
     const totalDays = patient.treatmentPhase === 'Intensive' ? 56 : 112;
     const daysSinceStart = differenceInDays(TODAY, startDate);
     return Math.min(100, Math.max(0, (daysSinceStart / totalDays) * 100));
+  } catch {
+    return 0;
+  }
+}
+
+// === TODAY PAGE — DOH cadence helpers ===
+
+/**
+ * True if dueDate is within ±1 day of `reference` (default: today).
+ * Tolerates the cadence-helper imprecision (a Penta-2 due "today ±1d"
+ * is still expected at the BHS). Returns false on null/invalid input.
+ */
+export function isExpectedToday(
+  dueDateStr: string | null | undefined,
+  reference: Date = TODAY,
+): boolean {
+  if (!dueDateStr) return false;
+  try {
+    const due = parseISO(dueDateStr);
+    if (isNaN(due.getTime())) return false;
+    const diff = differenceInDays(due, reference);
+    return diff >= -1 && diff <= 1;
+  } catch {
+    return false;
+  }
+}
+
+export interface DayOfWeekContext {
+  /** Wednesday — DOH National EPI Day (immunization sessions). */
+  isEpiDay: boolean;
+  /** Friday — PIDSR Category-II weekly report cutoff. */
+  isPidsrFriday: boolean;
+  /** Last 7 calendar days of the month — M1/M2 prep window. */
+  isLastWeekOfMonth: boolean;
+  /** Days until the 1st Monday of next month (M1/M2 submission deadline). */
+  m1DaysRemaining: number;
+}
+
+/**
+ * Returns DOH-mandated cadence flags for a given date.
+ * - EPI day: Wednesday (long-standing national vaccination day convention).
+ * - PIDSR Friday: Category-II surveillance weekly cutoff (PIDSR MoP 3rd Ed.).
+ * - M1/M2 deadline: 1st Monday of the following month (FHSIS MoP 2018).
+ */
+export function getDayOfWeekContext(reference: Date = TODAY): DayOfWeekContext {
+  const dow = getDay(reference); // 0=Sun, 1=Mon, ... 6=Sat
+  const lastDay = endOfMonth(reference);
+  const daysToMonthEnd = differenceInDays(lastDay, reference);
+  return {
+    isEpiDay: dow === 3,
+    isPidsrFriday: dow === 5,
+    isLastWeekOfMonth: daysToMonthEnd <= 6,
+    m1DaysRemaining: getReportingCountdown(reference),
+  };
+}
+
+/**
+ * Days until the 1st Monday of the *following* month — the FHSIS M1/M2
+ * submission deadline that midwives meet via the PHN. Returns 0 if today
+ * IS that 1st Monday, or a positive integer otherwise.
+ */
+export function getReportingCountdown(reference: Date = TODAY): number {
+  try {
+    const nextMonthStart = startOfMonth(addMonths(reference, 1));
+    // 0=Sun, 1=Mon, ... → days to add to reach Monday
+    const dowOfFirst = getDay(nextMonthStart);
+    const daysToMonday = dowOfFirst === 0 ? 1 : dowOfFirst === 1 ? 0 : 8 - dowOfFirst;
+    const firstMonday = addDays(nextMonthStart, daysToMonday);
+    return Math.max(0, differenceInDays(firstMonday, reference));
   } catch {
     return 0;
   }
