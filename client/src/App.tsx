@@ -219,8 +219,8 @@ function DashboardsHub({ children }: { children: React.ReactNode }) {
         { label: "Child", path: "/dashboards/child", testId: "hub-tab-dashboards-child" },
         { label: "Senior", path: "/dashboards/senior", testId: "hub-tab-dashboards-senior" },
         { label: "Nutrition", path: "/dashboards/nutrition", testId: "hub-tab-dashboards-nutrition" },
-        { label: "Disease Map", path: "/dashboards/disease-map", testId: "hub-tab-dashboards-disease", roles: ["SYSTEM_ADMIN", "MHO", "SHA"] },
         { label: "Hotspots", path: "/dashboards/hotspots", testId: "hub-tab-dashboards-hotspots", roles: ["SYSTEM_ADMIN", "MHO", "SHA"] },
+        { label: "Disease Map", path: "/dashboards/disease-map", testId: "hub-tab-dashboards-disease", roles: ["SYSTEM_ADMIN", "MHO", "SHA"] },
       ]}
     >
       {children}
