@@ -1,150 +1,239 @@
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
+import { useState, useEffect, useMemo } from "react";
 import type { Senior } from "@shared/schema";
 import { getSeniorPickupStatus, isMedsReadyForPickup, formatDate } from "@/lib/healthLogic";
-import KpiCard from "@/components/kpi-card";
 import StatusBadge from "@/components/status-badge";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Input } from "@/components/ui/input";
-import { AlertCircle, Clock, Pill, Users, Check, Search } from "lucide-react";
-import { useState, useEffect } from "react";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { AlertTriangle, Clock, CheckCircle, Pill, ChevronRight, Check, Search } from "lucide-react";
 import { usePagination } from "@/hooks/use-pagination";
 import TablePagination from "@/components/table-pagination";
+import { useAuth } from "@/hooks/use-auth";
 import { useBarangay } from "@/contexts/barangay-context";
 
+type StatusFilter = "urgent" | "overdue" | "dueSoon" | "ready" | "upcoming" | "all";
+
 export default function SeniorWorklist() {
-  const [, navigate] = useLocation();
+  const [location, navigate] = useLocation();
+  const { isTL } = useAuth();
   const { scopedPath } = useBarangay();
-  const { data: seniors = [], isLoading } = useQuery<Senior[]>({ queryKey: [scopedPath('/api/seniors')] });
-  const [activeTab, setActiveTab] = useState(() => localStorage.getItem('senior-tab') || 'overdue');
-  const [search, setSearch] = useState('');
+  const { data: seniors = [], isLoading } = useQuery<Senior[]>({ queryKey: [scopedPath("/api/seniors")] });
+
+  const initialStatus: StatusFilter = useMemo(() => {
+    const sp = new URLSearchParams(location.split("?")[1] ?? "");
+    const s = sp.get("status");
+    if (s === "all" || s === "overdue" || s === "dueSoon" || s === "upcoming" || s === "urgent" || s === "ready") return s;
+    return "urgent";
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>(initialStatus);
+  const [barangayFilter, setBarangayFilter] = useState<string>("all");
+  const [search, setSearch] = useState("");
 
   useEffect(() => {
-    localStorage.setItem('senior-tab', activeTab);
-  }, [activeTab]);
+    if (!isTL) setBarangayFilter("all");
+  }, [isTL]);
 
-  const seniorsWithStatus = seniors.map(s => ({
-    ...s,
-    pickupStatus: getSeniorPickupStatus(s),
-    medsReady: isMedsReadyForPickup(s)
-  }));
-
-  const overdue = seniorsWithStatus.filter(s => s.pickupStatus.status === 'overdue');
-  const dueSoon = seniorsWithStatus.filter(s => s.pickupStatus.status === 'due_soon');
-  const medsReady = seniorsWithStatus.filter(s => s.medsReady);
-
-  const getBaseFilteredSeniors = () => {
-    if (activeTab === 'overdue') return overdue;
-    if (activeTab === 'due_soon') return dueSoon;
-    if (activeTab === 'ready') return medsReady;
-    return seniorsWithStatus;
-  };
-
-  const filteredSeniors = getBaseFilteredSeniors().filter(s =>
-    search === '' ||
-    `${s.firstName ?? ''} ${s.lastName ?? ''}`.toLowerCase().includes(search.toLowerCase()) ||
-    (s.barangay ?? '').toLowerCase().includes(search.toLowerCase())
+  const seniorsWithStatus = useMemo(
+    () =>
+      seniors.map((s) => ({
+        ...s,
+        pickupStatus: getSeniorPickupStatus(s),
+        medsReady: isMedsReadyForPickup(s),
+      })),
+    [seniors],
   );
 
-  const pagination = usePagination(filteredSeniors);
+  const barangays = useMemo(() => {
+    const set = new Set<string>();
+    seniors.forEach((s) => {
+      if (s.barangay) set.add(s.barangay);
+    });
+    return Array.from(set).sort();
+  }, [seniors]);
 
-  useEffect(() => { pagination.resetPage(); }, [activeTab, search]);
+  const counts = useMemo(() => {
+    const c = { all: seniorsWithStatus.length, urgent: 0, overdue: 0, dueSoon: 0, upcoming: 0, ready: 0 };
+    seniorsWithStatus.forEach((s) => {
+      if (s.pickupStatus.status === "overdue") {
+        c.overdue++;
+        c.urgent++;
+      } else if (s.pickupStatus.status === "due_soon") {
+        c.dueSoon++;
+        c.urgent++;
+      } else {
+        c.upcoming++;
+      }
+      if (s.medsReady) c.ready++;
+    });
+    return c;
+  }, [seniorsWithStatus]);
+
+  const filteredSeniors = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return seniorsWithStatus.filter((s) => {
+      const st = s.pickupStatus.status;
+      if (statusFilter === "urgent" && st !== "overdue" && st !== "due_soon") return false;
+      if (statusFilter === "overdue" && st !== "overdue") return false;
+      if (statusFilter === "dueSoon" && st !== "due_soon") return false;
+      if (statusFilter === "upcoming" && st !== "upcoming" && st !== "available") return false;
+      if (statusFilter === "ready" && !s.medsReady) return false;
+      if (barangayFilter !== "all" && s.barangay !== barangayFilter) return false;
+      if (q) {
+        const nameOrBrgy = `${s.firstName ?? ""} ${s.lastName ?? ""} ${s.barangay ?? ""}`.toLowerCase();
+        if (!nameOrBrgy.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [seniorsWithStatus, statusFilter, barangayFilter, search]);
+
+  const pagination = usePagination(filteredSeniors);
+  useEffect(() => {
+    pagination.resetPage();
+  }, [statusFilter, barangayFilter, search]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (isLoading) {
-    return <div className="flex items-center justify-center h-64"><p className="text-muted-foreground">Loading...</p></div>;
+    return (
+      <div className="flex items-center justify-center h-64">
+        <p className="text-muted-foreground">Loading...</p>
+      </div>
+    );
   }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold flex items-center gap-2" data-testid="text-page-title">
-          <Pill className="w-6 h-6 text-purple-400" />
-          HTN Meds Pickup
-        </h1>
-        <p className="text-muted-foreground">Senior care worklist - Medication pickup</p>
+    <div className="space-y-4">
+      <div className="flex flex-wrap gap-1" data-testid="status-filters">
+        <FilterChip value="urgent" active={statusFilter} onSelect={setStatusFilter} count={counts.urgent} icon={AlertTriangle}>
+          Urgent
+        </FilterChip>
+        <FilterChip value="overdue" active={statusFilter} onSelect={setStatusFilter} count={counts.overdue} icon={AlertTriangle}>
+          Overdue
+        </FilterChip>
+        <FilterChip value="dueSoon" active={statusFilter} onSelect={setStatusFilter} count={counts.dueSoon} icon={Clock}>
+          Due Soon
+        </FilterChip>
+        <FilterChip value="ready" active={statusFilter} onSelect={setStatusFilter} count={counts.ready} icon={Check}>
+          Meds Ready
+        </FilterChip>
+        <FilterChip value="upcoming" active={statusFilter} onSelect={setStatusFilter} count={counts.upcoming} icon={CheckCircle}>
+          Upcoming
+        </FilterChip>
+        <FilterChip value="all" active={statusFilter} onSelect={setStatusFilter} count={counts.all}>
+          All
+        </FilterChip>
       </div>
 
-      <div className="grid grid-cols-4 gap-4">
-        <KpiCard title="Overdue" value={overdue.length} icon={AlertCircle} variant="danger" active={activeTab === 'overdue'} onClick={() => setActiveTab(activeTab === 'overdue' ? 'all' : 'overdue')} />
-        <KpiCard title="Due Soon" value={dueSoon.length} icon={Clock} variant="warning" active={activeTab === 'due_soon'} onClick={() => setActiveTab(activeTab === 'due_soon' ? 'all' : 'due_soon')} />
-        <KpiCard title="Meds Ready" value={medsReady.length} icon={Check} variant="success" active={activeTab === 'ready'} onClick={() => setActiveTab(activeTab === 'ready' ? 'all' : 'ready')} />
-        <KpiCard title="Total Seniors" value={seniors.length} icon={Users} active={activeTab === 'all'} onClick={() => setActiveTab('all')} />
+      <div className="flex flex-wrap gap-2 items-center">
+        <div className="relative flex-1 min-w-[240px] max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input
+            placeholder="Search by name or barangay…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-9"
+            data-testid="input-search"
+          />
+        </div>
+        {!isTL && (
+          <Select value={barangayFilter} onValueChange={setBarangayFilter}>
+            <SelectTrigger className="w-[180px]" data-testid="select-barangay-filter">
+              <SelectValue placeholder="All Barangays" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Barangays</SelectItem>
+              {barangays.map((b) => (
+                <SelectItem key={b} value={b}>
+                  {b}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
       </div>
 
-      <Card>
-        <CardHeader className="pb-0 space-y-3">
-          <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList>
-              <TabsTrigger value="overdue" data-testid="tab-overdue">Overdue ({overdue.length})</TabsTrigger>
-              <TabsTrigger value="due_soon" data-testid="tab-due-soon">Due Soon ({dueSoon.length})</TabsTrigger>
-              <TabsTrigger value="ready" data-testid="tab-ready">Meds Ready ({medsReady.length})</TabsTrigger>
-              <TabsTrigger value="all" data-testid="tab-all">All ({seniors.length})</TabsTrigger>
-            </TabsList>
-          </Tabs>
-          <div className="relative max-w-xs">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input
-              placeholder="Search senior or barangay..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="pl-9 h-8 text-sm"
-              data-testid="input-search"
-            />
-          </div>
-        </CardHeader>
-        <CardContent className="pt-4">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border">
-                  <th className="text-left py-2 px-3">Senior</th>
-                  <th className="text-left py-2 px-3">Barangay</th>
-                  <th className="text-left py-2 px-3">Meds Ready?</th>
-                  <th className="text-left py-2 px-3">Next Pickup</th>
-                  <th className="text-left py-2 px-3">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredSeniors.length === 0 && (
-                  <tr>
-                    <td colSpan={5} className="py-8 text-center text-muted-foreground">
-                      No items in this list
-                    </td>
-                  </tr>
-                )}
-                {pagination.pagedItems.map(s => (
-                  <tr
-                    key={s.id}
-                    onClick={() => navigate(`/senior/${s.id}`)}
-                    className="border-b border-border/50 cursor-pointer hover-elevate"
-                    data-testid={`row-senior-${s.id}`}
-                  >
-                    <td className="py-3 px-3">
-                      <div>
-                        <p className="font-medium">{s.firstName} {s.lastName}</p>
-                        <p className="text-xs text-muted-foreground">{s.phone}</p>
-                      </div>
-                    </td>
-                    <td className="py-3 px-3">{s.barangay}</td>
-                    <td className="py-3 px-3">
-                      {s.medsReady ? (
-                        <Badge className="bg-green-500/20 text-green-400 border-green-500/30">Yes</Badge>
-                      ) : (
-                        <Badge variant="secondary">No</Badge>
-                      )}
-                    </td>
-                    <td className="py-3 px-3">{formatDate(s.nextPickupDate)}</td>
-                    <td className="py-3 px-3"><StatusBadge status={s.pickupStatus.status} /></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+      <Card data-testid="card-worklist">
+        <CardContent className="pt-4 space-y-2">
+          {filteredSeniors.length === 0 && (
+            <p className="text-muted-foreground text-center py-8" data-testid="text-no-items">
+              No seniors match the current filters.
+            </p>
+          )}
+          {pagination.pagedItems.map((s) => (
+            <div
+              key={s.id}
+              role="button"
+              tabIndex={0}
+              onClick={() => navigate(`/senior/${s.id}`)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") navigate(`/senior/${s.id}`);
+              }}
+              className="flex items-center gap-3 p-3 rounded-md bg-muted/50 cursor-pointer hover-elevate"
+              data-testid={`row-senior-${s.id}`}
+            >
+              <div className="p-2 rounded-md bg-primary/10">
+                <Pill className="w-4 h-4 text-primary" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <p className="font-medium" data-testid={`text-name-${s.id}`}>
+                    {s.firstName} {s.lastName}
+                  </p>
+                  <StatusBadge status={s.pickupStatus.status} />
+                  {s.medsReady && (
+                    <Badge className="bg-green-500/20 text-green-700 dark:text-green-400 border-green-500/30">Meds Ready</Badge>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground" data-testid={`text-details-${s.id}`}>
+                  {s.barangay}
+                  {s.age ? ` · ${s.age} yrs` : ""}
+                  {s.phone ? ` · ${s.phone}` : ""}
+                </p>
+                <p className="text-xs text-muted-foreground" data-testid={`text-next-${s.id}`}>
+                  Next pickup: {formatDate(s.nextPickupDate)}
+                </p>
+              </div>
+              <ChevronRight className="w-4 h-4 text-muted-foreground" />
+            </div>
+          ))}
           <TablePagination pagination={pagination} />
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+function FilterChip({
+  value,
+  active,
+  onSelect,
+  count,
+  icon: Icon,
+  children,
+}: {
+  value: StatusFilter;
+  active: StatusFilter;
+  onSelect: (v: StatusFilter) => void;
+  count: number;
+  icon?: React.ElementType;
+  children: React.ReactNode;
+}) {
+  const isActive = active === value;
+  return (
+    <Button
+      variant={isActive ? "default" : "outline"}
+      size="sm"
+      onClick={() => onSelect(value)}
+      className="gap-1 h-8"
+      data-testid={`filter-status-${value}`}
+      data-active={isActive}
+    >
+      {Icon ? <Icon className="w-3.5 h-3.5" /> : null}
+      {children}
+      <span className="text-xs opacity-70">({count})</span>
+    </Button>
   );
 }

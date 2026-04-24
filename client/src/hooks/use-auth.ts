@@ -64,6 +64,8 @@ export const ADMIN_ONLY_ROLES = [UserRole.SYSTEM_ADMIN] as const;
 // Used directly in sidebarPermissions config items AND consumed by RoleRoute
 // via allowedRoles props.  Unlisted paths are publicly accessible to all roles.
 export const sidebarPermissions: Record<string, readonly string[]> = {
+  "/today": ALL_ROLES,
+  "/dashboards": ALL_ROLES,
   "/hotspots": MGMT_ROLES,
   "/inventory": MGMT_ROLES,
   "/inventory/stockouts": MGMT_ROLES,

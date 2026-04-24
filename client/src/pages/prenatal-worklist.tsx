@@ -4,216 +4,186 @@ import { useState, useEffect, useMemo } from "react";
 import type { Mother } from "@shared/schema";
 import { getTTStatus, getPrenatalCheckStatus, formatDate } from "@/lib/healthLogic";
 import StatusBadge from "@/components/status-badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { AlertTriangle, Clock, CheckCircle, Heart, ChevronRight } from "lucide-react";
+import { AlertTriangle, Clock, CheckCircle, Heart, ChevronRight, Search } from "lucide-react";
 import { usePagination } from "@/hooks/use-pagination";
 import TablePagination from "@/components/table-pagination";
 import { useAuth } from "@/hooks/use-auth";
 import { useBarangay } from "@/contexts/barangay-context";
 
+type StatusFilter = "urgent" | "overdue" | "dueSoon" | "upcoming" | "all";
+
+/**
+ * Unified Mothers "Patients" page. Merges the old TT Reminders worklist and
+ * the Mother Registry into a single list with filter chips + search +
+ * barangay scope. Old `/prenatal/registry` URL redirects here with
+ * `?status=all` to preserve bookmarks.
+ */
 export default function PrenatalWorklist() {
-  const [, navigate] = useLocation();
+  const [location, navigate] = useLocation();
   const { isTL } = useAuth();
   const { scopedPath } = useBarangay();
-  const { data: mothers = [], isLoading } = useQuery<Mother[]>({ queryKey: [scopedPath('/api/mothers')] });
-  const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [barangayFilter, setBarangayFilter] = useState<string>('all');
+  const { data: mothers = [], isLoading } = useQuery<Mother[]>({ queryKey: [scopedPath("/api/mothers")] });
 
-  // Non-TL users can filter by barangay via dropdown; TL scoping is handled by API
+  // Seed the initial chip from ?status= in the URL so deep links from the old
+  // Registry URL land on the "All" view instead of the default "Urgent" view.
+  const initialStatus: StatusFilter = useMemo(() => {
+    const sp = new URLSearchParams(location.split("?")[1] ?? "");
+    const s = sp.get("status");
+    if (s === "all" || s === "overdue" || s === "dueSoon" || s === "upcoming" || s === "urgent") return s;
+    return "urgent";
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>(initialStatus);
+  const [barangayFilter, setBarangayFilter] = useState<string>("all");
+  const [search, setSearch] = useState("");
+
   useEffect(() => {
-    if (!isTL) setBarangayFilter('all');
+    if (!isTL) setBarangayFilter("all");
   }, [isTL]);
 
-  const mothersWithStatus = useMemo(() => mothers.map(m => ({
-    ...m,
-    ttStatus: getTTStatus(m),
-    pcStatus: getPrenatalCheckStatus(m)
-  })), [mothers]);
+  const mothersWithStatus = useMemo(
+    () =>
+      mothers.map((m) => ({
+        ...m,
+        ttStatus: getTTStatus(m),
+        pcStatus: getPrenatalCheckStatus(m),
+      })),
+    [mothers],
+  );
 
   const barangays = useMemo(() => {
     const set = new Set<string>();
-    // Guard against records whose barangay is empty/null — Radix Select throws
-    // if a <SelectItem> receives value="".
-    mothers.forEach(m => { if (m.barangay) set.add(m.barangay); });
+    mothers.forEach((m) => {
+      if (m.barangay) set.add(m.barangay);
+    });
     return Array.from(set).sort();
   }, [mothers]);
 
-  const filteredMothers = useMemo(() => {
-    return mothersWithStatus.filter(m => {
-      const worstStatus = m.ttStatus.status === 'overdue' || m.pcStatus.status === 'overdue' ? 'overdue' :
-                          m.ttStatus.status === 'due_soon' || m.pcStatus.status === 'due_soon' ? 'dueSoon' : 'upcoming';
+  // Worst-of-two status summarises TT + prenatal-check state.
+  const worstStatusOf = (m: (typeof mothersWithStatus)[number]) =>
+    m.ttStatus.status === "overdue" || m.pcStatus.status === "overdue"
+      ? "overdue"
+      : m.ttStatus.status === "due_soon" || m.pcStatus.status === "due_soon"
+        ? "dueSoon"
+        : "upcoming";
 
-      if (statusFilter !== 'all' && worstStatus !== statusFilter) return false;
-      if (barangayFilter !== 'all' && m.barangay !== barangayFilter) return false;
+  const counts = useMemo(() => {
+    const c = { all: mothersWithStatus.length, urgent: 0, overdue: 0, dueSoon: 0, upcoming: 0 };
+    mothersWithStatus.forEach((m) => {
+      const w = worstStatusOf(m);
+      if (w === "overdue") {
+        c.overdue++;
+        c.urgent++;
+      } else if (w === "dueSoon") {
+        c.dueSoon++;
+        c.urgent++;
+      } else {
+        c.upcoming++;
+      }
+    });
+    return c;
+  }, [mothersWithStatus]);
+
+  const filteredMothers = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return mothersWithStatus.filter((m) => {
+      const w = worstStatusOf(m);
+      if (statusFilter === "urgent" && w !== "overdue" && w !== "dueSoon") return false;
+      if (statusFilter === "overdue" && w !== "overdue") return false;
+      if (statusFilter === "dueSoon" && w !== "dueSoon") return false;
+      if (statusFilter === "upcoming" && w !== "upcoming") return false;
+      if (barangayFilter !== "all" && m.barangay !== barangayFilter) return false;
+      if (q) {
+        const nameOrBrgy = `${m.firstName ?? ""} ${m.lastName ?? ""} ${m.barangay ?? ""}`.toLowerCase();
+        if (!nameOrBrgy.includes(q)) return false;
+      }
       return true;
     });
-  }, [mothersWithStatus, statusFilter, barangayFilter]);
-
-  const statusCounts = useMemo(() => {
-    const counts = { overdue: 0, dueSoon: 0, upcoming: 0 };
-    mothersWithStatus.forEach(m => {
-      const worstStatus = m.ttStatus.status === 'overdue' || m.pcStatus.status === 'overdue' ? 'overdue' :
-                          m.ttStatus.status === 'due_soon' || m.pcStatus.status === 'due_soon' ? 'dueSoon' : 'upcoming';
-      if (worstStatus === 'overdue') counts.overdue++;
-      else if (worstStatus === 'dueSoon') counts.dueSoon++;
-      else counts.upcoming++;
-    });
-    return counts;
-  }, [mothersWithStatus]);
+  }, [mothersWithStatus, statusFilter, barangayFilter, search]);
 
   const pagination = usePagination(filteredMothers);
 
-  useEffect(() => { pagination.resetPage(); }, [statusFilter, barangayFilter]);
+  useEffect(() => {
+    pagination.resetPage();
+  }, [statusFilter, barangayFilter, search]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (isLoading) {
-    return <div className="flex items-center justify-center h-64"><p className="text-muted-foreground">Loading...</p></div>;
+    return (
+      <div className="flex items-center justify-center h-64">
+        <p className="text-muted-foreground">Loading...</p>
+      </div>
+    );
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2" data-testid="text-page-title">
-            <Heart className="w-6 h-6 text-red-400 dark:text-red-300" />
-            TT Reminders
-          </h1>
-          <p className="text-muted-foreground" data-testid="text-page-subtitle">Prenatal worklist - Tetanus shots and check-ups</p>
-        </div>
+    <div className="space-y-4">
+      {/* Status chips */}
+      <div className="flex flex-wrap gap-1" data-testid="status-filters">
+        <FilterChip value="urgent" active={statusFilter} onSelect={setStatusFilter} count={counts.urgent} icon={AlertTriangle}>
+          Urgent
+        </FilterChip>
+        <FilterChip value="overdue" active={statusFilter} onSelect={setStatusFilter} count={counts.overdue} icon={AlertTriangle}>
+          Overdue
+        </FilterChip>
+        <FilterChip value="dueSoon" active={statusFilter} onSelect={setStatusFilter} count={counts.dueSoon} icon={Clock}>
+          Due Soon
+        </FilterChip>
+        <FilterChip value="upcoming" active={statusFilter} onSelect={setStatusFilter} count={counts.upcoming} icon={CheckCircle}>
+          Upcoming
+        </FilterChip>
+        <FilterChip value="all" active={statusFilter} onSelect={setStatusFilter} count={counts.all}>
+          All
+        </FilterChip>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4" data-testid="status-summary-cards">
-        <Card
-          className={`border-destructive/50 bg-destructive/10 cursor-pointer hover-elevate ${statusFilter === 'overdue' ? 'ring-2 ring-destructive' : ''}`}
-          onClick={() => setStatusFilter(statusFilter === 'overdue' ? 'all' : 'overdue')}
-          data-testid="card-overdue-count"
-        >
-          <CardContent className="pt-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-full bg-destructive/20">
-                <AlertTriangle className="w-5 h-5 text-destructive" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-destructive" data-testid="text-overdue-value">{statusCounts.overdue}</p>
-                <p className="text-sm text-muted-foreground" data-testid="text-overdue-label">Overdue</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card
-          className={`border-yellow-500/50 dark:border-yellow-400/50 bg-yellow-500/10 dark:bg-yellow-400/10 cursor-pointer hover-elevate ${statusFilter === 'dueSoon' ? 'ring-2 ring-yellow-500 dark:ring-yellow-400' : ''}`}
-          onClick={() => setStatusFilter(statusFilter === 'dueSoon' ? 'all' : 'dueSoon')}
-          data-testid="card-duesoon-count"
-        >
-          <CardContent className="pt-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-full bg-yellow-500/20 dark:bg-yellow-400/20">
-                <Clock className="w-5 h-5 text-yellow-600 dark:text-yellow-400" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-yellow-600 dark:text-yellow-400" data-testid="text-duesoon-value">{statusCounts.dueSoon}</p>
-                <p className="text-sm text-muted-foreground" data-testid="text-duesoon-label">Due Soon</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card
-          className={`border-green-500/50 dark:border-green-400/50 bg-green-500/10 dark:bg-green-400/10 cursor-pointer hover-elevate ${statusFilter === 'upcoming' ? 'ring-2 ring-green-500 dark:ring-green-400' : ''}`}
-          onClick={() => setStatusFilter(statusFilter === 'upcoming' ? 'all' : 'upcoming')}
-          data-testid="card-upcoming-count"
-        >
-          <CardContent className="pt-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-full bg-green-500/20 dark:bg-green-400/20">
-                <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-green-600 dark:text-green-400" data-testid="text-upcoming-value">{statusCounts.upcoming}</p>
-                <p className="text-sm text-muted-foreground" data-testid="text-upcoming-label">Upcoming</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="flex flex-wrap gap-2 items-center" data-testid="filters-container">
-        <div className="flex gap-1 flex-wrap" data-testid="status-filters">
-          <Button
-            variant={statusFilter === 'all' ? "default" : "outline"}
-            onClick={() => setStatusFilter('all')}
-            data-testid="filter-status-all"
-          >
-            All ({mothers.length})
-          </Button>
-          <Button
-            variant={statusFilter === 'overdue' ? "default" : "outline"}
-            onClick={() => setStatusFilter('overdue')}
-            className="gap-1"
-            data-testid="filter-status-overdue"
-          >
-            <AlertTriangle className="w-4 h-4" />
-            Overdue
-          </Button>
-          <Button
-            variant={statusFilter === 'dueSoon' ? "default" : "outline"}
-            onClick={() => setStatusFilter('dueSoon')}
-            className="gap-1"
-            data-testid="filter-status-duesoon"
-          >
-            <Clock className="w-4 h-4" />
-            Due Soon
-          </Button>
-          <Button
-            variant={statusFilter === 'upcoming' ? "default" : "outline"}
-            onClick={() => setStatusFilter('upcoming')}
-            className="gap-1"
-            data-testid="filter-status-upcoming"
-          >
-            <CheckCircle className="w-4 h-4" />
-            Upcoming
-          </Button>
+      {/* Search + barangay filter */}
+      <div className="flex flex-wrap gap-2 items-center">
+        <div className="relative flex-1 min-w-[240px] max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input
+            placeholder="Search by name or barangay…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-9"
+            data-testid="input-search"
+          />
         </div>
         {!isTL && (
-          <div className="ml-auto">
-            <Select value={barangayFilter} onValueChange={setBarangayFilter}>
-              <SelectTrigger className="w-[180px]" data-testid="select-barangay-filter">
-                <SelectValue placeholder="All Barangays" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Barangays</SelectItem>
-                {barangays.map(b => (
-                  <SelectItem key={b} value={b}>{b}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          <Select value={barangayFilter} onValueChange={setBarangayFilter}>
+            <SelectTrigger className="w-[180px]" data-testid="select-barangay-filter">
+              <SelectValue placeholder="All Barangays" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Barangays</SelectItem>
+              {barangays.map((b) => (
+                <SelectItem key={b} value={b}>
+                  {b}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         )}
       </div>
 
+      {/* List */}
       <Card data-testid="card-worklist">
-        <CardHeader className="flex flex-row items-center justify-between gap-2">
-          <CardTitle className="text-base" data-testid="text-list-title">
-            {statusFilter === 'all' ? 'All Mothers' :
-             statusFilter === 'overdue' ? 'Overdue Items' :
-             statusFilter === 'dueSoon' ? 'Due Soon Items' : 'Upcoming Items'}
-            <span className="ml-2 text-muted-foreground font-normal">({filteredMothers.length})</span>
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2">
+        <CardContent className="pt-4 space-y-2">
           {filteredMothers.length === 0 && (
             <p className="text-muted-foreground text-center py-8" data-testid="text-no-items">
-              No items in this list
+              No mothers match the current filters.
             </p>
           )}
-          {pagination.pagedItems.map(m => {
+          {pagination.pagedItems.map((m) => {
             const neededActions: string[] = [];
-            if (m.ttStatus.status !== 'completed') neededActions.push(m.ttStatus.nextShotLabel);
-            if (m.nextPrenatalCheckDate) neededActions.push('Prenatal Check');
+            if (m.ttStatus.status !== "completed") neededActions.push(m.ttStatus.nextShotLabel);
+            if (m.nextPrenatalCheckDate) neededActions.push("Prenatal Check");
 
-            const worstStatus = m.ttStatus.status === 'overdue' || m.pcStatus.status === 'overdue' ? 'overdue' :
-                                m.ttStatus.status === 'due_soon' || m.pcStatus.status === 'due_soon' ? 'due_soon' : 'upcoming';
-
+            const worst = worstStatusOf(m);
+            const statusKey = worst === "dueSoon" ? "due_soon" : worst;
             const dueDate = m.ttStatus.dueDate || m.nextPrenatalCheckDate;
 
             return (
@@ -222,20 +192,25 @@ export default function PrenatalWorklist() {
                 role="button"
                 tabIndex={0}
                 onClick={() => navigate(`/mother/${m.id}`)}
-                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') navigate(`/mother/${m.id}`); }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") navigate(`/mother/${m.id}`);
+                }}
                 className="flex items-center gap-3 p-3 rounded-md bg-muted/50 cursor-pointer hover-elevate"
                 data-testid={`row-mother-${m.id}`}
               >
-                <div className="p-2 rounded-md bg-red-500/20 dark:bg-red-400/20">
-                  <Heart className="w-4 h-4 text-red-500 dark:text-red-400" />
+                <div className="p-2 rounded-md bg-primary/10">
+                  <Heart className="w-4 h-4 text-primary" />
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <p className="font-medium" data-testid={`text-name-${m.id}`}>{m.firstName} {m.lastName}</p>
-                    <StatusBadge status={worstStatus} />
+                    <p className="font-medium" data-testid={`text-name-${m.id}`}>
+                      {m.firstName} {m.lastName}
+                    </p>
+                    <StatusBadge status={statusKey} />
                   </div>
                   <p className="text-xs text-muted-foreground" data-testid={`text-details-${m.id}`}>
-                    {m.barangay} · {neededActions.join(', ') || 'Up to date'}
+                    {m.barangay} · {neededActions.join(", ") || "Up to date"}
+                    {m.age ? ` · ${m.age} yrs` : ""}
                   </p>
                   {dueDate && (
                     <p className="text-xs text-muted-foreground" data-testid={`text-duedate-${m.id}`}>
@@ -251,5 +226,37 @@ export default function PrenatalWorklist() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+function FilterChip({
+  value,
+  active,
+  onSelect,
+  count,
+  icon: Icon,
+  children,
+}: {
+  value: StatusFilter;
+  active: StatusFilter;
+  onSelect: (v: StatusFilter) => void;
+  count: number;
+  icon?: React.ElementType;
+  children: React.ReactNode;
+}) {
+  const isActive = active === value;
+  return (
+    <Button
+      variant={isActive ? "default" : "outline"}
+      size="sm"
+      onClick={() => onSelect(value)}
+      className="gap-1 h-8"
+      data-testid={`filter-status-${value}`}
+      data-active={isActive}
+    >
+      {Icon ? <Icon className="w-3.5 h-3.5" /> : null}
+      {children}
+      <span className="text-xs opacity-70">({count})</span>
+    </Button>
   );
 }

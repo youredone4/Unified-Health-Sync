@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -10,69 +10,64 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarMenuSub,
+  SidebarMenuSubButton,
+  SidebarMenuSubItem,
   SidebarHeader,
   SidebarSeparator,
 } from "@/components/ui/sidebar";
 import { Badge } from "@/components/ui/badge";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
-  Home as HomeIcon,
+  BarChart3,
+  ClipboardList,
+  Package,
+  ClipboardPlus,
+  Calendar,
+  MessageCircle,
+  Shield,
+  Stethoscope,
+  User,
+  Users,
+  ChevronRight,
+  // Patients children
   HeartHandshake,
   Baby,
   UserCircle,
   Siren,
   Pill,
+  // Primary
+  Sparkles,
   Scale,
-  Package,
-  ClipboardList,
-  Shield,
-  Stethoscope,
-  User,
 } from "lucide-react";
 import { useTheme } from "@/contexts/theme-context";
 import { useAuth, sidebarPermissions, ALL_ROLES } from "@/hooks/use-auth";
 
 interface NavItem {
   title: string;
-  // Where clicking the item lands. Each hub uses its "worklist" / default tab
-  // as the landing URL so a second click opens the most-used view.
   url: string;
   icon: React.ElementType;
-  // Roles derived from sidebarPermissions so sidebar visibility and RoleRoute
-  // guards always agree.
   roles: readonly string[];
-  // URL prefixes that should show this sidebar item as "active". Anything
-  // under /prenatal, /fp, /mother goes to Mothers, etc.
   activePrefixes: readonly string[];
   isBadged?: boolean;
-  groupId: "main" | "admin";
+  tier: "main" | "decision" | "util" | "admin";
 }
 
 function rolesFor(url: string): readonly string[] {
   return sidebarPermissions[url] ?? ALL_ROLES;
 }
 
-// MGMT_ROLES = any role that can see at least one item in a management hub.
 const MGMT = ["SYSTEM_ADMIN", "MHO", "SHA"] as const;
 
-// Flat list of program hubs. Each item is one sidebar click; inside the
-// destination page, the ProgramHub header's tab strip exposes the hub's
-// sub-views (Worklist / Registry / Dashboard / …).
-const NAV_ITEMS: NavItem[] = [
-  {
-    title: "Home",
-    url: "/",
-    icon: HomeIcon,
-    roles: rolesFor("/"),
-    activePrefixes: ["/", "/hotspots", "/calendar", "/messages", "/patient-checkup"],
-    groupId: "main",
-  },
+// Children of the collapsible Patients group.
+const PATIENT_CHILDREN: NavItem[] = [
   {
     title: "Mothers",
     url: "/prenatal",
     icon: HeartHandshake,
     roles: rolesFor("/prenatal"),
     activePrefixes: ["/prenatal", "/mother", "/fp"],
-    groupId: "main",
+    tier: "main",
   },
   {
     title: "Children",
@@ -80,23 +75,7 @@ const NAV_ITEMS: NavItem[] = [
     icon: Baby,
     roles: rolesFor("/child"),
     activePrefixes: ["/child"],
-    groupId: "main",
-  },
-  {
-    title: "Seniors",
-    url: "/senior",
-    icon: UserCircle,
-    roles: rolesFor("/senior"),
-    activePrefixes: ["/senior"],
-    groupId: "main",
-  },
-  {
-    title: "Disease",
-    url: "/disease",
-    icon: Siren,
-    roles: rolesFor("/disease"),
-    activePrefixes: ["/disease"],
-    groupId: "main",
+    tier: "main",
   },
   {
     title: "TB DOTS",
@@ -104,23 +83,52 @@ const NAV_ITEMS: NavItem[] = [
     icon: Pill,
     roles: rolesFor("/tb"),
     activePrefixes: ["/tb"],
-    groupId: "main",
+    tier: "main",
   },
+  {
+    title: "Seniors",
+    url: "/senior",
+    icon: UserCircle,
+    roles: rolesFor("/senior"),
+    activePrefixes: ["/senior"],
+    tier: "main",
+  },
+  {
+    title: "Disease",
+    url: "/disease",
+    icon: Siren,
+    roles: rolesFor("/disease"),
+    activePrefixes: ["/disease"],
+    tier: "main",
+  },
+];
+
+// Flat top-level items outside the Patients group.
+const NAV_ITEMS: NavItem[] = [
+  {
+    title: "Today",
+    url: "/today",
+    icon: Sparkles,
+    roles: rolesFor("/today"),
+    activePrefixes: ["/today"],
+    tier: "main",
+  },
+  // Patients group handled separately (collapsible)
   {
     title: "Nutrition",
     url: "/nutrition",
     icon: Scale,
     roles: rolesFor("/nutrition"),
     activePrefixes: ["/nutrition"],
-    groupId: "main",
+    tier: "main",
   },
   {
-    title: "Inventory",
-    url: "/inventory",
-    icon: Package,
-    roles: rolesFor("/inventory"),
-    activePrefixes: ["/inventory"],
-    groupId: "main",
+    title: "Dashboards",
+    url: "/dashboards",
+    icon: BarChart3,
+    roles: rolesFor("/dashboards"),
+    activePrefixes: ["/dashboards", "/"],
+    tier: "decision",
   },
   {
     title: "Reports",
@@ -128,37 +136,74 @@ const NAV_ITEMS: NavItem[] = [
     icon: ClipboardList,
     roles: rolesFor("/reports/m1"),
     activePrefixes: ["/reports", "/m1/encode"],
-    groupId: "main",
+    tier: "decision",
+  },
+  {
+    title: "Inventory",
+    url: "/inventory",
+    icon: Package,
+    roles: rolesFor("/inventory"),
+    activePrefixes: ["/inventory"],
+    tier: "decision",
+  },
+  {
+    title: "Clinic Check-up",
+    url: "/patient-checkup",
+    icon: ClipboardPlus,
+    roles: rolesFor("/patient-checkup"),
+    activePrefixes: ["/patient-checkup"],
+    tier: "util",
+  },
+  {
+    title: "Calendar",
+    url: "/calendar",
+    icon: Calendar,
+    roles: rolesFor("/calendar"),
+    activePrefixes: ["/calendar"],
+    tier: "util",
+  },
+  {
+    title: "Messages",
+    url: "/messages",
+    icon: MessageCircle,
+    roles: rolesFor("/messages"),
+    activePrefixes: ["/messages"],
+    isBadged: true,
+    tier: "util",
   },
   {
     title: "Admin",
-    // Lands on the first tab the current role can access. Route-level RoleRoute
-    // picks up the slack — this URL is the most permissive of the three Admin
-    // tabs, so any MGMT role can always open Settings.
     url: "/settings",
     icon: Shield,
     roles: MGMT,
     activePrefixes: ["/admin", "/settings"],
-    groupId: "admin",
+    tier: "admin",
   },
 ];
 
 function isActiveFor(item: NavItem, location: string): boolean {
-  // Exact match on "/" must win — otherwise the Home prefix would steal every
-  // click (every URL starts with "/").
-  if (item.url === "/" && location !== "/") {
-    return item.activePrefixes.some((p) => p !== "/" && (location === p || location.startsWith(`${p}/`)));
-  }
   return item.activePrefixes.some(
-    (p) => location === p || location.startsWith(`${p}/`),
+    (p) => (p === "/" ? location === "/" : location === p || location.startsWith(`${p}/`)),
   );
 }
+
+const PATIENTS_OPEN_KEY = "sidebar.patients.open";
 
 export function AppSidebar() {
   const [location] = useLocation();
   const { settings } = useTheme();
   const { role, isAuthenticated } = useAuth();
   const [logoError, setLogoError] = useState(false);
+
+  // Persisted expand/collapse state for the Patients group.
+  const [patientsOpen, setPatientsOpen] = useState<boolean>(() => {
+    if (typeof window === "undefined") return true;
+    const raw = window.localStorage.getItem(PATIENTS_OPEN_KEY);
+    return raw === null ? true : raw === "1";
+  });
+  useEffect(() => {
+    window.localStorage.setItem(PATIENTS_OPEN_KEY, patientsOpen ? "1" : "0");
+  }, [patientsOpen]);
 
   const { data: unreadData } = useQuery<{ count: number }>({
     queryKey: ["/api/dm/unread-count"],
@@ -172,11 +217,20 @@ export function AppSidebar() {
   const logoUrl = settings?.logoUrl;
   const showLogo = logoUrl && !logoError;
 
-  const visible = NAV_ITEMS.filter((item) =>
+  const visibleTop = NAV_ITEMS.filter((item) =>
     role ? (item.roles as string[]).includes(role) : false,
   );
-  const mainItems = visible.filter((i) => i.groupId === "main");
-  const adminItems = visible.filter((i) => i.groupId === "admin");
+  const visiblePatientChildren = PATIENT_CHILDREN.filter((item) =>
+    role ? (item.roles as string[]).includes(role) : false,
+  );
+
+  const byTier = (t: NavItem["tier"]) => visibleTop.filter((i) => i.tier === t);
+  const mainTop = byTier("main");
+  const decision = byTier("decision");
+  const util = byTier("util");
+  const admin = byTier("admin");
+
+  const patientsGroupActive = PATIENT_CHILDREN.some((c) => isActiveFor(c, location));
 
   return (
     <Sidebar collapsible="icon">
@@ -204,70 +258,115 @@ export function AppSidebar() {
       </SidebarHeader>
 
       <SidebarContent>
+        {/* Daily work tier: Today + Patients group + Nutrition */}
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu>
-              {mainItems.map((item) => {
-                const active = isActiveFor(item, location);
-                const badge = item.isBadged && unreadCount > 0 ? unreadCount : null;
-                return (
-                  <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton
-                      asChild
-                      tooltip={item.title}
-                      data-active={active}
-                      className="data-[active=true]:bg-sidebar-accent data-[active=true]:font-medium"
-                    >
-                      <Link
-                        href={item.url}
-                        data-testid={`nav-${item.url.replace(/\//g, "-") || "home"}`}
+              {mainTop
+                .filter((i) => i.url === "/today")
+                .map((item) => (
+                  <SidebarItemRow key={item.title} item={item} location={location} unreadCount={unreadCount} />
+                ))}
+
+              {/* Patients collapsible group */}
+              {visiblePatientChildren.length > 0 && (
+                <Collapsible
+                  open={patientsOpen}
+                  onOpenChange={setPatientsOpen}
+                  className="group/patients"
+                >
+                  <SidebarMenuItem>
+                    <CollapsibleTrigger asChild>
+                      <SidebarMenuButton
+                        tooltip="Patients"
+                        data-active={patientsGroupActive}
+                        className="data-[active=true]:bg-sidebar-accent data-[active=true]:font-medium"
+                        data-testid="nav-patients-toggle"
                       >
-                        <item.icon className="w-4 h-4" />
-                        <span>{item.title}</span>
-                        {badge !== null && (
-                          <Badge
-                            className="ml-auto h-5 min-w-5 flex items-center justify-center text-xs px-1"
-                            data-testid="badge-unread-messages"
-                          >
-                            {badge}
-                          </Badge>
-                        )}
-                      </Link>
-                    </SidebarMenuButton>
+                        <Users className="w-4 h-4" />
+                        <span>Patients</span>
+                        <ChevronRight className="ml-auto w-4 h-4 transition-transform group-data-[state=open]/patients:rotate-90" />
+                      </SidebarMenuButton>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <SidebarMenuSub>
+                        {visiblePatientChildren.map((item) => {
+                          const active = isActiveFor(item, location);
+                          return (
+                            <SidebarMenuSubItem key={item.title}>
+                              <SidebarMenuSubButton
+                                asChild
+                                data-active={active}
+                                className="data-[active=true]:bg-sidebar-accent data-[active=true]:font-medium"
+                              >
+                                <Link
+                                  href={item.url}
+                                  data-testid={`nav-${item.url.replace(/\//g, "-")}`}
+                                >
+                                  <item.icon className="w-4 h-4" />
+                                  <span>{item.title}</span>
+                                </Link>
+                              </SidebarMenuSubButton>
+                            </SidebarMenuSubItem>
+                          );
+                        })}
+                      </SidebarMenuSub>
+                    </CollapsibleContent>
                   </SidebarMenuItem>
-                );
-              })}
+                </Collapsible>
+              )}
+
+              {mainTop
+                .filter((i) => i.url !== "/today")
+                .map((item) => (
+                  <SidebarItemRow key={item.title} item={item} location={location} unreadCount={unreadCount} />
+                ))}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
 
-        {adminItems.length > 0 && (
+        {/* Decision-making tier */}
+        {decision.length > 0 && (
           <>
             <SidebarSeparator />
             <SidebarGroup>
               <SidebarGroupContent>
                 <SidebarMenu>
-                  {adminItems.map((item) => {
-                    const active = isActiveFor(item, location);
-                    return (
-                      <SidebarMenuItem key={item.title}>
-                        <SidebarMenuButton
-                          asChild
-                          tooltip={item.title}
-                          data-active={active}
-                          className="data-[active=true]:bg-sidebar-accent data-[active=true]:font-medium"
-                        >
-                          <Link
-                            href={item.url}
-                            data-testid={`nav-${item.url.replace(/\//g, "-")}`}
-                          >
-                            <item.icon className="w-4 h-4" />
-                            <span>{item.title}</span>
-                          </Link>
-                        </SidebarMenuButton>
-                      </SidebarMenuItem>
-                    );
-                  })}
+                  {decision.map((item) => (
+                    <SidebarItemRow key={item.title} item={item} location={location} unreadCount={unreadCount} />
+                  ))}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+          </>
+        )}
+
+        {/* Utilities tier */}
+        {util.length > 0 && (
+          <>
+            <SidebarSeparator />
+            <SidebarGroup>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  {util.map((item) => (
+                    <SidebarItemRow key={item.title} item={item} location={location} unreadCount={unreadCount} />
+                  ))}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+          </>
+        )}
+
+        {/* Admin tier */}
+        {admin.length > 0 && (
+          <>
+            <SidebarSeparator />
+            <SidebarGroup>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  {admin.map((item) => (
+                    <SidebarItemRow key={item.title} item={item} location={location} unreadCount={unreadCount} />
+                  ))}
                 </SidebarMenu>
               </SidebarGroupContent>
             </SidebarGroup>
@@ -293,5 +392,44 @@ export function AppSidebar() {
         </SidebarMenu>
       </SidebarFooter>
     </Sidebar>
+  );
+}
+
+function SidebarItemRow({
+  item,
+  location,
+  unreadCount,
+}: {
+  item: NavItem;
+  location: string;
+  unreadCount: number;
+}) {
+  const active = isActiveFor(item, location);
+  const badge = item.isBadged && unreadCount > 0 ? unreadCount : null;
+  return (
+    <SidebarMenuItem>
+      <SidebarMenuButton
+        asChild
+        tooltip={item.title}
+        data-active={active}
+        className="data-[active=true]:bg-sidebar-accent data-[active=true]:font-medium"
+      >
+        <Link
+          href={item.url}
+          data-testid={`nav-${item.url.replace(/\//g, "-") || "home"}`}
+        >
+          <item.icon className="w-4 h-4" />
+          <span>{item.title}</span>
+          {badge !== null && (
+            <Badge
+              className="ml-auto h-5 min-w-5 flex items-center justify-center text-xs px-1"
+              data-testid="badge-unread-messages"
+            >
+              {badge}
+            </Badge>
+          )}
+        </Link>
+      </SidebarMenuButton>
+    </SidebarMenuItem>
   );
 }
