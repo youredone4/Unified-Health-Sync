@@ -1,4 +1,4 @@
-import { Switch, Route, useLocation } from "wouter";
+import { Switch, Route, useLocation, Redirect } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -11,7 +11,6 @@ import {
   LogOut,
   User,
   UserCircle,
-  Home as HomeIcon,
   HeartHandshake,
   Baby,
   Pill,
@@ -21,6 +20,8 @@ import {
   ClipboardList,
   Shield,
   Plus,
+  Sparkles,
+  BarChart3,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -33,25 +34,19 @@ import { useAuth, permissions } from "@/hooks/use-auth";
 import BarangaySwitcher from "@/components/barangay-switcher";
 
 import LandingPage from "@/pages/landing";
-import Dashboard from "@/pages/dashboard";
+import TodayPage from "@/pages/today";
+import DashboardsPage from "@/pages/dashboards";
 import Hotspots from "@/pages/hotspots";
 import CalendarPage from "@/pages/calendar";
 import PrenatalWorklist from "@/pages/prenatal-worklist";
-import PrenatalDashboard from "@/pages/prenatal-dashboard";
-import MotherRegistry from "@/pages/mother-registry";
 import MotherProfile from "@/pages/mother-profile";
 import MotherForm from "@/pages/mother-form";
 import ChildWorklist from "@/pages/child-worklist";
-import ChildDashboard from "@/pages/child-dashboard";
-import ChildRegistry from "@/pages/child-registry";
 import ChildProfile from "@/pages/child-profile";
 import ChildForm from "@/pages/child-form";
 import NutritionWorklist from "@/pages/nutrition-worklist";
 import GrowthMonitoring from "@/pages/growth-monitoring";
-import NutritionDashboard from "@/pages/nutrition-dashboard";
 import SeniorWorklist from "@/pages/senior-worklist";
-import SeniorDashboard from "@/pages/senior-dashboard";
-import SeniorRegistry from "@/pages/senior-registry";
 import SeniorProfile from "@/pages/senior-profile";
 import SeniorForm from "@/pages/senior-form";
 import InventoryPage from "@/pages/inventory";
@@ -60,11 +55,9 @@ import ReportsPage from "@/pages/reports";
 import AIReporting from "@/pages/ai-reporting";
 import DiseaseWorklist from "@/pages/disease-worklist";
 import DiseaseProfile from "@/pages/disease-profile";
-import DiseaseRegistry from "@/pages/disease-registry";
 import DiseaseMap from "@/pages/disease-map";
 import TBWorklist from "@/pages/tb-worklist";
 import TBProfile from "@/pages/tb-profile";
-import TBRegistry from "@/pages/tb-registry";
 import TBForm from "@/pages/tb-form";
 import DiseaseForm from "@/pages/disease-form";
 import InventoryForm from "@/pages/inventory-form";
@@ -123,25 +116,6 @@ function M1ReportEncode() { return <M1ReportPage initialMode="encode" />; }
 // Detail pages (/mother/:id, /senior/:id/edit, …) are intentionally NOT
 // wrapped — profile screens are full-bleed and own their own "back" nav.
 
-function HomeHub({ children }: { children: React.ReactNode }) {
-  const { role } = useAuth();
-  return (
-    <ProgramHub
-      title="Home"
-      icon={HomeIcon}
-      tabs={[
-        { label: "Overview", path: "/", testId: "hub-tab-home-overview" },
-        { label: "Hotspots", path: "/hotspots", testId: "hub-tab-home-hotspots", roles: ["SYSTEM_ADMIN", "MHO", "SHA"] },
-        { label: "Calendar", path: "/calendar", testId: "hub-tab-home-calendar" },
-        { label: "Messages", path: "/messages", testId: "hub-tab-home-messages" },
-        { label: "Clinic Check-up", path: "/patient-checkup", testId: "hub-tab-home-checkup", roles: ["SYSTEM_ADMIN", "MHO"] },
-      ]}
-    >
-      {children}
-    </ProgramHub>
-  );
-}
-
 function MothersHub({ children }: { children: React.ReactNode }) {
   return (
     <ProgramHub
@@ -149,9 +123,7 @@ function MothersHub({ children }: { children: React.ReactNode }) {
       icon={HeartHandshake}
       primaryAction={{ label: "New Mother", icon: Plus, path: "/mother/new" }}
       tabs={[
-        { label: "Worklist", path: "/prenatal", testId: "hub-tab-mothers-worklist" },
-        { label: "Registry", path: "/prenatal/registry", testId: "hub-tab-mothers-registry" },
-        { label: "Dashboard", path: "/prenatal/dashboard", testId: "hub-tab-mothers-dashboard" },
+        { label: "Patients", path: "/prenatal", testId: "hub-tab-mothers-patients" },
         { label: "Family Planning", path: "/fp", testId: "hub-tab-mothers-fp" },
       ]}
     >
@@ -167,9 +139,7 @@ function ChildrenHub({ children }: { children: React.ReactNode }) {
       icon={Baby}
       primaryAction={{ label: "New Child", icon: Plus, path: "/child/new" }}
       tabs={[
-        { label: "Worklist", path: "/child", testId: "hub-tab-children-worklist" },
-        { label: "Registry", path: "/child/registry", testId: "hub-tab-children-registry" },
-        { label: "Dashboard", path: "/child/dashboard", testId: "hub-tab-children-dashboard" },
+        { label: "Patients", path: "/child", testId: "hub-tab-children-patients" },
       ]}
     >
       {children}
@@ -184,9 +154,7 @@ function SeniorsHub({ children }: { children: React.ReactNode }) {
       icon={UserCircle}
       primaryAction={{ label: "New Senior", icon: Plus, path: "/senior/new" }}
       tabs={[
-        { label: "Worklist", path: "/senior", testId: "hub-tab-seniors-worklist" },
-        { label: "Registry", path: "/senior/registry", testId: "hub-tab-seniors-registry" },
-        { label: "Dashboard", path: "/senior/dashboard", testId: "hub-tab-seniors-dashboard" },
+        { label: "Patients", path: "/senior", testId: "hub-tab-seniors-patients" },
       ]}
     >
       {children}
@@ -201,8 +169,7 @@ function DiseaseHub({ children }: { children: React.ReactNode }) {
       icon={Siren}
       primaryAction={{ label: "New Case", icon: Plus, path: "/disease/new" }}
       tabs={[
-        { label: "Worklist", path: "/disease", testId: "hub-tab-disease-worklist" },
-        { label: "Registry", path: "/disease/registry", testId: "hub-tab-disease-registry" },
+        { label: "Patients", path: "/disease", testId: "hub-tab-disease-patients" },
         { label: "Map", path: "/disease/map", testId: "hub-tab-disease-map", roles: ["SYSTEM_ADMIN", "MHO", "SHA"] },
       ]}
     >
@@ -218,8 +185,7 @@ function TBHub({ children }: { children: React.ReactNode }) {
       icon={Pill}
       primaryAction={{ label: "New Patient", icon: Plus, path: "/tb/new" }}
       tabs={[
-        { label: "Worklist", path: "/tb", testId: "hub-tab-tb-worklist" },
-        { label: "Registry", path: "/tb/registry", testId: "hub-tab-tb-registry" },
+        { label: "Patients", path: "/tb", testId: "hub-tab-tb-patients" },
       ]}
     >
       {children}
@@ -235,7 +201,26 @@ function NutritionHub({ children }: { children: React.ReactNode }) {
       tabs={[
         { label: "Follow-ups", path: "/nutrition", testId: "hub-tab-nutrition-followups" },
         { label: "Growth", path: "/nutrition/growth", testId: "hub-tab-nutrition-growth" },
-        { label: "Dashboard", path: "/nutrition/dashboard", testId: "hub-tab-nutrition-dashboard" },
+      ]}
+    >
+      {children}
+    </ProgramHub>
+  );
+}
+
+function DashboardsHub({ children }: { children: React.ReactNode }) {
+  return (
+    <ProgramHub
+      title="Dashboards"
+      icon={BarChart3}
+      tabs={[
+        { label: "Municipal", path: "/dashboards", testId: "hub-tab-dashboards-municipal" },
+        { label: "Maternal", path: "/dashboards/maternal", testId: "hub-tab-dashboards-maternal" },
+        { label: "Child", path: "/dashboards/child", testId: "hub-tab-dashboards-child" },
+        { label: "Senior", path: "/dashboards/senior", testId: "hub-tab-dashboards-senior" },
+        { label: "Nutrition", path: "/dashboards/nutrition", testId: "hub-tab-dashboards-nutrition" },
+        { label: "Disease Map", path: "/dashboards/disease-map", testId: "hub-tab-dashboards-disease", roles: ["SYSTEM_ADMIN", "MHO", "SHA"] },
+        { label: "Hotspots", path: "/dashboards/hotspots", testId: "hub-tab-dashboards-hotspots", roles: ["SYSTEM_ADMIN", "MHO", "SHA"] },
       ]}
     >
       {children}
@@ -293,41 +278,61 @@ function AdminHub({ children }: { children: React.ReactNode }) {
 function Router() {
   return (
     <Switch>
-      {/* Home hub: Overview / Hotspots / Calendar / Messages / Check-up */}
-      <Route path="/"><HomeHub><Dashboard /></HomeHub></Route>
-      <Route path="/hotspots"><HomeHub><RoleRoute component={Hotspots} /></HomeHub></Route>
-      <Route path="/calendar"><HomeHub><CalendarPage /></HomeHub></Route>
-      <Route path="/messages"><HomeHub><MessagesPage /></HomeHub></Route>
-      <Route path="/patient-checkup"><HomeHub><RoleRoute component={PatientCheckupPage} /></HomeHub></Route>
+      {/* Today (TL landing) & the Dashboards hub */}
+      <Route path="/today"><TodayPage /></Route>
+      <Route path="/dashboards"><DashboardsHub><DashboardsPage /></DashboardsHub></Route>
+      <Route path="/dashboards/maternal"><DashboardsHub><DashboardsPage /></DashboardsHub></Route>
+      <Route path="/dashboards/child"><DashboardsHub><DashboardsPage /></DashboardsHub></Route>
+      <Route path="/dashboards/senior"><DashboardsHub><DashboardsPage /></DashboardsHub></Route>
+      <Route path="/dashboards/nutrition"><DashboardsHub><DashboardsPage /></DashboardsHub></Route>
+      <Route path="/dashboards/disease-map"><DashboardsHub><RoleRoute component={DashboardsPage} /></DashboardsHub></Route>
+      <Route path="/dashboards/hotspots"><DashboardsHub><RoleRoute component={DashboardsPage} /></DashboardsHub></Route>
 
-      {/* Mothers hub: Worklist / Registry / Dashboard / Family Planning */}
+      {/* Legacy Municipal Dashboard URL — redirect to the new Dashboards hub.
+          / was Home's Overview before; now it lives under /dashboards. */}
+      <Route path="/"><Redirect to="/dashboards" /></Route>
+
+      {/* Legacy URLs that used to live inside the Home hub: still resolve, but
+          outside a hub wrapper so they don't show a dead "Home" header. */}
+      <Route path="/hotspots"><RoleRoute component={Hotspots} /></Route>
+      <Route path="/calendar"><CalendarPage /></Route>
+      <Route path="/messages"><MessagesPage /></Route>
+      <Route path="/patient-checkup"><RoleRoute component={PatientCheckupPage} /></Route>
+
+      {/* Legacy program-dashboard URLs — preserved as sub-views of the
+          Dashboards hub for old bookmarks. */}
+      <Route path="/prenatal/dashboard"><Redirect to="/dashboards/maternal" /></Route>
+      <Route path="/child/dashboard"><Redirect to="/dashboards/child" /></Route>
+      <Route path="/senior/dashboard"><Redirect to="/dashboards/senior" /></Route>
+      <Route path="/nutrition/dashboard"><Redirect to="/dashboards/nutrition" /></Route>
+
+      {/* Legacy Registry URLs — merged into the Patients tab; redirect with
+          ?status=all so the old reference view is the default on land. */}
+      <Route path="/prenatal/registry"><Redirect to="/prenatal?status=all" /></Route>
+      <Route path="/child/registry"><Redirect to="/child?status=all" /></Route>
+      <Route path="/senior/registry"><Redirect to="/senior?status=all" /></Route>
+      <Route path="/disease/registry"><Redirect to="/disease?status=all" /></Route>
+      <Route path="/tb/registry"><Redirect to="/tb?status=all" /></Route>
+
+      {/* Mothers hub: Patients / Family Planning */}
       <Route path="/prenatal"><MothersHub><PrenatalWorklist /></MothersHub></Route>
-      <Route path="/prenatal/dashboard"><MothersHub><PrenatalDashboard /></MothersHub></Route>
-      <Route path="/prenatal/registry"><MothersHub><MotherRegistry /></MothersHub></Route>
       <Route path="/fp"><MothersHub><FpRegistry /></MothersHub></Route>
-
-      {/* Mothers detail pages — no hub wrapper (full-bleed profile / form) */}
       <Route path="/mother/new" component={MotherForm} />
       <Route path="/mother/:id/edit" component={MotherForm} />
       <Route path="/mother/:id" component={MotherProfile} />
 
-      {/* Children hub: Worklist / Registry / Dashboard */}
+      {/* Children hub: Patients */}
       <Route path="/child"><ChildrenHub><ChildWorklist /></ChildrenHub></Route>
-      <Route path="/child/dashboard"><ChildrenHub><ChildDashboard /></ChildrenHub></Route>
-      <Route path="/child/registry"><ChildrenHub><ChildRegistry /></ChildrenHub></Route>
       <Route path="/child/new" component={ChildForm} />
       <Route path="/child/:id/edit" component={ChildForm} />
       <Route path="/child/:id" component={ChildProfile} />
 
-      {/* Nutrition hub: Follow-ups / Growth / Dashboard */}
+      {/* Nutrition hub: Follow-ups / Growth */}
       <Route path="/nutrition"><NutritionHub><NutritionWorklist /></NutritionHub></Route>
       <Route path="/nutrition/growth"><NutritionHub><GrowthMonitoring /></NutritionHub></Route>
-      <Route path="/nutrition/dashboard"><NutritionHub><NutritionDashboard /></NutritionHub></Route>
 
-      {/* Seniors hub: Worklist / Registry / Dashboard */}
+      {/* Seniors hub: Patients */}
       <Route path="/senior"><SeniorsHub><SeniorWorklist /></SeniorsHub></Route>
-      <Route path="/senior/dashboard"><SeniorsHub><SeniorDashboard /></SeniorsHub></Route>
-      <Route path="/senior/registry"><SeniorsHub><SeniorRegistry /></SeniorsHub></Route>
       <Route path="/senior/new" component={SeniorForm} />
       <Route path="/senior/:id/edit" component={SeniorForm} />
       <Route path="/senior/:id" component={SeniorProfile} />
@@ -335,33 +340,30 @@ function Router() {
       {/* Inventory hub (MGMT_ROLES): Availability / Stock-outs */}
       <Route path="/inventory"><InventoryHub><RoleRoute component={InventoryPage} /></InventoryHub></Route>
       <Route path="/inventory/stockouts"><InventoryHub><RoleRoute component={StockoutsPage} /></InventoryHub></Route>
-      {/* Inventory forms — no hub wrapper (full-bleed form) */}
       <Route path="/inventory/new"><RoleRoute component={InventoryForm} /></Route>
       <Route path="/inventory/:id/edit"><RoleRoute component={InventoryForm} /></Route>
       <Route path="/inventory/medicine/:id/edit"><RoleRoute component={InventoryForm} /></Route>
 
-      {/* Reports hub: Encode M1 / M1 Summary & Export / Health Analytics */}
+      {/* Reports hub */}
       <Route path="/m1/encode"><ReportsHub><RoleRoute component={M1ReportEncode} /></ReportsHub></Route>
       <Route path="/reports/m1"><ReportsHub><RoleRoute component={M1ReportView} /></ReportsHub></Route>
       <Route path="/reports/ai"><ReportsHub><RoleRoute component={AIReporting} /></ReportsHub></Route>
       <Route path="/reports"><ReportsHub><RoleRoute component={ReportsPage} /></ReportsHub></Route>
 
-      {/* Disease hub: Worklist / Registry / Map */}
+      {/* Disease hub: Patients / Map */}
       <Route path="/disease"><DiseaseHub><DiseaseWorklist /></DiseaseHub></Route>
-      <Route path="/disease/registry"><DiseaseHub><DiseaseRegistry /></DiseaseHub></Route>
       <Route path="/disease/map"><DiseaseHub><RoleRoute component={DiseaseMap} /></DiseaseHub></Route>
       <Route path="/disease/new" component={DiseaseForm} />
       <Route path="/disease/:id/edit" component={DiseaseForm} />
       <Route path="/disease/:id" component={DiseaseProfile} />
 
-      {/* TB DOTS hub: Worklist / Registry */}
+      {/* TB DOTS hub: Patients */}
       <Route path="/tb"><TBHub><TBWorklist /></TBHub></Route>
-      <Route path="/tb/registry"><TBHub><TBRegistry /></TBHub></Route>
       <Route path="/tb/new" component={TBForm} />
       <Route path="/tb/:id/edit" component={TBForm} />
       <Route path="/tb/:id" component={TBProfile} />
 
-      {/* Admin hub: Users / Audit Logs / Settings */}
+      {/* Admin hub */}
       <Route path="/admin/users"><AdminHub><RoleRoute component={UserManagement} /></AdminHub></Route>
       <Route path="/admin/audit"><AdminHub><RoleRoute component={AuditLogs} /></AdminHub></Route>
       <Route path="/settings"><AdminHub><RoleRoute component={SettingsPage} /></AdminHub></Route>

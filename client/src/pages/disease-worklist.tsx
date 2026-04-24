@@ -1,213 +1,276 @@
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
+import { useState, useMemo, useEffect } from "react";
 import type { DiseaseCase } from "@shared/schema";
 import { useBarangay } from "@/contexts/barangay-context";
-import { getDiseaseStatus, getDaysSinceReported, isOutbreakCondition, formatDate } from "@/lib/healthLogic";
-import KpiCard from "@/components/kpi-card";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { getDaysSinceReported, isOutbreakCondition, formatDate } from "@/lib/healthLogic";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { AlertCircle, Eye, Activity, AlertTriangle, Siren, X, Search } from "lucide-react";
-import { useState, useEffect } from "react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  AlertCircle,
+  Eye,
+  Activity,
+  AlertTriangle,
+  Siren,
+  Search,
+  ChevronRight,
+  CheckCircle,
+  ShieldCheck,
+} from "lucide-react";
 import { usePagination } from "@/hooks/use-pagination";
 import TablePagination from "@/components/table-pagination";
+import { useAuth } from "@/hooks/use-auth";
 
-type FilterKey = 'new' | 'monitoring' | 'all' | null;
+type StatusFilter = "new" | "monitoring" | "referred" | "closed" | "active" | "all";
 
 export default function DiseaseWorklist() {
-  const [, navigate] = useLocation();
+  const [location, navigate] = useLocation();
+  const { isTL } = useAuth();
   const { scopedPath } = useBarangay();
-  const { data: cases = [], isLoading } = useQuery<DiseaseCase[]>({ queryKey: [scopedPath('/api/disease-cases')] });
-  const [activeFilter, setActiveFilter] = useState<FilterKey>(null);
-  const [search, setSearch] = useState('');
+  const { data: cases = [], isLoading } = useQuery<DiseaseCase[]>({ queryKey: [scopedPath("/api/disease-cases")] });
 
-  const casesWithStatus = cases.map(c => ({
-    ...c,
-    diseaseStatus: getDiseaseStatus(c),
-    daysSince: getDaysSinceReported(c)
-  }));
+  const initialStatus: StatusFilter = useMemo(() => {
+    const sp = new URLSearchParams(location.split("?")[1] ?? "");
+    const s = sp.get("status");
+    if (s === "all" || s === "new" || s === "monitoring" || s === "referred" || s === "closed" || s === "active") return s;
+    return "active";
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const newCases = casesWithStatus.filter(c => c.diseaseStatus === 'new');
-  const monitoringCases = casesWithStatus.filter(c => c.diseaseStatus === 'monitoring');
-  const activeCases = casesWithStatus.filter(c => c.diseaseStatus !== 'closed');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>(initialStatus);
+  const [barangayFilter, setBarangayFilter] = useState<string>("all");
+  const [search, setSearch] = useState("");
+
+  useEffect(() => {
+    if (!isTL) setBarangayFilter("all");
+  }, [isTL]);
+
+  const casesWithStatus = useMemo(
+    () =>
+      cases.map((c) => ({
+        ...c,
+        daysSince: getDaysSinceReported(c),
+      })),
+    [cases],
+  );
+
+  const barangays = useMemo(() => {
+    const set = new Set<string>();
+    cases.forEach((c) => {
+      if (c.barangay) set.add(c.barangay);
+    });
+    return Array.from(set).sort();
+  }, [cases]);
+
+  const counts = useMemo(() => {
+    const c = { all: cases.length, new: 0, monitoring: 0, referred: 0, closed: 0, active: 0 };
+    cases.forEach((cs) => {
+      const status = (cs.status || "New").toLowerCase();
+      if (status === "new") {
+        c.new++;
+        c.active++;
+      } else if (status === "monitoring") {
+        c.monitoring++;
+        c.active++;
+      } else if (status === "referred") {
+        c.referred++;
+        c.active++;
+      } else if (status === "closed") {
+        c.closed++;
+      }
+    });
+    return c;
+  }, [cases]);
 
   const outbreak = isOutbreakCondition(cases);
 
-  const handleCardClick = (filter: FilterKey) => {
-    setActiveFilter(prev => prev === filter ? null : filter);
-  };
-
-  const getBaseFilteredCases = () => {
-    if (activeFilter === 'new') return newCases;
-    if (activeFilter === 'monitoring') return monitoringCases;
-    return activeCases;
-  };
-
-  const filteredCases = getBaseFilteredCases().filter(c =>
-    search === '' ||
-    (c.patientName ?? '').toLowerCase().includes(search.toLowerCase()) ||
-    (c.barangay ?? '').toLowerCase().includes(search.toLowerCase()) ||
-    (c.condition ?? '').toLowerCase().includes(search.toLowerCase())
-  );
+  const filteredCases = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return casesWithStatus.filter((c) => {
+      const status = (c.status || "New").toLowerCase();
+      if (statusFilter === "new" && status !== "new") return false;
+      if (statusFilter === "monitoring" && status !== "monitoring") return false;
+      if (statusFilter === "referred" && status !== "referred") return false;
+      if (statusFilter === "closed" && status !== "closed") return false;
+      if (statusFilter === "active" && status === "closed") return false;
+      if (barangayFilter !== "all" && c.barangay !== barangayFilter) return false;
+      if (q) {
+        const hay = `${c.patientName ?? ""} ${c.barangay ?? ""} ${c.condition ?? ""}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [casesWithStatus, statusFilter, barangayFilter, search]);
 
   const pagination = usePagination(filteredCases);
-
-  useEffect(() => { pagination.resetPage(); }, [activeFilter, search]);
-
-  const getFilterLabel = () => {
-    const base = getBaseFilteredCases().length;
-    if (activeFilter === 'new') return `New Cases (${base})`;
-    if (activeFilter === 'monitoring') return `Monitoring (${base})`;
-    return `All Active (${base})`;
-  };
+  useEffect(() => {
+    pagination.resetPage();
+  }, [statusFilter, barangayFilter, search]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const getStatusVariant = (status: string): "destructive" | "secondary" | "outline" | "default" => {
     switch (status) {
-      case 'New': return 'destructive';
-      case 'Monitoring': return 'secondary';
-      case 'Referred': return 'outline';
-      default: return 'default';
+      case "New":
+        return "destructive";
+      case "Monitoring":
+        return "secondary";
+      case "Referred":
+        return "outline";
+      default:
+        return "default";
     }
   };
 
-  const renderRow = (c: typeof casesWithStatus[0]) => (
-    <tr
-      key={c.id}
-      onClick={() => navigate(`/disease/${c.id}`)}
-      className="border-b border-border/50 cursor-pointer hover-elevate"
-      data-testid={`row-disease-${c.id}`}
-    >
-      <td className="py-3 px-3">
-        <div>
-          <p className="font-medium">{c.patientName}</p>
-          <p className="text-xs text-muted-foreground">Age {c.age}</p>
-        </div>
-      </td>
-      <td className="py-3 px-3">{c.barangay}</td>
-      <td className="py-3 px-3">
-        <Badge variant="outline" className="font-normal">{c.condition}</Badge>
-      </td>
-      <td className="py-3 px-3">{formatDate(c.dateReported)}</td>
-      <td className="py-3 px-3 text-muted-foreground">{c.daysSince} day{c.daysSince !== 1 ? 's' : ''} ago</td>
-      <td className="py-3 px-3">
-        <Badge variant={getStatusVariant(c.status || 'New')}>{c.status}</Badge>
-      </td>
-    </tr>
-  );
-
   if (isLoading) {
-    return <div className="flex items-center justify-center h-64"><p className="text-muted-foreground">Loading...</p></div>;
+    return (
+      <div className="flex items-center justify-center h-64">
+        <p className="text-muted-foreground">Loading...</p>
+      </div>
+    );
   }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold flex items-center gap-2" data-testid="text-page-title">
-          <Siren className="w-6 h-6 text-orange-500" />
-          Disease Surveillance
-        </h1>
-        <p className="text-muted-foreground">Track and manage communicable disease cases</p>
-      </div>
-
+    <div className="space-y-4">
       {outbreak.isOutbreak && (
         <Card className="border-destructive bg-destructive/5">
-          <CardContent className="py-4">
+          <CardContent className="py-3">
             <div className="flex items-center gap-3">
-              <AlertTriangle className="w-6 h-6 text-destructive" />
+              <AlertTriangle className="w-5 h-5 text-destructive shrink-0" />
               <div>
-                <p className="font-semibold text-destructive">Outbreak Alert: {outbreak.condition}</p>
-                <p className="text-sm text-muted-foreground">{outbreak.count} cases reported in the last 14 days</p>
+                <p className="font-semibold text-destructive">Outbreak alert — {outbreak.condition}</p>
+                <p className="text-sm text-muted-foreground">{outbreak.count} cases reported in the last 14 days.</p>
               </div>
             </div>
           </CardContent>
         </Card>
       )}
 
-      <div className="grid grid-cols-3 gap-4">
-        <KpiCard
-          title="New Cases"
-          value={newCases.length}
-          icon={AlertCircle}
-          variant="danger"
-          onClick={() => handleCardClick('new')}
-          active={activeFilter === 'new'}
-        />
-        <KpiCard
-          title="Monitoring"
-          value={monitoringCases.length}
-          icon={Eye}
-          variant="warning"
-          onClick={() => handleCardClick('monitoring')}
-          active={activeFilter === 'monitoring'}
-        />
-        <KpiCard
-          title="Active Total"
-          value={activeCases.length}
-          icon={Activity}
-          onClick={() => handleCardClick('all')}
-          active={activeFilter === 'all'}
-        />
+      <div className="flex flex-wrap gap-1" data-testid="status-filters">
+        <FilterChip value="active" active={statusFilter} onSelect={setStatusFilter} count={counts.active} icon={Activity}>
+          Active
+        </FilterChip>
+        <FilterChip value="new" active={statusFilter} onSelect={setStatusFilter} count={counts.new} icon={AlertCircle}>
+          New
+        </FilterChip>
+        <FilterChip value="monitoring" active={statusFilter} onSelect={setStatusFilter} count={counts.monitoring} icon={Eye}>
+          Monitoring
+        </FilterChip>
+        <FilterChip value="referred" active={statusFilter} onSelect={setStatusFilter} count={counts.referred} icon={ShieldCheck}>
+          Referred
+        </FilterChip>
+        <FilterChip value="closed" active={statusFilter} onSelect={setStatusFilter} count={counts.closed} icon={CheckCircle}>
+          Closed
+        </FilterChip>
+        <FilterChip value="all" active={statusFilter} onSelect={setStatusFilter} count={counts.all}>
+          All
+        </FilterChip>
       </div>
 
-      <Card>
-        <CardHeader className="pb-3 flex-row items-center justify-between space-y-0 flex-wrap gap-2">
-          <p className="text-sm font-medium text-muted-foreground">
-            Showing: <span className="text-foreground font-semibold">{getFilterLabel()}</span>
-          </p>
-          <div className="flex items-center gap-2 flex-wrap">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input
-                placeholder="Search patient, barangay, condition..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="pl-9 h-8 text-sm w-[260px]"
-                data-testid="input-search"
-              />
+      <div className="flex flex-wrap gap-2 items-center">
+        <div className="relative flex-1 min-w-[240px] max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input
+            placeholder="Search patient, barangay, condition…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-9"
+            data-testid="input-search"
+          />
+        </div>
+        {!isTL && (
+          <Select value={barangayFilter} onValueChange={setBarangayFilter}>
+            <SelectTrigger className="w-[180px]" data-testid="select-barangay-filter">
+              <SelectValue placeholder="All Barangays" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Barangays</SelectItem>
+              {barangays.map((b) => (
+                <SelectItem key={b} value={b}>
+                  {b}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+      </div>
+
+      <Card data-testid="card-worklist">
+        <CardContent className="pt-4 space-y-2">
+          {filteredCases.length === 0 && (
+            <p className="text-muted-foreground text-center py-8" data-testid="text-no-items">
+              No cases match the current filters.
+            </p>
+          )}
+          {pagination.pagedItems.map((c) => (
+            <div
+              key={c.id}
+              role="button"
+              tabIndex={0}
+              onClick={() => navigate(`/disease/${c.id}`)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") navigate(`/disease/${c.id}`);
+              }}
+              className="flex items-center gap-3 p-3 rounded-md bg-muted/50 cursor-pointer hover-elevate"
+              data-testid={`row-disease-${c.id}`}
+            >
+              <div className="p-2 rounded-md bg-primary/10">
+                <Siren className="w-4 h-4 text-primary" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <p className="font-medium" data-testid={`text-name-${c.id}`}>
+                    {c.patientName}
+                  </p>
+                  <Badge variant={getStatusVariant(c.status || "New")}>{c.status}</Badge>
+                  <Badge variant="outline" className="font-normal">
+                    {c.condition}
+                  </Badge>
+                </div>
+                <p className="text-xs text-muted-foreground" data-testid={`text-details-${c.id}`}>
+                  {c.barangay}
+                  {c.age ? ` · Age ${c.age}` : ""} · {c.daysSince} day{c.daysSince !== 1 ? "s" : ""} since report
+                </p>
+                <p className="text-xs text-muted-foreground">Reported: {formatDate(c.dateReported)}</p>
+              </div>
+              <ChevronRight className="w-4 h-4 text-muted-foreground" />
             </div>
-            {activeFilter && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setActiveFilter(null)}
-                className="h-8 text-xs gap-1"
-                data-testid="button-clear-filter"
-              >
-                <X className="w-3 h-3" />
-                Clear filter
-              </Button>
-            )}
-          </div>
-        </CardHeader>
-        <CardContent className="pt-0">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border">
-                  <th className="text-left py-2 px-3">Patient</th>
-                  <th className="text-left py-2 px-3">Barangay</th>
-                  <th className="text-left py-2 px-3">Condition</th>
-                  <th className="text-left py-2 px-3">Date Reported</th>
-                  <th className="text-left py-2 px-3">Duration</th>
-                  <th className="text-left py-2 px-3">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredCases.length === 0 && (
-                  <tr>
-                    <td colSpan={6} className="py-8 text-center text-muted-foreground">
-                      No cases in this list
-                    </td>
-                  </tr>
-                )}
-                {pagination.pagedItems.map(renderRow)}
-              </tbody>
-            </table>
-          </div>
+          ))}
           <TablePagination pagination={pagination} />
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+function FilterChip({
+  value,
+  active,
+  onSelect,
+  count,
+  icon: Icon,
+  children,
+}: {
+  value: StatusFilter;
+  active: StatusFilter;
+  onSelect: (v: StatusFilter) => void;
+  count: number;
+  icon?: React.ElementType;
+  children: React.ReactNode;
+}) {
+  const isActive = active === value;
+  return (
+    <Button
+      variant={isActive ? "default" : "outline"}
+      size="sm"
+      onClick={() => onSelect(value)}
+      className="gap-1 h-8"
+      data-testid={`filter-status-${value}`}
+      data-active={isActive}
+    >
+      {Icon ? <Icon className="w-3.5 h-3.5" /> : null}
+      {children}
+      <span className="text-xs opacity-70">({count})</span>
+    </Button>
   );
 }
