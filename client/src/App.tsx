@@ -5,7 +5,23 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { SidebarProvider, SidebarTrigger, SidebarInset } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
-import { Bell, LogOut, User, UserCircle } from "lucide-react";
+import { ProgramHub } from "@/components/program-hub";
+import {
+  Bell,
+  LogOut,
+  User,
+  UserCircle,
+  Home as HomeIcon,
+  HeartHandshake,
+  Baby,
+  Pill,
+  Siren,
+  Scale,
+  Package,
+  ClipboardList,
+  Shield,
+  Plus,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -99,90 +115,260 @@ function RoleRoute({ component: Component, allowedRoles }: { component: React.Co
 function M1ReportView() { return <M1ReportPage initialMode="view" />; }
 function M1ReportEncode() { return <M1ReportPage initialMode="encode" />; }
 
+// ─── Program hubs ──────────────────────────────────────────────────────────
+// Each hub wraps the existing worklist / registry / dashboard components
+// without changing what they render. The hub header gives every page in that
+// program the same identity + one-click navigation between its sibling views.
+//
+// Detail pages (/mother/:id, /senior/:id/edit, …) are intentionally NOT
+// wrapped — profile screens are full-bleed and own their own "back" nav.
+
+function HomeHub({ children }: { children: React.ReactNode }) {
+  const { role } = useAuth();
+  return (
+    <ProgramHub
+      title="Home"
+      icon={HomeIcon}
+      tabs={[
+        { label: "Overview", path: "/", testId: "hub-tab-home-overview" },
+        { label: "Hotspots", path: "/hotspots", testId: "hub-tab-home-hotspots", roles: ["SYSTEM_ADMIN", "MHO", "SHA"] },
+        { label: "Calendar", path: "/calendar", testId: "hub-tab-home-calendar" },
+        { label: "Messages", path: "/messages", testId: "hub-tab-home-messages" },
+        { label: "Clinic Check-up", path: "/patient-checkup", testId: "hub-tab-home-checkup", roles: ["SYSTEM_ADMIN", "MHO"] },
+      ]}
+    >
+      {children}
+    </ProgramHub>
+  );
+}
+
+function MothersHub({ children }: { children: React.ReactNode }) {
+  return (
+    <ProgramHub
+      title="Mothers"
+      icon={HeartHandshake}
+      primaryAction={{ label: "New Mother", icon: Plus, path: "/mother/new" }}
+      tabs={[
+        { label: "Worklist", path: "/prenatal", testId: "hub-tab-mothers-worklist" },
+        { label: "Registry", path: "/prenatal/registry", testId: "hub-tab-mothers-registry" },
+        { label: "Dashboard", path: "/prenatal/dashboard", testId: "hub-tab-mothers-dashboard" },
+        { label: "Family Planning", path: "/fp", testId: "hub-tab-mothers-fp" },
+      ]}
+    >
+      {children}
+    </ProgramHub>
+  );
+}
+
+function ChildrenHub({ children }: { children: React.ReactNode }) {
+  return (
+    <ProgramHub
+      title="Children"
+      icon={Baby}
+      primaryAction={{ label: "New Child", icon: Plus, path: "/child/new" }}
+      tabs={[
+        { label: "Worklist", path: "/child", testId: "hub-tab-children-worklist" },
+        { label: "Registry", path: "/child/registry", testId: "hub-tab-children-registry" },
+        { label: "Dashboard", path: "/child/dashboard", testId: "hub-tab-children-dashboard" },
+      ]}
+    >
+      {children}
+    </ProgramHub>
+  );
+}
+
+function SeniorsHub({ children }: { children: React.ReactNode }) {
+  return (
+    <ProgramHub
+      title="Seniors"
+      icon={UserCircle}
+      primaryAction={{ label: "New Senior", icon: Plus, path: "/senior/new" }}
+      tabs={[
+        { label: "Worklist", path: "/senior", testId: "hub-tab-seniors-worklist" },
+        { label: "Registry", path: "/senior/registry", testId: "hub-tab-seniors-registry" },
+        { label: "Dashboard", path: "/senior/dashboard", testId: "hub-tab-seniors-dashboard" },
+      ]}
+    >
+      {children}
+    </ProgramHub>
+  );
+}
+
+function DiseaseHub({ children }: { children: React.ReactNode }) {
+  return (
+    <ProgramHub
+      title="Disease"
+      icon={Siren}
+      primaryAction={{ label: "New Case", icon: Plus, path: "/disease/new" }}
+      tabs={[
+        { label: "Worklist", path: "/disease", testId: "hub-tab-disease-worklist" },
+        { label: "Registry", path: "/disease/registry", testId: "hub-tab-disease-registry" },
+        { label: "Map", path: "/disease/map", testId: "hub-tab-disease-map", roles: ["SYSTEM_ADMIN", "MHO", "SHA"] },
+      ]}
+    >
+      {children}
+    </ProgramHub>
+  );
+}
+
+function TBHub({ children }: { children: React.ReactNode }) {
+  return (
+    <ProgramHub
+      title="TB DOTS"
+      icon={Pill}
+      primaryAction={{ label: "New Patient", icon: Plus, path: "/tb/new" }}
+      tabs={[
+        { label: "Worklist", path: "/tb", testId: "hub-tab-tb-worklist" },
+        { label: "Registry", path: "/tb/registry", testId: "hub-tab-tb-registry" },
+      ]}
+    >
+      {children}
+    </ProgramHub>
+  );
+}
+
+function NutritionHub({ children }: { children: React.ReactNode }) {
+  return (
+    <ProgramHub
+      title="Nutrition"
+      icon={Scale}
+      tabs={[
+        { label: "Follow-ups", path: "/nutrition", testId: "hub-tab-nutrition-followups" },
+        { label: "Growth", path: "/nutrition/growth", testId: "hub-tab-nutrition-growth" },
+        { label: "Dashboard", path: "/nutrition/dashboard", testId: "hub-tab-nutrition-dashboard" },
+      ]}
+    >
+      {children}
+    </ProgramHub>
+  );
+}
+
+function InventoryHub({ children }: { children: React.ReactNode }) {
+  return (
+    <ProgramHub
+      title="Inventory"
+      icon={Package}
+      tabs={[
+        { label: "Availability", path: "/inventory", testId: "hub-tab-inventory-avail" },
+        { label: "Stock-outs", path: "/inventory/stockouts", testId: "hub-tab-inventory-stockouts" },
+      ]}
+    >
+      {children}
+    </ProgramHub>
+  );
+}
+
+function ReportsHub({ children }: { children: React.ReactNode }) {
+  return (
+    <ProgramHub
+      title="Reports"
+      icon={ClipboardList}
+      tabs={[
+        { label: "Encode M1", path: "/m1/encode", testId: "hub-tab-reports-encode" },
+        { label: "M1 Summary & Export", path: "/reports/m1", testId: "hub-tab-reports-m1" },
+        { label: "Health Analytics", path: "/reports/ai", testId: "hub-tab-reports-ai", roles: ["SYSTEM_ADMIN", "MHO", "SHA"] },
+      ]}
+    >
+      {children}
+    </ProgramHub>
+  );
+}
+
+function AdminHub({ children }: { children: React.ReactNode }) {
+  return (
+    <ProgramHub
+      title="Admin"
+      icon={Shield}
+      tabs={[
+        { label: "Users", path: "/admin/users", testId: "hub-tab-admin-users", roles: ["SYSTEM_ADMIN"] },
+        { label: "Audit Logs", path: "/admin/audit", testId: "hub-tab-admin-audit", roles: ["SYSTEM_ADMIN"] },
+        { label: "Settings", path: "/settings", testId: "hub-tab-admin-settings", roles: ["SYSTEM_ADMIN", "MHO", "SHA"] },
+      ]}
+    >
+      {children}
+    </ProgramHub>
+  );
+}
+
 function Router() {
   return (
     <Switch>
-      <Route path="/" component={Dashboard} />
-      <Route path="/calendar" component={CalendarPage} />
-      <Route path="/prenatal" component={PrenatalWorklist} />
-      <Route path="/prenatal/dashboard" component={PrenatalDashboard} />
-      <Route path="/prenatal/registry" component={MotherRegistry} />
+      {/* Home hub: Overview / Hotspots / Calendar / Messages / Check-up */}
+      <Route path="/"><HomeHub><Dashboard /></HomeHub></Route>
+      <Route path="/hotspots"><HomeHub><RoleRoute component={Hotspots} /></HomeHub></Route>
+      <Route path="/calendar"><HomeHub><CalendarPage /></HomeHub></Route>
+      <Route path="/messages"><HomeHub><MessagesPage /></HomeHub></Route>
+      <Route path="/patient-checkup"><HomeHub><RoleRoute component={PatientCheckupPage} /></HomeHub></Route>
+
+      {/* Mothers hub: Worklist / Registry / Dashboard / Family Planning */}
+      <Route path="/prenatal"><MothersHub><PrenatalWorklist /></MothersHub></Route>
+      <Route path="/prenatal/dashboard"><MothersHub><PrenatalDashboard /></MothersHub></Route>
+      <Route path="/prenatal/registry"><MothersHub><MotherRegistry /></MothersHub></Route>
+      <Route path="/fp"><MothersHub><FpRegistry /></MothersHub></Route>
+
+      {/* Mothers detail pages — no hub wrapper (full-bleed profile / form) */}
       <Route path="/mother/new" component={MotherForm} />
       <Route path="/mother/:id/edit" component={MotherForm} />
       <Route path="/mother/:id" component={MotherProfile} />
-      <Route path="/child" component={ChildWorklist} />
-      <Route path="/child/dashboard" component={ChildDashboard} />
-      <Route path="/child/registry" component={ChildRegistry} />
+
+      {/* Children hub: Worklist / Registry / Dashboard */}
+      <Route path="/child"><ChildrenHub><ChildWorklist /></ChildrenHub></Route>
+      <Route path="/child/dashboard"><ChildrenHub><ChildDashboard /></ChildrenHub></Route>
+      <Route path="/child/registry"><ChildrenHub><ChildRegistry /></ChildrenHub></Route>
       <Route path="/child/new" component={ChildForm} />
       <Route path="/child/:id/edit" component={ChildForm} />
       <Route path="/child/:id" component={ChildProfile} />
-      <Route path="/nutrition" component={NutritionWorklist} />
-      <Route path="/nutrition/growth" component={GrowthMonitoring} />
-      <Route path="/nutrition/dashboard" component={NutritionDashboard} />
-      <Route path="/senior" component={SeniorWorklist} />
-      <Route path="/senior/dashboard" component={SeniorDashboard} />
-      <Route path="/senior/registry" component={SeniorRegistry} />
+
+      {/* Nutrition hub: Follow-ups / Growth / Dashboard */}
+      <Route path="/nutrition"><NutritionHub><NutritionWorklist /></NutritionHub></Route>
+      <Route path="/nutrition/growth"><NutritionHub><GrowthMonitoring /></NutritionHub></Route>
+      <Route path="/nutrition/dashboard"><NutritionHub><NutritionDashboard /></NutritionHub></Route>
+
+      {/* Seniors hub: Worklist / Registry / Dashboard */}
+      <Route path="/senior"><SeniorsHub><SeniorWorklist /></SeniorsHub></Route>
+      <Route path="/senior/dashboard"><SeniorsHub><SeniorDashboard /></SeniorsHub></Route>
+      <Route path="/senior/registry"><SeniorsHub><SeniorRegistry /></SeniorsHub></Route>
       <Route path="/senior/new" component={SeniorForm} />
       <Route path="/senior/:id/edit" component={SeniorForm} />
       <Route path="/senior/:id" component={SeniorProfile} />
-      <Route path="/inventory">
-        <RoleRoute component={InventoryPage} />
-      </Route>
-      <Route path="/inventory/new">
-        <RoleRoute component={InventoryForm} />
-      </Route>
-      <Route path="/inventory/:id/edit">
-        <RoleRoute component={InventoryForm} />
-      </Route>
-      <Route path="/inventory/medicine/:id/edit">
-        <RoleRoute component={InventoryForm} />
-      </Route>
-      <Route path="/inventory/stockouts">
-        <RoleRoute component={StockoutsPage} />
-      </Route>
-      <Route path="/reports">
-        <RoleRoute component={ReportsPage} />
-      </Route>
-      <Route path="/reports/ai">
-        <RoleRoute component={AIReporting} />
-      </Route>
-      <Route path="/reports/m1">
-        <RoleRoute component={M1ReportView} />
-      </Route>
-      <Route path="/m1/encode">
-        <RoleRoute component={M1ReportEncode} />
-      </Route>
-      <Route path="/disease" component={DiseaseWorklist} />
-      <Route path="/disease/registry" component={DiseaseRegistry} />
-      <Route path="/disease/map">
-        <RoleRoute component={DiseaseMap} />
-      </Route>
+
+      {/* Inventory hub (MGMT_ROLES): Availability / Stock-outs */}
+      <Route path="/inventory"><InventoryHub><RoleRoute component={InventoryPage} /></InventoryHub></Route>
+      <Route path="/inventory/stockouts"><InventoryHub><RoleRoute component={StockoutsPage} /></InventoryHub></Route>
+      {/* Inventory forms — no hub wrapper (full-bleed form) */}
+      <Route path="/inventory/new"><RoleRoute component={InventoryForm} /></Route>
+      <Route path="/inventory/:id/edit"><RoleRoute component={InventoryForm} /></Route>
+      <Route path="/inventory/medicine/:id/edit"><RoleRoute component={InventoryForm} /></Route>
+
+      {/* Reports hub: Encode M1 / M1 Summary & Export / Health Analytics */}
+      <Route path="/m1/encode"><ReportsHub><RoleRoute component={M1ReportEncode} /></ReportsHub></Route>
+      <Route path="/reports/m1"><ReportsHub><RoleRoute component={M1ReportView} /></ReportsHub></Route>
+      <Route path="/reports/ai"><ReportsHub><RoleRoute component={AIReporting} /></ReportsHub></Route>
+      <Route path="/reports"><ReportsHub><RoleRoute component={ReportsPage} /></ReportsHub></Route>
+
+      {/* Disease hub: Worklist / Registry / Map */}
+      <Route path="/disease"><DiseaseHub><DiseaseWorklist /></DiseaseHub></Route>
+      <Route path="/disease/registry"><DiseaseHub><DiseaseRegistry /></DiseaseHub></Route>
+      <Route path="/disease/map"><DiseaseHub><RoleRoute component={DiseaseMap} /></DiseaseHub></Route>
       <Route path="/disease/new" component={DiseaseForm} />
       <Route path="/disease/:id/edit" component={DiseaseForm} />
       <Route path="/disease/:id" component={DiseaseProfile} />
-      <Route path="/tb" component={TBWorklist} />
-      <Route path="/tb/registry" component={TBRegistry} />
+
+      {/* TB DOTS hub: Worklist / Registry */}
+      <Route path="/tb"><TBHub><TBWorklist /></TBHub></Route>
+      <Route path="/tb/registry"><TBHub><TBRegistry /></TBHub></Route>
       <Route path="/tb/new" component={TBForm} />
       <Route path="/tb/:id/edit" component={TBForm} />
       <Route path="/tb/:id" component={TBProfile} />
-      <Route path="/fp" component={FpRegistry} />
-      <Route path="/messages" component={MessagesPage} />
+
+      {/* Admin hub: Users / Audit Logs / Settings */}
+      <Route path="/admin/users"><AdminHub><RoleRoute component={UserManagement} /></AdminHub></Route>
+      <Route path="/admin/audit"><AdminHub><RoleRoute component={AuditLogs} /></AdminHub></Route>
+      <Route path="/settings"><AdminHub><RoleRoute component={SettingsPage} /></AdminHub></Route>
+
+      {/* Account lives outside hubs (footer item) */}
       <Route path="/account" component={AccountPage} />
-      <Route path="/settings">
-        <RoleRoute component={SettingsPage} />
-      </Route>
-      <Route path="/patient-checkup">
-        <RoleRoute component={PatientCheckupPage} />
-      </Route>
-      <Route path="/hotspots">
-        <RoleRoute component={Hotspots} />
-      </Route>
-      <Route path="/admin/users">
-        <RoleRoute component={UserManagement} />
-      </Route>
-      <Route path="/admin/audit">
-        <RoleRoute component={AuditLogs} />
-      </Route>
+
       <Route>
         <div className="flex items-center justify-center h-full">
           <p className="text-muted-foreground">Page not found</p>
