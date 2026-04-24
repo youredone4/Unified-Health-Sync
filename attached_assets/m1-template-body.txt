@@ -1,0 +1,996 @@
+                                                              FHSIS REPORT for the:
+                                                              Name of Barangay:
+                                                              Name of BHS:
+                                                              Name of Municipality/City:
+                                                              Name of Province:
+                                                              Projected Population of the Year:
+
+
+                                                                                                             SECT
+                                                                                                             Age G
+                            Demand Satisfied
+                                                                          10-14 yrs old
+
+1. No. of women of reproductive age (WRA) 15-49 years old who have
+demand for Family Planning (FP) and currently using, or whose partner                0
+is currently using, any modern FP methods
+
+
+                                                       Current Users
+                                                   (Beginning of the Month)                       New Acceptors
+           Modern FP Methods                                                                     (Previous Month
+                                                   Age Group                                     Age Group
+                                                                         TOTAL
+                                           10-14      15-19    20-49                     10-14
+1. BTL                                         0        0        14           14           0
+2. NSV                                         0        0        0            0            0
+3. Condom                                      0        1        8            9            0
+4. Pills                                       0        2        65           67           0
+   a. Pills-POP                                0        0        24           24           0
+   b. Pills-COC                                0        2        41           43           0
+5. Injectables (DMPA/POI)                      0        0        5            5            0
+6. Implant                                     0        0        25           25           0
+7. IUD                                         0        1        11           12           0
+   a. IUD-Interval                             0        0        11           11           0
+   b. IUD-PP                                   0        1        0            1            0
+8. NFP-LAM                                     0        1        6            7            0
+9. NFP-BBT                                     0        0        0            0            0
+10. NFP-CMM                                    0        0        58           58           0
+11. NFP-STM                                    0        0        0            0            0
+12. NFP-SDM                                    0        0        0            0            0
+Total Current Users                            0        5       192       197              0
+
+
+                                                   Age Group
+                  Indicators                                                       TOTAL
+                                           10-14      15-19    20-49
+PRENATAL CARE SERVICES
+
+1a. Women who gave birth with at least 4
+prenatal check-ups (for Q1 to Q3 2025                                                0
+only)
+1b. Total No. of Women who delivered and
+                                            0         0         0        0
+completed at least 8ANC =(a+b)
+
+
+
+a. No. of Women who delivered and
+                                                                         0
+Provided 1st to 8th ANC on schedule
+
+
+b. No. of Women who delivered and
+completed at least 8ANC                                                  0
+TRANS IN from other LGUs
+
+
+1c. Total No. of Women who delivered and
+                                            0         0         0        0
+were tracked during pregnancy =(a+b)-c
+
+
+
+a. No. of Women who delivered and who
+                                                                         0
+were tracked during pregnancy
+
+
+
+b. No. of TRANS IN from other LGUs                                       0
+
+
+
+c. No. of TRANS OUT (with MOV) before
+                                                                         0
+completing 8ANC
+
+
+
+2a. Number of pregnant women seen in
+                                             0         0         2       2
+the first trimester who have normal BMI
+
+
+
+2b. Number of pregnant women seen in
+                                             0         0         0       0
+the first trimester who have Low BMI
+
+
+
+2c. Number of pregnant women seen in
+                                             0         0         1       1
+the first trimester who have High BMI
+
+
+3a. Number of women pregnant for the
+first time given at least 2 doses of         0         0         1       1
+Tetanus diphtheria (Td) vaccination
+
+                                                   Age Group
+                Indicators                                             TOTAL
+                                           10-14     15-19     20-49
+INTRAPARTUM AND NEWBORN CARE
+
+1. Total Deliveries                                                      0
+2. No. of Livebirths                        0         0         0        0
+
+
+
+a. Normal birth weight                                                   0
+
+
+
+b. Low birth weight                                                      0
+
+
+c. Unknown birth weight                                                  0
+
+
+
+3. No. of deliveries attended by
+                                            0         0         0        0
+skilled health professionals
+
+
+
+a. Physicians                                                            0
+
+
+b. Nurses                                                                0
+
+
+c. Midwives                                                              0
+
+                                                   Age Group
+                Indicators                                             TOTAL
+                                           10-14     15-19     20-49
+POSTPARTUM CARE
+
+1a. Number and proportion of Postpartum
+women together with their newborn who
+                                                                         0
+completed at least 2PNC (for Q1 Jan to
+Feb 2025 only)
+
+
+
+1b. Total No. of women who delivered and
+                                            0         0         0        0
+completed at least 4PNC =(a+b)
+
+
+
+a. No. of women who delivered and
+                                                                         0
+Provided 1st to 4th PNC on schedule
+
+b. No. of women who delivered and
+completed at least 4PNC                                                  0
+TRANS IN from other LGUs
+
+1c. Total No. of women who delivered and
+who were tracked during pregnancy           0         0         0        0
+=(a+b)-c
+a. No. of women who delivered and who
+                                                                  0
+were tracked during pregnancy (New)
+
+
+
+b. No. of TRANS IN from other LGUs                                0
+
+
+
+c. No. of TRANS OUT (with MOV) before
+                                                                  0
+completing 4PNC
+
+
+
+                                                 Sex
+               Indicators                                        Rate
+                                        Male    Female   Total
+IMMUNIZATION
+A.1. Immunization Services
+
+1. Children protected at birth (CPAB)    0        2       2      0.00
+
+2. BCG (with in 0-28 days)               0        0       0      0.00
+
+
+3. BCG (29 days to 1 year old)           5        0       5      0.00
+
+
+A.2. Immunization Services (0-12 months old)
+
+1. DPT-HiB-HepB 1                        0        2       2      0.00
+
+2. DPT-HiB-HepB 2                        3        0       3      0.00
+
+3. DPT-HiB-HepB 3                        1        1       2      0.00
+
+4. OPV 1                                 0        0       0      0.00
+
+5. OPV 2                                 0        0       0      0.00
+
+6. OPV 3                                 0        0       0      0.00
+
+7. IPV 1                                 0        0       0      0.00
+
+A.3. Immunization Services (13-23 months old)
+
+1. DPT-HiB-HepB 1                        0        0       0      0.00
+
+2. DPT-HiB-HepB 2                        0        0       0      0.00
+
+3. DPT-HiB-HepB 3                        0        0       0      0.00
+4. OPV 1                                     0        0       0             0.00
+
+5. OPV 2                                     0        0       0             0.00
+
+6. OPV 3                                     0        0       0             0.00
+
+7. IPV 1                                     0        0       0             0.00
+
+                                                     Sex
+                Indicators                                                                     Remarks
+                                            Male   Female   Total
+
+   A.4. School-Based Immunization                  9 YO Projected Pop               Encode Data Here
+
+
+1. HPV 1st dose (9 years old Female only)                     0             0.00
+
+2. HPV 2nd dose (9 years old Female only)                     0             0.00
+
+3. Grade 1 learners given Td                                  0             0.00
+
+                                                     Sex
+                Indicators                                                                     Remarks
+                                            Male   Female   Total
+NUTRITION
+
+1. Newborns who were initiated on
+                                                              0             0.00
+breastfeeding within 1 hour after birth
+
+
+
+2. Infants born with low birth weight
+                                                              0             0.00
+(LBW) given complete Iron supplements
+
+
+3a. Infants aged 6-11 months old who
+received 1 dose of Vitamin A                                  0             0.00
+supplementation
+
+3b. Children aged 12-59 months old who
+completed 2 doses of Vitamin A
+                                                              0             0.00
+Supplementation
+
+
+              Projected Population                                      Projected Population
+                6-11 months old                                           12-59 months old
+
+                Encode Data Here                                         Encode Data Here
+
+                                                     Sex
+                Indicators                                                Remarks
+                                            Male   Female   Total
+
+
+6. Children 0-59 months old SEEN during
+                                             0        0       0
+the reporting period at health facilities
+6a. Identified MAM Children                                  0      0.00
+
+
+
+
+6b. Identified SAM Children                                  0      0.00
+
+
+
+
+7. MAM enrolled to SFP                                       0      0.00
+
+
+
+
+7a. Cured                                                    0      0.00
+
+
+
+
+7b. Non-cured                                                0      0.00
+
+
+
+
+7c. Defaulted                                                0      0.00
+
+
+                                                    Sex
+                Indicators                                          Rate
+                                            Male   Female   Total
+MANAGEMENT OF SICK
+
+1. Sick infants aged 6-11 months old who
+received Vitamin A capsule aside from                        0      0.00
+routine supplementation
+
+
+
+1a. Sick infants aged 6-11 months old
+                                                             0
+seen
+
+
+
+2. Sick infants aged 12-59 months old who
+received Vitamin A capsule aside from                        0      0.00
+routine supplementation
+
+
+
+2a. Sick infants aged 12-59 months old
+                                                             0
+seen
+3. Acute diarrhea cases 0-59 months old
+                                                               0
+seen
+
+
+
+                                                   Sex
+                Indicators                                    Total   Rate
+                                            Male     Female
+FIRST VISIT TO AN ORAL HEALTH CARE PROFESSIONAL
+
+
+
+1. Infants 0-11 months old who had their
+                                                               0      0.00
+first dental visit
+
+
+
+
+1. Children 1-4 years old who had
+their 1st visit to an oral health care       0           0     0      0.00
+professional within a year
+
+
+
+
+1a. Children 1-4 years old who had their
+1st visit to a facility-based oral health                      0      0.00
+care professional within a year
+
+
+
+
+1b. Children 1-4 years old who had their
+1st visit to a non-facility-based oral                         0      0.00
+health care professional within a year
+
+
+
+
+2. Children 5-9 years old who had
+their 1st visit to an oral health care       0           0     0      0.00
+professional within a year
+
+
+
+
+2a. Children 5-9 years old who had their
+1st visit to a facility-based oral health                      0      0.00
+care professional within a year
+2b. Children 5-9 years old who had their
+1st visit to a non-facility-based oral                0   0.00
+health care professional within a year
+
+
+
+
+3. Adolescents 10-19 years old who
+had their 1st visit to an oral health         0   0   0   0.00
+care professional within a year
+
+
+
+
+3a. Adolescents 10-19 years old who had
+their 1st visit to a facility-based oral              0   0.00
+health care professional within a year
+
+
+
+
+3b. Adolescents 10-19 years old who had
+their 1st visit to a non-facility-based               0   0.00
+oral health care professional within a year
+
+
+
+
+4. Adults 20-59 years old who had
+their 1st visit to an oral health care        2   0   2   0.00
+professional within a year
+
+
+
+
+4a. Adults 20-59 years old who had their
+1st visit to a facility-based oral health     2   0   2   0.00
+care professional within a year
+
+
+
+
+4b. Adults 20-59 years old who had their
+1st visit to a non-facility-based oral                0   0.00
+health care professional within a year
+5. Senior Citizens 60 years old and
+above who had their 1st visit to an
+                                               0           0       0           0.00
+oral health care professional within a
+year
+
+
+
+
+5a. Senior Citizens 60 years old and above
+who had their 1st visit to a facility-based                        0           0.00
+oral health care professional within a year
+
+
+
+
+5b. Senior Citizens 60 years old and above
+who had their 1st visit to a non-facility-
+                                                                   0           0.00
+based oral health care professional within
+a year
+
+
+                    Projected Population                                          Projected Population
+                       0-11 mos. Old                                                     1-4 YO
+
+                      Encode Data Here                                             Encode Data Here
+
+                                                      Age Group
+                Indicators                                                Total           Rate
+                                              10-14     15-19     20-49
+
+
+
+6. Pregnant Women who had their
+1st visit to an oral health care               0           0       0       0              0.00
+professional within a year
+
+
+
+
+6a. Pregnant Women who had their 1st
+visit to a facility-based oral health care                                 0              0.00
+professional within a year
+
+
+
+
+6b. Pregnant Women who had their 1st
+visit to a non-facility-based oral health                                  0              0.00
+care professional within a year
+
+
+
+
+                                                     Sex
+                Indicators                                        Total        Rate
+                                              Male     Female
+E1. Lifestyle Related
+
+1. Adults 20-59 years old who were risk
+                                                    0   0.00
+assessed using the PhilPEN protocol
+
+
+1a. With history of smoking                         0   0.00
+
+
+1b. Binge Drinker                                   0   0.00
+
+
+1c. Insufficient physical activities                0   0.00
+
+
+1d. Consumed unhealthy diet                         0   0.00
+
+
+1e. Overweight                                      0   0.00
+
+
+1f. Obese                                           0   0.00
+
+E2. Cardiovascular Disease Prevention and Control
+
+1. Adults 20-59 years old who were
+identified as hypertensive using the                0   0.00
+PhilPEN protocol
+
+
+2. Hypertensives 20-59 years old
+provided with antihypertensive              0   0   0   0.00
+medications
+
+
+
+2a. Provided by facility (100%)                     0   0.00
+
+
+
+
+2b. Out of pocket                                   0   0.00
+
+
+
+
+3. Senior Citizens 60 years old and above
+who were identified as hypertensive using           0   0.00
+the PhilPEN protocol
+
+
+
+4. Hypertensives 60 years old and
+above provided with                         0   0   0   0.00
+antihypertensive medications
+4a. Provided by facility (100%)                               0      0.00
+
+
+
+
+4b. Out of pocket                                             0      0.00
+
+
+                                                  Sex
+                Indicators                                   Total   Rate
+                                           Male     Female
+E4. Blindness Prevention Program
+
+
+1. Senior citizens aged 60 years old and
+                                                              0      0.00
+above screened for visual acuity
+
+
+
+2. Senior citizens aged 60 years old and
+above screened for visual acuity and                          0      0.00
+identified with eye disease/s
+
+
+3. Senior citizens identified with eye
+disease/s and referred to eye care                            0      0.00
+professionals
+
+E6. Cervical Cancer Prevention and Control Services
+
+
+1. Women aged 30-65 years old screened
+                                                              0      0.00
+or assessed for cervical cancer
+
+
+
+
+2. Women aged 30-65 years old found
+                                                              0      0.00
+suspicious for cervical cancer
+
+
+
+3. Women aged 30-65 years old
+found suspicious for cervical cancer        0           0     0      0.00
+and linked to care
+
+
+
+
+3a. Treated                                                   0
+3b. Referred                                        0
+
+
+
+
+4. Women aged 30-65 years old found
+                                                    0   0.00
+positive for precancerous lesions
+
+
+
+
+5. Women aged 30-65 years old
+found positive for precancerous        0      0     0   0.00
+lesions and linked to care
+
+
+
+
+5a. Treated                                         0
+
+
+
+
+5b. Referred                                        0
+
+
+
+
+Projected Population 30-65 YO         Encode Data
+Female only                              Here
+
+
+
+No. of Women screened
+                                      Encode Data
+Assess/Screened for Cervical Cancer
+                                         Here
+within the past 2 years
+
+
+
+Age Standardized Rate                 Encode Data
+for 30-69 YO                             Here
+
+
+
+
+                                      Encode Data
+Projected Population 50-69 YO
+                                         Here
+                                                                        Age Groups (in years)
+                Indicators                         0-9                 10-19            20-59
+                                            Male       Female   Male      Female     Male
+E8. Mental Health
+
+
+1. Individuals with mental health concern
+screened using the Mental Health Gap
+Action Programme (mhGAP)
+
+
+
+
+                Indicators                     Total                    Rate                    Rem
+
+G1. Water
+1. Households (HHs) with access to
+                                                   0                    0.00
+improved water supply - Total
+
+1a. HH with Level I                                                     0.00
+
+
+
+1b. HH with Level II                                                    0.00
+
+
+
+1c. HH with Level III                                                   0.00
+
+2. HH using safely managed drinking
+                                                                        0.00
+water service
+                                                                                                 SE
+                                                         Sex
+                Indicators                                                 Rate                 Rem
+                                            Male       Female   Total
+A. Filariasis
+1. No. of individuals EXAMINED for
+                                                            0
+lymphatic filariasis
+2. No. of individuals examined and found
+                                                            0      0.00
+POSITIVE for lymphatic filariasis
+3. No. of individuals examined with
+                                                            0
+lymphedema and/or elephantiasis
+4. No. of individuals examined with
+                                                            0
+hydrocele
+B. Rabies
+
+
+1. Category I                               0       0       0
+
+
+ a. ABTC/ABC                                                0
+ b. Non-ABTC/ABC                                            0
+
+
+2. Category II                              0       0       0
+
+
+ a. ABTC/ABC                                                0
+ b. Non-ABTC/ABC                                            0
+
+3. Category III                             0       0       0
+
+ a. ABTC/ABC                                                0
+ b. Non-ABTC/ABC                                            0
+
+4. No. of rabies exposure (ALL
+                                            0       0       0
+CATEGORIES)
+
+ a. ABTC/ABC                                                0
+ b. Non-ABTC/ABC                                            0
+
+5. No. of Category II rabies exposure
+who received COMPLETE DOSES of              0       0       0      0.00
+anti-rabies vaccines
+
+ a. ABTC/ABC                                                0      0.00
+ b. Non-ABTC/ABC                                            0      0.00
+                                                   Sex
+                 Indicators                                        Rate   Rem
+                                           Male   Female   Total
+C. Schistosomiasis
+
+1. No. of patients seen                     0       0       0
+
+  a. 5-14 years old                                         0
+  b. 15-19 years old                                        0
+  c. 20-59 years old                                        0
+  d. 60 years old & above                                   0
+2. No. of SUSPECTED CASES seen              0       0       0      0.00
+  a. 5-14 years old                                         0      0.00
+  b. 15-19 years old                                   0      0.00
+  c. 20-59 years old                                   0      0.00
+  d. 60 years old & above                              0      0.00
+3. No. of SUSPECTED cases TREATED      0       0       0      0.00
+  a. 5-14 years old                                    0      0.00
+  b. 15-19 years old                                   0      0.00
+  c. 20-59 years old                                   0      0.00
+  d. 60 years old & above                              0      0.00         Sub Indicator
+                                                                     Total Confirmed Cases
+4. No. of CONFIRMED cases              0       0       0      0.00   (complicated/
+                                                                     noncomplicated)
+ a. Complicated cases                  0       0       0      0.00   5-14 YO
+   a1. 5-14 years old                                  0      0.00   15-19 YO
+   b2. 15-19 years old                                 0      0.00   20-59 YO
+   c3. 20-59 years old                                 0      0.00   60 YO and Above
+
+   d4. 60 years old & above                            0      0.00
+
+ b. Non-complicated cases              0       0       0      0.00
+  a1. 5-14 years old                                   0      0.00
+  b2. 15-19 years old                                  0      0.00
+  c3. 20-59 years old                                  0      0.00
+  d4. 60 years old & above                             0      0.00
+                                              Sex
+               Indicators                                     Rate                         Rem
+                                      Male   Female   Total
+D. Soil-Transmitted Helminthiasis
+1. No. of individuals aged SCREENED
+                                       0       0       0
+for STH
+
+ a. 1-4 years old                                      0      0.00
+
+
+ b. 5-14 years old                                     0      0.00
+
+
+ c. 15-19 years old                                    0      0.00
+
+
+ d. 20-59 years old                                    0      0.00
+
+
+ e. 60 years old & above                               0      0.00
+
+2. No. of individuals CONFIRMED for
+                                       0       0       0      0.00
+STH
+
+ a. Resident                           0       0       0      0.00
+
+
+   • 1-4 years old                                     0      0.00
+
+
+   • 5-14 years old                                    0      0.00
+   • 15-19 years old                                 0      0.00
+
+
+   • 20-59 years old                                 0      0.00
+
+
+   • 60 years old & above                            0      0.00
+
+
+ b. Non-resident                     0       0       0      0.00
+
+
+   • 1-4 years old                                   0      0.00
+
+
+   • 5-14 years old                                  0      0.00
+
+
+   • 15-19 years old                                 0      0.00
+
+
+   • 20-59 years old                                 0      0.00
+
+
+   • 60 years old & above                            0      0.00
+
+
+
+
+                                            Sex
+               Indicators                                   Rate   Rem
+                                    Male   Female   Total
+E. Leprosy
+
+1. No. of leprosy old and new
+cases registered during reporting    0       0       0
+period
+
+
+  a. 0-4 years old                                   0
+
+
+
+  b. 5-14 years old                                  0
+
+
+
+  c. 15 years old & above                            0
+
+
+2. No. of NEWLY detected cases
+                                     0       0       0      0.00
+during reporting period
+  a. 0-4 years old                                          0          0.00
+
+
+
+  b. 5-14 years old                                         0          0.00
+
+
+
+  c. 15 years old & above                                   0          0.00
+
+
+3. No. of confirmed leprosy cases
+                                        0          0        0          0.00
+during reporting period
+
+
+  a. 0-4 years old                                          0          0.00
+
+
+
+  b. 5-14 years old                                         0          0.00
+
+
+
+  c. 15 years old & above                                   0          0.00
+
+F. HIV-AIDS/STI
+                                               Age Group
+               Indicators                                              TOTAL   Rate
+                                       10-14     15-19     20-49
+
+1. No. of pregnant women screened
+                                                                         0     0.00
+for syphilis
+
+2. No. of pregnant women tested
+                                                                         0     0.00
+positive for syphilis
+
+                                                                   Section H. Mortality
+Indicators                                  Male                Female            Total
+
+1. Total Maternal Deaths                                           0                  0
+
+
+1a. Direct Cause Maternal Death                                    0                  0
+
+a. Resident                                                                           0
+
+
+b. Non-Resident                                                                       0
+
+
+1b. Indirect Cause of Maternal Death                               0                  0
+
+
+a. Resident                                                                           0
+b. Non-Resident                         0
+
+2. Under Five Mortality
+                                        0
+   (0-59 mos old)
+
+3. Infant Mortality
+                                        0
+   (0-11 mos. And 29 days)
+
+4. Neonatal Mortality
+                                        0
+   (0-28 days)
+
+5. Total Perinatal Mortality    0   0   0
+
+5a. Fetal Death/Stillbirth              0
+
+
+5b. Early Neonatal Death
+                                        0
+     (0-6 days old)
+
+6. TOTAL DEATHS
+                                        0
+   (All Causes and Age Group)
+             Month:             May                     Quarter/ANNUAL:          1st Quarter                   Calendar Year:
+                            BERSEBA
+                            CALAITAN
+ity/City:                         Bayugan City
+                      AGUSAN DEL SUR
+on of the Year:                                      1, 888
+
+
+                           SECTION A. FAMILY PLANNING SERVICES FOR WOMEN OF REPRODUCTIVE AGE
+                           Age Group                                           Demand Satisfied
+                                                                                 Percentage         WRAProjected Population
+              15-19 yrs old       20-49 yrs old                   Total
+
+
+                      6                   193                     199                0.00                 Encode Data Here
+
+
+                                      Acceptors
+                                                                                                       Drop-outs
+             New Acceptors                              Other Acceptors                              (Present Month)
+            (Previous Month)                            (Present Month)
+            Age Group                                  Age Group                                  Age Group
+                                  TOTAL                                       TOTAL
+              15-19       20-49             10-14        15-19       20-49               10-14      15-19     20-49
+                0           0         0          0            0           0      0          0         0         0
+                0           0         0          0            0           0      0          0         0         0
+                0           0         0          0            0           0      0          0         0         0
+                0           0         0          0            0           0      0          0        0         0
+                0           0         0          0            0           0      0          0         0         0
+                0           0         0          0            0           0      0          0         0         0
+                0           0         0          0            0           0      0          0         0         0
+                0           0         0          0            0           0      0          0         0         0
+                0           0         0          0            0           0      0          0        0         0
+                0           0         0          0            0           0      0          0         0         0
+                0           0         0          0            0           0      0          0         0         0
+                1           1         2          0            0           0      0          0         0         0
+                0           0         0          0            0           0      0          0         0         0
+                0           0         0          0            0           0      0          0         0         0
+                0           0         0          0            0           0      0          0         0         0
+                0           0         0          0            0           0      0          0         0         0
+                1           1         2          0            0           0      0          0        0         0
+                                                SECTION B. MATERNAL CARE AND SERVICES
+
+                    Rate                   Remarks                                    Indicators
+
+
+
+                                                                    3b. Number of Pregnant Women for the 2nd or
+                    0.00                                            more times given at least 3 doses of Td
+                                                                    vaccination (Td2 Plus)
+
