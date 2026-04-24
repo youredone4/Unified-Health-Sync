@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, Fragment } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -628,9 +628,8 @@ export default function FpRegistry() {
               </TableHeader>
               <TableBody>
                 {pagedFiltered.map(record => (
-                  <>
+                  <Fragment key={record.id}>
                     <TableRow
-                      key={record.id}
                       className="cursor-pointer hover:bg-muted/50"
                       onClick={() => setExpandedId(expandedId === record.id ? null : record.id)}
                       data-testid={`row-fp-${record.id}`}
@@ -695,7 +694,7 @@ export default function FpRegistry() {
                         </TableCell>
                       </TableRow>
                     )}
-                  </>
+                  </Fragment>
                 ))}
               </TableBody>
             </Table>
