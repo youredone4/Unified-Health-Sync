@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useParams, useLocation } from "wouter";
-import type { Mother, FpServiceRecord, Child } from "@shared/schema";
+import type { Mother, FpServiceRecord, Child, PrenatalVisit } from "@shared/schema";
 import { FP_METHODS, FP_STATUSES } from "@shared/schema";
 import { getTTStatus, getPrenatalCheckStatus, formatDate } from "@/lib/healthLogic";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,14 +8,32 @@ import { Button } from "@/components/ui/button";
 import StatusBadge from "@/components/status-badge";
 import ConfirmModal from "@/components/confirm-modal";
 import SmsModal from "@/components/sms-modal";
+import {
+  PatientProfileShell,
+  GlanceGrid,
+  GlanceCell,
+  type StatusPill,
+  type ProfileOverflowAction,
+} from "@/components/patient-profile-shell";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth, permissions } from "@/hooks/use-auth";
-import { ArrowLeft, Heart, Stethoscope, MessageSquare, Check, Pencil, Trash2, HeartHandshake, Plus, ExternalLink, Baby } from "lucide-react";
+import {
+  Heart,
+  Stethoscope,
+  MessageSquare,
+  Check,
+  Pencil,
+  Trash2,
+  HeartHandshake,
+  Plus,
+  ExternalLink,
+  Baby,
+  AlertTriangle,
+} from "lucide-react";
 import ConsultationHistoryCard from "@/components/consultation-history-card";
 import VisitHistoryCard from "@/components/visit-history-card";
 import { useState } from "react";
 import { apiRequest, invalidateScopedQueries } from "@/lib/queryClient";
-import type { PrenatalVisit } from "@shared/schema";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
@@ -30,7 +48,6 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { format } from "date-fns";
-import { Badge } from "@/components/ui/badge";
 
 const FP_METHOD_LABELS: Record<string, string> = {
   BTL: "BTL", NSV: "NSV", CONDOM: "Condom", PILLS_POP: "Pills-POP",
@@ -61,7 +78,7 @@ export default function MotherProfile() {
   const { toast } = useToast();
   const { user } = useAuth();
 
-  const { data: mother, isLoading } = useQuery<Mother>({ queryKey: ['/api/mothers', id] });
+  const { data: mother, isLoading } = useQuery<Mother>({ queryKey: ["/api/mothers", id] });
 
   const { data: prenatalVisits = [] } = useQuery<PrenatalVisit[]>({
     queryKey: ["/api/nurse-visits", "mother", id],
@@ -73,46 +90,37 @@ export default function MotherProfile() {
     enabled: !!id,
   });
   const latestPrenatalVisit = prenatalVisits[0] ?? null;
-  
-  const [confirmOpen, setConfirmOpen] = useState(false);
-  const [confirmAction, setConfirmAction] = useState<'tt' | 'prenatal'>('tt');
-  const [deleteOpen, setDeleteOpen] = useState(false);
-  const [smsOpen, setSmsOpen] = useState(false);
-  const [fpDialogOpen, setFpDialogOpen] = useState(false);
 
   const { data: fpRecords = [] } = useQuery<FpServiceRecord[]>({
     queryKey: ["/api/fp-records"],
-    select: (records) => records.filter(r => r.linkedPersonId === Number(id) && r.linkedPersonType === "MOTHER"),
+    select: (records) => records.filter((r) => r.linkedPersonId === Number(id) && r.linkedPersonType === "MOTHER"),
     enabled: !!id,
   });
 
   const { data: linkedChildren = [] } = useQuery<Child[]>({
     queryKey: ["/api/children"],
-    select: (all) => all.filter(c => c.motherId === Number(id)),
+    select: (all) => all.filter((c) => c.motherId === Number(id)),
     enabled: !!id,
   });
 
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmAction, setConfirmAction] = useState<"tt" | "prenatal">("tt");
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [smsOpen, setSmsOpen] = useState(false);
+  const [fpDialogOpen, setFpDialogOpen] = useState(false);
+
   const fpEnrollForm = useForm<QuickEnrollValues>({
     resolver: zodResolver(quickEnrollSchema),
-    defaultValues: {
-      dateStarted: format(new Date(), "yyyy-MM-dd"),
-    },
+    defaultValues: { dateStarted: format(new Date(), "yyyy-MM-dd") },
   });
 
   const fpEnrollMutation = useMutation({
     mutationFn: (data: QuickEnrollValues) => {
-      // Derive reportingMonth from dateStarted (YYYY-MM) for M1 computation scoping
       const reportingMonth = data.dateStarted ? data.dateStarted.substring(0, 7) : format(new Date(), "yyyy-MM");
-      // Approximate DOB from mother's age for FP M1 age-bucket computation.
-      // Use the year from dateStarted (not current year) so historical enrollments
-      // produce the correct age-group bucket relative to the enrollment date.
-      // (mothers table lacks dob; approximate as July 1 of birth year)
       const enrollYear = data.dateStarted
         ? parseInt(data.dateStarted.substring(0, 4), 10)
         : new Date().getFullYear();
-      const approxDob = mother?.age
-        ? `${enrollYear - mother.age}-07-01`
-        : undefined;
+      const approxDob = mother?.age ? `${enrollYear - mother.age}-07-01` : undefined;
       return apiRequest("POST", "/api/fp-records", {
         ...data,
         barangay: mother?.barangay,
@@ -133,33 +141,33 @@ export default function MotherProfile() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: async (updates: Partial<Mother>) => {
-      return apiRequest('PUT', `/api/mothers/${id}`, updates);
-    },
+    mutationFn: async (updates: Partial<Mother>) => apiRequest("PUT", `/api/mothers/${id}`, updates),
     onSuccess: () => {
-      invalidateScopedQueries('/api/mothers');
-      queryClient.invalidateQueries({ queryKey: ['/api/mothers', id] });
+      invalidateScopedQueries("/api/mothers");
+      queryClient.invalidateQueries({ queryKey: ["/api/mothers", id] });
       toast({ title: "Saved", description: "Record updated successfully" });
       setConfirmOpen(false);
-    }
+    },
   });
 
   const deleteMutation = useMutation({
-    mutationFn: async () => {
-      return apiRequest('DELETE', `/api/mothers/${id}`);
-    },
+    mutationFn: async () => apiRequest("DELETE", `/api/mothers/${id}`),
     onSuccess: () => {
-      invalidateScopedQueries('/api/mothers');
+      invalidateScopedQueries("/api/mothers");
       toast({ title: "Deleted", description: "Patient record permanently deleted" });
-      navigate('/prenatal');
+      navigate("/prenatal");
     },
     onError: () => {
       toast({ title: "Error", description: "Could not delete record", variant: "destructive" });
-    }
+    },
   });
 
   if (isLoading || !mother) {
-    return <div className="flex items-center justify-center h-64"><p className="text-muted-foreground">Loading...</p></div>;
+    return (
+      <div className="flex items-center justify-center h-64">
+        <p className="text-muted-foreground">Loading...</p>
+      </div>
+    );
   }
 
   const tt = getTTStatus(mother);
@@ -168,148 +176,122 @@ export default function MotherProfile() {
   const canDelete = permissions.canDelete(user?.role);
 
   const handleMarkDone = () => {
-    if (confirmAction === 'tt') {
-      const today = new Date().toISOString().split('T')[0];
-      if (!mother.tt1Date) {
-        updateMutation.mutate({ tt1Date: today });
-      } else if (!mother.tt2Date) {
-        updateMutation.mutate({ tt2Date: today });
-      } else if (!mother.tt3Date) {
-        updateMutation.mutate({ tt3Date: today });
-      }
+    if (confirmAction === "tt") {
+      const today = new Date().toISOString().split("T")[0];
+      if (!mother.tt1Date) updateMutation.mutate({ tt1Date: today });
+      else if (!mother.tt2Date) updateMutation.mutate({ tt2Date: today });
+      else if (!mother.tt3Date) updateMutation.mutate({ tt3Date: today });
     }
   };
 
-  const smsMessage = tt.status !== 'completed' 
+  const smsMessage = tt.status !== "completed"
     ? `Hello ${mother.firstName}, this is a reminder for your ${tt.nextShotLabel}. Please visit your barangay health station.`
     : `Hello ${mother.firstName}, you have an upcoming prenatal check. Please visit your barangay health station.`;
 
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <Button variant="ghost" onClick={() => navigate('/prenatal')} className="gap-2" data-testid="button-back">
-          <ArrowLeft className="w-4 h-4" /> Back to Worklist
-        </Button>
-        <div className="flex gap-2">
-          {canUpdate && (
-            <Button variant="outline" size="sm" onClick={() => navigate(`/mother/${id}/edit`)} className="gap-1" data-testid="button-edit-mother">
-              <Pencil className="w-4 h-4" /> Edit
-            </Button>
-          )}
-          {canDelete && (
-            <Button variant="destructive" size="sm" onClick={() => setDeleteOpen(true)} className="gap-1" data-testid="button-delete-mother">
-              <Trash2 className="w-4 h-4" /> Delete
-            </Button>
-          )}
-        </div>
-      </div>
+  // ── Status pills ──────────────────────────────────────────────────────────
+  const statusPills: StatusPill[] = [];
+  if (tt.status === "overdue") {
+    statusPills.push({ label: `${tt.nextShotLabel} overdue`, tone: "danger", icon: AlertTriangle, testId: "pill-tt-overdue" });
+  } else if (tt.status === "due_soon") {
+    statusPills.push({ label: `${tt.nextShotLabel} due soon`, tone: "warning", testId: "pill-tt-due" });
+  }
+  if (pc.status === "overdue") {
+    statusPills.push({ label: "Prenatal check overdue", tone: "danger", icon: AlertTriangle, testId: "pill-pc-overdue" });
+  } else if (pc.status === "due_soon") {
+    statusPills.push({ label: "Prenatal check due soon", tone: "warning", testId: "pill-pc-due" });
+  }
+  if (latestPrenatalVisit?.riskStatus === "high") {
+    statusPills.push({ label: "High-risk pregnancy", tone: "danger", icon: AlertTriangle, testId: "pill-risk" });
+  }
 
-      <div className="flex flex-col md:flex-row gap-6">
-        <Card className="flex-1">
-          <CardHeader>
-            <CardTitle className="text-xl">{mother.firstName} {mother.lastName}</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            <p><span className="text-muted-foreground">Age:</span> {mother.age} years old</p>
-            <p><span className="text-muted-foreground">Barangay:</span> {mother.barangay}</p>
-            <p><span className="text-muted-foreground">Address:</span> {mother.addressLine || '-'}</p>
-            <p><span className="text-muted-foreground">Phone:</span> {mother.phone || '-'}</p>
-            <p>
-              <span className="text-muted-foreground">GA:</span>{" "}
-              {latestPrenatalVisit?.gaWeeks
-                ? `${latestPrenatalVisit.gaWeeks} weeks (from visit ${latestPrenatalVisit.visitDate})`
-                : `${mother.gaWeeks} weeks`}
-            </p>
-            {latestPrenatalVisit && (
-              <div className="pt-2 border-t border-border mt-2 space-y-1">
-                <p className="text-xs font-medium text-muted-foreground">Latest Nurse Visit ({latestPrenatalVisit.visitDate})</p>
-                {latestPrenatalVisit.bloodPressure && (
-                  <p className="text-sm"><span className="text-muted-foreground">BP:</span> {latestPrenatalVisit.bloodPressure}</p>
-                )}
-                {latestPrenatalVisit.weightKg && (
-                  <p className="text-sm"><span className="text-muted-foreground">Weight:</span> {latestPrenatalVisit.weightKg} kg</p>
-                )}
-                {latestPrenatalVisit.fundalHeight && (
-                  <p className="text-sm"><span className="text-muted-foreground">Fundal Height:</span> {latestPrenatalVisit.fundalHeight} cm</p>
-                )}
-                {latestPrenatalVisit.riskStatus && (
-                  <p className="text-sm"><span className="text-muted-foreground">Risk:</span> <span className="capitalize">{latestPrenatalVisit.riskStatus}</span></p>
-                )}
+  // ── At-a-glance ──────────────────────────────────────────────────────────
+  const atAGlance = (
+    <GlanceGrid>
+      <GlanceCell
+        label="GA"
+        value={latestPrenatalVisit?.gaWeeks ? `${latestPrenatalVisit.gaWeeks} wks` : `${mother.gaWeeks} wks`}
+        hint={latestPrenatalVisit?.gaWeeks ? `Visit ${latestPrenatalVisit.visitDate}` : "At registration"}
+        testId="glance-ga"
+      />
+      <GlanceCell
+        label="Next TT"
+        value={tt.nextShotLabel}
+        hint={<StatusBadge status={tt.status} />}
+        testId="glance-tt"
+      />
+      <GlanceCell
+        label="Next Prenatal"
+        value={formatDate(mother.nextPrenatalCheckDate)}
+        hint={<StatusBadge status={pc.status} />}
+        testId="glance-prenatal"
+      />
+      <GlanceCell
+        label="Latest BP / Wt"
+        value={
+          latestPrenatalVisit?.bloodPressure || latestPrenatalVisit?.weightKg
+            ? `${latestPrenatalVisit?.bloodPressure ?? "—"} · ${latestPrenatalVisit?.weightKg ? `${latestPrenatalVisit.weightKg} kg` : "—"}`
+            : "—"
+        }
+        hint={latestPrenatalVisit ? formatDate(latestPrenatalVisit.visitDate) : ""}
+        testId="glance-bp"
+      />
+    </GlanceGrid>
+  );
+
+  // ── Profile tab ──────────────────────────────────────────────────────────
+  const profileTab = (
+    <div className="space-y-4">
+      <Card>
+        <CardContent className="py-4">
+          <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 text-sm">
+            <div>
+              <dt className="text-muted-foreground text-xs">Age</dt>
+              <dd>{mother.age} years old</dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground text-xs">Barangay</dt>
+              <dd>{mother.barangay}</dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground text-xs">Address</dt>
+              <dd>{mother.addressLine || "—"}</dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground text-xs">Phone</dt>
+              <dd>{mother.phone || "—"}</dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground text-xs">GA at registration</dt>
+              <dd>{mother.gaWeeks} weeks</dd>
+            </div>
+            {mother.expectedDeliveryDate && (
+              <div>
+                <dt className="text-muted-foreground text-xs">Expected Delivery</dt>
+                <dd>{formatDate(mother.expectedDeliveryDate)}</dd>
               </div>
             )}
-          </CardContent>
-        </Card>
-
-        <div className="flex-1 space-y-4">
-          <Card className={tt.status === 'overdue' ? 'border-red-500/30' : tt.status === 'due_soon' ? 'border-orange-500/30' : ''}>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base flex items-center gap-2">
-                <Heart className="w-4 h-4 text-red-400" />
-                Next Tetanus Shot
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center justify-between gap-4 mb-3">
-                <div>
-                  <p className="font-medium">{tt.nextShotLabel}</p>
-                  <p className="text-sm text-muted-foreground">Due: {formatDate(tt.dueDate)}</p>
-                </div>
-                <StatusBadge status={tt.status} />
-              </div>
-              {tt.status !== 'completed' && (
-                <div className="flex gap-2">
-                  <Button size="sm" onClick={() => setSmsOpen(true)} variant="outline" className="gap-1" data-testid="button-send-sms-tt">
-                    <MessageSquare className="w-3 h-3" /> Send SMS
-                  </Button>
-                  <Button size="sm" onClick={() => { setConfirmAction('tt'); setConfirmOpen(true); }} className="gap-1" data-testid="button-mark-done-tt">
-                    <Check className="w-3 h-3" /> Mark Done
-                  </Button>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card className={pc.status === 'overdue' ? 'border-red-500/30' : pc.status === 'due_soon' ? 'border-orange-500/30' : ''}>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base flex items-center gap-2">
-                <Stethoscope className="w-4 h-4 text-blue-400" />
-                Next Prenatal Check
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center justify-between gap-4">
-                <div>
-                  <p className="font-medium">Prenatal Check-up</p>
-                  <p className="text-sm text-muted-foreground">Date: {formatDate(mother.nextPrenatalCheckDate)}</p>
-                </div>
-                <StatusBadge status={pc.status} />
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
+          </dl>
+        </CardContent>
+      </Card>
 
       <Card data-testid="card-linked-children">
         <CardHeader className="pb-2">
           <CardTitle className="text-base flex items-center justify-between">
             <span className="flex items-center gap-2">
-              <Baby className="w-4 h-4 text-blue-400" />
+              <Baby className="w-4 h-4 text-primary" />
               Linked Children ({linkedChildren.length})
             </span>
             <Button size="sm" variant="outline" onClick={() => navigate("/child/new")} className="gap-1" data-testid="button-add-linked-child">
-              <Plus className="w-3 h-3" />
-              Add Child
+              <Plus className="w-3 h-3" /> Add Child
             </Button>
           </CardTitle>
         </CardHeader>
         <CardContent>
           {linkedChildren.length === 0 ? (
-            <p className="text-sm text-muted-foreground py-2">
-              No children linked to this mother yet.
-            </p>
+            <p className="text-sm text-muted-foreground py-2">No children linked to this mother yet.</p>
           ) : (
             <div className="space-y-2">
-              {linkedChildren.map(c => (
+              {linkedChildren.map((c) => (
                 <div key={c.id} className="flex items-center justify-between p-2 rounded-md bg-muted/30 border border-border" data-testid={`linked-child-${c.id}`}>
                   <div>
                     <p className="font-medium">{c.name}</p>
@@ -327,27 +309,82 @@ export default function MotherProfile() {
           )}
         </CardContent>
       </Card>
+    </div>
+  );
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">TT History</CardTitle>
+  // ── Transactions tab ─────────────────────────────────────────────────────
+  const transactionsTab = (
+    <div className="space-y-4">
+      <VisitHistoryCard profileType="Mother" profileId={mother.id} />
+      <ConsultationHistoryCard profileType="Mother" profileId={mother.id} />
+    </div>
+  );
+
+  // ── Clinical tab ─────────────────────────────────────────────────────────
+  const clinicalTab = (
+    <div className="space-y-4">
+      <Card className={tt.status === "overdue" ? "border-red-500/30" : tt.status === "due_soon" ? "border-orange-500/30" : ""}>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Heart className="w-4 h-4 text-primary" /> Next Tetanus Shot
+          </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="space-y-2 text-sm">
-            <p><span className="text-muted-foreground">TT1:</span> {mother.tt1Date ? formatDate(mother.tt1Date) : 'Not yet given'}</p>
-            <p><span className="text-muted-foreground">TT2:</span> {mother.tt2Date ? formatDate(mother.tt2Date) : 'Not yet given'}</p>
-            <p><span className="text-muted-foreground">TT3:</span> {mother.tt3Date ? formatDate(mother.tt3Date) : 'Not yet given'}</p>
+          <div className="flex items-center justify-between gap-4 mb-3">
+            <div>
+              <p className="font-medium">{tt.nextShotLabel}</p>
+              <p className="text-sm text-muted-foreground">Due: {formatDate(tt.dueDate)}</p>
+            </div>
+            <StatusBadge status={tt.status} />
+          </div>
+          {tt.status !== "completed" && (
+            <div className="flex gap-2">
+              <Button size="sm" onClick={() => setSmsOpen(true)} variant="outline" className="gap-1" data-testid="button-send-sms-tt">
+                <MessageSquare className="w-3 h-3" /> Send SMS
+              </Button>
+              <Button size="sm" onClick={() => { setConfirmAction("tt"); setConfirmOpen(true); }} className="gap-1" data-testid="button-mark-done-tt">
+                <Check className="w-3 h-3" /> Mark Done
+              </Button>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card className={pc.status === "overdue" ? "border-red-500/30" : pc.status === "due_soon" ? "border-orange-500/30" : ""}>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Stethoscope className="w-4 h-4 text-primary" /> Next Prenatal Check
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <p className="font-medium">Prenatal Check-up</p>
+              <p className="text-sm text-muted-foreground">Date: {formatDate(mother.nextPrenatalCheckDate)}</p>
+            </div>
+            <StatusBadge status={pc.status} />
           </div>
         </CardContent>
       </Card>
 
-      {/* Family Planning Card */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">TT History</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-2 text-sm">
+            <p><span className="text-muted-foreground">TT1:</span> {mother.tt1Date ? formatDate(mother.tt1Date) : "Not yet given"}</p>
+            <p><span className="text-muted-foreground">TT2:</span> {mother.tt2Date ? formatDate(mother.tt2Date) : "Not yet given"}</p>
+            <p><span className="text-muted-foreground">TT3:</span> {mother.tt3Date ? formatDate(mother.tt3Date) : "Not yet given"}</p>
+          </div>
+        </CardContent>
+      </Card>
+
       <Card data-testid="card-fp-enrollment">
         <CardHeader className="pb-2">
           <CardTitle className="text-base flex items-center justify-between">
             <span className="flex items-center gap-2">
-              <HeartHandshake className="w-4 h-4 text-pink-400" />
-              Family Planning
+              <HeartHandshake className="w-4 h-4 text-primary" /> Family Planning
             </span>
             <div className="flex gap-2">
               {canUpdate && (
@@ -366,7 +403,7 @@ export default function MotherProfile() {
             <p className="text-sm text-muted-foreground">No FP records linked to this patient.</p>
           ) : (
             <div className="space-y-2">
-              {fpRecords.map(r => (
+              {fpRecords.map((r) => (
                 <div key={r.id} className="flex items-center justify-between text-sm" data-testid={`row-linked-fp-${r.id}`}>
                   <span>{FP_METHOD_LABELS[r.fpMethod] || r.fpMethod}</span>
                   <div className="flex items-center gap-2">
@@ -381,19 +418,61 @@ export default function MotherProfile() {
           )}
         </CardContent>
       </Card>
+    </div>
+  );
 
-      <ConsultationHistoryCard profileType="Mother" profileId={mother.id} />
+  // ── Overflow actions ─────────────────────────────────────────────────────
+  const overflowActions: ProfileOverflowAction[] = [];
+  if (tt.status !== "completed") {
+    overflowActions.push({
+      label: "Send SMS",
+      icon: MessageSquare,
+      onClick: () => setSmsOpen(true),
+      testId: "action-send-sms",
+    });
+  }
+  if (canUpdate) {
+    overflowActions.push({
+      label: "Edit",
+      icon: Pencil,
+      onClick: () => navigate(`/mother/${id}/edit`),
+      testId: "button-edit-mother",
+    });
+  }
+  if (canDelete) {
+    overflowActions.push({
+      label: "Delete",
+      icon: Trash2,
+      destructive: true,
+      onClick: () => setDeleteOpen(true),
+      testId: "button-delete-mother",
+    });
+  }
 
-      <VisitHistoryCard profileType="Mother" profileId={mother.id} />
+  return (
+    <>
+      <PatientProfileShell
+        backHref="/prenatal"
+        backLabel="Back to Worklist"
+        name={`${mother.firstName} ${mother.lastName}`}
+        subtitle={`${mother.age} yrs · Brgy ${mother.barangay}${mother.phone ? ` · ${mother.phone}` : ""}`}
+        statusPills={statusPills}
+        atAGlance={atAGlance}
+        overflowActions={overflowActions}
+        tabs={[
+          { value: "profile", label: "Profile", element: profileTab },
+          { value: "transactions", label: "Transactions", element: transactionsTab },
+          { value: "clinical", label: "Clinical", element: clinicalTab },
+        ]}
+      />
 
-      {/* FP Quick-Enroll Dialog */}
-      <Dialog open={fpDialogOpen} onOpenChange={v => !v && setFpDialogOpen(false)}>
+      <Dialog open={fpDialogOpen} onOpenChange={(v) => !v && setFpDialogOpen(false)}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle>Enroll in Family Planning</DialogTitle>
           </DialogHeader>
           <Form {...fpEnrollForm}>
-            <form onSubmit={fpEnrollForm.handleSubmit(d => fpEnrollMutation.mutate(d))} className="space-y-4">
+            <form onSubmit={fpEnrollForm.handleSubmit((d) => fpEnrollMutation.mutate(d))} className="space-y-4">
               <FormField control={fpEnrollForm.control} name="fpMethod" render={({ field }) => (
                 <FormItem>
                   <FormLabel>FP Method</FormLabel>
@@ -404,7 +483,7 @@ export default function MotherProfile() {
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      {FP_METHODS.map(m => <SelectItem key={m} value={m}>{FP_METHOD_LABELS[m]}</SelectItem>)}
+                      {FP_METHODS.map((m) => <SelectItem key={m} value={m}>{FP_METHOD_LABELS[m]}</SelectItem>)}
                     </SelectContent>
                   </Select>
                   <FormMessage />
@@ -420,7 +499,7 @@ export default function MotherProfile() {
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      {FP_STATUSES.map(s => <SelectItem key={s} value={s}>{FP_STATUS_LABELS[s]}</SelectItem>)}
+                      {FP_STATUSES.map((s) => <SelectItem key={s} value={s}>{FP_STATUS_LABELS[s]}</SelectItem>)}
                     </SelectContent>
                   </Select>
                   <FormMessage />
@@ -477,6 +556,6 @@ export default function MotherProfile() {
           await updateMutation.mutateAsync({ phone });
         }}
       />
-    </div>
+    </>
   );
 }
