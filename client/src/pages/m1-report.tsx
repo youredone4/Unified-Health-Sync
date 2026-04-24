@@ -72,15 +72,18 @@ interface ColumnSpec {
   hasRate?: boolean;
 }
 
-export default function M1ReportPage() {
+export default function M1ReportPage({ initialMode }: { initialMode?: "view" | "encode" } = {}) {
   const { toast } = useToast();
   const { settings } = useTheme();
-  
+
   const [selectedMonth, setSelectedMonth] = useState(() => new Date().getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState(() => new Date().getFullYear());
   const [selectedBarangayId, setSelectedBarangayId] = useState<number | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
-  const [reportMode, setReportMode] = useState<"view" | "encode">("view");
+  // Landing mode is controlled by route entry point: /m1/encode lands in
+  // encode, /reports/m1 lands in view. The toggle button remains so an
+  // operator who deep-linked to the "wrong" page can still flip locally.
+  const [reportMode, setReportMode] = useState<"view" | "encode">(initialMode ?? "view");
   const [editedValues, setEditedValues] = useState<IndicatorValueMap>({});
   const [activeReportId, setActiveReportId] = useState<number | null>(null);
   const [diseaseImportOpen, setDiseaseImportOpen] = useState(false);

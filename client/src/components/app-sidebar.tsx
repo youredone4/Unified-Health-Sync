@@ -145,6 +145,12 @@ const NAV_ZONES: NavZone[] = [
         ],
       },
       {
+        label: "Monthly Encoding",
+        items: [
+          { title: "M1 Encoding", url: "/m1/encode", icon: ClipboardList, roles: rolesFor("/m1/encode") },
+        ],
+      },
+      {
         label: "Communication",
         items: [
           { title: "Messages", url: "/messages", icon: MessageCircle, roles: rolesFor("/messages"), isBadged: true },
@@ -204,7 +210,7 @@ const NAV_ZONES: NavZone[] = [
       {
         label: null,
         items: [
-          { title: "M1 Report", url: "/reports/m1", icon: ClipboardList, roles: rolesFor("/reports/m1") },
+          { title: "M1 Brgy Summary & Export", url: "/reports/m1", icon: ClipboardList, roles: rolesFor("/reports/m1") },
           { title: "Health Analytics", url: "/reports/ai", icon: Bot, roles: rolesFor("/reports/ai") },
         ],
       },

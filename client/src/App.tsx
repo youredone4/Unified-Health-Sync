@@ -94,6 +94,11 @@ function RoleRoute({ component: Component, allowedRoles }: { component: React.Co
   return <Component />;
 }
 
+// M1 Report is rendered twice, once per sidebar zone, with different landing
+// modes. Same underlying page; the prop just picks which mode to show first.
+function M1ReportView() { return <M1ReportPage initialMode="view" />; }
+function M1ReportEncode() { return <M1ReportPage initialMode="encode" />; }
+
 function Router() {
   return (
     <Switch>
@@ -142,7 +147,10 @@ function Router() {
         <RoleRoute component={AIReporting} />
       </Route>
       <Route path="/reports/m1">
-        <RoleRoute component={M1ReportPage} />
+        <RoleRoute component={M1ReportView} />
+      </Route>
+      <Route path="/m1/encode">
+        <RoleRoute component={M1ReportEncode} />
       </Route>
       <Route path="/disease" component={DiseaseWorklist} />
       <Route path="/disease/registry" component={DiseaseRegistry} />
