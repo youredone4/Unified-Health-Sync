@@ -125,9 +125,24 @@ export default function DiseaseProfile() {
   }
 
   // ── At-a-glance ──────────────────────────────────────────────────────────
+  const allConditions = [
+    diseaseCase.condition,
+    ...((diseaseCase.additionalConditions ?? []) as string[]),
+  ].filter(Boolean);
+
   const atAGlance = (
     <GlanceGrid cols={3}>
-      <GlanceCell label="Condition" value={diseaseCase.condition} testId="glance-condition" />
+      <GlanceCell
+        label={allConditions.length > 1 ? `Conditions (${allConditions.length})` : "Condition"}
+        value={
+          <span className="flex flex-wrap gap-1">
+            {allConditions.map((c) => (
+              <Badge key={c} variant="outline" className="text-xs">{c}</Badge>
+            ))}
+          </span>
+        }
+        testId="glance-condition"
+      />
       <GlanceCell
         label="Date reported"
         value={formatDate(diseaseCase.dateReported)}
@@ -238,8 +253,12 @@ export default function DiseaseProfile() {
     <Card>
       <CardContent className="py-4 space-y-3">
         <div>
-          <p className="text-muted-foreground text-xs">Condition</p>
-          <Badge variant="outline" className="mt-1">{diseaseCase.condition}</Badge>
+          <p className="text-muted-foreground text-xs">{allConditions.length > 1 ? "Conditions" : "Condition"}</p>
+          <div className="flex flex-wrap gap-1 mt-1">
+            {allConditions.map((c) => (
+              <Badge key={c} variant="outline">{c}</Badge>
+            ))}
+          </div>
         </div>
         {diseaseCase.notes && (
           <div className="pt-2 border-t border-border">
@@ -288,7 +307,7 @@ export default function DiseaseProfile() {
         backHref="/disease"
         backLabel="Back to Worklist"
         name={diseaseCase.patientName}
-        subtitle={`${diseaseCase.age} yrs · ${diseaseCase.condition} · Brgy ${diseaseCase.barangay}`}
+        subtitle={`${diseaseCase.age} yrs · ${allConditions.join(", ")} · Brgy ${diseaseCase.barangay}`}
         typeBadges={
           <Badge variant={getStatusVariant(diseaseCase.status || "New")}>{diseaseCase.status}</Badge>
         }

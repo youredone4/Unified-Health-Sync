@@ -24,6 +24,31 @@ export const pidsrCat2: ReportDefinition = {
     if (barangay) conds.push(eq(diseaseCases.barangay, barangay));
     const rows = await db.select().from(diseaseCases).where(and(...conds));
 
+    // PIDSR is a notification line list — each disease must be its own
+    // line. A case row with co-conditions (e.g. HIV + TB) becomes 2
+    // line-list entries sharing patient details.
+    const lines: Array<{ id: string; cells: Record<string, string | number> }> = [];
+    for (const r of rows) {
+      const allConds = [r.condition, ...((r.additionalConditions ?? []) as string[])]
+        .map((c) => (c ?? "").trim())
+        .filter((c) => c.length > 0);
+      const dedup = Array.from(new Set(allConds));
+      for (const cond of dedup) {
+        lines.push({
+          id: `${r.id}:${cond}`,
+          cells: {
+            dateReported: r.dateReported,
+            patientName: r.patientName,
+            age: r.age ?? "",
+            barangay: r.barangay,
+            condition: cond,
+            status: r.status ?? "",
+            notes: r.notes ?? "",
+          },
+        });
+      }
+    }
+
     return {
       columns: [
         { key: "dateReported", label: "Date reported", align: "left" },
@@ -34,19 +59,11 @@ export const pidsrCat2: ReportDefinition = {
         { key: "status", label: "Status", align: "left" },
         { key: "notes", label: "Notes", align: "left" },
       ],
-      rows: rows.map((r) => ({
-        id: String(r.id),
-        cells: {
-          dateReported: r.dateReported,
-          patientName: r.patientName,
-          age: r.age ?? "",
-          barangay: r.barangay,
-          condition: r.condition,
-          status: r.status ?? "",
-          notes: r.notes ?? "",
-        },
-      })),
-      meta: { sourceCount: rows.length, notes: `${rows.length} cases in the week` },
+      rows: lines,
+      meta: {
+        sourceCount: rows.length,
+        notes: `${rows.length} case row${rows.length === 1 ? "" : "s"} → ${lines.length} disease line${lines.length === 1 ? "" : "s"} (cases with co-infections expand)`,
+      },
     };
   },
 };
