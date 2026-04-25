@@ -1054,6 +1054,43 @@ export const insertHouseholdWaterRecordSchema = createInsertSchema(householdWate
 export type HouseholdWaterRecord = typeof householdWaterRecords.$inferSelect;
 export type InsertHouseholdWaterRecord = z.infer<typeof insertHouseholdWaterRecordSchema>;
 
+// === PIDSR WEEKLY ATTESTATIONS — RA 11332 + PIDSR MoP 2nd Ed. ===
+// Cat-I diseases (AFP, measles, NT, rabies, cholera, anthrax, meningo,
+// HFMD outbreaks) require zero-reports each week even when no cases
+// occurred. Cat-II is a line list (already covered by disease_cases),
+// but the *submission attestation* is what marks the week as filed.
+export const PIDSR_ZERO_REPORT_DISEASES = [
+  "AFP", "MEASLES", "NEONATAL_TETANUS", "RABIES_HUMAN", "CHOLERA",
+  "ANTHRAX", "MENINGOCOCCAL", "HFMD_OUTBREAK",
+] as const;
+export type PidsrZeroReportDisease = typeof PIDSR_ZERO_REPORT_DISEASES[number];
+
+export const pidsrSubmissions = pgTable("pidsr_submissions", {
+  id: serial("id").primaryKey(),
+  barangay: text("barangay").notNull(),
+  weekStartDate: text("week_start_date").notNull(), // Monday YYYY-MM-DD
+  weekEndDate: text("week_end_date").notNull(),     // Friday YYYY-MM-DD (cutoff)
+  submittedAt: timestamp("submitted_at").defaultNow().notNull(),
+  submittedByUserId: varchar("submitted_by_user_id"),
+  cat2CaseCount: integer("cat2_case_count").default(0),
+  // Cat-I diseases that the DSO is attesting "zero cases this week".
+  // Stored as a JSON array of PidsrZeroReportDisease values; absent
+  // means the DSO did NOT confirm zero — i.e. potential gap.
+  zeroReportDiseases: jsonb("zero_report_diseases").$type<PidsrZeroReportDisease[]>(),
+  notes: text("notes"),
+}, (t) => ({
+  uniqueWeek: uniqueIndex("pidsr_submissions_unique_idx")
+    .on(t.barangay, t.weekEndDate),
+}));
+
+export const insertPidsrSubmissionSchema = createInsertSchema(pidsrSubmissions)
+  .omit({ id: true, submittedAt: true })
+  .extend({
+    zeroReportDiseases: z.array(z.enum(PIDSR_ZERO_REPORT_DISEASES)).optional(),
+  });
+export type PidsrSubmission = typeof pidsrSubmissions.$inferSelect;
+export type InsertPidsrSubmission = z.infer<typeof insertPidsrSubmissionSchema>;
+
 // Child monitoring visits
 export const childVisits = pgTable("child_visits", {
   id: serial("id").primaryKey(),
