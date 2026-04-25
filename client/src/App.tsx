@@ -78,6 +78,7 @@ import OralHealthPage from "@/pages/oral-health";
 import NcdScreeningsPage from "@/pages/ncd-screenings";
 import DiseaseSurveillancePage from "@/pages/disease-surveillance";
 import MortalityPage from "@/pages/mortality";
+import HouseholdWaterPage from "@/pages/household-water";
 
 const roleLabels: Record<string, string> = {
   SYSTEM_ADMIN: "Admin",
@@ -378,6 +379,9 @@ function Router() {
 
       {/* Mortality registry (Section H) */}
       <Route path="/mortality"><MortalityPage /></Route>
+
+      {/* Household water survey (Section W) */}
+      <Route path="/household-water"><HouseholdWaterPage /></Route>
 
       {/* Reports hub */}
       <Route path="/m1/encode"><ReportsHub><RoleRoute component={M1ReportEncode} /></ReportsHub></Route>
