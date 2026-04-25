@@ -3,7 +3,7 @@ import type { Server } from "http";
 import { storage } from "./storage";
 import { db } from "./db";
 import { max, eq } from "drizzle-orm";
-import { prenatalVisits, childVisits, seniorVisits, insertFpServiceRecordSchema, insertNutritionFollowUpSchema, insertColdChainLogSchema, insertTbDoseLogSchema, insertPostpartumVisitSchema, insertPrenatalScreeningSchema, insertBirthAttendanceRecordSchema, insertSickChildVisitSchema, insertSchoolImmunizationSchema, insertOralHealthVisitSchema, insertPhilpenAssessmentSchema, insertNcdScreeningSchema, insertVisionScreeningSchema, insertCervicalCancerScreeningSchema, insertMentalHealthScreeningSchema, insertFilariasisRecordSchema, insertRabiesExposureSchema, insertSchistosomiasisRecordSchema, insertSthRecordSchema, insertLeprosyRecordSchema, insertDeathEventSchema, insertHouseholdWaterRecordSchema, insertPidsrSubmissionSchema } from "@shared/schema";
+import { prenatalVisits, childVisits, seniorVisits, insertFpServiceRecordSchema, insertNutritionFollowUpSchema, insertColdChainLogSchema, insertTbDoseLogSchema, insertPostpartumVisitSchema, insertPrenatalScreeningSchema, insertBirthAttendanceRecordSchema, insertSickChildVisitSchema, insertSchoolImmunizationSchema, insertOralHealthVisitSchema, insertPhilpenAssessmentSchema, insertNcdScreeningSchema, insertVisionScreeningSchema, insertCervicalCancerScreeningSchema, insertMentalHealthScreeningSchema, insertFilariasisRecordSchema, insertRabiesExposureSchema, insertSchistosomiasisRecordSchema, insertSthRecordSchema, insertLeprosyRecordSchema, insertDeathEventSchema, insertHouseholdWaterRecordSchema, insertPidsrSubmissionSchema, insertWorkforceMemberSchema, insertWorkforceCredentialSchema } from "@shared/schema";
 import { api } from "@shared/routes";
 import { z } from "zod";
 import { setupAuth, registerAuthRoutes } from "./auth";
@@ -1123,6 +1123,95 @@ export async function registerRoutes(
   }));
 
   // === M1 TEMPLATE SYSTEM ===
+
+  // === HRH WORKFORCE MODULE — DOH HHRDB / NHWSS aligned ===
+  app.get("/api/workforce", loadUserInfo, requireAuth, ar(async (req, res) => {
+    const requestedBarangay = req.query.barangay ? String(req.query.barangay) : undefined;
+    const activeOnly = req.query.activeOnly === "true";
+    if (req.userInfo?.role === UserRole.TL) {
+      const assigned = req.userInfo.assignedBarangays;
+      if (assigned.length === 0) return res.json([]);
+      if (requestedBarangay && !assigned.includes(requestedBarangay)) {
+        return res.status(403).json({ message: "Access denied to this barangay" });
+      }
+      const all = await storage.getWorkforceMembers({ barangay: requestedBarangay, activeOnly });
+      return res.json(requestedBarangay ? all : all.filter((r) => !r.barangay || assigned.includes(r.barangay)));
+    }
+    const data = await storage.getWorkforceMembers({ barangay: requestedBarangay, activeOnly });
+    res.json(data);
+  }));
+
+  app.get("/api/workforce/:id", loadUserInfo, requireAuth, ar(async (req, res) => {
+    const id = parseId(req.params.id, res); if (id === null) return;
+    const member = await storage.getWorkforceMember(id);
+    if (!member) return res.status(404).json({ message: "Workforce member not found" });
+    if (req.userInfo?.role === UserRole.TL && member.barangay && !req.userInfo.assignedBarangays.includes(member.barangay)) {
+      return res.status(403).json({ message: "Access denied to this barangay" });
+    }
+    const credentials = await storage.getWorkforceCredentials(id);
+    res.json({ member, credentials });
+  }));
+
+  app.post("/api/workforce", loadUserInfo, requireAuth,
+    requireRole(UserRole.SYSTEM_ADMIN, UserRole.MHO, UserRole.SHA),
+    ar(async (req, res) => {
+      const parsed = insertWorkforceMemberSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: "Invalid workforce member", issues: parsed.error.issues });
+      }
+      const created = await storage.createWorkforceMember({
+        ...parsed.data,
+        recordedByUserId: req.userInfo?.id ?? null,
+      });
+      await createAuditLog(
+        req.userInfo!.id, req.userInfo!.role,
+        "CREATE", "WORKFORCE_MEMBER", String(created.id),
+        created.barangay ?? undefined, undefined,
+        { fullName: created.fullName, profession: created.profession, employmentStatus: created.employmentStatus },
+        req,
+      );
+      res.status(201).json(created);
+    }),
+  );
+
+  app.put("/api/workforce/:id", loadUserInfo, requireAuth,
+    requireRole(UserRole.SYSTEM_ADMIN, UserRole.MHO, UserRole.SHA),
+    ar(async (req, res) => {
+      const id = parseId(req.params.id, res); if (id === null) return;
+      const existing = await storage.getWorkforceMember(id);
+      if (!existing) return res.status(404).json({ message: "Workforce member not found" });
+      const updated = await storage.updateWorkforceMember(id, req.body);
+      await createAuditLog(
+        req.userInfo!.id, req.userInfo!.role,
+        "UPDATE", "WORKFORCE_MEMBER", String(id),
+        updated.barangay ?? undefined,
+        existing as any, updated as any, req,
+      );
+      res.json(updated);
+    }),
+  );
+
+  app.post("/api/workforce/:id/credentials", loadUserInfo, requireAuth,
+    requireRole(UserRole.SYSTEM_ADMIN, UserRole.MHO, UserRole.SHA),
+    ar(async (req, res) => {
+      const memberId = parseId(req.params.id, res); if (memberId === null) return;
+      const member = await storage.getWorkforceMember(memberId);
+      if (!member) return res.status(404).json({ message: "Workforce member not found" });
+      const parsed = insertWorkforceCredentialSchema.safeParse({ ...req.body, memberId });
+      if (!parsed.success) {
+        return res.status(400).json({ message: "Invalid credential", issues: parsed.error.issues });
+      }
+      const created = await storage.createWorkforceCredential(parsed.data);
+      await createAuditLog(
+        req.userInfo!.id, req.userInfo!.role,
+        "CREATE", "WORKFORCE_CREDENTIAL", String(created.id),
+        member.barangay ?? undefined, undefined,
+        { memberId, credentialType: created.credentialType, dateObtained: created.dateObtained },
+        req,
+      );
+      res.status(201).json(created);
+    }),
+  );
 
   // === PIDSR WEEKLY ATTESTATIONS — RA 11332 ===
   app.get("/api/pidsr-submissions", loadUserInfo, requireAuth, ar(async (req, res) => {

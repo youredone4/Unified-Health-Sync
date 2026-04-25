@@ -1054,6 +1054,74 @@ export const insertHouseholdWaterRecordSchema = createInsertSchema(householdWate
 export type HouseholdWaterRecord = typeof householdWaterRecords.$inferSelect;
 export type InsertHouseholdWaterRecord = z.infer<typeof insertHouseholdWaterRecordSchema>;
 
+// === HRH WORKFORCE MODULE — DOH HHRDB / NHWSS aligned ===
+// Roster of health workers under the LGU's responsibility for DOH
+// Human Resources for Health Information System (HRH-IS / NHWSS)
+// quarterly reporting, plus PhilHealth Konsulta accreditation HRH
+// attachments. Underpinned by RA 11223 §22-§25 (Health Workforce).
+export const HRH_PROFESSIONS = [
+  "NURSE", "MIDWIFE", "PHYSICIAN", "DENTIST", "MEDTECH",
+  "NUTRITIONIST", "SANITATION_INSPECTOR", "BHW_VOLUNTEER", "OTHER",
+] as const;
+export type HrhProfession = typeof HRH_PROFESSIONS[number];
+
+export const HRH_EMPLOYMENT_STATUSES = [
+  "REGULAR", "CONTRACTUAL", "JOB_ORDER", "CONTRACT_OF_SERVICE",
+  "NDP", "DTTB", "RHMPP", "RHMP", "MTDP", "VOLUNTEER", "OTHER",
+] as const;
+export type HrhEmploymentStatus = typeof HRH_EMPLOYMENT_STATUSES[number];
+
+export const workforceMembers = pgTable("workforce_members", {
+  id: serial("id").primaryKey(),
+  fullName: text("full_name").notNull(),
+  profession: text("profession").$type<HrhProfession>().notNull(),
+  prcLicenseNumber: text("prc_license_number"),
+  prcLicenseExpiry: text("prc_license_expiry"),     // YYYY-MM-DD; drives expiry alerts
+  barangay: text("barangay"),                        // primary assignment, null = RHU
+  facilityType: text("facility_type"),               // 'BHS' | 'RHU' | 'HOSPITAL'
+  employmentStatus: text("employment_status").$type<HrhEmploymentStatus>().notNull(),
+  dateHired: text("date_hired"),
+  dateSeparated: text("date_separated"),
+  separationReason: text("separation_reason"),
+  contactNumber: text("contact_number"),
+  email: text("email"),
+  // Optional link to the platform user account (if they log in to this app).
+  userId: varchar("user_id"),
+  notes: text("notes"),
+  recordedByUserId: varchar("recorded_by_user_id"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+export const insertWorkforceMemberSchema = createInsertSchema(workforceMembers)
+  .omit({ id: true, createdAt: true })
+  .extend({
+    profession: z.enum(HRH_PROFESSIONS),
+    employmentStatus: z.enum(HRH_EMPLOYMENT_STATUSES),
+  });
+export type WorkforceMember = typeof workforceMembers.$inferSelect;
+export type InsertWorkforceMember = z.infer<typeof insertWorkforceMemberSchema>;
+
+export const HRH_CREDENTIAL_TYPES = [
+  "BEmONC", "BLS", "ACLS", "IMCI", "FP_CBT", "mhGAP",
+  "PhilCAT_TB", "BLS_NEONATAL", "OTHER",
+] as const;
+export type HrhCredentialType = typeof HRH_CREDENTIAL_TYPES[number];
+
+export const workforceCredentials = pgTable("workforce_credentials", {
+  id: serial("id").primaryKey(),
+  memberId: integer("member_id").notNull().references(() => workforceMembers.id, { onDelete: "cascade" }),
+  credentialType: text("credential_type").$type<HrhCredentialType>().notNull(),
+  dateObtained: text("date_obtained").notNull(),
+  expiryDate: text("expiry_date"),
+  provider: text("provider"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+export const insertWorkforceCredentialSchema = createInsertSchema(workforceCredentials)
+  .omit({ id: true, createdAt: true })
+  .extend({ credentialType: z.enum(HRH_CREDENTIAL_TYPES) });
+export type WorkforceCredential = typeof workforceCredentials.$inferSelect;
+export type InsertWorkforceCredential = z.infer<typeof insertWorkforceCredentialSchema>;
+
 // === PIDSR WEEKLY ATTESTATIONS — RA 11332 + PIDSR MoP 2nd Ed. ===
 // Cat-I diseases (AFP, measles, NT, rabies, cholera, anthrax, meningo,
 // HFMD outbreaks) require zero-reports each week even when no cases
