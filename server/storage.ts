@@ -24,7 +24,7 @@ import {
   type ThemeSettings, type InsertThemeSettings,
   type Consult, type InsertConsult,
   type Barangay, type User,
-  type M1TemplateVersion, type M1IndicatorCatalog, type M1ReportInstance, type M1IndicatorValue,
+  type M1TemplateVersion, type M1IndicatorCatalog, type InsertM1IndicatorCatalog, type M1ReportInstance, type M1IndicatorValue,
   type MunicipalitySettings, type BarangaySettings,
   type SeniorMedClaim, type InsertSeniorMedClaim,
   type DirectMessage,
@@ -928,6 +928,58 @@ export class DatabaseStorage implements IStorage {
       add(rowKey, columnKey, v);
     }
 
+    // === SECTION C — POSTPARTUM (PNC follow-ups) ===
+    // C-01a: distinct mothers whose 2nd PNC visit fell in this report month
+    // C-01b: distinct mothers whose 4th PNC visit fell in this report month,
+    //        broken down by age (10-14, 15-19, 20-49, TOTAL)
+    // TRANS IN/OUT sub-rows (C-01b-b, C-01c-*) are not auto-computed yet —
+    // they require trans_in/trans_out flags on postpartum_visits.
+    const monthPrefix = `${year}-${String(month).padStart(2, "0")}`;
+    const inReportMonth = (date: string) => date.startsWith(monthPrefix);
+
+    const pncWhere = barangayName ? eq(mothers.barangay, barangayName) : undefined;
+    const pncRows = await db
+      .select({
+        motherId: postpartumVisits.motherId,
+        visitDate: postpartumVisits.visitDate,
+        age: mothers.age,
+      })
+      .from(postpartumVisits)
+      .innerJoin(mothers, eq(postpartumVisits.motherId, mothers.id))
+      .where(pncWhere)
+      .orderBy(postpartumVisits.motherId, postpartumVisits.visitDate);
+
+    const visitsByMother: Record<number, { dates: string[]; age: number }> = {};
+    for (const r of pncRows) {
+      if (!visitsByMother[r.motherId]) {
+        visitsByMother[r.motherId] = { dates: [], age: r.age };
+      }
+      visitsByMother[r.motherId].dates.push(r.visitDate);
+    }
+
+    let c01a = 0;
+    const c01b: Record<string, number> = { "10-14": 0, "15-19": 0, "20-49": 0, TOTAL: 0 };
+    for (const { dates, age } of Object.values(visitsByMother)) {
+      if (dates.length >= 2 && inReportMonth(dates[1])) {
+        c01a++;
+      }
+      if (dates.length >= 4 && inReportMonth(dates[3])) {
+        let bucket: "10-14" | "15-19" | "20-49" | null = null;
+        if (age >= 10 && age <= 14) bucket = "10-14";
+        else if (age >= 15 && age <= 19) bucket = "15-19";
+        else if (age >= 20 && age <= 49) bucket = "20-49";
+        if (bucket) {
+          c01b[bucket]++;
+          c01b.TOTAL++;
+        }
+      }
+    }
+    add("C-01a", "VALUE", c01a);
+    add("C-01b", "10-14", c01b["10-14"]);
+    add("C-01b", "15-19", c01b["15-19"]);
+    add("C-01b", "20-49", c01b["20-49"]);
+    add("C-01b", "TOTAL", c01b.TOTAL);
+
     // Save all computed values (ENCODED already excluded via `add`)
     if (computedRaw.length > 0) {
       await this.updateM1IndicatorValues(reportId, computedRaw.map(v => ({
@@ -1198,6 +1250,106 @@ export class DatabaseStorage implements IStorage {
       .limit(10);
   }
 
+  /**
+   * Idempotent insert of M1 Section C (Postpartum Care) catalog rows for the
+   * active template version. Source of truth is docs/m1-data-source-audit.md.
+   * Computed rows (C-01a, C-01b) are flagged isComputed=true so the report
+   * page renders them as auto-filled. The TRANS-IN/OUT sub-rows stay encode-
+   * only until postpartum_visits gains those flags.
+   */
+  private async seedM1SectionCRows(): Promise<void> {
+    const [activeTpl] = await db
+      .select()
+      .from(m1TemplateVersions)
+      .where(eq(m1TemplateVersions.isActive, true))
+      .limit(1);
+    if (!activeTpl) return; // template not seeded yet — nothing to do
+
+    const ageGroupSpec = { columns: ["10-14", "15-19", "20-49", "TOTAL"], hasTotal: true };
+    const singleSpec = { columns: ["VALUE"] };
+
+    const rows: InsertM1IndicatorCatalog[] = [
+      {
+        templateVersionId: activeTpl.id, pageNumber: 2, sectionCode: "C",
+        rowKey: "C-01a",
+        officialLabel: "Postpartum women together with their newborn who completed at least 2 PNC",
+        dataType: "INT", rowOrder: 200, indentLevel: 0,
+        columnGroupType: "SINGLE", columnSpec: singleSpec,
+        isComputed: true, isRequired: true,
+      },
+      {
+        templateVersionId: activeTpl.id, pageNumber: 2, sectionCode: "C",
+        rowKey: "C-01b",
+        officialLabel: "Total women who delivered and completed at least 4 PNC = (a + b)",
+        dataType: "INT", rowOrder: 210, indentLevel: 0,
+        columnGroupType: "AGE_GROUP", columnSpec: ageGroupSpec,
+        isComputed: true, isRequired: true,
+      },
+      {
+        templateVersionId: activeTpl.id, pageNumber: 2, sectionCode: "C",
+        rowKey: "C-01b-a",
+        officialLabel: "Women who delivered and provided 1st to 4th PNC on schedule",
+        dataType: "INT", rowOrder: 211, indentLevel: 1,
+        columnGroupType: "SINGLE", columnSpec: singleSpec,
+        isComputed: false, isRequired: true,
+      },
+      {
+        templateVersionId: activeTpl.id, pageNumber: 2, sectionCode: "C",
+        rowKey: "C-01b-b",
+        officialLabel: "Women who delivered and completed at least 4 PNC TRANS IN from other LGUs",
+        dataType: "INT", rowOrder: 212, indentLevel: 1,
+        columnGroupType: "SINGLE", columnSpec: singleSpec,
+        isComputed: false, isRequired: true,
+      },
+      {
+        templateVersionId: activeTpl.id, pageNumber: 2, sectionCode: "C",
+        rowKey: "C-01c",
+        officialLabel: "Total women who delivered and were tracked during pregnancy = (a + b) - c",
+        dataType: "INT", rowOrder: 220, indentLevel: 0,
+        columnGroupType: "AGE_GROUP", columnSpec: ageGroupSpec,
+        isComputed: false, isRequired: true,
+      },
+      {
+        templateVersionId: activeTpl.id, pageNumber: 2, sectionCode: "C",
+        rowKey: "C-01c-a",
+        officialLabel: "Women who delivered and who were tracked during pregnancy (new)",
+        dataType: "INT", rowOrder: 221, indentLevel: 1,
+        columnGroupType: "SINGLE", columnSpec: singleSpec,
+        isComputed: false, isRequired: true,
+      },
+      {
+        templateVersionId: activeTpl.id, pageNumber: 2, sectionCode: "C",
+        rowKey: "C-01c-b",
+        officialLabel: "TRANS IN from other LGUs",
+        dataType: "INT", rowOrder: 222, indentLevel: 1,
+        columnGroupType: "SINGLE", columnSpec: singleSpec,
+        isComputed: false, isRequired: true,
+      },
+      {
+        templateVersionId: activeTpl.id, pageNumber: 2, sectionCode: "C",
+        rowKey: "C-01c-c",
+        officialLabel: "TRANS OUT (with MOV) before completing 4 PNC",
+        dataType: "INT", rowOrder: 223, indentLevel: 1,
+        columnGroupType: "SINGLE", columnSpec: singleSpec,
+        isComputed: false, isRequired: true,
+      },
+    ];
+
+    for (const row of rows) {
+      const existing = await db
+        .select({ id: m1IndicatorCatalog.id })
+        .from(m1IndicatorCatalog)
+        .where(and(
+          eq(m1IndicatorCatalog.templateVersionId, row.templateVersionId),
+          eq(m1IndicatorCatalog.rowKey, row.rowKey),
+        ))
+        .limit(1);
+      if (existing.length === 0) {
+        await db.insert(m1IndicatorCatalog).values(row);
+      }
+    }
+  }
+
   async seedData(): Promise<void> {
     // Auto-migrate: add columns introduced after the initial deployment.
     // Every statement is fully idempotent (IF NOT EXISTS / IF EXISTS) so it is
@@ -1300,6 +1452,11 @@ export class DatabaseStorage implements IStorage {
         AND primary_saturation = 60
         AND primary_lightness = 40
     `);
+
+    // M1 Section C (Postpartum Care) catalog rows. Idempotent: insert one
+    // row per (template_version_id, row_key) only if not already present.
+    // Source of truth is docs/m1-data-source-audit.md.
+    await this.seedM1SectionCRows();
 
     const existingMothers = await this.getMothers();
     if (existingMothers.length > 0) return;
