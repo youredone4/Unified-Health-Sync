@@ -322,9 +322,13 @@ export default function LandingPage() {
 
   const isTeamLeader = lastLogin.role === "TL";
   const barangayName = lastLogin.barangay;
+  // Login page is the app's product surface, not an LGU surface — show
+  // the HealthSync brand instead of the municipality settings. The DB
+  // settings (lguName / lguSubtitle / logoUrl) still drive every other
+  // page in the app.
   const logoUrl = settings?.logoUrl;
-  const lguName = settings?.lguName || "GeoHealthSync";
-  const lguSubtitle = settings?.lguSubtitle || "Barangay Health System";
+  const lguName = "HealthSync";
+  const lguSubtitle = "Unified Digital Health Information System";
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4">
