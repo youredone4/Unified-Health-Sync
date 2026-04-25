@@ -521,8 +521,15 @@ export async function registerRoutes(
 
   app.put(api.diseaseCases.update.path, registryRBAC, ar(async (req, res) => {
     const id = parseId(req.params.id, res); if (id === null) return;
+    // Debug logging to diagnose the multi-condition save path. Logs the
+    // raw request body, the parsed schema input, and the row that came
+    // back from the DB. Strip once the multi-condition flow is confirmed.
+    console.log("[disease-cases PUT]", id, "raw body keys=", Object.keys(req.body ?? {}));
+    console.log("[disease-cases PUT]", id, "raw additionalConditions=", JSON.stringify(req.body?.additionalConditions));
     const input = api.diseaseCases.update.input.parse(req.body);
+    console.log("[disease-cases PUT]", id, "parsed additionalConditions=", JSON.stringify((input as any).additionalConditions));
     const updated = await storage.updateDiseaseCase(id, input);
+    console.log("[disease-cases PUT]", id, "stored additionalConditions=", JSON.stringify((updated as any).additionalConditions));
     res.json(updated);
   }));
 
