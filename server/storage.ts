@@ -8,7 +8,7 @@ import {
   sickChildVisits, schoolImmunizations, oralHealthVisits,
   philpenAssessments, ncdScreenings, visionScreenings, cervicalCancerScreenings, mentalHealthScreenings,
   filariasisRecords, rabiesExposures, schistosomiasisRecords, sthRecords, leprosyRecords,
-  deathEvents, householdWaterRecords,
+  deathEvents, pidsrSubmissions, householdWaterRecords,
   nutritionFollowUps,
   fpServiceRecords, FP_METHOD_ROW_KEY,
   globalChatMessages,
@@ -37,6 +37,7 @@ import {
   type SthRecord, type InsertSthRecord,
   type LeprosyRecord, type InsertLeprosyRecord,
   type DeathEvent, type InsertDeathEvent,
+  type PidsrSubmission, type InsertPidsrSubmission,
   type HouseholdWaterRecord, type InsertHouseholdWaterRecord,
   type HealthStation,
   type SmsMessage, type InsertSmsMessage,
@@ -131,6 +132,11 @@ export interface IStorage {
   // Phase 6 — Mortality registry (death_events extensions)
   getDeathEvents(params: { barangay?: string }): Promise<DeathEvent[]>;
   createDeathEvent(r: InsertDeathEvent): Promise<DeathEvent>;
+
+  // PIDSR weekly submission attestations
+  getPidsrSubmissions(params: { barangay?: string; fromDate?: string }): Promise<PidsrSubmission[]>;
+  getPidsrSubmissionForWeek(barangay: string, weekEndDate: string): Promise<PidsrSubmission | null>;
+  createPidsrSubmission(r: InsertPidsrSubmission): Promise<PidsrSubmission>;
 
   // Phase 7 — Water & Sanitation
   getHouseholdWaterRecords(params: { barangay?: string }): Promise<HouseholdWaterRecord[]>;
@@ -686,6 +692,26 @@ export class DatabaseStorage implements IStorage {
   }
   async createDeathEvent(r: InsertDeathEvent): Promise<DeathEvent> {
     const [c] = await db.insert(deathEvents).values(r).returning();
+    return c;
+  }
+
+  // ── PIDSR weekly submissions ───────────────────────────────────────
+  async getPidsrSubmissions(params: { barangay?: string; fromDate?: string }): Promise<PidsrSubmission[]> {
+    const conds = [];
+    if (params.barangay) conds.push(eq(pidsrSubmissions.barangay, params.barangay));
+    if (params.fromDate) conds.push(gte(pidsrSubmissions.weekEndDate, params.fromDate));
+    return await db.select().from(pidsrSubmissions)
+      .where(conds.length ? and(...conds) : undefined)
+      .orderBy(desc(pidsrSubmissions.weekEndDate));
+  }
+  async getPidsrSubmissionForWeek(barangay: string, weekEndDate: string): Promise<PidsrSubmission | null> {
+    const rows = await db.select().from(pidsrSubmissions)
+      .where(and(eq(pidsrSubmissions.barangay, barangay), eq(pidsrSubmissions.weekEndDate, weekEndDate)))
+      .limit(1);
+    return rows[0] ?? null;
+  }
+  async createPidsrSubmission(r: InsertPidsrSubmission): Promise<PidsrSubmission> {
+    const [c] = await db.insert(pidsrSubmissions).values(r).returning();
     return c;
   }
 

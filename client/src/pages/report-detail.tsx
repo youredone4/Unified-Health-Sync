@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ArrowLeft, FileText, Printer, Download } from "lucide-react";
+import { PidsrSubmissionPanel } from "@/components/reports/PidsrSubmissionPanel";
 
 interface ReportColumn { key: string; label: string; align?: "left" | "center" | "right" }
 interface ReportRow { id?: string; cells: Record<string, string | number | null>; isTotal?: boolean; indent?: number }
@@ -209,6 +210,16 @@ export default function ReportDetailPage() {
               )}
             </CardContent>
           </Card>
+
+          {/* Slug-specific submission panels */}
+          {params.slug === "pidsr-cat2-wndr" && (
+            <PidsrSubmissionPanel
+              barangay={data.barangay}
+              weekStartDate={data.period.fromDate}
+              weekEndDate={data.period.toDate}
+              cat2CaseCount={data.meta.sourceCount ?? 0}
+            />
+          )}
 
           <Card data-testid="report-table">
             <CardHeader className="pb-2">
