@@ -127,29 +127,39 @@ export default function DiseaseForm() {
       linkedPersonType: linkedPerson?.type || (isEdit ? data.linkedPersonType : undefined) || undefined,
       linkedPersonId: linkedPerson?.id || (isEdit ? data.linkedPersonId : undefined) || undefined,
     };
-    if (isEdit) {
-      updateMutation.mutate(basePayload);
+
+    // Multi-condition: file one case per condition. The primary
+    // condition either updates the current case (edit mode) or creates
+    // a new one (new mode); extras are always POSTed as new cases.
+    // Each disease is its own surveillance row — PIDSR + M2 both
+    // require that. Empty extra conditions are ignored.
+    const extras = additionalConditions.map((c) => c.trim()).filter((c) => c.length > 0);
+
+    if (extras.length === 0) {
+      // Single-condition path: existing simple flow.
+      if (isEdit) updateMutation.mutate(basePayload);
+      else createMutation.mutate(basePayload);
       return;
     }
 
-    // Multi-condition: file the primary case + one additional case per
-    // entered co-condition. Each disease is its own surveillance row
-    // (PIDSR + M2 both require that). Empty extra conditions are ignored.
-    const extras = additionalConditions.map((c) => c.trim()).filter((c) => c.length > 0);
-    if (extras.length === 0) {
-      createMutation.mutate(basePayload);
-      return;
-    }
     try {
-      // Sequential POSTs so audit logs are clearly ordered + a
+      // Sequential calls so audit logs are clearly ordered and a
       // mid-flight failure doesn't leave half the conditions unsent.
-      await apiRequest("POST", "/api/disease-cases", basePayload);
+      if (isEdit) {
+        await apiRequest("PUT", `/api/disease-cases/${params?.id}`, basePayload);
+      } else {
+        await apiRequest("POST", "/api/disease-cases", basePayload);
+      }
       for (const cond of extras) {
         await apiRequest("POST", "/api/disease-cases", { ...basePayload, condition: cond });
       }
       invalidateScopedQueries("/api/disease-cases");
-      toast({ title: `${extras.length + 1} cases filed for ${basePayload.patientName}` });
-      navigate("/disease/registry");
+      toast({
+        title: isEdit
+          ? `Case updated · ${extras.length} additional case${extras.length === 1 ? "" : "s"} filed for ${basePayload.patientName}`
+          : `${extras.length + 1} cases filed for ${basePayload.patientName}`,
+      });
+      navigate(isEdit ? `/disease/${params?.id}` : "/disease/registry");
     } catch (err) {
       toast({
         title: "Some cases could not be saved",
@@ -400,7 +410,7 @@ export default function DiseaseForm() {
                         />
                       </FormControl>
                       <FormMessage />
-                      {!isEdit && additionalConditions.map((extra, idx) => (
+                      {additionalConditions.map((extra, idx) => (
                         <div key={idx} className="mt-3 flex items-start gap-2" data-testid={`extra-condition-row-${idx}`}>
                           <div className="flex-1">
                             <FormLabel className="text-xs text-muted-foreground">
@@ -432,22 +442,22 @@ export default function DiseaseForm() {
                           </Button>
                         </div>
                       ))}
-                      {!isEdit && (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="mt-2 gap-1 text-xs"
-                          onClick={() => setAdditionalConditions([...additionalConditions, ""])}
-                          data-testid="button-add-condition"
-                        >
-                          <Plus className="w-3 h-3" /> Add another condition (co-infection)
-                        </Button>
-                      )}
-                      {!isEdit && additionalConditions.length > 0 && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="mt-2 gap-1 text-xs"
+                        onClick={() => setAdditionalConditions([...additionalConditions, ""])}
+                        data-testid="button-add-condition"
+                      >
+                        <Plus className="w-3 h-3" /> Add another condition (co-infection)
+                      </Button>
+                      {additionalConditions.length > 0 && (
                         <p className="text-xs text-muted-foreground italic mt-1">
-                          Each condition is filed as a separate case row, sharing this patient&rsquo;s details.
-                          Required by DOH PIDSR/M2 — each disease has its own surveillance status.
+                          {isEdit
+                            ? "The current case keeps its existing condition; each additional row is filed as a NEW case row sharing this patient's details."
+                            : "Each condition is filed as a separate case row, sharing this patient's details."}
+                          {" "}Required by DOH PIDSR/M2 — each disease has its own surveillance status.
                         </p>
                       )}
                     </FormItem>
