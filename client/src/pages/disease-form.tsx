@@ -109,14 +109,22 @@ export default function DiseaseForm() {
 
   const updateMutation = useMutation({
     mutationFn: async (data: FormValues) => {
-      return apiRequest("PUT", `/api/disease-cases/${params?.id}`, data);
+      // eslint-disable-next-line no-console
+      console.log("[disease-form PUT request]", `/api/disease-cases/${params?.id}`, "body=", data);
+      const res = await apiRequest("PUT", `/api/disease-cases/${params?.id}`, data);
+      const json = await res.clone().json().catch(() => null);
+      // eslint-disable-next-line no-console
+      console.log("[disease-form PUT response]", res.status, "body=", json);
+      return res;
     },
     onSuccess: () => {
       invalidateScopedQueries('/api/disease-cases');
       toast({ title: "Case updated successfully" });
       navigate(`/disease/${params?.id}`);
     },
-    onError: () => {
+    onError: (err) => {
+      // eslint-disable-next-line no-console
+      console.error("[disease-form PUT error]", err);
       toast({ title: "Failed to update case", variant: "destructive" });
     },
   });
@@ -133,6 +141,17 @@ export default function DiseaseForm() {
       linkedPersonType: linkedPerson?.type || (isEdit ? data.linkedPersonType : undefined) || undefined,
       linkedPersonId: linkedPerson?.id || (isEdit ? data.linkedPersonId : undefined) || undefined,
     };
+    // Browser-side diagnostic: visible in DevTools Console. Strip once
+    // the multi-condition save flow is verified end-to-end.
+    // eslint-disable-next-line no-console
+    console.log("[disease-form submit]", {
+      isEdit,
+      caseId: params?.id,
+      additionalConditionsState: additionalConditions,
+      extras,
+      payloadKeys: Object.keys(payload),
+      payloadAdditionalConditions: payload.additionalConditions,
+    });
     if (isEdit) updateMutation.mutate(payload);
     else createMutation.mutate(payload);
   };
