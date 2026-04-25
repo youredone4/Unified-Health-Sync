@@ -9,7 +9,7 @@ import { z } from "zod";
 import { setupAuth, registerAuthRoutes } from "./auth";
 import { registerAdminRoutes } from "./routes/admin";
 import { loadUserInfo, requireAuth, requireRole, createAuditLog } from "./middleware/rbac";
-import { UserRole, diseaseCases } from "@shared/schema";
+import { UserRole } from "@shared/schema";
 import { ensureReportsRegistered, listReports, getReport } from "./reports";
 import { monthRange, quarterRange, annualRange } from "./reports/types";
 
@@ -29,23 +29,6 @@ export async function registerRoutes(
   storage.seedData().catch((err) =>
     console.error("[seed] seedData failed:", err)
   );
-
-  // Startup schema banner — prints the columns drizzle knows for the
-  // disease_cases table. Useful when diagnosing "stale bundle" reports
-  // since drizzle's RETURNING * only emits columns defined in the
-  // running TS schema. Strip once this saga is closed.
-  try {
-    const cols = Object.keys(diseaseCases ?? {}).filter(
-      (k) => typeof (diseaseCases as any)[k]?.name === "string",
-    );
-    console.log("[startup] disease_cases TS schema columns:", cols.join(", "));
-    console.log(
-      "[startup] additionalConditions in schema?",
-      Object.prototype.hasOwnProperty.call(diseaseCases ?? {}, "additionalConditions"),
-    );
-  } catch (err) {
-    console.error("[startup] schema inspection failed:", err);
-  }
 
   // RBAC middleware for registry read - all authenticated users can read
   const registryReadRBAC = [loadUserInfo, requireAuth];
@@ -548,15 +531,8 @@ export async function registerRoutes(
 
   app.put(api.diseaseCases.update.path, registryRBAC, ar(async (req, res) => {
     const id = parseId(req.params.id, res); if (id === null) return;
-    // Debug logging to diagnose the multi-condition save path. Logs the
-    // raw request body, the parsed schema input, and the row that came
-    // back from the DB. Strip once the multi-condition flow is confirmed.
-    console.log("[disease-cases PUT]", id, "raw body keys=", Object.keys(req.body ?? {}));
-    console.log("[disease-cases PUT]", id, "raw additionalConditions=", JSON.stringify(req.body?.additionalConditions));
     const input = api.diseaseCases.update.input.parse(req.body);
-    console.log("[disease-cases PUT]", id, "parsed additionalConditions=", JSON.stringify((input as any).additionalConditions));
     const updated = await storage.updateDiseaseCase(id, input);
-    console.log("[disease-cases PUT]", id, "stored additionalConditions=", JSON.stringify((updated as any).additionalConditions));
     res.json(updated);
   }));
 
