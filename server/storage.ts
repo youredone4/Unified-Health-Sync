@@ -2909,10 +2909,30 @@ export class DatabaseStorage implements IStorage {
     `);
     // Co-conditions on a disease case (e.g. HIV + TB co-infection
     // recorded on the same case row). Aggregators unfold per condition.
-    await db.execute(sql`
-      ALTER TABLE disease_cases
-        ADD COLUMN IF NOT EXISTS additional_conditions JSONB NOT NULL DEFAULT '[]'::jsonb
-    `);
+    try {
+      await db.execute(sql`
+        ALTER TABLE disease_cases
+          ADD COLUMN IF NOT EXISTS additional_conditions JSONB NOT NULL DEFAULT '[]'::jsonb
+      `);
+      console.log("[migrate] disease_cases.additional_conditions: ALTER ran (idempotent)");
+    } catch (err) {
+      console.error("[migrate] disease_cases.additional_conditions ALTER failed:", err);
+    }
+    // Verify against information_schema what the live DB actually has.
+    try {
+      const probe = await db.execute(sql`
+        SELECT column_name, data_type, is_nullable, column_default
+        FROM information_schema.columns
+        WHERE table_name = 'disease_cases'
+        ORDER BY ordinal_position
+      `);
+      const rows = (probe as any).rows ?? (probe as any) ?? [];
+      console.log("[migrate] disease_cases columns in DB:", rows.map((r: any) => r.column_name).join(", "));
+      const has = rows.some((r: any) => r.column_name === "additional_conditions");
+      console.log("[migrate] additional_conditions present in DB?", has);
+    } catch (err) {
+      console.error("[migrate] disease_cases column probe failed:", err);
+    }
     await db.execute(sql`
       ALTER TABLE tb_patients
         ADD COLUMN IF NOT EXISTS referred_rhu_id INTEGER REFERENCES health_stations(id)
