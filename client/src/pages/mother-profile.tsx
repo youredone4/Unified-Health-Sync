@@ -32,6 +32,7 @@ import {
 } from "lucide-react";
 import ConsultationHistoryCard from "@/components/consultation-history-card";
 import { PncVisitsCard } from "@/components/pnc-visits-card";
+import { MaternalExtrasCard } from "@/components/maternal-extras-card";
 import VisitHistoryCard from "@/components/visit-history-card";
 import { useState } from "react";
 import { apiRequest, invalidateScopedQueries } from "@/lib/queryClient";
@@ -324,6 +325,7 @@ export default function MotherProfile() {
   // ── Clinical tab ─────────────────────────────────────────────────────────
   const clinicalTab = (
     <div className="space-y-4">
+      <MaternalExtrasCard mother={mother} />
       <PncVisitsCard mother={mother} />
       <Card className={tt.status === "overdue" ? "border-red-500/30" : tt.status === "due_soon" ? "border-orange-500/30" : ""}>
         <CardHeader className="pb-2">
