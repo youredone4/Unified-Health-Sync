@@ -592,6 +592,38 @@ export const insertPrenatalVisitSchema = createInsertSchema(prenatalVisits).omit
 export type PrenatalVisit = typeof prenatalVisits.$inferSelect;
 export type InsertPrenatalVisit = z.infer<typeof insertPrenatalVisitSchema>;
 
+// Postpartum (PNC) visits — DOH MNCHN AO 2008-0029 mandates checkpoints at
+// 24h, 72h, 7d and 6w post-delivery. Captures the M1 Section C indicators
+// (PNC completion + breastfeeding + iron supp + FP counseling) flagged in
+// docs/m1-data-source-audit.md.
+export const POSTPARTUM_CHECKPOINTS = ["24H", "72H", "7D", "6W", "OTHER"] as const;
+export type PostpartumCheckpoint = typeof POSTPARTUM_CHECKPOINTS[number];
+
+export const postpartumVisits = pgTable("postpartum_visits", {
+  id: serial("id").primaryKey(),
+  motherId: integer("mother_id").notNull().references(() => mothers.id, { onDelete: "cascade" }),
+  visitDate: text("visit_date").notNull(), // YYYY-MM-DD
+  visitType: text("visit_type").$type<PostpartumCheckpoint>().notNull(),
+  bpSystolic: integer("bp_systolic"),
+  bpDiastolic: integer("bp_diastolic"),
+  breastfeedingExclusive: boolean("breastfeeding_exclusive"),
+  ironSuppGiven: boolean("iron_supp_given"),
+  fpCounselingGiven: boolean("fp_counseling_given"),
+  notes: text("notes"),
+  recordedByUserId: varchar("recorded_by_user_id"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertPostpartumVisitSchema = createInsertSchema(postpartumVisits)
+  .omit({ id: true, createdAt: true })
+  .extend({
+    visitType: z.enum(POSTPARTUM_CHECKPOINTS),
+    bpSystolic: z.number().int().min(40).max(260).optional().nullable(),
+    bpDiastolic: z.number().int().min(20).max(180).optional().nullable(),
+  });
+export type PostpartumVisit = typeof postpartumVisits.$inferSelect;
+export type InsertPostpartumVisit = z.infer<typeof insertPostpartumVisitSchema>;
+
 // Child monitoring visits
 export const childVisits = pgTable("child_visits", {
   id: serial("id").primaryKey(),

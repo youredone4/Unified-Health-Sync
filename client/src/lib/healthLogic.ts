@@ -686,3 +686,54 @@ export function getReportingCountdown(reference: Date = TODAY): number {
     return 0;
   }
 }
+
+// === POSTPARTUM (PNC) — DOH MNCHN AO 2008-0029 ===
+
+export const PNC_CHECKPOINTS: Array<{ type: "24H" | "72H" | "7D" | "6W"; label: string; daysAfter: number }> = [
+  { type: "24H", label: "24 hours", daysAfter: 1 },
+  { type: "72H", label: "72 hours (3 days)", daysAfter: 3 },
+  { type: "7D",  label: "7 days",   daysAfter: 7 },
+  { type: "6W",  label: "6 weeks",  daysAfter: 42 },
+];
+
+export type PncCheckpointStatus = "logged" | "due" | "overdue" | "upcoming";
+
+export interface PncCheckpointResult {
+  type: "24H" | "72H" | "7D" | "6W";
+  label: string;
+  expectedDate: string; // YYYY-MM-DD
+  status: PncCheckpointStatus;
+}
+
+/**
+ * Given a delivery date and the recorded visits, produces per-checkpoint
+ * status — what's logged, what's due in today's window (±1 day), what's
+ * overdue, what's still upcoming. Returns null if outcomeDate is missing
+ * or unparseable.
+ */
+export function getPncCheckpoints(
+  outcomeDate: string | null | undefined,
+  visits: Array<{ visitType: string }>,
+  reference: Date = TODAY,
+): PncCheckpointResult[] | null {
+  if (!outcomeDate) return null;
+  let delivery: Date;
+  try {
+    delivery = parseISO(outcomeDate);
+    if (isNaN(delivery.getTime())) return null;
+  } catch {
+    return null;
+  }
+  const loggedTypes = new Set(visits.map(v => v.visitType));
+  return PNC_CHECKPOINTS.map((cp) => {
+    const expected = addDays(delivery, cp.daysAfter);
+    const expectedStr = format(expected, "yyyy-MM-dd");
+    const days = differenceInDays(expected, reference);
+    let status: PncCheckpointStatus;
+    if (loggedTypes.has(cp.type)) status = "logged";
+    else if (days >= -1 && days <= 1) status = "due";
+    else if (days < -1) status = "overdue";
+    else status = "upcoming";
+    return { type: cp.type, label: cp.label, expectedDate: expectedStr, status };
+  });
+}
