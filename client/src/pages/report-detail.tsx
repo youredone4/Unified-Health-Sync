@@ -55,10 +55,14 @@ export default function ReportDetailPage() {
   const [month, setMonth] = useState<number>(now.getMonth() + 1);
   const [quarter, setQuarter] = useState<number>(Math.floor(now.getMonth() / 3) + 1);
   const [year, setYear] = useState<number>(now.getFullYear());
-  // Default custom range: same calendar year, Jan 1 → today.
-  const todayIso = now.toISOString().slice(0, 10);
-  const [fromDate, setFromDate] = useState<string>(`${now.getFullYear()}-01-01`);
-  const [toDate, setToDate] = useState<string>(todayIso);
+  // Custom (date-range) cadence: pick whole calendar years from–to. M1
+  // data is monthly, so day-granularity is overkill. Default span is the
+  // last 3 calendar years, which covers a typical "give me a multi-year
+  // export" ask without forcing the user to scroll the picker.
+  const [fromYear, setFromYear] = useState<number>(now.getFullYear() - 2);
+  const [toYear, setToYear] = useState<number>(now.getFullYear());
+  const fromDate = `${fromYear}-01-01`;
+  const toDate = `${toYear}-12-31`;
 
   const queryKey = useMemo(() => {
     const barangayQs = selectedBarangay ? `&barangay=${encodeURIComponent(selectedBarangay)}` : "";
@@ -105,7 +109,7 @@ export default function ReportDetailPage() {
     const a = document.createElement("a");
     a.href = url;
     const periodSuffix = isCustom
-      ? `${fromDate}_to_${toDate}`
+      ? `${fromYear}_to_${toYear}`
       : isAnnual
       ? `${year}`
       : isQuarterly
@@ -118,7 +122,7 @@ export default function ReportDetailPage() {
 
   const yearOptions = useMemo(() => {
     const ys: number[] = [];
-    for (let y = now.getFullYear() + 1; y >= now.getFullYear() - 4; y--) ys.push(y);
+    for (let y = now.getFullYear() + 1; y >= now.getFullYear() - 9; y--) ys.push(y);
     return ys;
   }, [now]);
 
@@ -144,24 +148,40 @@ export default function ReportDetailPage() {
             {isCustom ? (
               <>
                 <div>
-                  <label className="text-xs text-muted-foreground">From date</label>
-                  <Input
-                    type="date"
-                    value={fromDate}
-                    max={toDate}
-                    onChange={(e) => setFromDate(e.target.value)}
-                    data-testid="input-from-date"
-                  />
+                  <label className="text-xs text-muted-foreground">From year</label>
+                  <Select
+                    value={String(fromYear)}
+                    onValueChange={(v) => {
+                      const n = Number(v);
+                      setFromYear(n);
+                      if (n > toYear) setToYear(n);
+                    }}
+                  >
+                    <SelectTrigger data-testid="select-from-year"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {yearOptions.map((y) => (
+                        <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div>
-                  <label className="text-xs text-muted-foreground">To date</label>
-                  <Input
-                    type="date"
-                    value={toDate}
-                    min={fromDate}
-                    onChange={(e) => setToDate(e.target.value)}
-                    data-testid="input-to-date"
-                  />
+                  <label className="text-xs text-muted-foreground">To year</label>
+                  <Select
+                    value={String(toYear)}
+                    onValueChange={(v) => {
+                      const n = Number(v);
+                      setToYear(n);
+                      if (n < fromYear) setFromYear(n);
+                    }}
+                  >
+                    <SelectTrigger data-testid="select-to-year"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {yearOptions.map((y) => (
+                        <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               </>
             ) : (
