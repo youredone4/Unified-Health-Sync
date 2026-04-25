@@ -91,6 +91,9 @@ export default function M1ReportPage({ initialMode }: { initialMode?: "view" | "
   const [dataSourcesOpen, setDataSourcesOpen] = useState(false);
   const { user, isTL, assignedBarangays } = useAuth();
   const { selectedBarangay: contextBarangay, scopedPath } = useBarangay();
+  // Stable primitive: use the first assigned barangay string rather than the
+  // array reference (which is a new [] on every render for non-TL users).
+  const firstAssignedBarangay = assignedBarangays[0] ?? null;
 
   const { data: templates = [], isLoading: templatesLoading } = useQuery<M1TemplateVersion[]>({
     queryKey: ["/api/m1/templates"],
@@ -100,15 +103,16 @@ export default function M1ReportPage({ initialMode }: { initialMode?: "view" | "
     queryKey: ["/api/barangays"],
   });
 
-  // TL auto-lock: sync M1 barangay selection to BarangayContext (switches when TL changes context barangay)
+  // TL auto-lock: sync M1 barangay selection to BarangayContext (switches when TL changes context barangay).
+  // Depends on primitive values only — avoids infinite re-render from stale array references.
   useEffect(() => {
-    if (isTL && barangays.length > 0) {
-      const targetName = contextBarangay || assignedBarangays[0];
-      if (!targetName) return;
-      const found = barangays.find(b => b.name === targetName);
-      if (found) setSelectedBarangayId(found.id);
-    }
-  }, [isTL, contextBarangay, assignedBarangays, barangays]);
+    if (!isTL || barangays.length === 0) return;
+    const targetName = contextBarangay || firstAssignedBarangay;
+    if (!targetName) return;
+    const found = barangays.find(b => b.name === targetName);
+    if (found) setSelectedBarangayId(prev => prev === found.id ? prev : found.id);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isTL, contextBarangay, firstAssignedBarangay, barangays.length]);
 
   const activeTemplate = templates.find(t => t.isActive) || templates[0];
 
