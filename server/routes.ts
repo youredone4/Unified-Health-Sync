@@ -10,6 +10,8 @@ import { setupAuth, registerAuthRoutes } from "./auth";
 import { registerAdminRoutes } from "./routes/admin";
 import { loadUserInfo, requireAuth, requireRole, createAuditLog } from "./middleware/rbac";
 import { UserRole } from "@shared/schema";
+import { ensureReportsRegistered, listReports, getReport } from "./reports";
+import { monthRange } from "./reports/types";
 
 export async function registerRoutes(
   httpServer: Server,
@@ -1121,7 +1123,61 @@ export async function registerRoutes(
   }));
 
   // === M1 TEMPLATE SYSTEM ===
-  
+
+  // === REPORTS HUB ===
+  // Lazy-register on first hit so the route file stays self-contained.
+  ensureReportsRegistered();
+
+  app.get("/api/reports", loadUserInfo, requireAuth, ar(async (_req, res) => {
+    const defs = listReports().map((d) => ({
+      slug: d.slug,
+      title: d.title,
+      description: d.description,
+      cadence: d.cadence,
+      category: d.category,
+      source: d.source ?? null,
+    }));
+    res.json(defs);
+  }));
+
+  app.get("/api/reports/:slug", loadUserInfo, requireAuth, ar(async (req, res) => {
+    const def = getReport(req.params.slug);
+    if (!def) return res.status(404).json({ message: "Report not found" });
+
+    const month = Number(req.query.month);
+    const year = Number(req.query.year);
+    if (!Number.isInteger(month) || month < 1 || month > 12) {
+      return res.status(400).json({ message: "month query param required (1-12)" });
+    }
+    if (!Number.isInteger(year) || year < 2000 || year > 2100) {
+      return res.status(400).json({ message: "year query param required (2000-2100)" });
+    }
+
+    const { fromDate, toDate, periodLabel } = monthRange(month, year);
+    const requestedBarangay = req.query.barangay ? String(req.query.barangay) : undefined;
+
+    // TL scoping: must specify a barangay they're assigned to.
+    let scopedBarangay = requestedBarangay;
+    if (req.userInfo?.role === UserRole.TL) {
+      const assigned = req.userInfo.assignedBarangays;
+      if (assigned.length === 0) {
+        return res.json({ columns: [], rows: [], meta: { sourceCount: 0, notes: "No assigned barangays" } });
+      }
+      if (requestedBarangay && !assigned.includes(requestedBarangay)) {
+        return res.status(403).json({ message: "Access denied to this barangay" });
+      }
+      scopedBarangay = requestedBarangay ?? assigned[0];
+    }
+
+    const result = await def.fetch({ fromDate, toDate, periodLabel, barangay: scopedBarangay });
+    res.json({
+      definition: { slug: def.slug, title: def.title, cadence: def.cadence, category: def.category, source: def.source ?? null },
+      period: { fromDate, toDate, periodLabel, month, year },
+      barangay: scopedBarangay ?? null,
+      ...result,
+    });
+  }));
+
   // Get active M1 template version
   app.get("/api/m1/templates", loadUserInfo, requireAuth, async (req, res) => {
     const templates = await storage.getM1TemplateVersions();

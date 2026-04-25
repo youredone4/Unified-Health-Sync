@@ -53,6 +53,7 @@ import SeniorForm from "@/pages/senior-form";
 import InventoryPage from "@/pages/inventory";
 import StockoutsPage from "@/pages/stockouts";
 import ReportsPage from "@/pages/reports";
+import ReportDetailPage from "@/pages/report-detail";
 import AIReporting from "@/pages/ai-reporting";
 import DiseaseWorklist from "@/pages/disease-worklist";
 import DiseaseProfile from "@/pages/disease-profile";
@@ -387,6 +388,7 @@ function Router() {
       <Route path="/m1/encode"><ReportsHub><RoleRoute component={M1ReportEncode} /></ReportsHub></Route>
       <Route path="/reports/m1"><ReportsHub><RoleRoute component={M1ReportView} /></ReportsHub></Route>
       <Route path="/reports/ai"><ReportsHub><RoleRoute component={AIReporting} /></ReportsHub></Route>
+      <Route path="/reports/:slug"><ReportsHub><RoleRoute component={ReportDetailPage} /></ReportsHub></Route>
       <Route path="/reports"><ReportsHub><RoleRoute component={ReportsPage} /></ReportsHub></Route>
 
       {/* Disease hub: Patients / Map */}
