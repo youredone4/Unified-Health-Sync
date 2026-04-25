@@ -32,10 +32,9 @@ export function BarangayProvider({ children }: { children: React.ReactNode }) {
   // - TL: must resolve to one of their assigned barangays. Falls back to the
   //   first assigned barangay if the persisted selection has been reassigned
   //   away from them.
-  // - MGMT (Admin / MHO / SHA): no assignedBarangays scope, so trust whatever
-  //   the user picked in the switcher. The switcher only offers valid options
-  //   (full /api/barangays list), and pages handle null gracefully with
-  //   "Select a barangay…" placeholders.
+  // - MGMT (Admin / MHO / SHA): always null. MGMT roles see consolidated data
+  //   across every barangay in the municipality — no per-barangay filtering.
+  //   The barangay switcher is hidden for these roles (see BarangaySwitcher).
   const effectiveBarangay: string | null = (() => {
     if (isTL) {
       if (assignedBarangays.length === 0) return null;
@@ -44,7 +43,7 @@ export function BarangayProvider({ children }: { children: React.ReactNode }) {
       }
       return assignedBarangays[0];
     }
-    return preferredBarangay;
+    return null;
   })();
 
   const setSelectedBarangay = (b: string) => {

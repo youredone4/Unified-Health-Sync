@@ -9,6 +9,7 @@ import {
 } from "@shared/schema";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useBarangay } from "@/contexts/barangay-context";
+import { useAuth, permissions } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -17,6 +18,7 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ShieldAlert, Save } from "lucide-react";
 import { format } from "date-fns";
 
@@ -47,17 +49,8 @@ function PtFields({ v, onChange }: { v: PtCommon; onChange: (v: PtCommon) => voi
 
 export default function DiseaseSurveillancePage() {
   const { selectedBarangay } = useBarangay();
-
-  if (!selectedBarangay) {
-    return (
-      <div className="space-y-4">
-        <Header />
-        <Card><CardContent className="pt-6 text-sm text-muted-foreground">
-          Select a barangay to record disease surveillance data.
-        </CardContent></Card>
-      </div>
-    );
-  }
+  const { role } = useAuth();
+  const canEnter = permissions.canEnterRecords(role);
 
   return (
     <div className="space-y-4">
@@ -70,11 +63,11 @@ export default function DiseaseSurveillancePage() {
           <TabsTrigger value="sth" data-testid="tab-sth">STH</TabsTrigger>
           <TabsTrigger value="lep" data-testid="tab-lep">Leprosy</TabsTrigger>
         </TabsList>
-        <TabsContent value="fil"><FilariasisCard barangay={selectedBarangay} /></TabsContent>
-        <TabsContent value="rab"><RabiesCard barangay={selectedBarangay} /></TabsContent>
-        <TabsContent value="sch"><SchistoCard barangay={selectedBarangay} /></TabsContent>
-        <TabsContent value="sth"><SthCard barangay={selectedBarangay} /></TabsContent>
-        <TabsContent value="lep"><LeprosyCard barangay={selectedBarangay} /></TabsContent>
+        <TabsContent value="fil"><FilariasisCard barangay={selectedBarangay} canEnter={canEnter} /></TabsContent>
+        <TabsContent value="rab"><RabiesCard barangay={selectedBarangay} canEnter={canEnter} /></TabsContent>
+        <TabsContent value="sch"><SchistoCard barangay={selectedBarangay} canEnter={canEnter} /></TabsContent>
+        <TabsContent value="sth"><SthCard barangay={selectedBarangay} canEnter={canEnter} /></TabsContent>
+        <TabsContent value="lep"><LeprosyCard barangay={selectedBarangay} canEnter={canEnter} /></TabsContent>
       </Tabs>
     </div>
   );
@@ -100,9 +93,12 @@ function Header() {
   );
 }
 
-function FilariasisCard({ barangay }: { barangay: string }) {
+function FilariasisCard({ barangay, canEnter }: { barangay: string | null; canEnter: boolean }) {
   const { toast } = useToast();
-  const queryKey = useMemo(() => [`/api/filariasis-records?barangay=${encodeURIComponent(barangay)}`], [barangay]);
+  const queryKey = useMemo(
+    () => [barangay ? `/api/filariasis-records?barangay=${encodeURIComponent(barangay)}` : "/api/filariasis-records"],
+    [barangay],
+  );
   const { data: rows = [] } = useQuery<FilariasisRecord[]>({ queryKey });
   const [pt, setPt] = useState<PtCommon>({ patientName: "", dob: "", sex: "M" });
   const [date, setDate] = useState(today());
@@ -116,39 +112,82 @@ function FilariasisCard({ barangay }: { barangay: string }) {
     onError: (e: Error) => toast({ title: "Could not save", description: e.message, variant: "destructive" }),
   });
   return (
-    <Card data-testid="card-fil">
-      <CardHeader className="pb-2"><CardTitle className="text-base">Filariasis exam</CardTitle></CardHeader>
-      <CardContent className="space-y-3">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-          <PtFields v={pt} onChange={setPt} />
-          <div><label className="text-xs text-muted-foreground">Exam date</label>
-            <Input type="date" value={date} max={today()} onChange={(e) => setDate(e.target.value)} data-testid="input-fil-date" />
-          </div>
-        </div>
-        <div className="flex flex-wrap gap-3">
-          <Select value={result} onValueChange={(v) => setResult(v as any)}>
-            <SelectTrigger className="w-44" data-testid="select-fil-result"><SelectValue placeholder="Result" /></SelectTrigger>
-            <SelectContent>{FIL_RESULTS.map((v) => <SelectItem key={v} value={v}>{v}</SelectItem>)}</SelectContent>
-          </Select>
-          <Select value={manif} onValueChange={(v) => setManif(v as any)}>
-            <SelectTrigger className="w-44" data-testid="select-fil-manif"><SelectValue /></SelectTrigger>
-            <SelectContent>{FIL_MANIFESTATIONS.map((v) => <SelectItem key={v} value={v}>{v}</SelectItem>)}</SelectContent>
-          </Select>
-        </div>
-        <div className="flex items-center justify-between flex-wrap gap-2">
-          <Badge variant="outline" className="text-xs font-normal">{rows.length} recorded</Badge>
-          <Button size="sm" onClick={() => create.mutate()} disabled={!pt.patientName || !pt.dob} className="gap-1" data-testid="button-save-fil">
-            <Save className="w-4 h-4" /> Save
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
+    <div className="space-y-4">
+      {canEnter && barangay && (
+        <Card data-testid="card-fil">
+          <CardHeader className="pb-2"><CardTitle className="text-base">Filariasis exam</CardTitle></CardHeader>
+          <CardContent className="space-y-3">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+              <PtFields v={pt} onChange={setPt} />
+              <div><label className="text-xs text-muted-foreground">Exam date</label>
+                <Input type="date" value={date} max={today()} onChange={(e) => setDate(e.target.value)} data-testid="input-fil-date" />
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-3">
+              <Select value={result} onValueChange={(v) => setResult(v as any)}>
+                <SelectTrigger className="w-44" data-testid="select-fil-result"><SelectValue placeholder="Result" /></SelectTrigger>
+                <SelectContent>{FIL_RESULTS.map((v) => <SelectItem key={v} value={v}>{v}</SelectItem>)}</SelectContent>
+              </Select>
+              <Select value={manif} onValueChange={(v) => setManif(v as any)}>
+                <SelectTrigger className="w-44" data-testid="select-fil-manif"><SelectValue /></SelectTrigger>
+                <SelectContent>{FIL_MANIFESTATIONS.map((v) => <SelectItem key={v} value={v}>{v}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-center justify-end flex-wrap gap-2">
+              <Button size="sm" onClick={() => create.mutate()} disabled={!pt.patientName || !pt.dob} className="gap-1" data-testid="button-save-fil">
+                <Save className="w-4 h-4" /> Save
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+      <Card data-testid="card-fil-history">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">
+            Records {barangay ? `— ${barangay}` : "(consolidated, all barangays)"}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {rows.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-3 text-center">No filariasis records yet.</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Date</TableHead>
+                  {!barangay && <TableHead>Barangay</TableHead>}
+                  <TableHead>Patient</TableHead>
+                  <TableHead>Sex</TableHead>
+                  <TableHead>Result</TableHead>
+                  <TableHead>Manifestation</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {rows.map((r) => (
+                  <TableRow key={r.id} data-testid={`fil-row-${r.id}`}>
+                    <TableCell className="font-mono text-xs">{r.examDate}</TableCell>
+                    {!barangay && <TableCell className="text-xs">{r.barangay}</TableCell>}
+                    <TableCell>{r.patientName}</TableCell>
+                    <TableCell>{r.sex}</TableCell>
+                    <TableCell>{r.result || "—"}</TableCell>
+                    <TableCell>{r.manifestation}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+    </div>
   );
 }
 
-function RabiesCard({ barangay }: { barangay: string }) {
+function RabiesCard({ barangay, canEnter }: { barangay: string | null; canEnter: boolean }) {
   const { toast } = useToast();
-  const queryKey = useMemo(() => [`/api/rabies-exposures?barangay=${encodeURIComponent(barangay)}`], [barangay]);
+  const queryKey = useMemo(
+    () => [barangay ? `/api/rabies-exposures?barangay=${encodeURIComponent(barangay)}` : "/api/rabies-exposures"],
+    [barangay],
+  );
   const { data: rows = [] } = useQuery<RabiesExposure[]>({ queryKey });
   const [pt, setPt] = useState<PtCommon>({ patientName: "", dob: "", sex: "M" });
   const [date, setDate] = useState(today());
@@ -163,45 +202,90 @@ function RabiesCard({ barangay }: { barangay: string }) {
     onError: (e: Error) => toast({ title: "Could not save", description: e.message, variant: "destructive" }),
   });
   return (
-    <Card data-testid="card-rab">
-      <CardHeader className="pb-2"><CardTitle className="text-base">Rabies exposure</CardTitle></CardHeader>
-      <CardContent className="space-y-3">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-          <PtFields v={pt} onChange={setPt} />
-          <div><label className="text-xs text-muted-foreground">Exposure date</label>
-            <Input type="date" value={date} max={today()} onChange={(e) => setDate(e.target.value)} data-testid="input-rab-date" />
-          </div>
-          <div><label className="text-xs text-muted-foreground">Category</label>
-            <Select value={cat} onValueChange={(v) => setCat(v as any)}>
-              <SelectTrigger data-testid="select-rab-cat"><SelectValue /></SelectTrigger>
-              <SelectContent>{RABIES_CATEGORIES.map((v) => <SelectItem key={v} value={v}>{v}</SelectItem>)}</SelectContent>
-            </Select>
-          </div>
-          <div><label className="text-xs text-muted-foreground">Treatment center</label>
-            <Select value={center} onValueChange={(v) => setCenter(v as any)}>
-              <SelectTrigger data-testid="select-rab-center"><SelectValue /></SelectTrigger>
-              <SelectContent>{RABIES_CENTERS.map((v) => <SelectItem key={v} value={v}>{v}</SelectItem>)}</SelectContent>
-            </Select>
-          </div>
-        </div>
-        <label className="flex items-center gap-2 text-sm">
-          <Checkbox checked={complete} onCheckedChange={(v) => setComplete(!!v)} data-testid="check-complete" />
-          Complete anti-rabies vaccine doses
-        </label>
-        <div className="flex items-center justify-between flex-wrap gap-2">
-          <Badge variant="outline" className="text-xs font-normal">{rows.length} recorded</Badge>
-          <Button size="sm" onClick={() => create.mutate()} disabled={!pt.patientName || !pt.dob} className="gap-1" data-testid="button-save-rab">
-            <Save className="w-4 h-4" /> Save
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
+    <div className="space-y-4">
+      {canEnter && barangay && (
+        <Card data-testid="card-rab">
+          <CardHeader className="pb-2"><CardTitle className="text-base">Rabies exposure</CardTitle></CardHeader>
+          <CardContent className="space-y-3">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+              <PtFields v={pt} onChange={setPt} />
+              <div><label className="text-xs text-muted-foreground">Exposure date</label>
+                <Input type="date" value={date} max={today()} onChange={(e) => setDate(e.target.value)} data-testid="input-rab-date" />
+              </div>
+              <div><label className="text-xs text-muted-foreground">Category</label>
+                <Select value={cat} onValueChange={(v) => setCat(v as any)}>
+                  <SelectTrigger data-testid="select-rab-cat"><SelectValue /></SelectTrigger>
+                  <SelectContent>{RABIES_CATEGORIES.map((v) => <SelectItem key={v} value={v}>{v}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+              <div><label className="text-xs text-muted-foreground">Treatment center</label>
+                <Select value={center} onValueChange={(v) => setCenter(v as any)}>
+                  <SelectTrigger data-testid="select-rab-center"><SelectValue /></SelectTrigger>
+                  <SelectContent>{RABIES_CENTERS.map((v) => <SelectItem key={v} value={v}>{v}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+            </div>
+            <label className="flex items-center gap-2 text-sm">
+              <Checkbox checked={complete} onCheckedChange={(v) => setComplete(!!v)} data-testid="check-complete" />
+              Complete anti-rabies vaccine doses
+            </label>
+            <div className="flex items-center justify-end flex-wrap gap-2">
+              <Button size="sm" onClick={() => create.mutate()} disabled={!pt.patientName || !pt.dob} className="gap-1" data-testid="button-save-rab">
+                <Save className="w-4 h-4" /> Save
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+      <Card data-testid="card-rab-history">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">
+            Records {barangay ? `— ${barangay}` : "(consolidated, all barangays)"}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {rows.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-3 text-center">No rabies exposures yet.</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Date</TableHead>
+                  {!barangay && <TableHead>Barangay</TableHead>}
+                  <TableHead>Patient</TableHead>
+                  <TableHead>Sex</TableHead>
+                  <TableHead>Category</TableHead>
+                  <TableHead>Center</TableHead>
+                  <TableHead>Complete</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {rows.map((r) => (
+                  <TableRow key={r.id} data-testid={`rab-row-${r.id}`}>
+                    <TableCell className="font-mono text-xs">{r.exposureDate}</TableCell>
+                    {!barangay && <TableCell className="text-xs">{r.barangay}</TableCell>}
+                    <TableCell>{r.patientName}</TableCell>
+                    <TableCell>{r.sex}</TableCell>
+                    <TableCell><Badge variant="outline" className="text-xs">{r.category}</Badge></TableCell>
+                    <TableCell className="text-xs">{r.treatmentCenter || "—"}</TableCell>
+                    <TableCell>{r.completeDoses ? "Yes" : "—"}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+    </div>
   );
 }
 
-function SchistoCard({ barangay }: { barangay: string }) {
+function SchistoCard({ barangay, canEnter }: { barangay: string | null; canEnter: boolean }) {
   const { toast } = useToast();
-  const queryKey = useMemo(() => [`/api/schistosomiasis-records?barangay=${encodeURIComponent(barangay)}`], [barangay]);
+  const queryKey = useMemo(
+    () => [barangay ? `/api/schistosomiasis-records?barangay=${encodeURIComponent(barangay)}` : "/api/schistosomiasis-records"],
+    [barangay],
+  );
   const { data: rows = [] } = useQuery<SchistosomiasisRecord[]>({ queryKey });
   const [pt, setPt] = useState<PtCommon>({ patientName: "", dob: "", sex: "M" });
   const [date, setDate] = useState(today());
@@ -217,35 +301,81 @@ function SchistoCard({ barangay }: { barangay: string }) {
     onError: (e: Error) => toast({ title: "Could not save", description: e.message, variant: "destructive" }),
   });
   return (
-    <Card data-testid="card-sch">
-      <CardHeader className="pb-2"><CardTitle className="text-base">Schistosomiasis</CardTitle></CardHeader>
-      <CardContent className="space-y-3">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-          <PtFields v={pt} onChange={setPt} />
-          <div><label className="text-xs text-muted-foreground">Seen date</label>
-            <Input type="date" value={date} max={today()} onChange={(e) => setDate(e.target.value)} data-testid="input-sch-date" />
-          </div>
-        </div>
-        <div className="flex flex-wrap gap-3 text-sm">
-          <label className="flex items-center gap-2"><Checkbox checked={suspected} onCheckedChange={(v) => setSuspected(!!v)} data-testid="check-suspected" /> Suspected</label>
-          <label className="flex items-center gap-2"><Checkbox checked={treated} onCheckedChange={(v) => setTreated(!!v)} data-testid="check-treated" /> Treated</label>
-          <label className="flex items-center gap-2"><Checkbox checked={confirmed} onCheckedChange={(v) => setConfirmed(!!v)} data-testid="check-confirmed" /> Confirmed</label>
-          <label className="flex items-center gap-2"><Checkbox checked={complicated} onCheckedChange={(v) => setComplicated(!!v)} data-testid="check-complicated" /> Complicated</label>
-        </div>
-        <div className="flex items-center justify-between flex-wrap gap-2">
-          <Badge variant="outline" className="text-xs font-normal">{rows.length} recorded</Badge>
-          <Button size="sm" onClick={() => create.mutate()} disabled={!pt.patientName || !pt.dob} className="gap-1" data-testid="button-save-sch">
-            <Save className="w-4 h-4" /> Save
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
+    <div className="space-y-4">
+      {canEnter && barangay && (
+        <Card data-testid="card-sch">
+          <CardHeader className="pb-2"><CardTitle className="text-base">Schistosomiasis</CardTitle></CardHeader>
+          <CardContent className="space-y-3">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+              <PtFields v={pt} onChange={setPt} />
+              <div><label className="text-xs text-muted-foreground">Seen date</label>
+                <Input type="date" value={date} max={today()} onChange={(e) => setDate(e.target.value)} data-testid="input-sch-date" />
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-3 text-sm">
+              <label className="flex items-center gap-2"><Checkbox checked={suspected} onCheckedChange={(v) => setSuspected(!!v)} data-testid="check-suspected" /> Suspected</label>
+              <label className="flex items-center gap-2"><Checkbox checked={treated} onCheckedChange={(v) => setTreated(!!v)} data-testid="check-treated" /> Treated</label>
+              <label className="flex items-center gap-2"><Checkbox checked={confirmed} onCheckedChange={(v) => setConfirmed(!!v)} data-testid="check-confirmed" /> Confirmed</label>
+              <label className="flex items-center gap-2"><Checkbox checked={complicated} onCheckedChange={(v) => setComplicated(!!v)} data-testid="check-complicated" /> Complicated</label>
+            </div>
+            <div className="flex items-center justify-end flex-wrap gap-2">
+              <Button size="sm" onClick={() => create.mutate()} disabled={!pt.patientName || !pt.dob} className="gap-1" data-testid="button-save-sch">
+                <Save className="w-4 h-4" /> Save
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+      <Card data-testid="card-sch-history">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">
+            Records {barangay ? `— ${barangay}` : "(consolidated, all barangays)"}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {rows.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-3 text-center">No schistosomiasis records yet.</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Date</TableHead>
+                  {!barangay && <TableHead>Barangay</TableHead>}
+                  <TableHead>Patient</TableHead>
+                  <TableHead>Sex</TableHead>
+                  <TableHead>Tags</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {rows.map((r) => (
+                  <TableRow key={r.id} data-testid={`sch-row-${r.id}`}>
+                    <TableCell className="font-mono text-xs">{r.seenDate}</TableCell>
+                    {!barangay && <TableCell className="text-xs">{r.barangay}</TableCell>}
+                    <TableCell>{r.patientName}</TableCell>
+                    <TableCell>{r.sex}</TableCell>
+                    <TableCell className="text-xs space-x-1">
+                      {r.suspected && <Badge variant="outline" className="text-[10px]">Suspected</Badge>}
+                      {r.treated && <Badge variant="outline" className="text-[10px]">Treated</Badge>}
+                      {r.confirmed && <Badge variant="outline" className="text-[10px]">Confirmed</Badge>}
+                      {r.complicated && <Badge variant="destructive" className="text-[10px]">Complicated</Badge>}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+    </div>
   );
 }
 
-function SthCard({ barangay }: { barangay: string }) {
+function SthCard({ barangay, canEnter }: { barangay: string | null; canEnter: boolean }) {
   const { toast } = useToast();
-  const queryKey = useMemo(() => [`/api/sth-records?barangay=${encodeURIComponent(barangay)}`], [barangay]);
+  const queryKey = useMemo(
+    () => [barangay ? `/api/sth-records?barangay=${encodeURIComponent(barangay)}` : "/api/sth-records"],
+    [barangay],
+  );
   const { data: rows = [] } = useQuery<SthRecord[]>({ queryKey });
   const [pt, setPt] = useState<PtCommon>({ patientName: "", dob: "", sex: "M" });
   const [date, setDate] = useState(today());
@@ -259,36 +389,79 @@ function SthCard({ barangay }: { barangay: string }) {
     onError: (e: Error) => toast({ title: "Could not save", description: e.message, variant: "destructive" }),
   });
   return (
-    <Card data-testid="card-sth">
-      <CardHeader className="pb-2"><CardTitle className="text-base">Soil-transmitted helminth (STH)</CardTitle></CardHeader>
-      <CardContent className="space-y-3">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-          <PtFields v={pt} onChange={setPt} />
-          <div><label className="text-xs text-muted-foreground">Screen date</label>
-            <Input type="date" value={date} max={today()} onChange={(e) => setDate(e.target.value)} data-testid="input-sth-date" />
-          </div>
-        </div>
-        <div className="flex flex-wrap gap-3 text-sm items-center">
-          <label className="flex items-center gap-2"><Checkbox checked={confirmed} onCheckedChange={(v) => setConfirmed(!!v)} data-testid="check-sth-confirmed" /> Confirmed</label>
-          <Select value={residency} onValueChange={(v) => setResidency(v as any)}>
-            <SelectTrigger className="w-44" data-testid="select-sth-residency"><SelectValue /></SelectTrigger>
-            <SelectContent>{STH_RESIDENCIES.map((v) => <SelectItem key={v} value={v}>{v}</SelectItem>)}</SelectContent>
-          </Select>
-        </div>
-        <div className="flex items-center justify-between flex-wrap gap-2">
-          <Badge variant="outline" className="text-xs font-normal">{rows.length} recorded</Badge>
-          <Button size="sm" onClick={() => create.mutate()} disabled={!pt.patientName || !pt.dob} className="gap-1" data-testid="button-save-sth">
-            <Save className="w-4 h-4" /> Save
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
+    <div className="space-y-4">
+      {canEnter && barangay && (
+        <Card data-testid="card-sth">
+          <CardHeader className="pb-2"><CardTitle className="text-base">Soil-transmitted helminth (STH)</CardTitle></CardHeader>
+          <CardContent className="space-y-3">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+              <PtFields v={pt} onChange={setPt} />
+              <div><label className="text-xs text-muted-foreground">Screen date</label>
+                <Input type="date" value={date} max={today()} onChange={(e) => setDate(e.target.value)} data-testid="input-sth-date" />
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-3 text-sm items-center">
+              <label className="flex items-center gap-2"><Checkbox checked={confirmed} onCheckedChange={(v) => setConfirmed(!!v)} data-testid="check-sth-confirmed" /> Confirmed</label>
+              <Select value={residency} onValueChange={(v) => setResidency(v as any)}>
+                <SelectTrigger className="w-44" data-testid="select-sth-residency"><SelectValue /></SelectTrigger>
+                <SelectContent>{STH_RESIDENCIES.map((v) => <SelectItem key={v} value={v}>{v}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-center justify-end flex-wrap gap-2">
+              <Button size="sm" onClick={() => create.mutate()} disabled={!pt.patientName || !pt.dob} className="gap-1" data-testid="button-save-sth">
+                <Save className="w-4 h-4" /> Save
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+      <Card data-testid="card-sth-history">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">
+            Records {barangay ? `— ${barangay}` : "(consolidated, all barangays)"}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {rows.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-3 text-center">No STH records yet.</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Date</TableHead>
+                  {!barangay && <TableHead>Barangay</TableHead>}
+                  <TableHead>Patient</TableHead>
+                  <TableHead>Sex</TableHead>
+                  <TableHead>Confirmed</TableHead>
+                  <TableHead>Residency</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {rows.map((r) => (
+                  <TableRow key={r.id} data-testid={`sth-row-${r.id}`}>
+                    <TableCell className="font-mono text-xs">{r.screenDate}</TableCell>
+                    {!barangay && <TableCell className="text-xs">{r.barangay}</TableCell>}
+                    <TableCell>{r.patientName}</TableCell>
+                    <TableCell>{r.sex}</TableCell>
+                    <TableCell>{r.confirmed ? "Yes" : "—"}</TableCell>
+                    <TableCell className="text-xs">{r.residency}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+    </div>
   );
 }
 
-function LeprosyCard({ barangay }: { barangay: string }) {
+function LeprosyCard({ barangay, canEnter }: { barangay: string | null; canEnter: boolean }) {
   const { toast } = useToast();
-  const queryKey = useMemo(() => [`/api/leprosy-records?barangay=${encodeURIComponent(barangay)}`], [barangay]);
+  const queryKey = useMemo(
+    () => [barangay ? `/api/leprosy-records?barangay=${encodeURIComponent(barangay)}` : "/api/leprosy-records"],
+    [barangay],
+  );
   const { data: rows = [] } = useQuery<LeprosyRecord[]>({ queryKey });
   const [pt, setPt] = useState<PtCommon>({ patientName: "", dob: "", sex: "M" });
   const [date, setDate] = useState(today());
@@ -302,26 +475,67 @@ function LeprosyCard({ barangay }: { barangay: string }) {
     onError: (e: Error) => toast({ title: "Could not save", description: e.message, variant: "destructive" }),
   });
   return (
-    <Card data-testid="card-lep">
-      <CardHeader className="pb-2"><CardTitle className="text-base">Leprosy</CardTitle></CardHeader>
-      <CardContent className="space-y-3">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-          <PtFields v={pt} onChange={setPt} />
-          <div><label className="text-xs text-muted-foreground">Registered date</label>
-            <Input type="date" value={date} max={today()} onChange={(e) => setDate(e.target.value)} data-testid="input-lep-date" />
-          </div>
-        </div>
-        <div className="flex flex-wrap gap-3 text-sm">
-          <label className="flex items-center gap-2"><Checkbox checked={newCase} onCheckedChange={(v) => setNewCase(!!v)} data-testid="check-new-case" /> New case</label>
-          <label className="flex items-center gap-2"><Checkbox checked={confirmed} onCheckedChange={(v) => setConfirmed(!!v)} data-testid="check-lep-confirmed" /> Confirmed</label>
-        </div>
-        <div className="flex items-center justify-between flex-wrap gap-2">
-          <Badge variant="outline" className="text-xs font-normal">{rows.length} recorded</Badge>
-          <Button size="sm" onClick={() => create.mutate()} disabled={!pt.patientName || !pt.dob} className="gap-1" data-testid="button-save-lep">
-            <Save className="w-4 h-4" /> Save
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
+    <div className="space-y-4">
+      {canEnter && barangay && (
+        <Card data-testid="card-lep">
+          <CardHeader className="pb-2"><CardTitle className="text-base">Leprosy</CardTitle></CardHeader>
+          <CardContent className="space-y-3">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+              <PtFields v={pt} onChange={setPt} />
+              <div><label className="text-xs text-muted-foreground">Registered date</label>
+                <Input type="date" value={date} max={today()} onChange={(e) => setDate(e.target.value)} data-testid="input-lep-date" />
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-3 text-sm">
+              <label className="flex items-center gap-2"><Checkbox checked={newCase} onCheckedChange={(v) => setNewCase(!!v)} data-testid="check-new-case" /> New case</label>
+              <label className="flex items-center gap-2"><Checkbox checked={confirmed} onCheckedChange={(v) => setConfirmed(!!v)} data-testid="check-lep-confirmed" /> Confirmed</label>
+            </div>
+            <div className="flex items-center justify-end flex-wrap gap-2">
+              <Button size="sm" onClick={() => create.mutate()} disabled={!pt.patientName || !pt.dob} className="gap-1" data-testid="button-save-lep">
+                <Save className="w-4 h-4" /> Save
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+      <Card data-testid="card-lep-history">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">
+            Records {barangay ? `— ${barangay}` : "(consolidated, all barangays)"}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {rows.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-3 text-center">No leprosy records yet.</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Date</TableHead>
+                  {!barangay && <TableHead>Barangay</TableHead>}
+                  <TableHead>Patient</TableHead>
+                  <TableHead>Sex</TableHead>
+                  <TableHead>Tags</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {rows.map((r) => (
+                  <TableRow key={r.id} data-testid={`lep-row-${r.id}`}>
+                    <TableCell className="font-mono text-xs">{r.registeredDate}</TableCell>
+                    {!barangay && <TableCell className="text-xs">{r.barangay}</TableCell>}
+                    <TableCell>{r.patientName}</TableCell>
+                    <TableCell>{r.sex}</TableCell>
+                    <TableCell className="text-xs space-x-1">
+                      {r.newCase && <Badge variant="outline" className="text-[10px]">New</Badge>}
+                      {r.confirmed && <Badge variant="outline" className="text-[10px]">Confirmed</Badge>}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+    </div>
   );
 }

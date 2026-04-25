@@ -7,6 +7,7 @@ import {
 } from "@shared/schema";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useBarangay } from "@/contexts/barangay-context";
+import { useAuth, permissions } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -25,17 +26,16 @@ import { format } from "date-fns";
 
 export default function SchoolImmunizationsPage() {
   const { selectedBarangay } = useBarangay();
+  const { role } = useAuth();
+  const canEnter = permissions.canEnterRecords(role);
   const { toast } = useToast();
   const today = format(new Date(), "yyyy-MM-dd");
 
   const queryKey = useMemo(
-    () => [`/api/school-immunizations?barangay=${encodeURIComponent(selectedBarangay || "")}`],
+    () => [selectedBarangay ? `/api/school-immunizations?barangay=${encodeURIComponent(selectedBarangay)}` : "/api/school-immunizations"],
     [selectedBarangay],
   );
-  const { data: rows = [] } = useQuery<SchoolImmunization[]>({
-    queryKey,
-    enabled: !!selectedBarangay,
-  });
+  const { data: rows = [] } = useQuery<SchoolImmunization[]>({ queryKey });
 
   const [learnerName, setLearnerName] = useState("");
   const [schoolName, setSchoolName] = useState("");
@@ -91,13 +91,8 @@ export default function SchoolImmunizationsPage() {
         </p>
       </div>
 
-      {!selectedBarangay ? (
-        <Card><CardContent className="pt-6 text-sm text-muted-foreground">
-          Select a barangay from the switcher to record school immunizations.
-        </CardContent></Card>
-      ) : (
-        <>
-          <Card data-testid="card-school-imm-form">
+      {canEnter && selectedBarangay && (
+        <Card data-testid="card-school-imm-form">
             <CardHeader className="pb-2"><CardTitle className="text-base">Record vaccination</CardTitle></CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -153,42 +148,47 @@ export default function SchoolImmunizationsPage() {
               </div>
             </CardContent>
           </Card>
-
-          <Card data-testid="card-school-imm-history">
-            <CardHeader className="pb-2"><CardTitle className="text-base">Records — {selectedBarangay}</CardTitle></CardHeader>
-            <CardContent>
-              {rows.length === 0 ? (
-                <p className="text-sm text-muted-foreground py-3 text-center">No school immunization records yet.</p>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Date</TableHead>
-                      <TableHead>Learner</TableHead>
-                      <TableHead>Sex</TableHead>
-                      <TableHead>Vaccine</TableHead>
-                      <TableHead>Dose</TableHead>
-                      <TableHead>Grade</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {rows.map((r) => (
-                      <TableRow key={r.id} data-testid={`school-imm-row-${r.id}`}>
-                        <TableCell className="font-mono text-xs">{r.vaccinationDate}</TableCell>
-                        <TableCell>{r.learnerName}</TableCell>
-                        <TableCell>{r.sex}</TableCell>
-                        <TableCell><Badge variant="outline" className="text-xs">{r.vaccine}</Badge></TableCell>
-                        <TableCell>{r.doseNumber}</TableCell>
-                        <TableCell>{r.gradeLevel ?? "—"}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
-            </CardContent>
-          </Card>
-        </>
       )}
+
+      <Card data-testid="card-school-imm-history">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">
+            Records {selectedBarangay ? `— ${selectedBarangay}` : "(consolidated, all barangays)"}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {rows.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-3 text-center">No school immunization records yet.</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Date</TableHead>
+                  {!selectedBarangay && <TableHead>Barangay</TableHead>}
+                  <TableHead>Learner</TableHead>
+                  <TableHead>Sex</TableHead>
+                  <TableHead>Vaccine</TableHead>
+                  <TableHead>Dose</TableHead>
+                  <TableHead>Grade</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {rows.map((r) => (
+                  <TableRow key={r.id} data-testid={`school-imm-row-${r.id}`}>
+                    <TableCell className="font-mono text-xs">{r.vaccinationDate}</TableCell>
+                    {!selectedBarangay && <TableCell className="text-xs">{r.barangay}</TableCell>}
+                    <TableCell>{r.learnerName}</TableCell>
+                    <TableCell>{r.sex}</TableCell>
+                    <TableCell><Badge variant="outline" className="text-xs">{r.vaccine}</Badge></TableCell>
+                    <TableCell>{r.doseNumber}</TableCell>
+                    <TableCell>{r.gradeLevel ?? "—"}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

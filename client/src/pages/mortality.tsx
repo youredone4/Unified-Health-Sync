@@ -7,6 +7,7 @@ import {
 } from "@shared/schema";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useBarangay } from "@/contexts/barangay-context";
+import { useAuth, permissions } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -25,13 +26,15 @@ const today = () => format(new Date(), "yyyy-MM-dd");
 
 export default function MortalityPage() {
   const { selectedBarangay } = useBarangay();
+  const { role } = useAuth();
+  const canEnter = permissions.canEnterRecords(role);
   const { toast } = useToast();
 
   const queryKey = useMemo(
-    () => [`/api/death-events?barangay=${encodeURIComponent(selectedBarangay || "")}`],
+    () => [selectedBarangay ? `/api/death-events?barangay=${encodeURIComponent(selectedBarangay)}` : "/api/death-events"],
     [selectedBarangay],
   );
-  const { data: rows = [] } = useQuery<DeathEvent[]>({ queryKey, enabled: !!selectedBarangay });
+  const { data: rows = [] } = useQuery<DeathEvent[]>({ queryKey });
 
   const [deceasedName, setDeceasedName] = useState("");
   const [sex, setSex] = useState<"M" | "F">("M");
@@ -82,13 +85,8 @@ export default function MortalityPage() {
         <p className="text-sm text-muted-foreground">Feeds M1 Section H (mortality / natality).</p>
       </div>
 
-      {!selectedBarangay ? (
-        <Card><CardContent className="pt-6 text-sm text-muted-foreground">
-          Select a barangay to record deaths.
-        </CardContent></Card>
-      ) : (
-        <>
-          <Card data-testid="card-mortality-form">
+      {canEnter && selectedBarangay && (
+        <Card data-testid="card-mortality-form">
             <CardHeader className="pb-2"><CardTitle className="text-base">Record death event</CardTitle></CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -146,46 +144,51 @@ export default function MortalityPage() {
               </div>
             </CardContent>
           </Card>
-
-          <Card data-testid="card-mortality-history">
-            <CardHeader className="pb-2"><CardTitle className="text-base">Records — {selectedBarangay}</CardTitle></CardHeader>
-            <CardContent>
-              {rows.length === 0 ? (
-                <p className="text-sm text-muted-foreground py-3 text-center">No death events recorded.</p>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Date</TableHead>
-                      <TableHead>Name</TableHead>
-                      <TableHead>Sex</TableHead>
-                      <TableHead>Age</TableHead>
-                      <TableHead>Cause</TableHead>
-                      <TableHead>Tags</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {rows.map((r) => (
-                      <TableRow key={r.id} data-testid={`mortality-row-${r.id}`}>
-                        <TableCell className="font-mono text-xs">{r.dateOfDeath}</TableCell>
-                        <TableCell>{r.deceasedName}</TableCell>
-                        <TableCell>{r.sex || "—"}</TableCell>
-                        <TableCell>{r.ageDays !== null ? `${r.ageDays}d` : r.age !== null ? `${r.age}y` : "—"}</TableCell>
-                        <TableCell className="text-xs">{r.causeOfDeath || "—"}</TableCell>
-                        <TableCell className="text-xs space-x-1">
-                          {r.maternalDeathCause && <Badge variant="destructive" className="text-[10px]">{r.maternalDeathCause}</Badge>}
-                          {r.isFetalDeath && <Badge variant="outline" className="text-[10px]">Fetal</Badge>}
-                          {r.isLiveBornEarlyNeonatal && <Badge variant="outline" className="text-[10px]">Early neonatal</Badge>}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
-            </CardContent>
-          </Card>
-        </>
       )}
+
+      <Card data-testid="card-mortality-history">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">
+            Records {selectedBarangay ? `— ${selectedBarangay}` : "(consolidated, all barangays)"}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {rows.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-3 text-center">No death events recorded.</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Date</TableHead>
+                  {!selectedBarangay && <TableHead>Barangay</TableHead>}
+                  <TableHead>Name</TableHead>
+                  <TableHead>Sex</TableHead>
+                  <TableHead>Age</TableHead>
+                  <TableHead>Cause</TableHead>
+                  <TableHead>Tags</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {rows.map((r) => (
+                  <TableRow key={r.id} data-testid={`mortality-row-${r.id}`}>
+                    <TableCell className="font-mono text-xs">{r.dateOfDeath}</TableCell>
+                    {!selectedBarangay && <TableCell className="text-xs">{r.barangay}</TableCell>}
+                    <TableCell>{r.deceasedName}</TableCell>
+                    <TableCell>{r.sex || "—"}</TableCell>
+                    <TableCell>{r.ageDays !== null ? `${r.ageDays}d` : r.age !== null ? `${r.age}y` : "—"}</TableCell>
+                    <TableCell className="text-xs">{r.causeOfDeath || "—"}</TableCell>
+                    <TableCell className="text-xs space-x-1">
+                      {r.maternalDeathCause && <Badge variant="destructive" className="text-[10px]">{r.maternalDeathCause}</Badge>}
+                      {r.isFetalDeath && <Badge variant="outline" className="text-[10px]">Fetal</Badge>}
+                      {r.isLiveBornEarlyNeonatal && <Badge variant="outline" className="text-[10px]">Early neonatal</Badge>}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

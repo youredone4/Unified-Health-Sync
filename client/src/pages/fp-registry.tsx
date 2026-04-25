@@ -27,7 +27,7 @@ import {
 } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { useAuth } from "@/hooks/use-auth";
+import { useAuth, permissions } from "@/hooks/use-auth";
 import type { FpServiceRecord } from "@shared/schema";
 import { FP_METHODS, FP_STATUSES } from "@shared/schema";
 
@@ -403,7 +403,7 @@ function FpFormDialog({ open, onClose, record, defaultBarangay }: FpFormDialogPr
 export default function FpRegistry() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const { isAdmin, isTL, assignedBarangays } = useAuth();
+  const { isAdmin, isTL, assignedBarangays, role } = useAuth();
 
   const [search, setSearch] = useState("");
   const [filterBarangay, setFilterBarangay] = useState("all");
@@ -492,9 +492,11 @@ export default function FpRegistry() {
             <p className="text-sm text-muted-foreground">Track FP clients and methods across barangays</p>
           </div>
         </div>
-        <Button onClick={() => { setEditRecord(null); setDialogOpen(true); }} data-testid="button-add-fp-client">
-          <Plus className="w-4 h-4 mr-2" /> Add FP Client
-        </Button>
+        {permissions.canEnterRecords(role) && (
+          <Button onClick={() => { setEditRecord(null); setDialogOpen(true); }} data-testid="button-add-fp-client">
+            <Plus className="w-4 h-4 mr-2" /> Add FP Client
+          </Button>
+        )}
       </div>
 
       {/* Summary Cards */}

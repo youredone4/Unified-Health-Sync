@@ -3546,6 +3546,129 @@ export class DatabaseStorage implements IStorage {
     ]);
 
     console.log("Database seeded successfully!");
+    await this.seedMgmtConsolidatedDemo();
+  }
+
+  /**
+   * Demo data for MGMT-consolidated views (mortality, household water, oral
+   * health visits, school immunizations). Each table gets 2 rows in each of
+   * 6 representative barangays — enough to populate the read-only consolidated
+   * registry pages an admin / MHO / SHA sees.
+   *
+   * Idempotent per-table: if a table already has any rows, the seed for that
+   * table is skipped. Safe to re-run on every boot.
+   */
+  async seedMgmtConsolidatedDemo(): Promise<void> {
+    const seedBarangays = ["Amoslog", "Anislagan", "Bayboy", "Central (Poblacion)", "Mabini", "Pananay-an"];
+    const today = new Date();
+    const isoOffset = (days: number) => {
+      const d = new Date(today);
+      d.setDate(d.getDate() - days);
+      return d.toISOString().slice(0, 10);
+    };
+
+    // 1) Mortality
+    const existingDeaths = await db.execute(sql`SELECT COUNT(*)::int AS n FROM death_events`);
+    const deathCount = Number(((existingDeaths as any).rows ?? existingDeaths)[0]?.n ?? 0);
+    if (deathCount === 0) {
+      const rows: any[] = [];
+      seedBarangays.forEach((b, i) => {
+        rows.push({
+          deceasedName: `Deceased Resident ${i + 1}A`, sex: i % 2 === 0 ? "M" : "F",
+          age: 60 + i * 3, ageDays: null, dateOfDeath: isoOffset(20 + i * 3),
+          causeOfDeath: i % 2 === 0 ? "Hypertension" : "Pneumonia",
+          barangay: b, residency: "RESIDENT", isFetalDeath: false, isLiveBornEarlyNeonatal: false,
+          createdAt: new Date().toISOString(),
+        });
+        rows.push({
+          deceasedName: `Deceased Resident ${i + 1}B`, sex: i % 2 === 0 ? "F" : "M",
+          age: i === 0 ? 0 : 50 + i, ageDays: i === 0 ? 5 : null, dateOfDeath: isoOffset(45 + i * 4),
+          causeOfDeath: i === 0 ? "Sepsis (neonatal)" : "Cerebrovascular accident",
+          barangay: b, residency: "RESIDENT",
+          isFetalDeath: false, isLiveBornEarlyNeonatal: i === 0,
+          createdAt: new Date().toISOString(),
+        });
+      });
+      await db.insert(deathEvents).values(rows);
+      console.log(`[seed] death_events: inserted ${rows.length} demo rows across ${seedBarangays.length} barangays`);
+    }
+
+    // 2) Household water
+    const existingWater = await db.execute(sql`SELECT COUNT(*)::int AS n FROM household_water_records`);
+    const waterCount = Number(((existingWater as any).rows ?? existingWater)[0]?.n ?? 0);
+    if (waterCount === 0) {
+      const rows: any[] = [];
+      seedBarangays.forEach((b, i) => {
+        rows.push({
+          barangay: b, surveyDate: isoOffset(15 + i * 2),
+          householdId: `HH-${b.slice(0, 4).toUpperCase()}-001`,
+          householdHead: `Household Head ${i + 1}`,
+          waterLevel: i < 2 ? "III" : i < 4 ? "II" : "I",
+          safelyManaged: i < 3, notes: null,
+        });
+        rows.push({
+          barangay: b, surveyDate: isoOffset(35 + i * 3),
+          householdId: `HH-${b.slice(0, 4).toUpperCase()}-002`,
+          householdHead: `Household Head ${i + 1}-B`,
+          waterLevel: i < 3 ? "II" : "I",
+          safelyManaged: i < 2, notes: null,
+        });
+      });
+      await db.insert(householdWaterRecords).values(rows);
+      console.log(`[seed] household_water_records: inserted ${rows.length} demo rows across ${seedBarangays.length} barangays`);
+    }
+
+    // 3) Oral health visits
+    const existingOral = await db.execute(sql`SELECT COUNT(*)::int AS n FROM oral_health_visits`);
+    const oralCount = Number(((existingOral as any).rows ?? existingOral)[0]?.n ?? 0);
+    if (oralCount === 0) {
+      const rows: any[] = [];
+      seedBarangays.forEach((b, i) => {
+        rows.push({
+          patientName: `Patient ${i + 1}A`, barangay: b,
+          dob: `${1990 + i}-${String((i % 12) + 1).padStart(2, "0")}-15`,
+          sex: i % 2 === 0 ? "M" : "F",
+          visitDate: isoOffset(10 + i * 2),
+          isFirstVisit: true, facilityBased: true, isPregnant: false,
+        });
+        rows.push({
+          patientName: `Patient ${i + 1}B`, barangay: b,
+          dob: `${1985 + i}-${String(((i + 3) % 12) + 1).padStart(2, "0")}-22`,
+          sex: i % 2 === 0 ? "F" : "M",
+          visitDate: isoOffset(25 + i * 3),
+          isFirstVisit: i % 2 === 0, facilityBased: i < 4, isPregnant: i === 0,
+        });
+      });
+      await db.insert(oralHealthVisits).values(rows);
+      console.log(`[seed] oral_health_visits: inserted ${rows.length} demo rows across ${seedBarangays.length} barangays`);
+    }
+
+    // 4) School immunizations (HPV / Td)
+    const existingSchool = await db.execute(sql`SELECT COUNT(*)::int AS n FROM school_immunizations`);
+    const schoolCount = Number(((existingSchool as any).rows ?? existingSchool)[0]?.n ?? 0);
+    if (schoolCount === 0) {
+      const rows: any[] = [];
+      seedBarangays.forEach((b, i) => {
+        rows.push({
+          learnerName: `Learner ${i + 1}A`, barangay: b,
+          schoolName: `${b} Elementary School`,
+          gradeLevel: 1, dob: `2018-${String((i % 12) + 1).padStart(2, "0")}-08`,
+          sex: i % 2 === 0 ? "F" : "M",
+          vaccine: "Td", doseNumber: 1,
+          vaccinationDate: isoOffset(30 + i * 2),
+        });
+        rows.push({
+          learnerName: `Learner ${i + 1}B`, barangay: b,
+          schoolName: `${b} Elementary School`,
+          gradeLevel: 4, dob: `2015-${String(((i + 5) % 12) + 1).padStart(2, "0")}-12`,
+          sex: "F",
+          vaccine: "HPV", doseNumber: 1,
+          vaccinationDate: isoOffset(40 + i * 3),
+        });
+      });
+      await db.insert(schoolImmunizations).values(rows);
+      console.log(`[seed] school_immunizations: inserted ${rows.length} demo rows across ${seedBarangays.length} barangays`);
+    }
   }
 
   // Seed historical M1 report data for all barangays from 2020 to 2025

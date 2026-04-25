@@ -98,6 +98,13 @@ export const permissions = {
   canImportReports: (role?: string) => role === UserRole.SYSTEM_ADMIN || role === UserRole.MHO,
   canCreate: (role?: string) => role === UserRole.SYSTEM_ADMIN || role === UserRole.MHO || role === UserRole.SHA || role === UserRole.TL,
   canUpdate: (role?: string) => role === UserRole.SYSTEM_ADMIN || role === UserRole.MHO || role === UserRole.SHA || role === UserRole.TL,
+  // Encode-level access for transactional/clinical entry (mothers, children,
+  // disease cases, FP records, mortality, screenings, household water, etc.).
+  // Per DOH operational model: BHS-level TLs capture, RHU-level MGMT reviews.
+  // MGMT roles see consolidated data but cannot add new records — they
+  // validate + sign off + submit. Server-side enforcement still governs
+  // mutation routes; this helper drives the UI affordance.
+  canEnterRecords: (role?: string) => role === UserRole.TL,
   canDelete: (role?: string) => role === UserRole.SYSTEM_ADMIN,
   canEditInventory: (role?: string) => role === UserRole.SYSTEM_ADMIN,
   isAdmin: (role?: string) => role === UserRole.SYSTEM_ADMIN,

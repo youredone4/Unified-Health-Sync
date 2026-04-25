@@ -6,6 +6,7 @@ import {
 } from "@shared/schema";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useBarangay } from "@/contexts/barangay-context";
+import { useAuth, permissions } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -21,13 +22,15 @@ const today = () => format(new Date(), "yyyy-MM-dd");
 
 export default function HouseholdWaterPage() {
   const { selectedBarangay } = useBarangay();
+  const { role } = useAuth();
+  const canEnter = permissions.canEnterRecords(role);
   const { toast } = useToast();
 
   const queryKey = useMemo(
-    () => [`/api/household-water-records?barangay=${encodeURIComponent(selectedBarangay || "")}`],
+    () => [selectedBarangay ? `/api/household-water-records?barangay=${encodeURIComponent(selectedBarangay)}` : "/api/household-water-records"],
     [selectedBarangay],
   );
-  const { data: rows = [] } = useQuery<HouseholdWaterRecord[]>({ queryKey, enabled: !!selectedBarangay });
+  const { data: rows = [] } = useQuery<HouseholdWaterRecord[]>({ queryKey });
 
   const [householdId, setHouseholdId] = useState("");
   const [householdHead, setHouseholdHead] = useState("");
@@ -61,13 +64,8 @@ export default function HouseholdWaterPage() {
         <p className="text-sm text-muted-foreground">Feeds M1 Section W (water &amp; sanitation).</p>
       </div>
 
-      {!selectedBarangay ? (
-        <Card><CardContent className="pt-6 text-sm text-muted-foreground">
-          Select a barangay to record household water survey data.
-        </CardContent></Card>
-      ) : (
-        <>
-          <Card data-testid="card-water-form">
+      {canEnter && selectedBarangay && (
+        <Card data-testid="card-water-form">
             <CardHeader className="pb-2"><CardTitle className="text-base">Record household</CardTitle></CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -109,38 +107,43 @@ export default function HouseholdWaterPage() {
               </div>
             </CardContent>
           </Card>
-
-          <Card data-testid="card-water-history">
-            <CardHeader className="pb-2"><CardTitle className="text-base">Records — {selectedBarangay}</CardTitle></CardHeader>
-            <CardContent>
-              {rows.length === 0 ? (
-                <p className="text-sm text-muted-foreground py-3 text-center">No household water records yet.</p>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Date</TableHead>
-                      <TableHead>Household</TableHead>
-                      <TableHead>Level</TableHead>
-                      <TableHead>Safely managed</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {rows.map((r) => (
-                      <TableRow key={r.id} data-testid={`water-row-${r.id}`}>
-                        <TableCell className="font-mono text-xs">{r.surveyDate}</TableCell>
-                        <TableCell>{r.householdHead || r.householdId || "—"}</TableCell>
-                        <TableCell>{r.waterLevel ? <Badge variant="outline">Level {r.waterLevel}</Badge> : "—"}</TableCell>
-                        <TableCell>{r.safelyManaged ? "Yes" : "—"}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
-            </CardContent>
-          </Card>
-        </>
       )}
+
+      <Card data-testid="card-water-history">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">
+            Records {selectedBarangay ? `— ${selectedBarangay}` : "(consolidated, all barangays)"}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {rows.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-3 text-center">No household water records yet.</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Date</TableHead>
+                  {!selectedBarangay && <TableHead>Barangay</TableHead>}
+                  <TableHead>Household</TableHead>
+                  <TableHead>Level</TableHead>
+                  <TableHead>Safely managed</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {rows.map((r) => (
+                  <TableRow key={r.id} data-testid={`water-row-${r.id}`}>
+                    <TableCell className="font-mono text-xs">{r.surveyDate}</TableCell>
+                    {!selectedBarangay && <TableCell className="text-xs">{r.barangay}</TableCell>}
+                    <TableCell>{r.householdHead || r.householdId || "—"}</TableCell>
+                    <TableCell>{r.waterLevel ? <Badge variant="outline">Level {r.waterLevel}</Badge> : "—"}</TableCell>
+                    <TableCell>{r.safelyManaged ? "Yes" : "—"}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }
