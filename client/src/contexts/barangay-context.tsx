@@ -28,12 +28,23 @@ export function BarangayProvider({ children }: { children: React.ReactNode }) {
   // Compute effective barangay synchronously during render — no useEffect needed.
   // If auth data is already cached (normal case for logged-in users), this resolves
   // on the very first render, preventing any unscoped API call.
+  //
+  // - TL: must resolve to one of their assigned barangays. Falls back to the
+  //   first assigned barangay if the persisted selection has been reassigned
+  //   away from them.
+  // - MGMT (Admin / MHO / SHA): no assignedBarangays scope, so trust whatever
+  //   the user picked in the switcher. The switcher only offers valid options
+  //   (full /api/barangays list), and pages handle null gracefully with
+  //   "Select a barangay…" placeholders.
   const effectiveBarangay: string | null = (() => {
-    if (!isTL || assignedBarangays.length === 0) return null;
-    if (preferredBarangay && assignedBarangays.includes(preferredBarangay)) {
-      return preferredBarangay;
+    if (isTL) {
+      if (assignedBarangays.length === 0) return null;
+      if (preferredBarangay && assignedBarangays.includes(preferredBarangay)) {
+        return preferredBarangay;
+      }
+      return assignedBarangays[0];
     }
-    return assignedBarangays[0];
+    return preferredBarangay;
   })();
 
   const setSelectedBarangay = (b: string) => {
