@@ -1301,6 +1301,18 @@ export async function registerRoutes(
   // Lazy-register on first hit so the route file stays self-contained.
   ensureReportsRegistered();
 
+  // Diagnostic: dump the registered report slugs without auth so we can
+  // verify the server picked up new reports after a deploy. Returns just
+  // slug + cadence — no row data, no role gate.
+  app.get("/api/reports/_registry", (_req, res) => {
+    const slugs = listReports().map((r) => ({
+      slug: r.slug,
+      cadence: r.cadence,
+      category: r.category,
+    }));
+    res.json({ count: slugs.length, slugs });
+  });
+
   app.get("/api/reports", loadUserInfo, requireAuth, ar(async (req, res) => {
     const role = req.userInfo?.role;
     const defs = listReports()
