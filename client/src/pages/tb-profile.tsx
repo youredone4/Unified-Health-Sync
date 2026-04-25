@@ -27,6 +27,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
 import SmsModal from "@/components/sms-modal";
 import ConfirmModal from "@/components/confirm-modal";
+import { TbDoseLogCard } from "@/components/tb-dose-log-card";
 import { useAuth, permissions } from "@/hooks/use-auth";
 import { addDays, format } from "date-fns";
 import {
@@ -270,6 +271,7 @@ export default function TBProfile() {
   // ── Clinical tab ─────────────────────────────────────────────────────────
   const clinicalTab = (
     <div className="space-y-4">
+      <TbDoseLogCard tbPatientId={patient.id} />
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-base flex items-center gap-2">

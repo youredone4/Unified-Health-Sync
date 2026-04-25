@@ -1,6 +1,6 @@
 import { db } from "./db";
 import { 
-  mothers, children, seniors, inventory, medicineInventory, inventorySnapshots, coldChainLogs, healthStations, smsOutbox, diseaseCases, tbPatients, themeSettings,
+  mothers, children, seniors, inventory, medicineInventory, inventorySnapshots, coldChainLogs, tbDoseLogs, healthStations, smsOutbox, diseaseCases, tbPatients, themeSettings,
   barangays, users, userBarangays, municipalitySettings, UserRole, consults, seniorMedClaims,
   m1TemplateVersions, m1IndicatorCatalog, m1ReportInstances, m1ReportHeader, m1IndicatorValues, barangaySettings,
   directMessages,
@@ -15,6 +15,7 @@ import {
   type MedicineInventoryItem, type InsertMedicineInventoryItem,
   type InventorySnapshot, type InsertInventorySnapshot,
   type ColdChainLog, type InsertColdChainLog,
+  type TbDoseLog, type InsertTbDoseLog,
   type HealthStation,
   type SmsMessage, type InsertSmsMessage,
   type DiseaseCase, type InsertDiseaseCase,
@@ -67,6 +68,14 @@ export interface IStorage {
   getColdChainLogs(params: { barangay?: string; fromDate?: string; toDate?: string }): Promise<ColdChainLog[]>;
   getColdChainTodayStatus(barangay: string, date: string): Promise<{ am: ColdChainLog | null; pm: ColdChainLog | null }>;
   createColdChainLog(log: InsertColdChainLog): Promise<ColdChainLog>;
+
+  // TB DOTS daily dose log (NTP MoP 6th Ed.)
+  getTbDoseLogs(params: { tbPatientId?: number; fromDate?: string; toDate?: string }): Promise<TbDoseLog[]>;
+  getTbDoseTodaySummary(barangay: string, date: string): Promise<{
+    expected: TBPatient[];
+    logsByPatient: Record<number, TbDoseLog>;
+  }>;
+  createTbDoseLog(log: InsertTbDoseLog): Promise<TbDoseLog>;
 
   getHealthStations(filter?: { facilityType?: string; hasTbDots?: boolean }): Promise<HealthStation[]>;
 
@@ -340,6 +349,46 @@ export class DatabaseStorage implements IStorage {
 
   async createColdChainLog(log: InsertColdChainLog): Promise<ColdChainLog> {
     const [created] = await db.insert(coldChainLogs).values(log).returning();
+    return created;
+  }
+
+  async getTbDoseLogs(params: { tbPatientId?: number; fromDate?: string; toDate?: string }): Promise<TbDoseLog[]> {
+    const conditions = [];
+    if (params.tbPatientId !== undefined) conditions.push(eq(tbDoseLogs.tbPatientId, params.tbPatientId));
+    if (params.fromDate) conditions.push(gte(tbDoseLogs.doseDate, params.fromDate));
+    if (params.toDate) conditions.push(lt(tbDoseLogs.doseDate, params.toDate));
+    return await db
+      .select()
+      .from(tbDoseLogs)
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .orderBy(desc(tbDoseLogs.doseDate));
+  }
+
+  async getTbDoseTodaySummary(barangay: string, date: string): Promise<{
+    expected: TBPatient[];
+    logsByPatient: Record<number, TbDoseLog>;
+  }> {
+    const expected = await db
+      .select()
+      .from(tbPatients)
+      .where(and(
+        eq(tbPatients.barangay, barangay),
+        eq(tbPatients.treatmentPhase, "Intensive"),
+        eq(tbPatients.outcomeStatus, "Ongoing"),
+      ));
+    if (expected.length === 0) return { expected: [], logsByPatient: {} };
+    const ids = expected.map(p => p.id);
+    const logs = await db
+      .select()
+      .from(tbDoseLogs)
+      .where(and(inArray(tbDoseLogs.tbPatientId, ids), eq(tbDoseLogs.doseDate, date)));
+    const logsByPatient: Record<number, TbDoseLog> = {};
+    for (const l of logs) logsByPatient[l.tbPatientId] = l;
+    return { expected, logsByPatient };
+  }
+
+  async createTbDoseLog(log: InsertTbDoseLog): Promise<TbDoseLog> {
+    const [created] = await db.insert(tbDoseLogs).values(log).returning();
     return created;
   }
 

@@ -25,7 +25,6 @@ import {
   UserCircle,
   Siren,
   Sparkles,
-  ListChecks,
   Stethoscope,
 } from "lucide-react";
 import { DayBannerStrip } from "@/components/today/DayBannerStrip";
@@ -34,6 +33,7 @@ import { ProgramWorklist, type WorklistItem } from "@/components/today/ProgramWo
 import { DefaultersList } from "@/components/today/DefaultersList";
 import { ComingSoonCard } from "@/components/today/ComingSoonCard";
 import { ColdChainPanel } from "@/components/today/ColdChainPanel";
+import { TbDosePanel } from "@/components/today/TbDosePanel";
 import { QuickAddBar } from "@/components/today/QuickAddBar";
 
 /**
@@ -138,15 +138,10 @@ export default function TodayPage() {
       {/* Cross-program defaulters bucket */}
       <DefaultersList items={defaulters} />
 
-      {/* Cold-chain + remaining "coming soon" gaps */}
+      {/* Cold-chain + TB doses + remaining "coming soon" gaps */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <ColdChainPanel />
-        <ComingSoonCard
-          title="TB DOTS dose tally"
-          icon={ListChecks}
-          description="Per-patient daily dose-administration log for intensive-phase TB patients (NTP MoP). Today shows visit cadence only."
-          testId="coming-soon-tb-tally"
-        />
+        <TbDosePanel />
         <ComingSoonCard
           title="PNC follow-ups"
           icon={Stethoscope}

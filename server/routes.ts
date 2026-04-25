@@ -3,7 +3,7 @@ import type { Server } from "http";
 import { storage } from "./storage";
 import { db } from "./db";
 import { max, eq } from "drizzle-orm";
-import { prenatalVisits, childVisits, seniorVisits, insertFpServiceRecordSchema, insertNutritionFollowUpSchema, insertColdChainLogSchema } from "@shared/schema";
+import { prenatalVisits, childVisits, seniorVisits, insertFpServiceRecordSchema, insertNutritionFollowUpSchema, insertColdChainLogSchema, insertTbDoseLogSchema } from "@shared/schema";
 import { api } from "@shared/routes";
 import { z } from "zod";
 import { setupAuth, registerAuthRoutes } from "./auth";
@@ -606,6 +606,62 @@ export async function registerRoutes(
     await createAuditLog(req.userInfo!.id, req.userInfo!.role, "DELETE", "TB_DOTS", String(id), undefined, undefined, undefined, req);
     res.json({ success: true });
   }));
+
+  // === TB DOSE LOGS (NTP MoP 6th Ed. — directly-observed daily dose) ===
+  app.get("/api/tb-dose-logs", loadUserInfo, requireAuth, ar(async (req, res) => {
+    const patientIdRaw = req.query.patientId ? Number(req.query.patientId) : undefined;
+    const fromDate = req.query.fromDate ? String(req.query.fromDate) : undefined;
+    const toDate = req.query.toDate ? String(req.query.toDate) : undefined;
+    if (patientIdRaw === undefined || !Number.isFinite(patientIdRaw)) {
+      return res.status(400).json({ message: "patientId query param is required" });
+    }
+    const patient = await storage.getTBPatient(patientIdRaw);
+    if (!patient) return res.status(404).json({ message: "TB patient not found" });
+    if (req.userInfo?.role === UserRole.TL && !req.userInfo.assignedBarangays.includes(patient.barangay)) {
+      return res.status(403).json({ message: "Access denied to this barangay" });
+    }
+    const data = await storage.getTbDoseLogs({ tbPatientId: patientIdRaw, fromDate, toDate });
+    res.json(data);
+  }));
+
+  app.get("/api/tb-dose-logs/today", loadUserInfo, requireAuth, ar(async (req, res) => {
+    const barangay = req.query.barangay ? String(req.query.barangay) : undefined;
+    if (!barangay) return res.status(400).json({ message: "barangay query param is required" });
+    if (req.userInfo?.role === UserRole.TL && !req.userInfo.assignedBarangays.includes(barangay)) {
+      return res.status(403).json({ message: "Access denied to this barangay" });
+    }
+    const today = new Date().toISOString().slice(0, 10);
+    const summary = await storage.getTbDoseTodaySummary(barangay, today);
+    res.json(summary);
+  }));
+
+  app.post("/api/tb-dose-logs", loadUserInfo, requireAuth,
+    requireRole(UserRole.SYSTEM_ADMIN, UserRole.MHO, UserRole.SHA, UserRole.TL),
+    ar(async (req, res) => {
+      const parsed = insertTbDoseLogSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: "Invalid TB dose log", issues: parsed.error.issues });
+      }
+      const input = parsed.data;
+      const patient = await storage.getTBPatient(input.tbPatientId);
+      if (!patient) return res.status(404).json({ message: "TB patient not found" });
+      if (req.userInfo?.role === UserRole.TL && !req.userInfo.assignedBarangays.includes(patient.barangay)) {
+        return res.status(403).json({ message: "Access denied to this barangay" });
+      }
+      const created = await storage.createTbDoseLog({
+        ...input,
+        observedByUserId: req.userInfo?.id ?? null,
+      });
+      await createAuditLog(
+        req.userInfo!.id, req.userInfo!.role,
+        "CREATE", "TB_DOSE_LOG", String(created.id),
+        patient.barangay, undefined,
+        { tbPatientId: created.tbPatientId, doseDate: created.doseDate, observedStatus: created.observedStatus },
+        req,
+      );
+      res.status(201).json(created);
+    }),
+  );
 
   // === THEME SETTINGS ===
   app.get(api.themeSettings.get.path, async (req, res) => {
