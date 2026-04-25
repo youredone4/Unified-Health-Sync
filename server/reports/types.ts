@@ -10,8 +10,8 @@
 
 import type { Express } from "express";
 
-export type ReportCadence = "weekly" | "monthly" | "quarterly" | "annual";
-export type ReportCategory = "fhsis" | "program" | "surveillance" | "performance";
+export type ReportCadence = "weekly" | "monthly" | "quarterly" | "annual" | "custom";
+export type ReportCategory = "fhsis" | "program" | "surveillance" | "performance" | "admin";
 
 export interface ReportParams {
   /** YYYY-MM-DD range start (inclusive). */
@@ -57,6 +57,13 @@ export interface ReportDefinition {
   category: ReportCategory;
   /** Source DOH issuance / form code, displayed on the detail header. */
   source?: string;
+  /**
+   * If set, only users with one of these role strings can see / fetch
+   * this report. Used for admin-only reports (e.g. Registered Users).
+   * Default: visible to any authenticated user (TL barangay-scoped at
+   * the data layer).
+   */
+  requiredRoles?: readonly string[];
   fetch: (params: ReportParams) => Promise<ReportResult>;
 }
 
@@ -118,6 +125,19 @@ export function annualRange(year: number): { fromDate: string; toDate: string; p
     toDate: `${year}-12-31`,
     periodLabel: `${year}`,
   };
+}
+
+/**
+ * Validates and packages an arbitrary YYYY-MM-DD date range. Used by
+ * reports declaring `cadence: "custom"`. Throws on invalid input so
+ * the route handler can return 400.
+ */
+export function customRange(fromDate: string, toDate: string): { fromDate: string; toDate: string; periodLabel: string } {
+  const isoRe = /^\d{4}-\d{2}-\d{2}$/;
+  if (!isoRe.test(fromDate)) throw new Error("fromDate must be YYYY-MM-DD");
+  if (!isoRe.test(toDate)) throw new Error("toDate must be YYYY-MM-DD");
+  if (fromDate > toDate) throw new Error("fromDate must be on or before toDate");
+  return { fromDate, toDate, periodLabel: `${fromDate} to ${toDate}` };
 }
 
 // Marker type so the routes module can pass `app` in once if needed in future.

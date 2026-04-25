@@ -4,15 +4,15 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
-  FileText, ArrowRight, ClipboardList, Activity, ShieldAlert, BarChart3,
+  FileText, ArrowRight, ClipboardList, Activity, ShieldAlert, BarChart3, Shield,
 } from "lucide-react";
 
 interface ReportDef {
   slug: string;
   title: string;
   description: string;
-  cadence: "weekly" | "monthly" | "quarterly" | "annual";
-  category: "fhsis" | "program" | "surveillance" | "performance";
+  cadence: "weekly" | "monthly" | "quarterly" | "annual" | "custom";
+  category: "fhsis" | "program" | "surveillance" | "performance" | "admin";
   source: string | null;
 }
 
@@ -21,6 +21,7 @@ const CATEGORY_LABELS: Record<ReportDef["category"], string> = {
   program: "Program-Specific",
   surveillance: "Surveillance",
   performance: "LGU Performance",
+  admin: "Administration",
 };
 
 const CATEGORY_ICONS: Record<ReportDef["category"], typeof ClipboardList> = {
@@ -28,6 +29,7 @@ const CATEGORY_ICONS: Record<ReportDef["category"], typeof ClipboardList> = {
   program: Activity,
   surveillance: ShieldAlert,
   performance: BarChart3,
+  admin: Shield,
 };
 
 const CADENCE_TONE: Record<ReportDef["cadence"], string> = {
@@ -35,6 +37,7 @@ const CADENCE_TONE: Record<ReportDef["cadence"], string> = {
   monthly: "bg-primary/15 text-primary",
   quarterly: "bg-sky-500/15 text-sky-700 dark:text-sky-300",
   annual: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
+  custom: "bg-violet-500/15 text-violet-700 dark:text-violet-300",
 };
 
 export default function ReportsPage() {
@@ -49,10 +52,10 @@ export default function ReportsPage() {
       acc[r.category].push(r);
       return acc;
     },
-    { fhsis: [], program: [], surveillance: [], performance: [] },
+    { fhsis: [], program: [], surveillance: [], performance: [], admin: [] },
   );
 
-  const orderedCategories: ReportDef["category"][] = ["fhsis", "program", "surveillance", "performance"];
+  const orderedCategories: ReportDef["category"][] = ["fhsis", "program", "surveillance", "performance", "admin"];
 
   return (
     <div className="space-y-6">

@@ -15,7 +15,7 @@ import { PidsrSubmissionPanel } from "@/components/reports/PidsrSubmissionPanel"
 
 interface ReportColumn { key: string; label: string; align?: "left" | "center" | "right" }
 interface ReportRow { id?: string; cells: Record<string, string | number | null>; isTotal?: boolean; indent?: number }
-type ReportCadence = "weekly" | "monthly" | "quarterly" | "annual";
+type ReportCadence = "weekly" | "monthly" | "quarterly" | "annual" | "custom";
 interface ReportDef {
   slug: string;
   title: string;
@@ -44,9 +44,10 @@ export default function ReportDetailPage() {
   const { selectedBarangay } = useBarangay();
 
   // Fetch the registered definition so we can pick the right period selector
-  // (Year / Quarter / Month) based on the report's cadence.
+  // (Custom range / Year / Quarter / Month) based on the report's cadence.
   const { data: defs = [] } = useQuery<ReportDef[]>({ queryKey: ["/api/reports"] });
   const def = defs.find((d) => d.slug === params.slug);
+  const isCustom = def?.cadence === "custom";
   const isAnnual = def?.cadence === "annual";
   const isQuarterly = def?.cadence === "quarterly";
 
@@ -54,19 +55,23 @@ export default function ReportDetailPage() {
   const [month, setMonth] = useState<number>(now.getMonth() + 1);
   const [quarter, setQuarter] = useState<number>(Math.floor(now.getMonth() / 3) + 1);
   const [year, setYear] = useState<number>(now.getFullYear());
+  // Default custom range: same calendar year, Jan 1 → today.
+  const todayIso = now.toISOString().slice(0, 10);
+  const [fromDate, setFromDate] = useState<string>(`${now.getFullYear()}-01-01`);
+  const [toDate, setToDate] = useState<string>(todayIso);
 
   const queryKey = useMemo(() => {
+    const barangayQs = selectedBarangay ? `&barangay=${encodeURIComponent(selectedBarangay)}` : "";
+    if (isCustom) {
+      return [`/api/reports/${params.slug}?fromDate=${fromDate}&toDate=${toDate}${barangayQs}`];
+    }
     const periodPart = isAnnual
       ? ""
       : isQuarterly
       ? `quarter=${quarter}&`
       : `month=${month}&`;
-    return [
-      `/api/reports/${params.slug}?${periodPart}year=${year}${
-        selectedBarangay ? `&barangay=${encodeURIComponent(selectedBarangay)}` : ""
-      }`,
-    ];
-  }, [params.slug, isAnnual, isQuarterly, month, quarter, year, selectedBarangay]);
+    return [`/api/reports/${params.slug}?${periodPart}year=${year}${barangayQs}`];
+  }, [params.slug, isCustom, isAnnual, isQuarterly, month, quarter, year, fromDate, toDate, selectedBarangay]);
 
   const { data, isLoading, error } = useQuery<ReportResponse>({
     queryKey,
@@ -99,7 +104,9 @@ export default function ReportDetailPage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    const periodSuffix = isAnnual
+    const periodSuffix = isCustom
+      ? `${fromDate}_to_${toDate}`
+      : isAnnual
       ? `${year}`
       : isQuarterly
       ? `Q${quarter}-${year}`
@@ -134,43 +141,70 @@ export default function ReportDetailPage() {
       <Card className="print:hidden">
         <CardContent className="pt-4">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
-            {isAnnual ? null : isQuarterly ? (
-              <div>
-                <label className="text-xs text-muted-foreground">Quarter</label>
-                <Select value={String(quarter)} onValueChange={(v) => setQuarter(Number(v))}>
-                  <SelectTrigger data-testid="select-quarter"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="1">Q1 (Jan–Mar)</SelectItem>
-                    <SelectItem value="2">Q2 (Apr–Jun)</SelectItem>
-                    <SelectItem value="3">Q3 (Jul–Sep)</SelectItem>
-                    <SelectItem value="4">Q4 (Oct–Dec)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+            {isCustom ? (
+              <>
+                <div>
+                  <label className="text-xs text-muted-foreground">From date</label>
+                  <Input
+                    type="date"
+                    value={fromDate}
+                    max={toDate}
+                    onChange={(e) => setFromDate(e.target.value)}
+                    data-testid="input-from-date"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground">To date</label>
+                  <Input
+                    type="date"
+                    value={toDate}
+                    min={fromDate}
+                    onChange={(e) => setToDate(e.target.value)}
+                    data-testid="input-to-date"
+                  />
+                </div>
+              </>
             ) : (
-              <div>
-                <label className="text-xs text-muted-foreground">Month</label>
-                <Select value={String(month)} onValueChange={(v) => setMonth(Number(v))}>
-                  <SelectTrigger data-testid="select-month"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {MONTHS.map((m, i) => (
-                      <SelectItem key={i} value={String(i + 1)}>{m}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              <>
+                {isAnnual ? null : isQuarterly ? (
+                  <div>
+                    <label className="text-xs text-muted-foreground">Quarter</label>
+                    <Select value={String(quarter)} onValueChange={(v) => setQuarter(Number(v))}>
+                      <SelectTrigger data-testid="select-quarter"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="1">Q1 (Jan–Mar)</SelectItem>
+                        <SelectItem value="2">Q2 (Apr–Jun)</SelectItem>
+                        <SelectItem value="3">Q3 (Jul–Sep)</SelectItem>
+                        <SelectItem value="4">Q4 (Oct–Dec)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                ) : (
+                  <div>
+                    <label className="text-xs text-muted-foreground">Month</label>
+                    <Select value={String(month)} onValueChange={(v) => setMonth(Number(v))}>
+                      <SelectTrigger data-testid="select-month"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {MONTHS.map((m, i) => (
+                          <SelectItem key={i} value={String(i + 1)}>{m}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+                <div>
+                  <label className="text-xs text-muted-foreground">Year</label>
+                  <Select value={String(year)} onValueChange={(v) => setYear(Number(v))}>
+                    <SelectTrigger data-testid="select-year"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {yearOptions.map((y) => (
+                        <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </>
             )}
-            <div>
-              <label className="text-xs text-muted-foreground">Year</label>
-              <Select value={String(year)} onValueChange={(v) => setYear(Number(v))}>
-                <SelectTrigger data-testid="select-year"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {yearOptions.map((y) => (
-                    <SelectItem key={y} value={String(y)}>{y}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
             <div>
               <label className="text-xs text-muted-foreground">Barangay</label>
               <Input
