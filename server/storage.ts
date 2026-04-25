@@ -8,6 +8,7 @@ import {
   sickChildVisits, schoolImmunizations, oralHealthVisits,
   philpenAssessments, ncdScreenings, visionScreenings, cervicalCancerScreenings, mentalHealthScreenings,
   filariasisRecords, rabiesExposures, schistosomiasisRecords, sthRecords, leprosyRecords,
+  deathEvents,
   nutritionFollowUps,
   fpServiceRecords, FP_METHOD_ROW_KEY,
   globalChatMessages,
@@ -35,6 +36,7 @@ import {
   type SchistosomiasisRecord, type InsertSchistosomiasisRecord,
   type SthRecord, type InsertSthRecord,
   type LeprosyRecord, type InsertLeprosyRecord,
+  type DeathEvent, type InsertDeathEvent,
   type HealthStation,
   type SmsMessage, type InsertSmsMessage,
   type DiseaseCase, type InsertDiseaseCase,
@@ -124,6 +126,10 @@ export interface IStorage {
   // Oral health visits (M1 Section ORAL)
   getOralHealthVisits(params: { barangay?: string }): Promise<OralHealthVisit[]>;
   createOralHealthVisit(record: InsertOralHealthVisit): Promise<OralHealthVisit>;
+
+  // Phase 6 — Mortality registry (death_events extensions)
+  getDeathEvents(params: { barangay?: string }): Promise<DeathEvent[]>;
+  createDeathEvent(r: InsertDeathEvent): Promise<DeathEvent>;
 
   // Phase 5 — Disease surveillance
   getFilariasisRecords(params: { barangay?: string }): Promise<FilariasisRecord[]>;
@@ -666,6 +672,16 @@ export class DatabaseStorage implements IStorage {
   async createMentalHealthScreening(record: InsertMentalHealthScreening): Promise<MentalHealthScreening> {
     const [created] = await db.insert(mentalHealthScreenings).values(record).returning();
     return created;
+  }
+
+  // ── Phase 6 Mortality registry ─────────────────────────────────────
+  async getDeathEvents(params: { barangay?: string }): Promise<DeathEvent[]> {
+    const conds = params.barangay ? [eq(deathEvents.barangay, params.barangay)] : [];
+    return await db.select().from(deathEvents).where(conds.length ? and(...conds) : undefined).orderBy(desc(deathEvents.dateOfDeath));
+  }
+  async createDeathEvent(r: InsertDeathEvent): Promise<DeathEvent> {
+    const [c] = await db.insert(deathEvents).values(r).returning();
+    return c;
   }
 
   // ── Phase 5 Disease surveillance ────────────────────────────────────
@@ -1895,6 +1911,62 @@ export class DatabaseStorage implements IStorage {
       add(rk, "M", g.M); add(rk, "F", g.F); add(rk, "TOTAL", g.TOTAL);
     }
 
+    // === SECTION H — Mortality / Natality (death_events extensions) ===
+    const deRows = await db.select().from(deathEvents).where(and(
+      barangayName ? eq(deathEvents.barangay, barangayName) : undefined,
+      sql`${deathEvents.dateOfDeath} LIKE ${monthLike}`,
+    ));
+    let h03M = 0, h03F = 0;
+    let h03aTotal = 0, h03aR = 0, h03aNR = 0;
+    let h03bTotal = 0, h03bR = 0, h03bNR = 0;
+    let h04 = 0, h05 = 0, h06 = 0, h07 = 0, h07b = 0, h08 = 0;
+    for (const r of deRows) {
+      h08++;
+      const ageDays = r.ageDays ?? null;
+      const ageYrs = r.age ?? null;
+      const ageMos = ageDays !== null ? Math.floor(ageDays / 30) : (ageYrs !== null ? ageYrs * 12 : null);
+
+      // Maternal deaths (women 15-49, has maternal_death_cause set)
+      const isMaternal = r.maternalDeathCause === "DIRECT" || r.maternalDeathCause === "INDIRECT";
+      if (isMaternal) {
+        if (r.sex === "F") h03F++;
+        else h03M++;
+        if (r.maternalDeathCause === "DIRECT") {
+          h03aTotal++;
+          if (r.residency === "RESIDENT") h03aR++;
+          else if (r.residency === "NON_RESIDENT") h03aNR++;
+        } else if (r.maternalDeathCause === "INDIRECT") {
+          h03bTotal++;
+          if (r.residency === "RESIDENT") h03bR++;
+          else if (r.residency === "NON_RESIDENT") h03bNR++;
+        }
+      }
+
+      // Age-band mortality
+      if (ageMos !== null && ageMos < 60) h04++;
+      if (ageMos !== null && ageMos < 12) h05++;
+      if (ageDays !== null && ageDays <= 28) h06++;
+      // Perinatal: fetal death + early neonatal (≤6 days)
+      if (r.isFetalDeath) h07++;
+      else if (r.isLiveBornEarlyNeonatal && ageDays !== null && ageDays <= 6) {
+        h07++;
+        h07b++;
+      }
+    }
+    add("H-03", "M", h03M); add("H-03", "F", h03F); add("H-03", "TOTAL", h03M + h03F);
+    add("H-03a", "M", 0); add("H-03a", "F", h03aTotal); add("H-03a", "TOTAL", h03aTotal);
+    add("H-03a-R", "VALUE", h03aR);
+    add("H-03a-NR", "VALUE", h03aNR);
+    add("H-03b", "M", 0); add("H-03b", "F", h03bTotal); add("H-03b", "TOTAL", h03bTotal);
+    add("H-03b-R", "VALUE", h03bR);
+    add("H-03b-NR", "VALUE", h03bNR);
+    add("H-04", "VALUE", h04);
+    add("H-05", "VALUE", h05);
+    add("H-06", "VALUE", h06);
+    add("H-07", "TOTAL", h07);
+    add("H-07b", "VALUE", h07b);
+    add("H-08", "VALUE", h08);
+
     // Save all computed values (ENCODED already excluded via `add`)
     if (computedRaw.length > 0) {
       await this.updateM1IndicatorValues(reportId, computedRaw.map(v => ({
@@ -2644,6 +2716,37 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
+  /** Phase 6 catalog rows — Section H (Mortality / Natality). */
+  private async seedM1MortalityRows(): Promise<void> {
+    const [activeTpl] = await db.select().from(m1TemplateVersions).where(eq(m1TemplateVersions.isActive, true)).limit(1);
+    if (!activeTpl) return;
+    const sexRateSpec = { columns: ["M", "F", "TOTAL"], hasTotal: true };
+    const singleSpec = { columns: ["VALUE"] };
+    const tplId = activeTpl.id;
+
+    const rows: InsertM1IndicatorCatalog[] = [
+      { templateVersionId: tplId, pageNumber: 3, sectionCode: "H", rowKey: "H-03", officialLabel: "Total Maternal Deaths", dataType: "INT", rowOrder: 800, indentLevel: 0, columnGroupType: "SEX_RATE", columnSpec: sexRateSpec, isComputed: true, isRequired: true },
+      { templateVersionId: tplId, pageNumber: 3, sectionCode: "H", rowKey: "H-03a", officialLabel: "Direct Cause Maternal Death", dataType: "INT", rowOrder: 801, indentLevel: 1, columnGroupType: "SEX_RATE", columnSpec: sexRateSpec, isComputed: true, isRequired: true },
+      { templateVersionId: tplId, pageNumber: 3, sectionCode: "H", rowKey: "H-03a-R", officialLabel: "Resident", dataType: "INT", rowOrder: 802, indentLevel: 2, columnGroupType: "SINGLE", columnSpec: singleSpec, isComputed: true, isRequired: true },
+      { templateVersionId: tplId, pageNumber: 3, sectionCode: "H", rowKey: "H-03a-NR", officialLabel: "Non-Resident", dataType: "INT", rowOrder: 803, indentLevel: 2, columnGroupType: "SINGLE", columnSpec: singleSpec, isComputed: true, isRequired: true },
+      { templateVersionId: tplId, pageNumber: 3, sectionCode: "H", rowKey: "H-03b", officialLabel: "Indirect Cause Maternal Death", dataType: "INT", rowOrder: 804, indentLevel: 1, columnGroupType: "SEX_RATE", columnSpec: sexRateSpec, isComputed: true, isRequired: true },
+      { templateVersionId: tplId, pageNumber: 3, sectionCode: "H", rowKey: "H-03b-R", officialLabel: "Resident", dataType: "INT", rowOrder: 805, indentLevel: 2, columnGroupType: "SINGLE", columnSpec: singleSpec, isComputed: true, isRequired: true },
+      { templateVersionId: tplId, pageNumber: 3, sectionCode: "H", rowKey: "H-03b-NR", officialLabel: "Non-Resident", dataType: "INT", rowOrder: 806, indentLevel: 2, columnGroupType: "SINGLE", columnSpec: singleSpec, isComputed: true, isRequired: true },
+      { templateVersionId: tplId, pageNumber: 3, sectionCode: "H", rowKey: "H-04", officialLabel: "Under-Five Mortality (0–59 mos)", dataType: "INT", rowOrder: 810, indentLevel: 0, columnGroupType: "SINGLE", columnSpec: singleSpec, isComputed: true, isRequired: true },
+      { templateVersionId: tplId, pageNumber: 3, sectionCode: "H", rowKey: "H-05", officialLabel: "Infant Mortality (0–11 mos & 29 days)", dataType: "INT", rowOrder: 811, indentLevel: 0, columnGroupType: "SINGLE", columnSpec: singleSpec, isComputed: true, isRequired: true },
+      { templateVersionId: tplId, pageNumber: 3, sectionCode: "H", rowKey: "H-06", officialLabel: "Neonatal Mortality (0–28 days)", dataType: "INT", rowOrder: 812, indentLevel: 0, columnGroupType: "SINGLE", columnSpec: singleSpec, isComputed: true, isRequired: true },
+      { templateVersionId: tplId, pageNumber: 3, sectionCode: "H", rowKey: "H-07", officialLabel: "Total Perinatal Mortality", dataType: "INT", rowOrder: 813, indentLevel: 0, columnGroupType: "SEX_RATE", columnSpec: sexRateSpec, isComputed: true, isRequired: true },
+      { templateVersionId: tplId, pageNumber: 3, sectionCode: "H", rowKey: "H-07b", officialLabel: "Early Neonatal Death (0–6 days)", dataType: "INT", rowOrder: 814, indentLevel: 1, columnGroupType: "SINGLE", columnSpec: singleSpec, isComputed: true, isRequired: true },
+      { templateVersionId: tplId, pageNumber: 3, sectionCode: "H", rowKey: "H-08", officialLabel: "Total Deaths (all causes / age groups)", dataType: "INT", rowOrder: 820, indentLevel: 0, columnGroupType: "SINGLE", columnSpec: singleSpec, isComputed: true, isRequired: true },
+    ];
+    for (const row of rows) {
+      const existing = await db.select({ id: m1IndicatorCatalog.id }).from(m1IndicatorCatalog)
+        .where(and(eq(m1IndicatorCatalog.templateVersionId, row.templateVersionId), eq(m1IndicatorCatalog.rowKey, row.rowKey)))
+        .limit(1);
+      if (existing.length === 0) await db.insert(m1IndicatorCatalog).values(row);
+    }
+  }
+
   async seedData(): Promise<void> {
     // Auto-migrate: add columns introduced after the initial deployment.
     // Every statement is fully idempotent (IF NOT EXISTS / IF EXISTS) so it is
@@ -2757,6 +2860,7 @@ export class DatabaseStorage implements IStorage {
     await this.seedM1OralHealthRows();
     await this.seedM1NcdRows();
     await this.seedM1DiseaseRows();
+    await this.seedM1MortalityRows();
 
     const existingMothers = await this.getMothers();
     if (existingMothers.length > 0) return;
