@@ -333,6 +333,33 @@ export const insertTBPatientSchema = createInsertSchema(tbPatients)
 export type TBPatient = typeof tbPatients.$inferSelect;
 export type InsertTBPatient = z.infer<typeof insertTBPatientSchema>;
 
+// === TB DOSE LOGS (Directly-Observed Daily Dose) ===
+// NTP MoP 6th Ed.: intensive-phase TB patients require directly-observed
+// daily dose. One log per (patient, day) — uniqueness prevents duplicates.
+export const TB_DOSE_STATUSES = ["TAKEN", "MISSED", "REFUSED", "UNAVAILABLE"] as const;
+export type TbDoseStatus = typeof TB_DOSE_STATUSES[number];
+
+export const tbDoseLogs = pgTable("tb_dose_logs", {
+  id: serial("id").primaryKey(),
+  tbPatientId: integer("tb_patient_id").notNull().references(() => tbPatients.id, { onDelete: "cascade" }),
+  doseDate: text("dose_date").notNull(), // YYYY-MM-DD
+  observedStatus: text("observed_status").$type<TbDoseStatus>().notNull(),
+  observedByUserId: varchar("observed_by_user_id"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (t) => ({
+  uniqueDose: uniqueIndex("tb_dose_logs_unique_idx").on(t.tbPatientId, t.doseDate),
+}));
+
+export const insertTbDoseLogSchema = createInsertSchema(tbDoseLogs)
+  .omit({ id: true, createdAt: true })
+  .extend({
+    observedStatus: z.enum(TB_DOSE_STATUSES),
+    tbPatientId: z.number().int().positive(),
+  });
+export type TbDoseLog = typeof tbDoseLogs.$inferSelect;
+export type InsertTbDoseLog = z.infer<typeof insertTbDoseLogSchema>;
+
 // === THEME SETTINGS (LGU Branding) ===
 export const themeSettings = pgTable("theme_settings", {
   id: serial("id").primaryKey(),
