@@ -52,7 +52,7 @@ export function M1ProgressStrip({ daysRemaining }: M1ProgressStripProps) {
     : isReadOnly
     ? "Open M1 summary"
     : "Continue M1 report";
-  const ctaHref = isReadOnly ? "/reports/m1" : "/m1/encode";
+  const ctaHref = "/reports/m1";
 
   return (
     <Card data-testid="card-m1-progress">
