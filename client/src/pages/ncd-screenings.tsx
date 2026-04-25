@@ -11,6 +11,7 @@ import {
 } from "@shared/schema";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useBarangay } from "@/contexts/barangay-context";
+import { useAuth, permissions } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -21,6 +22,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { HeartPulse, Save } from "lucide-react";
 import { format } from "date-fns";
 
@@ -63,17 +65,8 @@ function CommonFields({
 
 export default function NcdScreeningsPage() {
   const { selectedBarangay } = useBarangay();
-
-  if (!selectedBarangay) {
-    return (
-      <div className="space-y-4">
-        <PageHeader />
-        <Card><CardContent className="pt-6 text-sm text-muted-foreground">
-          Select a barangay to record NCD screenings.
-        </CardContent></Card>
-      </div>
-    );
-  }
+  const { role } = useAuth();
+  const canEnter = permissions.canEnterRecords(role);
 
   return (
     <div className="space-y-4">
@@ -86,11 +79,11 @@ export default function NcdScreeningsPage() {
           <TabsTrigger value="cervical" data-testid="tab-cervical">Cervical (G6)</TabsTrigger>
           <TabsTrigger value="mental" data-testid="tab-mental">Mental (G8)</TabsTrigger>
         </TabsList>
-        <TabsContent value="philpen"><PhilpenSection barangay={selectedBarangay} /></TabsContent>
-        <TabsContent value="ncd"><NcdSection barangay={selectedBarangay} /></TabsContent>
-        <TabsContent value="vision"><VisionSection barangay={selectedBarangay} /></TabsContent>
-        <TabsContent value="cervical"><CervicalSection barangay={selectedBarangay} /></TabsContent>
-        <TabsContent value="mental"><MentalSection barangay={selectedBarangay} /></TabsContent>
+        <TabsContent value="philpen"><PhilpenSection barangay={selectedBarangay} canEnter={canEnter} /></TabsContent>
+        <TabsContent value="ncd"><NcdSection barangay={selectedBarangay} canEnter={canEnter} /></TabsContent>
+        <TabsContent value="vision"><VisionSection barangay={selectedBarangay} canEnter={canEnter} /></TabsContent>
+        <TabsContent value="cervical"><CervicalSection barangay={selectedBarangay} canEnter={canEnter} /></TabsContent>
+        <TabsContent value="mental"><MentalSection barangay={selectedBarangay} canEnter={canEnter} /></TabsContent>
       </Tabs>
     </div>
   );
@@ -107,9 +100,12 @@ function PageHeader() {
   );
 }
 
-function PhilpenSection({ barangay }: { barangay: string }) {
+function PhilpenSection({ barangay, canEnter }: { barangay: string | null; canEnter: boolean }) {
   const { toast } = useToast();
-  const queryKey = useMemo(() => [`/api/philpen-assessments?barangay=${encodeURIComponent(barangay)}`], [barangay]);
+  const queryKey = useMemo(
+    () => [barangay ? `/api/philpen-assessments?barangay=${encodeURIComponent(barangay)}` : "/api/philpen-assessments"],
+    [barangay],
+  );
   const { data: rows = [] } = useQuery<PhilpenAssessment[]>({ queryKey });
 
   const [common, setCommon] = useState<BasicCommon>({ patientName: "", dob: "", sex: "M" });
@@ -140,42 +136,90 @@ function PhilpenSection({ barangay }: { barangay: string }) {
   });
 
   return (
-    <Card data-testid="card-philpen">
-      <CardHeader className="pb-2"><CardTitle className="text-base">PhilPEN assessment</CardTitle></CardHeader>
-      <CardContent className="space-y-3">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-          <CommonFields v={common} onChange={setCommon} />
-          <div>
-            <label className="text-xs text-muted-foreground">Assessment date</label>
-            <Input type="date" value={date} max={today()} onChange={(e) => setDate(e.target.value)} data-testid="input-pp-date" />
-          </div>
-        </div>
-        <div className="flex flex-wrap gap-3 text-sm">
-          <label className="flex items-center gap-2"><Checkbox checked={smoking} onCheckedChange={(v) => setSmoking(!!v)} data-testid="check-smoking" /> Smoking history</label>
-          <label className="flex items-center gap-2"><Checkbox checked={drinker} onCheckedChange={(v) => setDrinker(!!v)} data-testid="check-drinker" /> Binge drinker</label>
-          <label className="flex items-center gap-2"><Checkbox checked={insufficient} onCheckedChange={(v) => setInsufficient(!!v)} data-testid="check-insufficient" /> Insufficient activity</label>
-          <label className="flex items-center gap-2"><Checkbox checked={unhealthy} onCheckedChange={(v) => setUnhealthy(!!v)} data-testid="check-unhealthy" /> Unhealthy diet</label>
-          <Select value={bmi} onValueChange={(v) => setBmi(v as BmiCategory)}>
-            <SelectTrigger className="w-44" data-testid="select-bmi"><SelectValue placeholder="BMI category" /></SelectTrigger>
-            <SelectContent>
-              {BMI_CATEGORIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="flex items-center justify-between flex-wrap gap-2">
-          <Badge variant="outline" className="text-xs font-normal">{rows.length} recorded</Badge>
-          <Button size="sm" onClick={() => create.mutate()} disabled={!common.patientName || !common.dob || create.isPending} className="gap-1" data-testid="button-save-pp">
-            <Save className="w-4 h-4" /> {create.isPending ? "Saving…" : "Save assessment"}
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
+    <div className="space-y-4">
+      {canEnter && barangay && (
+        <Card data-testid="card-philpen">
+          <CardHeader className="pb-2"><CardTitle className="text-base">PhilPEN assessment</CardTitle></CardHeader>
+          <CardContent className="space-y-3">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+              <CommonFields v={common} onChange={setCommon} />
+              <div>
+                <label className="text-xs text-muted-foreground">Assessment date</label>
+                <Input type="date" value={date} max={today()} onChange={(e) => setDate(e.target.value)} data-testid="input-pp-date" />
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-3 text-sm">
+              <label className="flex items-center gap-2"><Checkbox checked={smoking} onCheckedChange={(v) => setSmoking(!!v)} data-testid="check-smoking" /> Smoking history</label>
+              <label className="flex items-center gap-2"><Checkbox checked={drinker} onCheckedChange={(v) => setDrinker(!!v)} data-testid="check-drinker" /> Binge drinker</label>
+              <label className="flex items-center gap-2"><Checkbox checked={insufficient} onCheckedChange={(v) => setInsufficient(!!v)} data-testid="check-insufficient" /> Insufficient activity</label>
+              <label className="flex items-center gap-2"><Checkbox checked={unhealthy} onCheckedChange={(v) => setUnhealthy(!!v)} data-testid="check-unhealthy" /> Unhealthy diet</label>
+              <Select value={bmi} onValueChange={(v) => setBmi(v as BmiCategory)}>
+                <SelectTrigger className="w-44" data-testid="select-bmi"><SelectValue placeholder="BMI category" /></SelectTrigger>
+                <SelectContent>
+                  {BMI_CATEGORIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-center justify-end flex-wrap gap-2">
+              <Button size="sm" onClick={() => create.mutate()} disabled={!common.patientName || !common.dob || create.isPending} className="gap-1" data-testid="button-save-pp">
+                <Save className="w-4 h-4" /> {create.isPending ? "Saving…" : "Save assessment"}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+      <Card data-testid="card-philpen-history">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">
+            Records {barangay ? `— ${barangay}` : "(consolidated, all barangays)"}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {rows.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-3 text-center">No PhilPEN assessments yet.</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Date</TableHead>
+                  {!barangay && <TableHead>Barangay</TableHead>}
+                  <TableHead>Patient</TableHead>
+                  <TableHead>Sex</TableHead>
+                  <TableHead>BMI</TableHead>
+                  <TableHead>Risks</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {rows.map((r) => (
+                  <TableRow key={r.id} data-testid={`philpen-row-${r.id}`}>
+                    <TableCell className="font-mono text-xs">{r.assessmentDate}</TableCell>
+                    {!barangay && <TableCell className="text-xs">{r.barangay}</TableCell>}
+                    <TableCell>{r.patientName}</TableCell>
+                    <TableCell>{r.sex}</TableCell>
+                    <TableCell className="text-xs">{r.bmiCategory || "—"}</TableCell>
+                    <TableCell className="text-xs space-x-1">
+                      {r.smokingHistory && <Badge variant="outline" className="text-[10px]">Smoking</Badge>}
+                      {r.bingeDrinker && <Badge variant="outline" className="text-[10px]">Binge</Badge>}
+                      {r.insufficientActivity && <Badge variant="outline" className="text-[10px]">Inactive</Badge>}
+                      {r.unhealthyDiet && <Badge variant="outline" className="text-[10px]">Diet</Badge>}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+    </div>
   );
 }
 
-function NcdSection({ barangay }: { barangay: string }) {
+function NcdSection({ barangay, canEnter }: { barangay: string | null; canEnter: boolean }) {
   const { toast } = useToast();
-  const queryKey = useMemo(() => [`/api/ncd-screenings?barangay=${encodeURIComponent(barangay)}`], [barangay]);
+  const queryKey = useMemo(
+    () => [barangay ? `/api/ncd-screenings?barangay=${encodeURIComponent(barangay)}` : "/api/ncd-screenings"],
+    [barangay],
+  );
   const { data: rows = [] } = useQuery<NcdScreening[]>({ queryKey });
 
   const [common, setCommon] = useState<BasicCommon>({ patientName: "", dob: "", sex: "M" });
@@ -203,45 +247,92 @@ function NcdSection({ barangay }: { barangay: string }) {
   });
 
   return (
-    <Card data-testid="card-ncd">
-      <CardHeader className="pb-2"><CardTitle className="text-base">CV / HTN screening</CardTitle></CardHeader>
-      <CardContent className="space-y-3">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-          <CommonFields v={common} onChange={setCommon} />
-          <div>
-            <label className="text-xs text-muted-foreground">Screen date</label>
-            <Input type="date" value={date} max={today()} onChange={(e) => setDate(e.target.value)} data-testid="input-ncd-date" />
-          </div>
-          <div>
-            <label className="text-xs text-muted-foreground">Condition</label>
-            <Select value={condition} onValueChange={(v) => setCondition(v as NcdCondition)}>
-              <SelectTrigger data-testid="select-condition"><SelectValue /></SelectTrigger>
-              <SelectContent>{NCD_CONDITIONS.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
-            </Select>
-          </div>
-        </div>
-        <div className="flex flex-wrap gap-3 text-sm">
-          <label className="flex items-center gap-2"><Checkbox checked={diagnosed} onCheckedChange={(v) => setDiagnosed(!!v)} data-testid="check-diagnosed" /> Diagnosed</label>
-          <label className="flex items-center gap-2"><Checkbox checked={meds} onCheckedChange={(v) => setMeds(!!v)} data-testid="check-meds" /> Meds provided</label>
-          <Select value={source} onValueChange={(v) => setSource(v as NcdMedsSource)}>
-            <SelectTrigger className="w-44" data-testid="select-source"><SelectValue placeholder="Meds source" /></SelectTrigger>
-            <SelectContent>{NCD_MEDS_SOURCES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
-          </Select>
-        </div>
-        <div className="flex items-center justify-between flex-wrap gap-2">
-          <Badge variant="outline" className="text-xs font-normal">{rows.length} recorded</Badge>
-          <Button size="sm" onClick={() => create.mutate()} disabled={!common.patientName || !common.dob || create.isPending} className="gap-1" data-testid="button-save-ncd">
-            <Save className="w-4 h-4" /> {create.isPending ? "Saving…" : "Save screening"}
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
+    <div className="space-y-4">
+      {canEnter && barangay && (
+        <Card data-testid="card-ncd">
+          <CardHeader className="pb-2"><CardTitle className="text-base">CV / HTN screening</CardTitle></CardHeader>
+          <CardContent className="space-y-3">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+              <CommonFields v={common} onChange={setCommon} />
+              <div>
+                <label className="text-xs text-muted-foreground">Screen date</label>
+                <Input type="date" value={date} max={today()} onChange={(e) => setDate(e.target.value)} data-testid="input-ncd-date" />
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground">Condition</label>
+                <Select value={condition} onValueChange={(v) => setCondition(v as NcdCondition)}>
+                  <SelectTrigger data-testid="select-condition"><SelectValue /></SelectTrigger>
+                  <SelectContent>{NCD_CONDITIONS.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-3 text-sm">
+              <label className="flex items-center gap-2"><Checkbox checked={diagnosed} onCheckedChange={(v) => setDiagnosed(!!v)} data-testid="check-diagnosed" /> Diagnosed</label>
+              <label className="flex items-center gap-2"><Checkbox checked={meds} onCheckedChange={(v) => setMeds(!!v)} data-testid="check-meds" /> Meds provided</label>
+              <Select value={source} onValueChange={(v) => setSource(v as NcdMedsSource)}>
+                <SelectTrigger className="w-44" data-testid="select-source"><SelectValue placeholder="Meds source" /></SelectTrigger>
+                <SelectContent>{NCD_MEDS_SOURCES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-center justify-end flex-wrap gap-2">
+              <Button size="sm" onClick={() => create.mutate()} disabled={!common.patientName || !common.dob || create.isPending} className="gap-1" data-testid="button-save-ncd">
+                <Save className="w-4 h-4" /> {create.isPending ? "Saving…" : "Save screening"}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+      <Card data-testid="card-ncd-history">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">
+            Records {barangay ? `— ${barangay}` : "(consolidated, all barangays)"}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {rows.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-3 text-center">No NCD screenings yet.</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Date</TableHead>
+                  {!barangay && <TableHead>Barangay</TableHead>}
+                  <TableHead>Patient</TableHead>
+                  <TableHead>Sex</TableHead>
+                  <TableHead>Condition</TableHead>
+                  <TableHead>Tags</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {rows.map((r) => (
+                  <TableRow key={r.id} data-testid={`ncd-row-${r.id}`}>
+                    <TableCell className="font-mono text-xs">{r.screenDate}</TableCell>
+                    {!barangay && <TableCell className="text-xs">{r.barangay}</TableCell>}
+                    <TableCell>{r.patientName}</TableCell>
+                    <TableCell>{r.sex}</TableCell>
+                    <TableCell><Badge variant="outline" className="text-xs">{r.condition}</Badge></TableCell>
+                    <TableCell className="text-xs space-x-1">
+                      {r.diagnosed && <Badge variant="outline" className="text-[10px]">Diagnosed</Badge>}
+                      {r.medsProvided && <Badge variant="outline" className="text-[10px]">Meds</Badge>}
+                      {r.medsSource && <span className="text-[10px] text-muted-foreground">{r.medsSource}</span>}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+    </div>
   );
 }
 
-function VisionSection({ barangay }: { barangay: string }) {
+function VisionSection({ barangay, canEnter }: { barangay: string | null; canEnter: boolean }) {
   const { toast } = useToast();
-  const queryKey = useMemo(() => [`/api/vision-screenings?barangay=${encodeURIComponent(barangay)}`], [barangay]);
+  const queryKey = useMemo(
+    () => [barangay ? `/api/vision-screenings?barangay=${encodeURIComponent(barangay)}` : "/api/vision-screenings"],
+    [barangay],
+  );
   const { data: rows = [] } = useQuery<VisionScreening[]>({ queryKey });
 
   const [common, setCommon] = useState<BasicCommon>({ patientName: "", dob: "", sex: "M" });
@@ -267,34 +358,77 @@ function VisionSection({ barangay }: { barangay: string }) {
   });
 
   return (
-    <Card data-testid="card-vision">
-      <CardHeader className="pb-2"><CardTitle className="text-base">Vision screening (60+)</CardTitle></CardHeader>
-      <CardContent className="space-y-3">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-          <CommonFields v={common} onChange={setCommon} />
-          <div>
-            <label className="text-xs text-muted-foreground">Screen date</label>
-            <Input type="date" value={date} max={today()} onChange={(e) => setDate(e.target.value)} data-testid="input-vision-date" />
-          </div>
-        </div>
-        <div className="flex flex-wrap gap-3 text-sm">
-          <label className="flex items-center gap-2"><Checkbox checked={eyeDisease} onCheckedChange={(v) => setEyeDisease(!!v)} data-testid="check-eye-disease" /> Eye disease found</label>
-          <label className="flex items-center gap-2"><Checkbox checked={referred} onCheckedChange={(v) => setReferred(!!v)} data-testid="check-eye-ref" /> Referred to eye care</label>
-        </div>
-        <div className="flex items-center justify-between flex-wrap gap-2">
-          <Badge variant="outline" className="text-xs font-normal">{rows.length} recorded</Badge>
-          <Button size="sm" onClick={() => create.mutate()} disabled={!common.patientName || !common.dob || create.isPending} className="gap-1" data-testid="button-save-vision">
-            <Save className="w-4 h-4" /> {create.isPending ? "Saving…" : "Save screening"}
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
+    <div className="space-y-4">
+      {canEnter && barangay && (
+        <Card data-testid="card-vision">
+          <CardHeader className="pb-2"><CardTitle className="text-base">Vision screening (60+)</CardTitle></CardHeader>
+          <CardContent className="space-y-3">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+              <CommonFields v={common} onChange={setCommon} />
+              <div>
+                <label className="text-xs text-muted-foreground">Screen date</label>
+                <Input type="date" value={date} max={today()} onChange={(e) => setDate(e.target.value)} data-testid="input-vision-date" />
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-3 text-sm">
+              <label className="flex items-center gap-2"><Checkbox checked={eyeDisease} onCheckedChange={(v) => setEyeDisease(!!v)} data-testid="check-eye-disease" /> Eye disease found</label>
+              <label className="flex items-center gap-2"><Checkbox checked={referred} onCheckedChange={(v) => setReferred(!!v)} data-testid="check-eye-ref" /> Referred to eye care</label>
+            </div>
+            <div className="flex items-center justify-end flex-wrap gap-2">
+              <Button size="sm" onClick={() => create.mutate()} disabled={!common.patientName || !common.dob || create.isPending} className="gap-1" data-testid="button-save-vision">
+                <Save className="w-4 h-4" /> {create.isPending ? "Saving…" : "Save screening"}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+      <Card data-testid="card-vision-history">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">
+            Records {barangay ? `— ${barangay}` : "(consolidated, all barangays)"}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {rows.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-3 text-center">No vision screenings yet.</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Date</TableHead>
+                  {!barangay && <TableHead>Barangay</TableHead>}
+                  <TableHead>Patient</TableHead>
+                  <TableHead>Sex</TableHead>
+                  <TableHead>Eye disease</TableHead>
+                  <TableHead>Referred</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {rows.map((r) => (
+                  <TableRow key={r.id} data-testid={`vision-row-${r.id}`}>
+                    <TableCell className="font-mono text-xs">{r.screenDate}</TableCell>
+                    {!barangay && <TableCell className="text-xs">{r.barangay}</TableCell>}
+                    <TableCell>{r.patientName}</TableCell>
+                    <TableCell>{r.sex}</TableCell>
+                    <TableCell>{r.eyeDiseaseFound ? "Yes" : "—"}</TableCell>
+                    <TableCell>{r.referredToEyeCare ? "Yes" : "—"}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+    </div>
   );
 }
 
-function CervicalSection({ barangay }: { barangay: string }) {
+function CervicalSection({ barangay, canEnter }: { barangay: string | null; canEnter: boolean }) {
   const { toast } = useToast();
-  const queryKey = useMemo(() => [`/api/cervical-cancer-screenings?barangay=${encodeURIComponent(barangay)}`], [barangay]);
+  const queryKey = useMemo(
+    () => [barangay ? `/api/cervical-cancer-screenings?barangay=${encodeURIComponent(barangay)}` : "/api/cervical-cancer-screenings"],
+    [barangay],
+  );
   const { data: rows = [] } = useQuery<CervicalCancerScreening[]>({ queryKey });
 
   const [common, setCommon] = useState<BasicCommon>({ patientName: "", dob: "", sex: "F" });
@@ -327,50 +461,95 @@ function CervicalSection({ barangay }: { barangay: string }) {
   });
 
   return (
-    <Card data-testid="card-cervical">
-      <CardHeader className="pb-2"><CardTitle className="text-base">Cervical cancer screening (women 30–65)</CardTitle></CardHeader>
-      <CardContent className="space-y-3">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-          <CommonFields v={common} onChange={setCommon} includeSex={false} />
-          <div>
-            <label className="text-xs text-muted-foreground">Screen date</label>
-            <Input type="date" value={date} max={today()} onChange={(e) => setDate(e.target.value)} data-testid="input-cervical-date" />
-          </div>
-          <div>
-            <label className="text-xs text-muted-foreground">Method</label>
-            <Select value={method} onValueChange={(v) => setMethod(v as CervicalScreenMethod)}>
-              <SelectTrigger data-testid="select-method"><SelectValue /></SelectTrigger>
-              <SelectContent>{CERVICAL_SCREEN_METHODS.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent>
-            </Select>
-          </div>
-        </div>
-        <div className="flex flex-wrap gap-3 text-sm">
-          <label className="flex items-center gap-2"><Checkbox checked={suspicious} onCheckedChange={(v) => setSuspicious(!!v)} data-testid="check-suspicious" /> Suspicious</label>
-          <label className="flex items-center gap-2"><Checkbox checked={linked} onCheckedChange={(v) => setLinked(!!v)} data-testid="check-linked" /> Linked to care</label>
-          <Select value={linkedOutcome} onValueChange={(v) => setLinkedOutcome(v as CareOutcome)}>
-            <SelectTrigger className="w-40" data-testid="select-linked-outcome"><SelectValue placeholder="Linked outcome" /></SelectTrigger>
-            <SelectContent>{CARE_OUTCOMES.map((o) => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent>
-          </Select>
-          <label className="flex items-center gap-2"><Checkbox checked={precancer} onCheckedChange={(v) => setPrecancer(!!v)} data-testid="check-precancer" /> Precancerous</label>
-          <Select value={precancerOutcome} onValueChange={(v) => setPrecancerOutcome(v as CareOutcome)}>
-            <SelectTrigger className="w-40" data-testid="select-precancer-outcome"><SelectValue placeholder="Precancer outcome" /></SelectTrigger>
-            <SelectContent>{CARE_OUTCOMES.map((o) => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent>
-          </Select>
-        </div>
-        <div className="flex items-center justify-between flex-wrap gap-2">
-          <Badge variant="outline" className="text-xs font-normal">{rows.length} recorded</Badge>
-          <Button size="sm" onClick={() => create.mutate()} disabled={!common.patientName || !common.dob || create.isPending} className="gap-1" data-testid="button-save-cervical">
-            <Save className="w-4 h-4" /> {create.isPending ? "Saving…" : "Save screening"}
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
+    <div className="space-y-4">
+      {canEnter && barangay && (
+        <Card data-testid="card-cervical">
+          <CardHeader className="pb-2"><CardTitle className="text-base">Cervical cancer screening (women 30–65)</CardTitle></CardHeader>
+          <CardContent className="space-y-3">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+              <CommonFields v={common} onChange={setCommon} includeSex={false} />
+              <div>
+                <label className="text-xs text-muted-foreground">Screen date</label>
+                <Input type="date" value={date} max={today()} onChange={(e) => setDate(e.target.value)} data-testid="input-cervical-date" />
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground">Method</label>
+                <Select value={method} onValueChange={(v) => setMethod(v as CervicalScreenMethod)}>
+                  <SelectTrigger data-testid="select-method"><SelectValue /></SelectTrigger>
+                  <SelectContent>{CERVICAL_SCREEN_METHODS.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-3 text-sm">
+              <label className="flex items-center gap-2"><Checkbox checked={suspicious} onCheckedChange={(v) => setSuspicious(!!v)} data-testid="check-suspicious" /> Suspicious</label>
+              <label className="flex items-center gap-2"><Checkbox checked={linked} onCheckedChange={(v) => setLinked(!!v)} data-testid="check-linked" /> Linked to care</label>
+              <Select value={linkedOutcome} onValueChange={(v) => setLinkedOutcome(v as CareOutcome)}>
+                <SelectTrigger className="w-40" data-testid="select-linked-outcome"><SelectValue placeholder="Linked outcome" /></SelectTrigger>
+                <SelectContent>{CARE_OUTCOMES.map((o) => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent>
+              </Select>
+              <label className="flex items-center gap-2"><Checkbox checked={precancer} onCheckedChange={(v) => setPrecancer(!!v)} data-testid="check-precancer" /> Precancerous</label>
+              <Select value={precancerOutcome} onValueChange={(v) => setPrecancerOutcome(v as CareOutcome)}>
+                <SelectTrigger className="w-40" data-testid="select-precancer-outcome"><SelectValue placeholder="Precancer outcome" /></SelectTrigger>
+                <SelectContent>{CARE_OUTCOMES.map((o) => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-center justify-end flex-wrap gap-2">
+              <Button size="sm" onClick={() => create.mutate()} disabled={!common.patientName || !common.dob || create.isPending} className="gap-1" data-testid="button-save-cervical">
+                <Save className="w-4 h-4" /> {create.isPending ? "Saving…" : "Save screening"}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+      <Card data-testid="card-cervical-history">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">
+            Records {barangay ? `— ${barangay}` : "(consolidated, all barangays)"}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {rows.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-3 text-center">No cervical screenings yet.</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Date</TableHead>
+                  {!barangay && <TableHead>Barangay</TableHead>}
+                  <TableHead>Patient</TableHead>
+                  <TableHead>Method</TableHead>
+                  <TableHead>Tags</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {rows.map((r) => (
+                  <TableRow key={r.id} data-testid={`cervical-row-${r.id}`}>
+                    <TableCell className="font-mono text-xs">{r.screenDate}</TableCell>
+                    {!barangay && <TableCell className="text-xs">{r.barangay}</TableCell>}
+                    <TableCell>{r.patientName}</TableCell>
+                    <TableCell className="text-xs">{r.screenMethod || "—"}</TableCell>
+                    <TableCell className="text-xs space-x-1">
+                      {r.suspicious && <Badge variant="destructive" className="text-[10px]">Suspicious</Badge>}
+                      {r.linkedToCare && <Badge variant="outline" className="text-[10px]">Linked</Badge>}
+                      {r.precancerous && <Badge variant="outline" className="text-[10px]">Precancer</Badge>}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+    </div>
   );
 }
 
-function MentalSection({ barangay }: { barangay: string }) {
+function MentalSection({ barangay, canEnter }: { barangay: string | null; canEnter: boolean }) {
   const { toast } = useToast();
-  const queryKey = useMemo(() => [`/api/mental-health-screenings?barangay=${encodeURIComponent(barangay)}`], [barangay]);
+  const queryKey = useMemo(
+    () => [barangay ? `/api/mental-health-screenings?barangay=${encodeURIComponent(barangay)}` : "/api/mental-health-screenings"],
+    [barangay],
+  );
   const { data: rows = [] } = useQuery<MentalHealthScreening[]>({ queryKey });
 
   const [common, setCommon] = useState<BasicCommon>({ patientName: "", dob: "", sex: "M" });
@@ -394,27 +573,67 @@ function MentalSection({ barangay }: { barangay: string }) {
   });
 
   return (
-    <Card data-testid="card-mental">
-      <CardHeader className="pb-2"><CardTitle className="text-base">mhGAP screening</CardTitle></CardHeader>
-      <CardContent className="space-y-3">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-          <CommonFields v={common} onChange={setCommon} />
-          <div>
-            <label className="text-xs text-muted-foreground">Screen date</label>
-            <Input type="date" value={date} max={today()} onChange={(e) => setDate(e.target.value)} data-testid="input-mental-date" />
-          </div>
-        </div>
-        <label className="flex items-center gap-2 text-sm">
-          <Checkbox checked={positive} onCheckedChange={(v) => setPositive(!!v)} data-testid="check-positive" />
-          Positive (mental-health concern identified)
-        </label>
-        <div className="flex items-center justify-between flex-wrap gap-2">
-          <Badge variant="outline" className="text-xs font-normal">{rows.length} recorded</Badge>
-          <Button size="sm" onClick={() => create.mutate()} disabled={!common.patientName || !common.dob || create.isPending} className="gap-1" data-testid="button-save-mental">
-            <Save className="w-4 h-4" /> {create.isPending ? "Saving…" : "Save screening"}
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
+    <div className="space-y-4">
+      {canEnter && barangay && (
+        <Card data-testid="card-mental">
+          <CardHeader className="pb-2"><CardTitle className="text-base">mhGAP screening</CardTitle></CardHeader>
+          <CardContent className="space-y-3">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+              <CommonFields v={common} onChange={setCommon} />
+              <div>
+                <label className="text-xs text-muted-foreground">Screen date</label>
+                <Input type="date" value={date} max={today()} onChange={(e) => setDate(e.target.value)} data-testid="input-mental-date" />
+              </div>
+            </div>
+            <label className="flex items-center gap-2 text-sm">
+              <Checkbox checked={positive} onCheckedChange={(v) => setPositive(!!v)} data-testid="check-positive" />
+              Positive (mental-health concern identified)
+            </label>
+            <div className="flex items-center justify-end flex-wrap gap-2">
+              <Button size="sm" onClick={() => create.mutate()} disabled={!common.patientName || !common.dob || create.isPending} className="gap-1" data-testid="button-save-mental">
+                <Save className="w-4 h-4" /> {create.isPending ? "Saving…" : "Save screening"}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+      <Card data-testid="card-mental-history">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">
+            Records {barangay ? `— ${barangay}` : "(consolidated, all barangays)"}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {rows.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-3 text-center">No mhGAP screenings yet.</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Date</TableHead>
+                  {!barangay && <TableHead>Barangay</TableHead>}
+                  <TableHead>Patient</TableHead>
+                  <TableHead>Sex</TableHead>
+                  <TableHead>Tool</TableHead>
+                  <TableHead>Positive</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {rows.map((r) => (
+                  <TableRow key={r.id} data-testid={`mental-row-${r.id}`}>
+                    <TableCell className="font-mono text-xs">{r.screenDate}</TableCell>
+                    {!barangay && <TableCell className="text-xs">{r.barangay}</TableCell>}
+                    <TableCell>{r.patientName}</TableCell>
+                    <TableCell>{r.sex}</TableCell>
+                    <TableCell className="text-xs">{r.tool || "—"}</TableCell>
+                    <TableCell>{r.positive ? <Badge variant="destructive" className="text-[10px]">Yes</Badge> : "—"}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+    </div>
   );
 }
