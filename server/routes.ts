@@ -3,7 +3,7 @@ import type { Server } from "http";
 import { storage } from "./storage";
 import { db } from "./db";
 import { max, eq } from "drizzle-orm";
-import { prenatalVisits, childVisits, seniorVisits, insertFpServiceRecordSchema, insertNutritionFollowUpSchema, insertColdChainLogSchema, insertTbDoseLogSchema, insertPostpartumVisitSchema, insertPrenatalScreeningSchema, insertBirthAttendanceRecordSchema, insertSickChildVisitSchema, insertSchoolImmunizationSchema, insertOralHealthVisitSchema } from "@shared/schema";
+import { prenatalVisits, childVisits, seniorVisits, insertFpServiceRecordSchema, insertNutritionFollowUpSchema, insertColdChainLogSchema, insertTbDoseLogSchema, insertPostpartumVisitSchema, insertPrenatalScreeningSchema, insertBirthAttendanceRecordSchema, insertSickChildVisitSchema, insertSchoolImmunizationSchema, insertOralHealthVisitSchema, insertPhilpenAssessmentSchema, insertNcdScreeningSchema, insertVisionScreeningSchema, insertCervicalCancerScreeningSchema, insertMentalHealthScreeningSchema } from "@shared/schema";
 import { api } from "@shared/routes";
 import { z } from "zod";
 import { setupAuth, registerAuthRoutes } from "./auth";
@@ -846,6 +846,66 @@ export async function registerRoutes(
       res.status(201).json(created);
     }),
   );
+
+  // ===== PHASE 4 — NCD & Lifestyle screenings =====
+  // Generic factory: GET (TL-scoped to assigned barangays) + POST (audit-logged).
+  // Each route group below uses the same shape as cold-chain/oral-health.
+  const ncdRoute = (
+    pathBase: string,
+    auditEntity: string,
+    schema: any,
+    getter: (params: { barangay?: string }) => Promise<any[]>,
+    creator: (record: any) => Promise<any>,
+  ) => {
+    app.get(pathBase, loadUserInfo, requireAuth, ar(async (req, res) => {
+      const requestedBarangay = req.query.barangay ? String(req.query.barangay) : undefined;
+      if (req.userInfo?.role === UserRole.TL) {
+        const assigned = req.userInfo.assignedBarangays;
+        if (assigned.length === 0) return res.json([]);
+        if (requestedBarangay && !assigned.includes(requestedBarangay)) {
+          return res.status(403).json({ message: "Access denied to this barangay" });
+        }
+        const all = await getter({ barangay: requestedBarangay });
+        const scoped = requestedBarangay ? all : all.filter(r => assigned.includes(r.barangay));
+        return res.json(scoped);
+      }
+      const data = await getter({ barangay: requestedBarangay });
+      res.json(data);
+    }));
+
+    app.post(pathBase, loadUserInfo, requireAuth,
+      requireRole(UserRole.SYSTEM_ADMIN, UserRole.MHO, UserRole.SHA, UserRole.TL),
+      ar(async (req, res) => {
+        const parsed = schema.safeParse(req.body);
+        if (!parsed.success) {
+          return res.status(400).json({ message: `Invalid ${auditEntity}`, issues: parsed.error.issues });
+        }
+        const input = parsed.data;
+        if (req.userInfo?.role === UserRole.TL && !req.userInfo.assignedBarangays.includes(input.barangay)) {
+          return res.status(403).json({ message: "Access denied to this barangay" });
+        }
+        const created = await creator({ ...input, recordedByUserId: req.userInfo?.id ?? null });
+        await createAuditLog(
+          req.userInfo!.id, req.userInfo!.role,
+          "CREATE", auditEntity, String(created.id),
+          created.barangay, undefined,
+          { id: created.id }, req,
+        );
+        res.status(201).json(created);
+      }),
+    );
+  };
+
+  ncdRoute("/api/philpen-assessments", "PHILPEN_ASSESSMENT", insertPhilpenAssessmentSchema,
+    (p) => storage.getPhilpenAssessments(p), (r) => storage.createPhilpenAssessment(r));
+  ncdRoute("/api/ncd-screenings", "NCD_SCREENING", insertNcdScreeningSchema,
+    (p) => storage.getNcdScreenings(p), (r) => storage.createNcdScreening(r));
+  ncdRoute("/api/vision-screenings", "VISION_SCREENING", insertVisionScreeningSchema,
+    (p) => storage.getVisionScreenings(p), (r) => storage.createVisionScreening(r));
+  ncdRoute("/api/cervical-cancer-screenings", "CERVICAL_CANCER_SCREENING", insertCervicalCancerScreeningSchema,
+    (p) => storage.getCervicalCancerScreenings(p), (r) => storage.createCervicalCancerScreening(r));
+  ncdRoute("/api/mental-health-screenings", "MENTAL_HEALTH_SCREENING", insertMentalHealthScreeningSchema,
+    (p) => storage.getMentalHealthScreenings(p), (r) => storage.createMentalHealthScreening(r));
 
   // === ORAL HEALTH VISITS — feeds M1 Section ORAL ===
   app.get("/api/oral-health-visits", loadUserInfo, requireAuth, ar(async (req, res) => {

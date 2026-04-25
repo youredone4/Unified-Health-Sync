@@ -6,6 +6,7 @@ import {
   directMessages,
   prenatalVisits, childVisits, seniorVisits, postpartumVisits, prenatalScreenings, birthAttendanceRecords,
   sickChildVisits, schoolImmunizations, oralHealthVisits,
+  philpenAssessments, ncdScreenings, visionScreenings, cervicalCancerScreenings, mentalHealthScreenings,
   nutritionFollowUps,
   fpServiceRecords, FP_METHOD_ROW_KEY,
   globalChatMessages,
@@ -23,6 +24,11 @@ import {
   type SickChildVisit, type InsertSickChildVisit,
   type SchoolImmunization, type InsertSchoolImmunization,
   type OralHealthVisit, type InsertOralHealthVisit,
+  type PhilpenAssessment, type InsertPhilpenAssessment,
+  type NcdScreening, type InsertNcdScreening,
+  type VisionScreening, type InsertVisionScreening,
+  type CervicalCancerScreening, type InsertCervicalCancerScreening,
+  type MentalHealthScreening, type InsertMentalHealthScreening,
   type HealthStation,
   type SmsMessage, type InsertSmsMessage,
   type DiseaseCase, type InsertDiseaseCase,
@@ -112,6 +118,18 @@ export interface IStorage {
   // Oral health visits (M1 Section ORAL)
   getOralHealthVisits(params: { barangay?: string }): Promise<OralHealthVisit[]>;
   createOralHealthVisit(record: InsertOralHealthVisit): Promise<OralHealthVisit>;
+
+  // Phase 4 — NCD & Lifestyle screenings
+  getPhilpenAssessments(params: { barangay?: string }): Promise<PhilpenAssessment[]>;
+  createPhilpenAssessment(record: InsertPhilpenAssessment): Promise<PhilpenAssessment>;
+  getNcdScreenings(params: { barangay?: string; condition?: string }): Promise<NcdScreening[]>;
+  createNcdScreening(record: InsertNcdScreening): Promise<NcdScreening>;
+  getVisionScreenings(params: { barangay?: string }): Promise<VisionScreening[]>;
+  createVisionScreening(record: InsertVisionScreening): Promise<VisionScreening>;
+  getCervicalCancerScreenings(params: { barangay?: string }): Promise<CervicalCancerScreening[]>;
+  createCervicalCancerScreening(record: InsertCervicalCancerScreening): Promise<CervicalCancerScreening>;
+  getMentalHealthScreenings(params: { barangay?: string }): Promise<MentalHealthScreening[]>;
+  createMentalHealthScreening(record: InsertMentalHealthScreening): Promise<MentalHealthScreening>;
 
   getHealthStations(filter?: { facilityType?: string; hasTbDots?: boolean }): Promise<HealthStation[]>;
 
@@ -571,6 +589,64 @@ export class DatabaseStorage implements IStorage {
 
   async createOralHealthVisit(record: InsertOralHealthVisit): Promise<OralHealthVisit> {
     const [created] = await db.insert(oralHealthVisits).values(record).returning();
+    return created;
+  }
+
+  // ── Phase 4 NCD screenings ─────────────────────────────────────────
+  async getPhilpenAssessments(params: { barangay?: string }): Promise<PhilpenAssessment[]> {
+    const conditions = [];
+    if (params.barangay) conditions.push(eq(philpenAssessments.barangay, params.barangay));
+    return await db.select().from(philpenAssessments)
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .orderBy(desc(philpenAssessments.assessmentDate));
+  }
+  async createPhilpenAssessment(record: InsertPhilpenAssessment): Promise<PhilpenAssessment> {
+    const [created] = await db.insert(philpenAssessments).values(record).returning();
+    return created;
+  }
+  async getNcdScreenings(params: { barangay?: string; condition?: string }): Promise<NcdScreening[]> {
+    const conditions = [];
+    if (params.barangay) conditions.push(eq(ncdScreenings.barangay, params.barangay));
+    if (params.condition) conditions.push(eq(ncdScreenings.condition, params.condition as any));
+    return await db.select().from(ncdScreenings)
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .orderBy(desc(ncdScreenings.screenDate));
+  }
+  async createNcdScreening(record: InsertNcdScreening): Promise<NcdScreening> {
+    const [created] = await db.insert(ncdScreenings).values(record).returning();
+    return created;
+  }
+  async getVisionScreenings(params: { barangay?: string }): Promise<VisionScreening[]> {
+    const conditions = [];
+    if (params.barangay) conditions.push(eq(visionScreenings.barangay, params.barangay));
+    return await db.select().from(visionScreenings)
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .orderBy(desc(visionScreenings.screenDate));
+  }
+  async createVisionScreening(record: InsertVisionScreening): Promise<VisionScreening> {
+    const [created] = await db.insert(visionScreenings).values(record).returning();
+    return created;
+  }
+  async getCervicalCancerScreenings(params: { barangay?: string }): Promise<CervicalCancerScreening[]> {
+    const conditions = [];
+    if (params.barangay) conditions.push(eq(cervicalCancerScreenings.barangay, params.barangay));
+    return await db.select().from(cervicalCancerScreenings)
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .orderBy(desc(cervicalCancerScreenings.screenDate));
+  }
+  async createCervicalCancerScreening(record: InsertCervicalCancerScreening): Promise<CervicalCancerScreening> {
+    const [created] = await db.insert(cervicalCancerScreenings).values(record).returning();
+    return created;
+  }
+  async getMentalHealthScreenings(params: { barangay?: string }): Promise<MentalHealthScreening[]> {
+    const conditions = [];
+    if (params.barangay) conditions.push(eq(mentalHealthScreenings.barangay, params.barangay));
+    return await db.select().from(mentalHealthScreenings)
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .orderBy(desc(mentalHealthScreenings.screenDate));
+  }
+  async createMentalHealthScreening(record: InsertMentalHealthScreening): Promise<MentalHealthScreening> {
+    const [created] = await db.insert(mentalHealthScreenings).values(record).returning();
     return created;
   }
 
@@ -1486,6 +1562,142 @@ export class DatabaseStorage implements IStorage {
     add("ORAL-06a", "TOTAL", oral06a);
     add("ORAL-06b", "TOTAL", oral06b);
 
+    // === SECTION G1 — PhilPEN Risk Assessment (adults 20-59) ===
+    const ppRows = await db.select().from(philpenAssessments).where(and(
+      barangayName ? eq(philpenAssessments.barangay, barangayName) : undefined,
+      sql`${philpenAssessments.assessmentDate} LIKE ${monthLike}`,
+    ));
+    const calcAgeYrs = (dob: string, ref: string): number => {
+      const d = new Date(dob), r = new Date(ref);
+      if (isNaN(d.getTime()) || isNaN(r.getTime())) return -1;
+      let y = r.getFullYear() - d.getFullYear();
+      const md = r.getMonth() - d.getMonth();
+      if (md < 0 || (md === 0 && r.getDate() < d.getDate())) y--;
+      return y;
+    };
+    const g1 = { M: 0, F: 0, TOTAL: 0 } as Record<string, number>;
+    const g1a = { M: 0, F: 0, TOTAL: 0 } as Record<string, number>;
+    const g1b = { M: 0, F: 0, TOTAL: 0 } as Record<string, number>;
+    const g1c = { M: 0, F: 0, TOTAL: 0 } as Record<string, number>;
+    const g1d = { M: 0, F: 0, TOTAL: 0 } as Record<string, number>;
+    const g1e = { M: 0, F: 0, TOTAL: 0 } as Record<string, number>;
+    const g1f = { M: 0, F: 0, TOTAL: 0 } as Record<string, number>;
+    for (const r of ppRows) {
+      const age = calcAgeYrs(r.dob, r.assessmentDate);
+      if (age < 20 || age > 59) continue;
+      const sx = r.sex === "F" ? "F" : "M";
+      const incr = (g: Record<string, number>) => { g[sx]++; g.TOTAL++; };
+      incr(g1);
+      if (r.smokingHistory) incr(g1a);
+      if (r.bingeDrinker) incr(g1b);
+      if (r.insufficientActivity) incr(g1c);
+      if (r.unhealthyDiet) incr(g1d);
+      if (r.bmiCategory === "OVERWEIGHT") incr(g1e);
+      if (r.bmiCategory === "OBESE") incr(g1f);
+    }
+    for (const [rk, g] of [["G1-01", g1], ["G1-01a", g1a], ["G1-01b", g1b], ["G1-01c", g1c], ["G1-01d", g1d], ["G1-01e", g1e], ["G1-01f", g1f]] as const) {
+      add(rk, "M", g.M); add(rk, "F", g.F); add(rk, "TOTAL", g.TOTAL);
+    }
+
+    // === SECTION G2 — Cardiovascular (HTN screenings via ncd_screenings) ===
+    const ncdRows = await db.select().from(ncdScreenings).where(and(
+      barangayName ? eq(ncdScreenings.barangay, barangayName) : undefined,
+      sql`${ncdScreenings.screenDate} LIKE ${monthLike}`,
+      eq(ncdScreenings.condition, "HTN"),
+    ));
+    const g201 = { M: 0, F: 0, TOTAL: 0 };
+    const g202 = { M: 0, F: 0, TOTAL: 0 };
+    const g202a = { M: 0, F: 0, TOTAL: 0 };
+    const g202b = { M: 0, F: 0, TOTAL: 0 };
+    const g204a = { M: 0, F: 0, TOTAL: 0 };
+    const g204b = { M: 0, F: 0, TOTAL: 0 };
+    for (const r of ncdRows) {
+      const age = calcAgeYrs(r.dob, r.screenDate);
+      const sx = r.sex === "F" ? "F" : "M";
+      const incr = (g: Record<string, number>) => { g[sx]++; g.TOTAL++; };
+      if (age >= 20 && age <= 59) {
+        if (r.diagnosed) incr(g201);
+        if (r.medsProvided) {
+          incr(g202);
+          if (r.medsSource === "FACILITY") incr(g202a);
+          else if (r.medsSource === "OUT_OF_POCKET") incr(g202b);
+        }
+      } else if (age >= 60) {
+        if (r.medsProvided) {
+          if (r.medsSource === "FACILITY") incr(g204a);
+          else if (r.medsSource === "OUT_OF_POCKET") incr(g204b);
+        }
+      }
+    }
+    for (const [rk, g] of [["G2-01", g201], ["G2-02", g202], ["G2-02a", g202a], ["G2-02b", g202b], ["G2-04a", g204a], ["G2-04b", g204b]] as const) {
+      add(rk, "M", g.M); add(rk, "F", g.F); add(rk, "TOTAL", g.TOTAL);
+    }
+
+    // === SECTION G4 — Vision Screening (60+) ===
+    const visRows = await db.select().from(visionScreenings).where(and(
+      barangayName ? eq(visionScreenings.barangay, barangayName) : undefined,
+      sql`${visionScreenings.screenDate} LIKE ${monthLike}`,
+    ));
+    const g401 = { M: 0, F: 0, TOTAL: 0 };
+    const g402 = { M: 0, F: 0, TOTAL: 0 };
+    const g403 = { M: 0, F: 0, TOTAL: 0 };
+    for (const r of visRows) {
+      const age = calcAgeYrs(r.dob, r.screenDate);
+      if (age < 60) continue;
+      const sx = r.sex === "F" ? "F" : "M";
+      const incr = (g: Record<string, number>) => { g[sx]++; g.TOTAL++; };
+      incr(g401);
+      if (r.eyeDiseaseFound) incr(g402);
+      if (r.referredToEyeCare) incr(g403);
+    }
+    for (const [rk, g] of [["G4-01", g401], ["G4-02", g402], ["G4-03", g403]] as const) {
+      add(rk, "M", g.M); add(rk, "F", g.F); add(rk, "TOTAL", g.TOTAL);
+    }
+
+    // === SECTION G6 — Cervical Cancer Screening (women 30-65) ===
+    const ccRows = await db.select().from(cervicalCancerScreenings).where(and(
+      barangayName ? eq(cervicalCancerScreenings.barangay, barangayName) : undefined,
+      sql`${cervicalCancerScreenings.screenDate} LIKE ${monthLike}`,
+    ));
+    let g601 = 0, g602 = 0, g603 = 0, g603a = 0, g603b = 0, g604 = 0, g605 = 0, g605a = 0, g605b = 0;
+    for (const r of ccRows) {
+      const age = calcAgeYrs(r.dob, r.screenDate);
+      if (age < 30 || age > 65) continue;
+      g601++;
+      if (r.suspicious) {
+        g602++;
+        if (r.linkedToCare) {
+          g603++;
+          if (r.linkedOutcome === "TREATED") g603a++;
+          else if (r.linkedOutcome === "REFERRED") g603b++;
+        }
+      }
+      if (r.precancerous) {
+        g604++;
+        if (r.linkedToCare) {
+          g605++;
+          if (r.precancerousOutcome === "TREATED") g605a++;
+          else if (r.precancerousOutcome === "REFERRED") g605b++;
+        }
+      }
+    }
+    add("G6-01", "F", g601); add("G6-01", "TOTAL", g601);
+    add("G6-02", "F", g602); add("G6-02", "TOTAL", g602);
+    add("G6-03", "F", g603); add("G6-03", "TOTAL", g603);
+    add("G6-03a", "F", g603a); add("G6-03a", "TOTAL", g603a);
+    add("G6-03b", "F", g603b); add("G6-03b", "TOTAL", g603b);
+    add("G6-04", "F", g604); add("G6-04", "TOTAL", g604);
+    add("G6-05", "F", g605); add("G6-05", "TOTAL", g605);
+    add("G6-05a", "F", g605a); add("G6-05a", "TOTAL", g605a);
+    add("G6-05b", "F", g605b); add("G6-05b", "TOTAL", g605b);
+
+    // === SECTION G8 — Mental Health (mhGAP) ===
+    const mhRows = await db.select().from(mentalHealthScreenings).where(and(
+      barangayName ? eq(mentalHealthScreenings.barangay, barangayName) : undefined,
+      sql`${mentalHealthScreenings.screenDate} LIKE ${monthLike}`,
+    ));
+    add("G8-01", "TOTAL", mhRows.length);
+
     // Save all computed values (ENCODED already excluded via `add`)
     if (computedRaw.length > 0) {
       await this.updateM1IndicatorValues(reportId, computedRaw.map(v => ({
@@ -2127,6 +2339,57 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
+  /** Phase 4 catalog rows — G1 (PhilPEN), G2 (CV), G4 (Vision), G6 (Cervical), G8 (Mental health). */
+  private async seedM1NcdRows(): Promise<void> {
+    const [activeTpl] = await db.select().from(m1TemplateVersions).where(eq(m1TemplateVersions.isActive, true)).limit(1);
+    if (!activeTpl) return;
+    const sexRateSpec = { columns: ["M", "F", "TOTAL"], hasTotal: true };
+    const tplId = activeTpl.id;
+
+    const mk = (
+      rowKey: string, label: string, section: string, order: number, indent: number = 0,
+    ): InsertM1IndicatorCatalog => ({
+      templateVersionId: tplId, pageNumber: 3, sectionCode: section, rowKey,
+      officialLabel: label, dataType: "INT", rowOrder: order, indentLevel: indent,
+      columnGroupType: "SEX_RATE", columnSpec: sexRateSpec, isComputed: true, isRequired: true,
+    });
+
+    const rows: InsertM1IndicatorCatalog[] = [
+      mk("G1-01", "Adults 20–59 yo risk assessed using PhilPEN", "G1", 600),
+      mk("G1-01a", "With history of smoking", "G1", 601, 1),
+      mk("G1-01b", "Binge Drinker", "G1", 602, 1),
+      mk("G1-01c", "Insufficient physical activities", "G1", 603, 1),
+      mk("G1-01d", "Consumed unhealthy diet", "G1", 604, 1),
+      mk("G1-01e", "Overweight", "G1", 605, 1),
+      mk("G1-01f", "Obese", "G1", 606, 1),
+      mk("G2-01", "Adults 20–59 yo identified as hypertensive using PhilPEN", "G2", 620),
+      mk("G2-02", "Hypertensives 20–59 yo provided with antihypertensive medications", "G2", 621),
+      mk("G2-02a", "Provided by facility (100%)", "G2", 622, 1),
+      mk("G2-02b", "Out of pocket", "G2", 623, 1),
+      mk("G2-04a", "Provided by facility (100%) — 60+ HTN", "G2", 625, 1),
+      mk("G2-04b", "Out of pocket — 60+ HTN", "G2", 626, 1),
+      mk("G4-01", "Senior citizens 60+ screened for visual acuity", "G4", 640),
+      mk("G4-02", "Senior citizens 60+ screened and identified with eye disease(s)", "G4", 641),
+      mk("G4-03", "Senior citizens identified with eye disease(s) and referred", "G4", 642),
+      mk("G6-01", "Women 30–65 yo screened/assessed for cervical cancer", "G6", 660),
+      mk("G6-02", "Women 30–65 yo found suspicious for cervical cancer", "G6", 661),
+      mk("G6-03", "Women 30–65 yo found suspicious and linked to care", "G6", 662),
+      mk("G6-03a", "Treated", "G6", 663, 1),
+      mk("G6-03b", "Referred", "G6", 664, 1),
+      mk("G6-04", "Women 30–65 yo found positive for precancerous lesions", "G6", 665),
+      mk("G6-05", "Precancerous + linked to care", "G6", 666),
+      mk("G6-05a", "Treated", "G6", 667, 1),
+      mk("G6-05b", "Referred", "G6", 668, 1),
+      mk("G8-01", "Individuals with mental health concern screened using mhGAP", "G8", 680),
+    ];
+    for (const row of rows) {
+      const existing = await db.select({ id: m1IndicatorCatalog.id }).from(m1IndicatorCatalog)
+        .where(and(eq(m1IndicatorCatalog.templateVersionId, row.templateVersionId), eq(m1IndicatorCatalog.rowKey, row.rowKey)))
+        .limit(1);
+      if (existing.length === 0) await db.insert(m1IndicatorCatalog).values(row);
+    }
+  }
+
   async seedData(): Promise<void> {
     // Auto-migrate: add columns introduced after the initial deployment.
     // Every statement is fully idempotent (IF NOT EXISTS / IF EXISTS) so it is
@@ -2238,6 +2501,7 @@ export class DatabaseStorage implements IStorage {
     await this.seedM1MaternalRows();
     await this.seedM1ChildHealthRows();
     await this.seedM1OralHealthRows();
+    await this.seedM1NcdRows();
 
     const existingMothers = await this.getMothers();
     if (existingMothers.length > 0) return;

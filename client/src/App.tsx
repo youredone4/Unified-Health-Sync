@@ -75,6 +75,7 @@ import FpRegistry from "@/pages/fp-registry";
 import ColdChainPage from "@/pages/cold-chain";
 import SchoolImmunizationsPage from "@/pages/school-immunizations";
 import OralHealthPage from "@/pages/oral-health";
+import NcdScreeningsPage from "@/pages/ncd-screenings";
 
 const roleLabels: Record<string, string> = {
   SYSTEM_ADMIN: "Admin",
@@ -366,6 +367,9 @@ function Router() {
 
       {/* Oral health visits (Section ORAL) */}
       <Route path="/oral-health"><OralHealthPage /></Route>
+
+      {/* NCD & lifestyle screenings (Sections G1, G2, G4, G6, G8) */}
+      <Route path="/ncd-screenings"><NcdScreeningsPage /></Route>
 
       {/* Reports hub */}
       <Route path="/m1/encode"><ReportsHub><RoleRoute component={M1ReportEncode} /></ReportsHub></Route>

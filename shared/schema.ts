@@ -768,6 +768,139 @@ export const insertOralHealthVisitSchema = createInsertSchema(oralHealthVisits)
 export type OralHealthVisit = typeof oralHealthVisits.$inferSelect;
 export type InsertOralHealthVisit = z.infer<typeof insertOralHealthVisitSchema>;
 
+// ===========================================================================
+// PHASE 4 — NCD & Lifestyle (PhilPEN, CV, Vision, Cervical, Mental health)
+// ===========================================================================
+
+// === PHILPEN RISK ASSESSMENTS — Section G1 ===
+export const BMI_CATEGORIES = ["UNDERWEIGHT", "NORMAL", "OVERWEIGHT", "OBESE"] as const;
+export type BmiCategory = typeof BMI_CATEGORIES[number];
+
+export const philpenAssessments = pgTable("philpen_assessments", {
+  id: serial("id").primaryKey(),
+  patientName: text("patient_name").notNull(),
+  barangay: text("barangay").notNull(),
+  dob: text("dob").notNull(),
+  sex: text("sex").notNull(), // 'M' | 'F'
+  assessmentDate: text("assessment_date").notNull(),
+  smokingHistory: boolean("smoking_history").default(false),
+  bingeDrinker: boolean("binge_drinker").default(false),
+  insufficientActivity: boolean("insufficient_activity").default(false),
+  unhealthyDiet: boolean("unhealthy_diet").default(false),
+  bmiCategory: text("bmi_category").$type<BmiCategory>(),
+  notes: text("notes"),
+  recordedByUserId: varchar("recorded_by_user_id"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+export const insertPhilpenAssessmentSchema = createInsertSchema(philpenAssessments)
+  .omit({ id: true, createdAt: true })
+  .extend({ sex: z.enum(["M", "F"]), bmiCategory: z.enum(BMI_CATEGORIES).optional().nullable() });
+export type PhilpenAssessment = typeof philpenAssessments.$inferSelect;
+export type InsertPhilpenAssessment = z.infer<typeof insertPhilpenAssessmentSchema>;
+
+// === NCD SCREENINGS — Sections G2 (HTN) + G3 reserved (DM) ===
+export const NCD_CONDITIONS = ["HTN", "DM"] as const;
+export type NcdCondition = typeof NCD_CONDITIONS[number];
+export const NCD_MEDS_SOURCES = ["FACILITY", "OUT_OF_POCKET"] as const;
+export type NcdMedsSource = typeof NCD_MEDS_SOURCES[number];
+
+export const ncdScreenings = pgTable("ncd_screenings", {
+  id: serial("id").primaryKey(),
+  patientName: text("patient_name").notNull(),
+  barangay: text("barangay").notNull(),
+  dob: text("dob").notNull(),
+  sex: text("sex").notNull(),
+  screenDate: text("screen_date").notNull(),
+  condition: text("condition").$type<NcdCondition>().notNull(),
+  diagnosed: boolean("diagnosed").default(false),
+  medsProvided: boolean("meds_provided").default(false),
+  medsSource: text("meds_source").$type<NcdMedsSource>(),
+  notes: text("notes"),
+  recordedByUserId: varchar("recorded_by_user_id"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+export const insertNcdScreeningSchema = createInsertSchema(ncdScreenings)
+  .omit({ id: true, createdAt: true })
+  .extend({
+    sex: z.enum(["M", "F"]),
+    condition: z.enum(NCD_CONDITIONS),
+    medsSource: z.enum(NCD_MEDS_SOURCES).optional().nullable(),
+  });
+export type NcdScreening = typeof ncdScreenings.$inferSelect;
+export type InsertNcdScreening = z.infer<typeof insertNcdScreeningSchema>;
+
+// === VISION SCREENINGS — Section G4 (Blindness Prevention) ===
+export const visionScreenings = pgTable("vision_screenings", {
+  id: serial("id").primaryKey(),
+  patientName: text("patient_name").notNull(),
+  barangay: text("barangay").notNull(),
+  dob: text("dob").notNull(),
+  sex: text("sex").notNull(),
+  screenDate: text("screen_date").notNull(),
+  eyeDiseaseFound: boolean("eye_disease_found").default(false),
+  referredToEyeCare: boolean("referred_to_eye_care").default(false),
+  notes: text("notes"),
+  recordedByUserId: varchar("recorded_by_user_id"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+export const insertVisionScreeningSchema = createInsertSchema(visionScreenings)
+  .omit({ id: true, createdAt: true })
+  .extend({ sex: z.enum(["M", "F"]) });
+export type VisionScreening = typeof visionScreenings.$inferSelect;
+export type InsertVisionScreening = z.infer<typeof insertVisionScreeningSchema>;
+
+// === CERVICAL CANCER SCREENINGS — Section G6 ===
+export const CERVICAL_SCREEN_METHODS = ["VIA", "PAP_SMEAR", "HPV_TEST"] as const;
+export type CervicalScreenMethod = typeof CERVICAL_SCREEN_METHODS[number];
+export const CARE_OUTCOMES = ["TREATED", "REFERRED"] as const;
+export type CareOutcome = typeof CARE_OUTCOMES[number];
+
+export const cervicalCancerScreenings = pgTable("cervical_cancer_screenings", {
+  id: serial("id").primaryKey(),
+  patientName: text("patient_name").notNull(),
+  barangay: text("barangay").notNull(),
+  dob: text("dob").notNull(),
+  screenDate: text("screen_date").notNull(),
+  screenMethod: text("screen_method").$type<CervicalScreenMethod>(),
+  suspicious: boolean("suspicious").default(false),
+  linkedToCare: boolean("linked_to_care").default(false),
+  linkedOutcome: text("linked_outcome").$type<CareOutcome>(),
+  precancerous: boolean("precancerous").default(false),
+  precancerousOutcome: text("precancerous_outcome").$type<CareOutcome>(),
+  notes: text("notes"),
+  recordedByUserId: varchar("recorded_by_user_id"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+export const insertCervicalCancerScreeningSchema = createInsertSchema(cervicalCancerScreenings)
+  .omit({ id: true, createdAt: true })
+  .extend({
+    screenMethod: z.enum(CERVICAL_SCREEN_METHODS).optional().nullable(),
+    linkedOutcome: z.enum(CARE_OUTCOMES).optional().nullable(),
+    precancerousOutcome: z.enum(CARE_OUTCOMES).optional().nullable(),
+  });
+export type CervicalCancerScreening = typeof cervicalCancerScreenings.$inferSelect;
+export type InsertCervicalCancerScreening = z.infer<typeof insertCervicalCancerScreeningSchema>;
+
+// === MENTAL HEALTH SCREENINGS — Section G8 (mhGAP) ===
+export const mentalHealthScreenings = pgTable("mental_health_screenings", {
+  id: serial("id").primaryKey(),
+  patientName: text("patient_name").notNull(),
+  barangay: text("barangay").notNull(),
+  dob: text("dob").notNull(),
+  sex: text("sex").notNull(),
+  screenDate: text("screen_date").notNull(),
+  tool: text("tool").default("mhGAP"),
+  positive: boolean("positive").default(false),
+  notes: text("notes"),
+  recordedByUserId: varchar("recorded_by_user_id"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+export const insertMentalHealthScreeningSchema = createInsertSchema(mentalHealthScreenings)
+  .omit({ id: true, createdAt: true })
+  .extend({ sex: z.enum(["M", "F"]) });
+export type MentalHealthScreening = typeof mentalHealthScreenings.$inferSelect;
+export type InsertMentalHealthScreening = z.infer<typeof insertMentalHealthScreeningSchema>;
+
 // Child monitoring visits
 export const childVisits = pgTable("child_visits", {
   id: serial("id").primaryKey(),

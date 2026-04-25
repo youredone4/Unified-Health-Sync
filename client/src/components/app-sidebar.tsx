@@ -42,6 +42,7 @@ import {
   Snowflake,
   GraduationCap,
   Smile,
+  HeartPulse,
 } from "lucide-react";
 import { useTheme } from "@/contexts/theme-context";
 import { useAuth, sidebarPermissions, ALL_ROLES } from "@/hooks/use-auth";
@@ -171,6 +172,14 @@ const NAV_ITEMS: NavItem[] = [
     icon: Smile,
     roles: rolesFor("/oral-health"),
     activePrefixes: ["/oral-health"],
+    tier: "util",
+  },
+  {
+    title: "NCD Screenings",
+    url: "/ncd-screenings",
+    icon: HeartPulse,
+    roles: rolesFor("/ncd-screenings"),
+    activePrefixes: ["/ncd-screenings"],
     tier: "util",
   },
   {
