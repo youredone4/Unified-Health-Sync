@@ -31,6 +31,7 @@ import { useState } from "react";
 import { ThemeProvider } from "@/contexts/theme-context";
 import { BarangayProvider } from "@/contexts/barangay-context";
 import { useAuth, permissions } from "@/hooks/use-auth";
+import { getDefaultLandingForRole } from "@/lib/role-landing";
 import BarangaySwitcher from "@/components/barangay-switcher";
 
 import LandingPage from "@/pages/landing";
@@ -108,6 +109,16 @@ function RoleRoute({ component: Component, allowedRoles }: { component: React.Co
 // modes. Same underlying page; the prop just picks which mode to show first.
 function M1ReportView() { return <M1ReportPage initialMode="view" />; }
 function M1ReportEncode() { return <M1ReportPage initialMode="encode" />; }
+
+// Role-aware redirect for "/". TLs land on /today, decision-maker roles land
+// on /dashboards. Mirrors the post-login redirect in landing.tsx so a logged-
+// in TL who hits the root URL (bookmark, fresh tab, refresh) doesn't get
+// force-pushed to the decision-maker hub. AppContent already gates the Router
+// on authentication, so this only runs when a user is signed in.
+function RoleLandingRedirect() {
+  const { role } = useAuth();
+  return <Redirect to={getDefaultLandingForRole(role)} />;
+}
 
 // ─── Program hubs ──────────────────────────────────────────────────────────
 // Each hub wraps the existing worklist / registry / dashboard components
@@ -289,9 +300,9 @@ function Router() {
       <Route path="/dashboards/disease-map"><DashboardsHub><RoleRoute component={DashboardsPage} /></DashboardsHub></Route>
       <Route path="/dashboards/hotspots"><DashboardsHub><RoleRoute component={DashboardsPage} /></DashboardsHub></Route>
 
-      {/* Legacy Municipal Dashboard URL — redirect to the new Dashboards hub.
-          / was Home's Overview before; now it lives under /dashboards. */}
-      <Route path="/"><Redirect to="/dashboards" /></Route>
+      {/* Root redirect is role-aware: TL → /today, decision-maker roles →
+          /dashboards. See lib/role-landing.ts for the canonical mapping. */}
+      <Route path="/"><RoleLandingRedirect /></Route>
 
       {/* Legacy URLs that used to live inside the Home hub: still resolve, but
           outside a hub wrapper so they don't show a dead "Home" header. */}
