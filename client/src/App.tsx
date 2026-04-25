@@ -114,10 +114,9 @@ function RoleRoute({ component: Component, allowedRoles }: { component: React.Co
   return <Component />;
 }
 
-// M1 Report is rendered twice, once per sidebar zone, with different landing
-// modes. Same underlying page; the prop just picks which mode to show first.
+// Single M1 Report page. The Mode toggle on the page itself flips between
+// View and Encode — no separate /m1/encode route needed.
 function M1ReportView() { return <M1ReportPage initialMode="view" />; }
-function M1ReportEncode() { return <M1ReportPage initialMode="encode" />; }
 
 // Role-aware redirect for "/". TLs land on /today, decision-maker roles land
 // on /dashboards. Mirrors the post-login redirect in landing.tsx so a logged-
@@ -271,8 +270,7 @@ function ReportsHub({ children }: { children: React.ReactNode }) {
       icon={ClipboardList}
       tabs={[
         { label: "All Reports", path: "/reports", testId: "hub-tab-reports-all" },
-        { label: "Encode M1", path: "/m1/encode", testId: "hub-tab-reports-encode" },
-        { label: "M1 Summary & Export", path: "/reports/m1", testId: "hub-tab-reports-m1" },
+        { label: "FHSIS M1 Brgy Report", path: "/reports/m1", testId: "hub-tab-reports-m1" },
         { label: "Health Analytics", path: "/reports/ai", testId: "hub-tab-reports-ai", roles: ["SYSTEM_ADMIN", "MHO", "SHA"] },
       ]}
     >
@@ -392,7 +390,6 @@ function Router() {
       <Route path="/household-water"><HouseholdWaterPage /></Route>
 
       {/* Reports hub */}
-      <Route path="/m1/encode"><ReportsHub><RoleRoute component={M1ReportEncode} /></ReportsHub></Route>
       <Route path="/reports/m1"><ReportsHub><RoleRoute component={M1ReportView} /></ReportsHub></Route>
       <Route path="/reports/ai"><ReportsHub><RoleRoute component={AIReporting} /></ReportsHub></Route>
       <Route path="/reports/:slug"><ReportsHub><RoleRoute component={ReportDetailPage} /></ReportsHub></Route>

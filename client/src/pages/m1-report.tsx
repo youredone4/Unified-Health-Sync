@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
+import { useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -8,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { FileText, Download, Save, Plus, ChevronLeft, ChevronRight, RefreshCw, Building2, Upload, Database, Loader2, Lock, Unlock, Send, Cpu, ChevronDown, ChevronUp, Info } from "lucide-react";
+import { FileText, Download, Save, Plus, ChevronLeft, ChevronRight, RefreshCw, Building2, Upload, Database, Loader2, Lock, Unlock, Send, Cpu, ChevronDown, ChevronUp, Info, CalendarRange } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { useTheme } from "@/contexts/theme-context";
@@ -73,6 +74,7 @@ interface ColumnSpec {
 }
 
 export default function M1ReportPage({ initialMode }: { initialMode?: "view" | "encode" } = {}) {
+  const [, navigate] = useLocation();
   const { toast } = useToast();
   const { settings } = useTheme();
 
@@ -80,9 +82,6 @@ export default function M1ReportPage({ initialMode }: { initialMode?: "view" | "
   const [selectedYear, setSelectedYear] = useState(() => new Date().getFullYear());
   const [selectedBarangayId, setSelectedBarangayId] = useState<number | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
-  // Landing mode is controlled by route entry point: /m1/encode lands in
-  // encode, /reports/m1 lands in view. The toggle button remains so an
-  // operator who deep-linked to the "wrong" page can still flip locally.
   const [reportMode, setReportMode] = useState<"view" | "encode">(initialMode ?? "view");
   const [editedValues, setEditedValues] = useState<IndicatorValueMap>({});
   const [activeReportId, setActiveReportId] = useState<number | null>(null);
@@ -1385,6 +1384,15 @@ export default function M1ReportPage({ initialMode }: { initialMode?: "view" | "
                   Import M1 Data
                 </Button>
               )}
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => navigate("/reports/m1-date-range-export")}
+                data-testid="button-export-date-range"
+              >
+                <CalendarRange className="h-4 w-4 mr-1" />
+                Export Date Range
+              </Button>
               {!existingReport && selectedBarangayId && (
                 <Button
                   size="sm"
