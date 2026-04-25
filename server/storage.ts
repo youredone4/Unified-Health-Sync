@@ -2971,6 +2971,52 @@ export class DatabaseStorage implements IStorage {
       ALTER TABLE disease_cases
         ADD COLUMN IF NOT EXISTS additional_conditions JSONB NOT NULL DEFAULT '[]'::jsonb
     `);
+    // Phase 6 Mortality (FHSIS Section H): age-band + maternal-cause
+    // + perinatal flags on death_events. Each idempotent.
+    await db.execute(sql`
+      ALTER TABLE death_events
+        ADD COLUMN IF NOT EXISTS age_days INTEGER,
+        ADD COLUMN IF NOT EXISTS maternal_death_cause TEXT,
+        ADD COLUMN IF NOT EXISTS residency TEXT,
+        ADD COLUMN IF NOT EXISTS is_fetal_death BOOLEAN NOT NULL DEFAULT FALSE,
+        ADD COLUMN IF NOT EXISTS is_live_born_early_neonatal BOOLEAN NOT NULL DEFAULT FALSE
+    `);
+    // HRH workforce module (Admin/MGMT) — DOH HHRDB / NHWSS aligned.
+    // CREATE … IF NOT EXISTS so deployments that haven't db:push'd
+    // since PR #66 still get the tables on next boot.
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS workforce_members (
+        id                    SERIAL PRIMARY KEY,
+        full_name             TEXT NOT NULL,
+        profession            TEXT NOT NULL,
+        prc_license_number    TEXT,
+        prc_license_expiry    TEXT,
+        barangay              TEXT,
+        facility_type         TEXT,
+        employment_status     TEXT NOT NULL,
+        date_hired            TEXT,
+        date_separated        TEXT,
+        separation_reason     TEXT,
+        contact_number        TEXT,
+        email                 TEXT,
+        user_id               VARCHAR,
+        notes                 TEXT,
+        recorded_by_user_id   VARCHAR,
+        created_at            TIMESTAMP DEFAULT NOW()
+      )
+    `);
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS workforce_credentials (
+        id                  SERIAL PRIMARY KEY,
+        member_id           INTEGER NOT NULL REFERENCES workforce_members(id) ON DELETE CASCADE,
+        credential_type     TEXT NOT NULL,
+        date_obtained       TEXT NOT NULL,
+        expiry_date         TEXT,
+        provider            TEXT,
+        notes               TEXT,
+        created_at          TIMESTAMP DEFAULT NOW()
+      )
+    `);
     await db.execute(sql`
       ALTER TABLE tb_patients
         ADD COLUMN IF NOT EXISTS referred_rhu_id INTEGER REFERENCES health_stations(id)

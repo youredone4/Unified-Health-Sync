@@ -90,8 +90,12 @@ export default function ReportDetailPage() {
         })
         .join(","),
     );
-    const csv = [header, ...lines].join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
+    const csv = [header, ...lines].join("\r\n");
+    // UTF-8 BOM (﻿) prefix so Excel detects the encoding on
+    // double-click and renders accented characters / non-ASCII names
+    // correctly. CRLF line endings + text/csv MIME match what Excel
+    // expects from a "Save as CSV" output.
+    const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
