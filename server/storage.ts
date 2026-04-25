@@ -4,7 +4,7 @@ import {
   barangays, users, userBarangays, municipalitySettings, UserRole, consults, seniorMedClaims,
   m1TemplateVersions, m1IndicatorCatalog, m1ReportInstances, m1ReportHeader, m1IndicatorValues, barangaySettings,
   directMessages,
-  prenatalVisits, childVisits, seniorVisits,
+  prenatalVisits, childVisits, seniorVisits, postpartumVisits,
   nutritionFollowUps,
   fpServiceRecords, FP_METHOD_ROW_KEY,
   globalChatMessages,
@@ -16,6 +16,7 @@ import {
   type InventorySnapshot, type InsertInventorySnapshot,
   type ColdChainLog, type InsertColdChainLog,
   type TbDoseLog, type InsertTbDoseLog,
+  type PostpartumVisit, type InsertPostpartumVisit,
   type HealthStation,
   type SmsMessage, type InsertSmsMessage,
   type DiseaseCase, type InsertDiseaseCase,
@@ -76,6 +77,15 @@ export interface IStorage {
     logsByPatient: Record<number, TbDoseLog>;
   }>;
   createTbDoseLog(log: InsertTbDoseLog): Promise<TbDoseLog>;
+
+  // Postpartum (PNC) visits — DOH MNCHN AO 2008-0029
+  getPostpartumVisits(motherId: number): Promise<PostpartumVisit[]>;
+  getPostpartumDueToday(barangay: string, today: string): Promise<{
+    mother: Mother;
+    visits: PostpartumVisit[];
+    dueCheckpoints: string[];
+  }[]>;
+  createPostpartumVisit(visit: InsertPostpartumVisit): Promise<PostpartumVisit>;
 
   getHealthStations(filter?: { facilityType?: string; hasTbDots?: boolean }): Promise<HealthStation[]>;
 
@@ -389,6 +399,82 @@ export class DatabaseStorage implements IStorage {
 
   async createTbDoseLog(log: InsertTbDoseLog): Promise<TbDoseLog> {
     const [created] = await db.insert(tbDoseLogs).values(log).returning();
+    return created;
+  }
+
+  async getPostpartumVisits(motherId: number): Promise<PostpartumVisit[]> {
+    return await db
+      .select()
+      .from(postpartumVisits)
+      .where(eq(postpartumVisits.motherId, motherId))
+      .orderBy(desc(postpartumVisits.visitDate));
+  }
+
+  async getPostpartumDueToday(barangay: string, today: string): Promise<{
+    mother: Mother;
+    visits: PostpartumVisit[];
+    dueCheckpoints: string[];
+  }[]> {
+    // Mothers in this barangay who delivered in the last ~6 weeks (42 days
+    // window, padded by 7 to catch the 6W checkpoint and any near-misses).
+    const lookbackDays = 49;
+    const minOutcomeDate = new Date(today);
+    minOutcomeDate.setDate(minOutcomeDate.getDate() - lookbackDays);
+    const minOutcomeStr = minOutcomeDate.toISOString().slice(0, 10);
+
+    const candidates = await db
+      .select()
+      .from(mothers)
+      .where(and(
+        eq(mothers.barangay, barangay),
+        eq(mothers.outcome, "live_birth"),
+        gte(mothers.outcomeDate, minOutcomeStr),
+      ));
+    if (candidates.length === 0) return [];
+
+    const ids = candidates.map(m => m.id);
+    const visits = await db
+      .select()
+      .from(postpartumVisits)
+      .where(inArray(postpartumVisits.motherId, ids));
+
+    const visitsByMother: Record<number, PostpartumVisit[]> = {};
+    for (const v of visits) {
+      (visitsByMother[v.motherId] ||= []).push(v);
+    }
+
+    const todayDate = new Date(today);
+    const checkpoints: { type: string; daysAfter: number }[] = [
+      { type: "24H", daysAfter: 1 },
+      { type: "72H", daysAfter: 3 },
+      { type: "7D", daysAfter: 7 },
+      { type: "6W", daysAfter: 42 },
+    ];
+
+    const results: { mother: Mother; visits: PostpartumVisit[]; dueCheckpoints: string[] }[] = [];
+    for (const mother of candidates) {
+      if (!mother.outcomeDate) continue;
+      const outcomeDate = new Date(mother.outcomeDate);
+      const ms = todayDate.getTime() - outcomeDate.getTime();
+      const daysSince = Math.floor(ms / 86400000);
+      const motherVisits = visitsByMother[mother.id] || [];
+      const loggedTypes = new Set(motherVisits.map(v => v.visitType));
+      const dueCheckpoints: string[] = [];
+      for (const cp of checkpoints) {
+        const inWindow = daysSince >= cp.daysAfter - 1 && daysSince <= cp.daysAfter + 1;
+        if (inWindow && !loggedTypes.has(cp.type as any)) {
+          dueCheckpoints.push(cp.type);
+        }
+      }
+      if (dueCheckpoints.length > 0) {
+        results.push({ mother, visits: motherVisits, dueCheckpoints });
+      }
+    }
+    return results;
+  }
+
+  async createPostpartumVisit(visit: InsertPostpartumVisit): Promise<PostpartumVisit> {
+    const [created] = await db.insert(postpartumVisits).values(visit).returning();
     return created;
   }
 

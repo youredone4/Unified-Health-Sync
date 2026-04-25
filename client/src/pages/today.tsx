@@ -25,15 +25,14 @@ import {
   UserCircle,
   Siren,
   Sparkles,
-  Stethoscope,
 } from "lucide-react";
 import { DayBannerStrip } from "@/components/today/DayBannerStrip";
 import { M1ProgressStrip } from "@/components/today/M1ProgressStrip";
 import { ProgramWorklist, type WorklistItem } from "@/components/today/ProgramWorklist";
 import { DefaultersList } from "@/components/today/DefaultersList";
-import { ComingSoonCard } from "@/components/today/ComingSoonCard";
 import { ColdChainPanel } from "@/components/today/ColdChainPanel";
 import { TbDosePanel } from "@/components/today/TbDosePanel";
+import { PncPanel } from "@/components/today/PncPanel";
 import { QuickAddBar } from "@/components/today/QuickAddBar";
 
 /**
@@ -138,16 +137,11 @@ export default function TodayPage() {
       {/* Cross-program defaulters bucket */}
       <DefaultersList items={defaulters} />
 
-      {/* Cold-chain + TB doses + remaining "coming soon" gaps */}
+      {/* Daily DOH-cadence panels: cold-chain, TB doses, PNC checkpoints */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <ColdChainPanel />
         <TbDosePanel />
-        <ComingSoonCard
-          title="PNC follow-ups"
-          icon={Stethoscope}
-          description="Postpartum visits at 24h / 72h / 7d / 6wk after delivery. Needs the postpartum_visits module from the M1 audit."
-          testId="coming-soon-pnc"
-        />
+        <PncPanel />
       </div>
 
       {/* Quick add — demoted to a footer row */}
