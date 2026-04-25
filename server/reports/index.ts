@@ -20,6 +20,7 @@ import { lguScorecard } from "./lgu-scorecard";
 import { hrhRoster } from "./hrh-roster";
 import { m1DateRangeExport } from "./m1-date-range";
 import { registeredUsers } from "./registered-users";
+import { nursesRoster } from "./nurses-roster";
 
 export function ensureReportsRegistered() {
   // Always (re-)register. registerReport is idempotent — overwriting an
@@ -41,6 +42,7 @@ export function ensureReportsRegistered() {
   registerReport(hrhRoster);
   registerReport(m1DateRangeExport);
   registerReport(registeredUsers);
+  registerReport(nursesRoster);
   const slugs = listReports().map((r) => r.slug);
   console.log(`[reports] ${slugs.length} reports registered: ${slugs.join(", ")}`);
 }
