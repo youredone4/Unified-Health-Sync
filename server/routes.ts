@@ -11,7 +11,7 @@ import { registerAdminRoutes } from "./routes/admin";
 import { loadUserInfo, requireAuth, requireRole, createAuditLog } from "./middleware/rbac";
 import { UserRole } from "@shared/schema";
 import { ensureReportsRegistered, listReports, getReport } from "./reports";
-import { monthRange, quarterRange } from "./reports/types";
+import { monthRange, quarterRange, annualRange } from "./reports/types";
 
 export async function registerRoutes(
   httpServer: Server,
@@ -1149,10 +1149,15 @@ export async function registerRoutes(
       return res.status(400).json({ message: "year query param required (2000-2100)" });
     }
 
-    // Accept quarter (1-4) for quarterly reports; fall back to month (1-12).
+    // Period selection by cadence:
+    //   annual    → ?year= only
+    //   quarterly → ?quarter=1-4 &year=
+    //   anything else (monthly/weekly) → ?month=1-12 &year=
     let fromDate: string, toDate: string, periodLabel: string;
     const quarter = req.query.quarter !== undefined ? Number(req.query.quarter) : NaN;
-    if (Number.isInteger(quarter) && quarter >= 1 && quarter <= 4) {
+    if (def.cadence === "annual") {
+      ({ fromDate, toDate, periodLabel } = annualRange(year));
+    } else if (Number.isInteger(quarter) && quarter >= 1 && quarter <= 4) {
       ({ fromDate, toDate, periodLabel } = quarterRange(quarter, year));
     } else {
       const month = Number(req.query.month);
@@ -1184,7 +1189,9 @@ export async function registerRoutes(
         toDate,
         periodLabel,
         year,
-        ...(Number.isInteger(quarter) && quarter >= 1 && quarter <= 4
+        ...(def.cadence === "annual"
+          ? {}
+          : Number.isInteger(quarter) && quarter >= 1 && quarter <= 4
           ? { quarter }
           : { month: Number(req.query.month) }),
       },

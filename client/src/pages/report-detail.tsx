@@ -43,9 +43,10 @@ export default function ReportDetailPage() {
   const { selectedBarangay } = useBarangay();
 
   // Fetch the registered definition so we can pick the right period selector
-  // (Quarter vs. Month) based on the report's cadence.
+  // (Year / Quarter / Month) based on the report's cadence.
   const { data: defs = [] } = useQuery<ReportDef[]>({ queryKey: ["/api/reports"] });
   const def = defs.find((d) => d.slug === params.slug);
+  const isAnnual = def?.cadence === "annual";
   const isQuarterly = def?.cadence === "quarterly";
 
   const now = new Date();
@@ -54,13 +55,17 @@ export default function ReportDetailPage() {
   const [year, setYear] = useState<number>(now.getFullYear());
 
   const queryKey = useMemo(() => {
-    const periodPart = isQuarterly ? `quarter=${quarter}` : `month=${month}`;
+    const periodPart = isAnnual
+      ? ""
+      : isQuarterly
+      ? `quarter=${quarter}&`
+      : `month=${month}&`;
     return [
-      `/api/reports/${params.slug}?${periodPart}&year=${year}${
+      `/api/reports/${params.slug}?${periodPart}year=${year}${
         selectedBarangay ? `&barangay=${encodeURIComponent(selectedBarangay)}` : ""
       }`,
     ];
-  }, [params.slug, isQuarterly, month, quarter, year, selectedBarangay]);
+  }, [params.slug, isAnnual, isQuarterly, month, quarter, year, selectedBarangay]);
 
   const { data, isLoading, error } = useQuery<ReportResponse>({
     queryKey,
@@ -89,7 +94,11 @@ export default function ReportDetailPage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    const periodSuffix = isQuarterly ? `Q${quarter}-${year}` : `${year}-${String(month).padStart(2, "0")}`;
+    const periodSuffix = isAnnual
+      ? `${year}`
+      : isQuarterly
+      ? `Q${quarter}-${year}`
+      : `${year}-${String(month).padStart(2, "0")}`;
     a.download = `${data.definition.slug}-${periodSuffix}.csv`;
     a.click();
     URL.revokeObjectURL(url);
@@ -120,7 +129,7 @@ export default function ReportDetailPage() {
       <Card className="print:hidden">
         <CardContent className="pt-4">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
-            {isQuarterly ? (
+            {isAnnual ? null : isQuarterly ? (
               <div>
                 <label className="text-xs text-muted-foreground">Quarter</label>
                 <Select value={String(quarter)} onValueChange={(v) => setQuarter(Number(v))}>
