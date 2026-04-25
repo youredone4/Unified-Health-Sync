@@ -77,7 +77,7 @@ export const sidebarPermissions: Record<string, readonly string[]> = {
   "/disease-surveillance": ALL_ROLES,
   "/mortality": ALL_ROLES,
   "/household-water": ALL_ROLES,
-  "/reports": MGMT_ROLES,
+  "/reports": ALL_ROLES,
   "/reports/ai": MGMT_ROLES,
   "/reports/m1": ALL_ROLES,
   "/m1/encode": ALL_ROLES,
