@@ -14,6 +14,8 @@ import { mortality } from "./mortality";
 import { coldChain } from "./cold-chain";
 import { oralHealth } from "./oral-health";
 import { pidsrCat2 } from "./pidsr-cat2";
+import { ntpTb3a } from "./ntp-tb-3a";
+import { ntpTb5a } from "./ntp-tb-5a";
 
 let registered = false;
 
@@ -28,6 +30,8 @@ export function ensureReportsRegistered() {
   registerReport(coldChain);
   registerReport(oralHealth);
   registerReport(pidsrCat2);
+  registerReport(ntpTb3a);
+  registerReport(ntpTb5a);
   registered = true;
 }
 

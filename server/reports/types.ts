@@ -93,5 +93,21 @@ export function monthRange(month: number, year: number): { fromDate: string; toD
   };
 }
 
+/**
+ * Computes a YYYY-MM-DD inclusive range for the given calendar quarter.
+ * Q1 = Jan–Mar, Q2 = Apr–Jun, Q3 = Jul–Sep, Q4 = Oct–Dec.
+ */
+export function quarterRange(quarter: number, year: number): { fromDate: string; toDate: string; periodLabel: string } {
+  if (quarter < 1 || quarter > 4) throw new Error(`Invalid quarter: ${quarter}`);
+  const startMonth = (quarter - 1) * 3 + 1;
+  const endMonth = quarter * 3;
+  const lastDay = new Date(Date.UTC(year, endMonth, 0)).getUTCDate();
+  return {
+    fromDate: `${year}-${String(startMonth).padStart(2, "0")}-01`,
+    toDate: `${year}-${String(endMonth).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`,
+    periodLabel: `Q${quarter} ${year}`,
+  };
+}
+
 // Marker type so the routes module can pass `app` in once if needed in future.
 export type ReportApp = Express;
