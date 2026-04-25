@@ -109,5 +109,16 @@ export function quarterRange(quarter: number, year: number): { fromDate: string;
   };
 }
 
+/**
+ * Computes a YYYY-MM-DD inclusive range covering the full calendar year.
+ */
+export function annualRange(year: number): { fromDate: string; toDate: string; periodLabel: string } {
+  return {
+    fromDate: `${year}-01-01`,
+    toDate: `${year}-12-31`,
+    periodLabel: `${year}`,
+  };
+}
+
 // Marker type so the routes module can pass `app` in once if needed in future.
 export type ReportApp = Express;

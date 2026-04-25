@@ -16,6 +16,7 @@ import { oralHealth } from "./oral-health";
 import { pidsrCat2 } from "./pidsr-cat2";
 import { ntpTb3a } from "./ntp-tb-3a";
 import { ntpTb5a } from "./ntp-tb-5a";
+import { lguScorecard } from "./lgu-scorecard";
 
 let registered = false;
 
@@ -32,6 +33,7 @@ export function ensureReportsRegistered() {
   registerReport(pidsrCat2);
   registerReport(ntpTb3a);
   registerReport(ntpTb5a);
+  registerReport(lguScorecard);
   registered = true;
 }
 
