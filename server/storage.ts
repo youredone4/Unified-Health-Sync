@@ -5,6 +5,7 @@ import {
   m1TemplateVersions, m1IndicatorCatalog, m1ReportInstances, m1ReportHeader, m1IndicatorValues, barangaySettings,
   directMessages,
   prenatalVisits, childVisits, seniorVisits, postpartumVisits, prenatalScreenings, birthAttendanceRecords,
+  sickChildVisits, schoolImmunizations,
   nutritionFollowUps,
   fpServiceRecords, FP_METHOD_ROW_KEY,
   globalChatMessages,
@@ -19,6 +20,8 @@ import {
   type PostpartumVisit, type InsertPostpartumVisit,
   type PrenatalScreening, type InsertPrenatalScreening,
   type BirthAttendanceRecord, type InsertBirthAttendanceRecord,
+  type SickChildVisit, type InsertSickChildVisit,
+  type SchoolImmunization, type InsertSchoolImmunization,
   type HealthStation,
   type SmsMessage, type InsertSmsMessage,
   type DiseaseCase, type InsertDiseaseCase,
@@ -96,6 +99,14 @@ export interface IStorage {
   // Birth-attendance records (M1 B-04 delivery type breakdown)
   getBirthAttendanceRecords(motherId: number): Promise<BirthAttendanceRecord[]>;
   createBirthAttendanceRecord(record: InsertBirthAttendanceRecord): Promise<BirthAttendanceRecord>;
+
+  // Sick child visits (M1 Section F — IMCI)
+  getSickChildVisits(childId: number): Promise<SickChildVisit[]>;
+  createSickChildVisit(visit: InsertSickChildVisit): Promise<SickChildVisit>;
+
+  // School immunizations (M1 Section D4 — HPV / Td)
+  getSchoolImmunizations(params: { barangay?: string; vaccine?: string }): Promise<SchoolImmunization[]>;
+  createSchoolImmunization(record: InsertSchoolImmunization): Promise<SchoolImmunization>;
 
   getHealthStations(filter?: { facilityType?: string; hasTbDots?: boolean }): Promise<HealthStation[]>;
 
@@ -511,6 +522,35 @@ export class DatabaseStorage implements IStorage {
 
   async createBirthAttendanceRecord(record: InsertBirthAttendanceRecord): Promise<BirthAttendanceRecord> {
     const [created] = await db.insert(birthAttendanceRecords).values(record).returning();
+    return created;
+  }
+
+  async getSickChildVisits(childId: number): Promise<SickChildVisit[]> {
+    return await db
+      .select()
+      .from(sickChildVisits)
+      .where(eq(sickChildVisits.childId, childId))
+      .orderBy(desc(sickChildVisits.visitDate));
+  }
+
+  async createSickChildVisit(visit: InsertSickChildVisit): Promise<SickChildVisit> {
+    const [created] = await db.insert(sickChildVisits).values(visit).returning();
+    return created;
+  }
+
+  async getSchoolImmunizations(params: { barangay?: string; vaccine?: string }): Promise<SchoolImmunization[]> {
+    const conditions = [];
+    if (params.barangay) conditions.push(eq(schoolImmunizations.barangay, params.barangay));
+    if (params.vaccine) conditions.push(eq(schoolImmunizations.vaccine, params.vaccine as any));
+    return await db
+      .select()
+      .from(schoolImmunizations)
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .orderBy(desc(schoolImmunizations.vaccinationDate));
+  }
+
+  async createSchoolImmunization(record: InsertSchoolImmunization): Promise<SchoolImmunization> {
+    const [created] = await db.insert(schoolImmunizations).values(record).returning();
     return created;
   }
 
@@ -1185,6 +1225,169 @@ export class DatabaseStorage implements IStorage {
     emitPs("A-12", r => !!r.calciumGiven);
     emitPs("A-13", r => !!r.dewormingGiven);
 
+    // === SECTION E — Nutrition (extras beyond E-01 already computed) ===
+    // E-02: LBW infants given complete iron supplementation (born this month)
+    const cBirthThisMonth = [...cBase, sql`dob LIKE ${monthLike}`];
+    const cE02 = [...cBirthThisMonth, sql`birth_weight_category = 'low'`, sql`iron_supp_complete = true`];
+    add("E-02", "M",     await countQ(children, [...cE02, sql`sex = 'male'`]));
+    add("E-02", "F",     await countQ(children, [...cE02, sql`sex = 'female'`]));
+    add("E-02", "TOTAL", await countQ(children, cE02));
+
+    // E-03a: 6-11 mos given Vit-A this month
+    const ageInMonthsExpr = sql`EXTRACT(MONTH FROM AGE(NOW(), dob::date))::int + 12 * EXTRACT(YEAR FROM AGE(NOW(), dob::date))::int`;
+    const cE03a = [...cBase, sql`vitamin_a1_date LIKE ${monthLike}`, sql`${ageInMonthsExpr} BETWEEN 6 AND 11`];
+    add("E-03a", "M",     await countQ(children, [...cE03a, sql`sex = 'male'`]));
+    add("E-03a", "F",     await countQ(children, [...cE03a, sql`sex = 'female'`]));
+    add("E-03a", "TOTAL", await countQ(children, cE03a));
+
+    // E-03b: 12-59 mos completed 2nd dose Vit-A this month
+    const cE03b = [...cBase, sql`vitamin_a2_date LIKE ${monthLike}`, sql`${ageInMonthsExpr} BETWEEN 12 AND 59`];
+    add("E-03b", "M",     await countQ(children, [...cE03b, sql`sex = 'male'`]));
+    add("E-03b", "F",     await countQ(children, [...cE03b, sql`sex = 'female'`]));
+    add("E-03b", "TOTAL", await countQ(children, cE03b));
+
+    // E-06 family — children 0-59 mos seen this month with classification
+    // Source: nutrition_followups joined to children (for sex + age window).
+    // E-06 (TOTAL seen), E-06a (MAM), E-06b (SAM)
+    const nfRows = await db.execute(sql`
+      SELECT c.id AS child_id,
+             c.sex AS sex,
+             c.dob AS dob,
+             nf.classification AS classification,
+             nf.actions AS actions,
+             nf.outcome AS outcome,
+             nf.follow_up_date AS follow_up_date
+      FROM nutrition_followups nf
+      INNER JOIN children c ON c.id = nf.child_id
+      WHERE nf.follow_up_date LIKE ${monthLike}
+        ${barangayName ? sql`AND c.barangay = ${barangayName}` : sql``}
+    `);
+    const nfList = (nfRows as any).rows ?? (nfRows as any) ?? [];
+    const e06 = { M: new Set<number>(), F: new Set<number>(), TOTAL: new Set<number>() };
+    const e06a = { M: new Set<number>(), F: new Set<number>(), TOTAL: new Set<number>() };
+    const e06b = { M: new Set<number>(), F: new Set<number>(), TOTAL: new Set<number>() };
+    const e07 = { M: new Set<number>(), F: new Set<number>(), TOTAL: new Set<number>() };
+    const e07a = { M: new Set<number>(), F: new Set<number>(), TOTAL: new Set<number>() };
+    const e07b = { M: new Set<number>(), F: new Set<number>(), TOTAL: new Set<number>() };
+    const e07c = { M: new Set<number>(), F: new Set<number>(), TOTAL: new Set<number>() };
+    const e08 = { M: new Set<number>(), F: new Set<number>(), TOTAL: new Set<number>() };
+    for (const r of nfList) {
+      const sx = (r.sex as string) === "female" ? "F" : "M";
+      const cid = Number(r.child_id);
+      e06[sx as "M" | "F"].add(cid); e06.TOTAL.add(cid);
+      const cls = String(r.classification || "");
+      const actions = Array.isArray(r.actions) ? r.actions : [];
+      const outcome = String(r.outcome || "");
+      if (cls === "MAM") {
+        e06a[sx as "M" | "F"].add(cid); e06a.TOTAL.add(cid);
+      } else if (cls === "SAM_COMPLICATED" || cls === "SAM_UNCOMPLICATED") {
+        e06b[sx as "M" | "F"].add(cid); e06b.TOTAL.add(cid);
+      }
+      if (actions.includes("ENROLL_SFP")) {
+        e07[sx as "M" | "F"].add(cid); e07.TOTAL.add(cid);
+        if (outcome === "CURED") { e07a[sx as "M" | "F"].add(cid); e07a.TOTAL.add(cid); }
+        else if (outcome === "NON_RESPONDER") { e07b[sx as "M" | "F"].add(cid); e07b.TOTAL.add(cid); }
+        else if (outcome === "DEFAULTED") { e07c[sx as "M" | "F"].add(cid); e07c.TOTAL.add(cid); }
+      }
+      if (actions.includes("ENROLL_OTC")) {
+        e08[sx as "M" | "F"].add(cid); e08.TOTAL.add(cid);
+      }
+    }
+    for (const [rk, group] of [
+      ["E-06", e06], ["E-06a", e06a], ["E-06b", e06b],
+      ["E-07", e07], ["E-07a", e07a], ["E-07b", e07b], ["E-07c", e07c],
+      ["E-08", e08],
+    ] as const) {
+      add(rk, "M", group.M.size);
+      add(rk, "F", group.F.size);
+      add(rk, "TOTAL", group.TOTAL.size);
+    }
+
+    // === SECTION F — Sick Children (IMCI) ===
+    const scvRows = await db
+      .select({
+        childId: sickChildVisits.childId,
+        visitDate: sickChildVisits.visitDate,
+        vitaminAGiven: sickChildVisits.vitaminAGiven,
+        hasAcuteDiarrhea: sickChildVisits.hasAcuteDiarrhea,
+        sex: children.sex,
+        dob: children.dob,
+      })
+      .from(sickChildVisits)
+      .innerJoin(children, eq(sickChildVisits.childId, children.id))
+      .where(and(
+        barangayName ? eq(children.barangay, barangayName) : undefined,
+        sql`${sickChildVisits.visitDate} LIKE ${monthLike}`,
+      ));
+
+    const ageMosAt = (dob: string, ref: string): number => {
+      const d = new Date(dob);
+      const r = new Date(ref);
+      if (isNaN(d.getTime()) || isNaN(r.getTime())) return -1;
+      return (r.getFullYear() - d.getFullYear()) * 12 + (r.getMonth() - d.getMonth());
+    };
+
+    const f01 = { M: new Set<number>(), F: new Set<number>(), TOTAL: new Set<number>() };
+    const f01a = { M: new Set<number>(), F: new Set<number>(), TOTAL: new Set<number>() };
+    const f02 = { M: new Set<number>(), F: new Set<number>(), TOTAL: new Set<number>() };
+    const f02a = { M: new Set<number>(), F: new Set<number>(), TOTAL: new Set<number>() };
+    const f03 = { M: new Set<number>(), F: new Set<number>(), TOTAL: new Set<number>() };
+
+    for (const r of scvRows) {
+      const sx = (r.sex || "").toLowerCase() === "female" ? "F" : "M";
+      const ageMos = ageMosAt(r.dob, r.visitDate);
+      const in611 = ageMos >= 6 && ageMos <= 11;
+      const in1259 = ageMos >= 12 && ageMos <= 59;
+      const in059 = ageMos >= 0 && ageMos <= 59;
+      const cid = r.childId;
+      if (in611) {
+        f01a[sx as "M" | "F"].add(cid); f01a.TOTAL.add(cid);
+        if (r.vitaminAGiven) { f01[sx as "M" | "F"].add(cid); f01.TOTAL.add(cid); }
+      }
+      if (in1259) {
+        f02a[sx as "M" | "F"].add(cid); f02a.TOTAL.add(cid);
+        if (r.vitaminAGiven) { f02[sx as "M" | "F"].add(cid); f02.TOTAL.add(cid); }
+      }
+      if (in059 && r.hasAcuteDiarrhea) {
+        f03[sx as "M" | "F"].add(cid); f03.TOTAL.add(cid);
+      }
+    }
+    for (const [rk, group] of [
+      ["F-01", f01], ["F-01a", f01a],
+      ["F-02", f02], ["F-02a", f02a],
+      ["F-03", f03],
+    ] as const) {
+      add(rk, "M", group.M.size);
+      add(rk, "F", group.F.size);
+      add(rk, "TOTAL", group.TOTAL.size);
+    }
+
+    // === SECTION D4 — School-based immunization ===
+    const siRows = await db
+      .select()
+      .from(schoolImmunizations)
+      .where(and(
+        barangayName ? eq(schoolImmunizations.barangay, barangayName) : undefined,
+        sql`${schoolImmunizations.vaccinationDate} LIKE ${monthLike}`,
+      ));
+    let d401 = 0, d402 = 0, d403 = 0;
+    for (const r of siRows) {
+      const dob = new Date(r.dob);
+      const ref = new Date(r.vaccinationDate);
+      const ageYrs = isNaN(dob.getTime()) || isNaN(ref.getTime())
+        ? -1
+        : Math.floor((ref.getTime() - dob.getTime()) / (365.25 * 86400000));
+      if (r.vaccine === "HPV" && r.sex === "F" && ageYrs === 9 && r.doseNumber === 1) d401++;
+      else if (r.vaccine === "HPV" && r.sex === "F" && ageYrs === 9 && r.doseNumber === 2) d402++;
+      else if (r.vaccine === "Td" && r.gradeLevel === 1) d403++;
+    }
+    add("D4-01", "F",     d401);
+    add("D4-01", "TOTAL", d401);
+    add("D4-02", "F",     d402);
+    add("D4-02", "TOTAL", d402);
+    // D4-03 is mixed-sex, just emit TOTAL for now
+    add("D4-03", "TOTAL", d403);
+
     // Save all computed values (ENCODED already excluded via `add`)
     if (computedRaw.length > 0) {
       await this.updateM1IndicatorValues(reportId, computedRaw.map(v => ({
@@ -1684,6 +1887,78 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
+  /**
+   * Phase 2 catalog rows — Section E (Nutrition extras), Section F (Sick
+   * Children / IMCI), Section D4 (School-Based Immunization). All flagged
+   * isComputed=true since computeM1Values fills them from children,
+   * nutrition_followups, sick_child_visits, and school_immunizations.
+   */
+  private async seedM1ChildHealthRows(): Promise<void> {
+    const [activeTpl] = await db
+      .select()
+      .from(m1TemplateVersions)
+      .where(eq(m1TemplateVersions.isActive, true))
+      .limit(1);
+    if (!activeTpl) return;
+
+    const sexRateSpec = { columns: ["M", "F", "TOTAL"], hasTotal: true };
+    const tplId = activeTpl.id;
+
+    const mk = (
+      rowKey: string, label: string, section: string, page: number, order: number,
+      indent: number = 0,
+    ): InsertM1IndicatorCatalog => ({
+      templateVersionId: tplId,
+      pageNumber: page,
+      sectionCode: section,
+      rowKey,
+      officialLabel: label,
+      dataType: "INT",
+      rowOrder: order,
+      indentLevel: indent,
+      columnGroupType: "SEX_RATE",
+      columnSpec: sexRateSpec,
+      isComputed: true,
+      isRequired: true,
+    });
+
+    const rows: InsertM1IndicatorCatalog[] = [
+      mk("E-02", "Infants born with low birth weight (LBW) given complete iron supplements", "E", 2, 302),
+      mk("E-03a", "Infants 6–11 mos given 1 dose of Vitamin A supplementation", "E", 2, 303),
+      mk("E-03b", "Children 12–59 mos who completed 2 doses of Vitamin A supplementation", "E", 2, 304),
+      mk("E-06", "Children 0–59 mos seen during the reporting period at health facilities", "E", 2, 306),
+      mk("E-06a", "Identified MAM Children", "E", 2, 307, 1),
+      mk("E-06b", "Identified SAM Children", "E", 2, 308, 1),
+      mk("E-07", "MAM enrolled to SFP", "E", 2, 309),
+      mk("E-07a", "Cured", "E", 2, 310, 1),
+      mk("E-07b", "Non-cured", "E", 2, 311, 1),
+      mk("E-07c", "Defaulted", "E", 2, 312, 1),
+      mk("E-08", "SAM identified — referred / enrolled in OTC", "E", 2, 313),
+      mk("F-01", "Sick infants 6–11 mos given Vitamin A (aside from routine)", "F", 2, 401),
+      mk("F-01a", "Sick infants 6–11 mos seen", "F", 2, 402, 1),
+      mk("F-02", "Sick infants 12–59 mos given Vitamin A (aside from routine)", "F", 2, 403),
+      mk("F-02a", "Sick infants 12–59 mos seen", "F", 2, 404, 1),
+      mk("F-03", "Acute diarrhea cases 0–59 mos seen", "F", 2, 405),
+      mk("D4-01", "HPV 1st dose (9 yo female only)", "D4", 2, 281),
+      mk("D4-02", "HPV 2nd dose (9 yo female only)", "D4", 2, 282),
+      mk("D4-03", "Grade 1 learners given Td", "D4", 2, 283),
+    ];
+
+    for (const row of rows) {
+      const existing = await db
+        .select({ id: m1IndicatorCatalog.id })
+        .from(m1IndicatorCatalog)
+        .where(and(
+          eq(m1IndicatorCatalog.templateVersionId, row.templateVersionId),
+          eq(m1IndicatorCatalog.rowKey, row.rowKey),
+        ))
+        .limit(1);
+      if (existing.length === 0) {
+        await db.insert(m1IndicatorCatalog).values(row);
+      }
+    }
+  }
+
   async seedData(): Promise<void> {
     // Auto-migrate: add columns introduced after the initial deployment.
     // Every statement is fully idempotent (IF NOT EXISTS / IF EXISTS) so it is
@@ -1787,11 +2062,13 @@ export class DatabaseStorage implements IStorage {
         AND primary_lightness = 40
     `);
 
-    // M1 catalog rows for Phase 1 (Maternal expansion). Idempotent: insert
-    // one row per (template_version_id, row_key) only if not already present.
+    // M1 catalog rows for Phase 1 (Maternal expansion) and Phase 2 (Child
+    // health extras). Idempotent: insert one row per (template_version_id,
+    // row_key) only if not already present.
     // Source of truth is docs/m1-data-source-audit.md.
     await this.seedM1SectionCRows();
     await this.seedM1MaternalRows();
+    await this.seedM1ChildHealthRows();
 
     const existingMothers = await this.getMothers();
     if (existingMothers.length > 0) return;

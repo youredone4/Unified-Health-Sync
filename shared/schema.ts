@@ -692,6 +692,57 @@ export const insertBirthAttendanceRecordSchema = createInsertSchema(birthAttenda
 export type BirthAttendanceRecord = typeof birthAttendanceRecords.$inferSelect;
 export type InsertBirthAttendanceRecord = z.infer<typeof insertBirthAttendanceRecordSchema>;
 
+// === SICK CHILD VISITS — feeds M1 Section F ===
+// IMCI sick-consult log. children.vitaminA1Date / vitaminA2Date already
+// captures routine Vit-A; this table captures the *sick-visit* Vit-A
+// (per F-01/F-02) and acute-diarrhea cases (F-03).
+export const sickChildVisits = pgTable("sick_child_visits", {
+  id: serial("id").primaryKey(),
+  childId: integer("child_id").notNull().references(() => children.id, { onDelete: "cascade" }),
+  visitDate: text("visit_date").notNull(),
+  vitaminAGiven: boolean("vitamin_a_given").default(false),
+  hasAcuteDiarrhea: boolean("has_acute_diarrhea").default(false),
+  notes: text("notes"),
+  recordedByUserId: varchar("recorded_by_user_id"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertSickChildVisitSchema = createInsertSchema(sickChildVisits).omit({ id: true, createdAt: true });
+export type SickChildVisit = typeof sickChildVisits.$inferSelect;
+export type InsertSickChildVisit = z.infer<typeof insertSickChildVisitSchema>;
+
+// === SCHOOL IMMUNIZATIONS — feeds M1 Section D4 ===
+// HPV (9-yo female) and Grade-1 Td. School-aged learners are typically
+// not in the `children` table, so this is a standalone roster.
+export const SCHOOL_VACCINES = ["HPV", "Td"] as const;
+export type SchoolVaccine = typeof SCHOOL_VACCINES[number];
+
+export const schoolImmunizations = pgTable("school_immunizations", {
+  id: serial("id").primaryKey(),
+  learnerName: text("learner_name").notNull(),
+  barangay: text("barangay").notNull(),
+  schoolName: text("school_name"),
+  gradeLevel: integer("grade_level"),
+  dob: text("dob").notNull(),
+  sex: text("sex").notNull(), // 'M' | 'F'
+  vaccine: text("vaccine").$type<SchoolVaccine>().notNull(),
+  doseNumber: integer("dose_number").notNull(),
+  vaccinationDate: text("vaccination_date").notNull(),
+  notes: text("notes"),
+  recordedByUserId: varchar("recorded_by_user_id"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertSchoolImmunizationSchema = createInsertSchema(schoolImmunizations)
+  .omit({ id: true, createdAt: true })
+  .extend({
+    vaccine: z.enum(SCHOOL_VACCINES),
+    doseNumber: z.number().int().min(1).max(3),
+    sex: z.enum(["M", "F"]),
+  });
+export type SchoolImmunization = typeof schoolImmunizations.$inferSelect;
+export type InsertSchoolImmunization = z.infer<typeof insertSchoolImmunizationSchema>;
+
 // Child monitoring visits
 export const childVisits = pgTable("child_visits", {
   id: serial("id").primaryKey(),
