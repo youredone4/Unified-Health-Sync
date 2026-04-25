@@ -1,6 +1,7 @@
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
+import { useAuth, permissions } from "@/hooks/use-auth";
 
 const ITEMS = [
   { label: "Mother", href: "/mother/new", testId: "qa-mother" },
@@ -12,6 +13,10 @@ const ITEMS = [
 
 export function QuickAddBar() {
   const [, navigate] = useLocation();
+  const { role } = useAuth();
+  // Quick-add is for record encoding, which only TLs do. MGMT roles
+  // see consolidated data and validate; they don't enter new rows.
+  if (!permissions.canEnterRecords(role)) return null;
   return (
     <div className="flex items-center gap-2 flex-wrap pt-1" data-testid="today-quick-add">
       <span className="text-xs text-muted-foreground mr-1">Quick add:</span>

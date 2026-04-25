@@ -3,6 +3,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import type { OralHealthVisit } from "@shared/schema";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useBarangay } from "@/contexts/barangay-context";
+import { useAuth, permissions } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -22,14 +23,16 @@ import { format } from "date-fns";
 
 export default function OralHealthPage() {
   const { selectedBarangay } = useBarangay();
+  const { role } = useAuth();
+  const canEnter = permissions.canEnterRecords(role);
   const { toast } = useToast();
   const today = format(new Date(), "yyyy-MM-dd");
 
   const queryKey = useMemo(
-    () => [`/api/oral-health-visits?barangay=${encodeURIComponent(selectedBarangay || "")}`],
+    () => [selectedBarangay ? `/api/oral-health-visits?barangay=${encodeURIComponent(selectedBarangay)}` : "/api/oral-health-visits"],
     [selectedBarangay],
   );
-  const { data: rows = [] } = useQuery<OralHealthVisit[]>({ queryKey, enabled: !!selectedBarangay });
+  const { data: rows = [] } = useQuery<OralHealthVisit[]>({ queryKey });
 
   const [patientName, setPatientName] = useState("");
   const [dob, setDob] = useState("");
@@ -67,13 +70,8 @@ export default function OralHealthPage() {
         </h1>
         <p className="text-sm text-muted-foreground">First-visit dental tracking. Feeds M1 Section ORAL.</p>
       </div>
-      {!selectedBarangay ? (
-        <Card><CardContent className="pt-6 text-sm text-muted-foreground">
-          Select a barangay to record oral health visits.
-        </CardContent></Card>
-      ) : (
-        <>
-          <Card data-testid="card-oral-form">
+      {canEnter && selectedBarangay && (
+        <Card data-testid="card-oral-form">
             <CardHeader className="pb-2"><CardTitle className="text-base">Record visit</CardTitle></CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -113,42 +111,47 @@ export default function OralHealthPage() {
               </div>
             </CardContent>
           </Card>
-
-          <Card data-testid="card-oral-history">
-            <CardHeader className="pb-2"><CardTitle className="text-base">Records — {selectedBarangay}</CardTitle></CardHeader>
-            <CardContent>
-              {rows.length === 0 ? (
-                <p className="text-sm text-muted-foreground py-3 text-center">No oral health visits yet.</p>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Date</TableHead>
-                      <TableHead>Patient</TableHead>
-                      <TableHead>Sex</TableHead>
-                      <TableHead>First?</TableHead>
-                      <TableHead>Facility</TableHead>
-                      <TableHead>Pregnant</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {rows.map((r) => (
-                      <TableRow key={r.id} data-testid={`oral-row-${r.id}`}>
-                        <TableCell className="font-mono text-xs">{r.visitDate}</TableCell>
-                        <TableCell>{r.patientName}</TableCell>
-                        <TableCell>{r.sex}</TableCell>
-                        <TableCell>{r.isFirstVisit ? <Badge variant="outline">1st</Badge> : "—"}</TableCell>
-                        <TableCell>{r.facilityBased ? "Facility" : "Outreach"}</TableCell>
-                        <TableCell>{r.isPregnant ? "Yes" : "—"}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
-            </CardContent>
-          </Card>
-        </>
       )}
+
+      <Card data-testid="card-oral-history">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">
+            Records {selectedBarangay ? `— ${selectedBarangay}` : "(consolidated, all barangays)"}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {rows.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-3 text-center">No oral health visits yet.</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Date</TableHead>
+                  {!selectedBarangay && <TableHead>Barangay</TableHead>}
+                  <TableHead>Patient</TableHead>
+                  <TableHead>Sex</TableHead>
+                  <TableHead>First?</TableHead>
+                  <TableHead>Facility</TableHead>
+                  <TableHead>Pregnant</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {rows.map((r) => (
+                  <TableRow key={r.id} data-testid={`oral-row-${r.id}`}>
+                    <TableCell className="font-mono text-xs">{r.visitDate}</TableCell>
+                    {!selectedBarangay && <TableCell className="text-xs">{r.barangay}</TableCell>}
+                    <TableCell>{r.patientName}</TableCell>
+                    <TableCell>{r.sex}</TableCell>
+                    <TableCell>{r.isFirstVisit ? <Badge variant="outline">1st</Badge> : "—"}</TableCell>
+                    <TableCell>{r.facilityBased ? "Facility" : "Outreach"}</TableCell>
+                    <TableCell>{r.isPregnant ? "Yes" : "—"}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

@@ -12,6 +12,7 @@ import {
 } from "@shared/schema";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useBarangay } from "@/contexts/barangay-context";
+import { useAuth, permissions } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -37,6 +38,8 @@ type FormValues = z.infer<typeof formSchema>;
 
 export default function ColdChainPage() {
   const { selectedBarangay } = useBarangay();
+  const { role } = useAuth();
+  const canEnter = permissions.canEnterRecords(role);
   const { toast } = useToast();
   const today = format(new Date(), "yyyy-MM-dd");
   const fromDate = format(subDays(new Date(), 14), "yyyy-MM-dd");
@@ -62,7 +65,9 @@ export default function ColdChainPage() {
   );
   const historyQueryKey = useMemo(
     () => [
-      `/api/cold-chain/logs?barangay=${encodeURIComponent(selectedBarangay || "")}&fromDate=${fromDate}`,
+      selectedBarangay
+        ? `/api/cold-chain/logs?barangay=${encodeURIComponent(selectedBarangay)}&fromDate=${fromDate}`
+        : `/api/cold-chain/logs?fromDate=${fromDate}`,
     ],
     [selectedBarangay, fromDate],
   );
@@ -74,7 +79,6 @@ export default function ColdChainPage() {
 
   const { data: history = [] } = useQuery<ColdChainLog[]>({
     queryKey: historyQueryKey,
-    enabled: !!selectedBarangay,
   });
 
   const createMutation = useMutation({
@@ -103,23 +107,11 @@ export default function ColdChainPage() {
     },
   });
 
-  if (!selectedBarangay) {
-    return (
-      <div className="space-y-4">
-        <PageHeader />
-        <Card>
-          <CardContent className="pt-6 text-sm text-muted-foreground">
-            Select a barangay from the switcher to view or log cold-chain readings.
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-4">
       <PageHeader />
-      <TodayStatusCard status={todayStatus} barangay={selectedBarangay} />
+      {selectedBarangay && <TodayStatusCard status={todayStatus} barangay={selectedBarangay} />}
+      {canEnter && selectedBarangay && (
       <Card data-testid="card-cold-chain-form">
         <CardHeader className="pb-2">
           <CardTitle className="text-base">Log a reading</CardTitle>
@@ -239,10 +231,13 @@ export default function ColdChainPage() {
           </Form>
         </CardContent>
       </Card>
+      )}
 
       <Card data-testid="card-cold-chain-history">
         <CardHeader className="pb-2">
-          <CardTitle className="text-base">Last 14 days</CardTitle>
+          <CardTitle className="text-base">
+            Last 14 days {selectedBarangay ? `— ${selectedBarangay}` : "(consolidated, all barangays)"}
+          </CardTitle>
         </CardHeader>
         <CardContent>
           {history.length === 0 ? (
@@ -254,6 +249,7 @@ export default function ColdChainPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Date</TableHead>
+                  {!selectedBarangay && <TableHead>Barangay</TableHead>}
                   <TableHead>Period</TableHead>
                   <TableHead>Temp (°C)</TableHead>
                   <TableHead>VVM</TableHead>
@@ -266,6 +262,7 @@ export default function ColdChainPage() {
                   return (
                     <TableRow key={r.id} data-testid={`history-row-${r.id}`}>
                       <TableCell className="font-mono text-xs">{r.readingDate}</TableCell>
+                      {!selectedBarangay && <TableCell className="text-xs">{r.barangay}</TableCell>}
                       <TableCell>{r.readingPeriod}</TableCell>
                       <TableCell className={inRange ? "" : "text-destructive font-medium"}>
                         {r.tempCelsius.toFixed(1)}

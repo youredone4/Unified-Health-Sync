@@ -1,7 +1,7 @@
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { useAuth } from "@/hooks/use-auth";
+import { useAuth, permissions } from "@/hooks/use-auth";
 import type { ReactNode } from "react";
 
 /**
@@ -85,7 +85,7 @@ export function ProgramHub({
             )}
           </div>
         </div>
-        {primaryAction && (
+        {primaryAction && permissions.canEnterRecords(role) && (
           <Button asChild data-testid="hub-primary-action">
             <Link href={primaryAction.path}>
               {Ac ? <Ac className="h-4 w-4 mr-2" /> : null}
