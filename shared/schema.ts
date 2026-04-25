@@ -349,7 +349,15 @@ export const diseaseCases = pgTable("disease_cases", {
   longitude: text("longitude"),
 });
 
-export const insertDiseaseCaseSchema = createInsertSchema(diseaseCases).omit({ id: true });
+// drizzle-zod auto-generates additionalConditions as an opaque jsonb /
+// unknown shape. Extending it explicitly to z.array(z.string()) means
+// PUT /api/disease-cases/:id won't strip the field on .parse() and the
+// route handler will pass it through to db.update().set(...).
+export const insertDiseaseCaseSchema = createInsertSchema(diseaseCases)
+  .omit({ id: true })
+  .extend({
+    additionalConditions: z.array(z.string()).optional().default([]),
+  });
 export type DiseaseCase = typeof diseaseCases.$inferSelect;
 export type InsertDiseaseCase = z.infer<typeof insertDiseaseCaseSchema>;
 
