@@ -493,12 +493,22 @@ export async function registerRoutes(
   // DISEASE_CONDITION_DEFAULTS by the New Case form so any condition
   // typed via the "Other..." free-text option stays in the dropdown
   // for future cases. Trimmed/de-duped server-side.
-  app.get("/api/disease-cases/conditions", loadUserInfo, requireAuth, ar(async (_req, res) => {
+  //
+  // URL note: deliberately NOT under /api/disease-cases/* — that
+  // namespace ends with a /:id route and Express was matching this
+  // endpoint as id=conditions on some deployments. Path collision
+  // sidestepped by living under /api/disease-conditions instead.
+  app.get("/api/disease-conditions", loadUserInfo, requireAuth, ar(async (_req, res) => {
     const all = await storage.getDiseaseCases();
     const set = new Set<string>();
     for (const c of all) {
       const trimmed = (c.condition ?? "").trim();
       if (trimmed) set.add(trimmed);
+      const extras = ((c as any).additionalConditions ?? []) as string[];
+      for (const e of extras) {
+        const t = (e ?? "").trim();
+        if (t) set.add(t);
+      }
     }
     res.json(Array.from(set).sort());
   }));

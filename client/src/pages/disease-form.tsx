@@ -201,7 +201,7 @@ export default function DiseaseForm() {
   // recorded" group inside ConditionPicker so user-typed "Other..."
   // values stay available next time.
   const { data: existingConditions = [] } = useQuery<string[]>({
-    queryKey: ["/api/disease-cases/conditions"],
+    queryKey: ["/api/disease-conditions"],
   });
   const statuses = ["New", "Monitoring", "Referred", "Closed"];
 
