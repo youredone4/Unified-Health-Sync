@@ -1,91 +1,114 @@
 import { useQuery } from "@tanstack/react-query";
-import type { Mother, Child, Senior, InventoryItem } from "@shared/schema";
-import { getTTStatus, getNextVaccineStatus, getSeniorPickupStatus, isUnderweightRisk } from "@/lib/healthLogic";
+import { useLocation } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { FileText, Download, Printer } from "lucide-react";
-import { useBarangay } from "@/contexts/barangay-context";
+import { Badge } from "@/components/ui/badge";
+import {
+  FileText, ArrowRight, ClipboardList, Activity, ShieldAlert, BarChart3,
+} from "lucide-react";
+
+interface ReportDef {
+  slug: string;
+  title: string;
+  description: string;
+  cadence: "weekly" | "monthly" | "quarterly" | "annual";
+  category: "fhsis" | "program" | "surveillance" | "performance";
+  source: string | null;
+}
+
+const CATEGORY_LABELS: Record<ReportDef["category"], string> = {
+  fhsis: "FHSIS Family",
+  program: "Program-Specific",
+  surveillance: "Surveillance",
+  performance: "LGU Performance",
+};
+
+const CATEGORY_ICONS: Record<ReportDef["category"], typeof ClipboardList> = {
+  fhsis: ClipboardList,
+  program: Activity,
+  surveillance: ShieldAlert,
+  performance: BarChart3,
+};
+
+const CADENCE_TONE: Record<ReportDef["cadence"], string> = {
+  weekly: "bg-orange-500/15 text-orange-700 dark:text-orange-300",
+  monthly: "bg-primary/15 text-primary",
+  quarterly: "bg-sky-500/15 text-sky-700 dark:text-sky-300",
+  annual: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
+};
 
 export default function ReportsPage() {
-  const { scopedPath } = useBarangay();
-  const { data: mothers = [] } = useQuery<Mother[]>({ queryKey: [scopedPath('/api/mothers')] });
-  const { data: children = [] } = useQuery<Child[]>({ queryKey: [scopedPath('/api/children')] });
-  const { data: seniors = [] } = useQuery<Senior[]>({ queryKey: [scopedPath('/api/seniors')] });
-  const { data: inventory = [] } = useQuery<InventoryItem[]>({ queryKey: ['/api/inventory'] });
+  const [, navigate] = useLocation();
+  const { data: reports = [], isLoading } = useQuery<ReportDef[]>({
+    queryKey: ["/api/reports"],
+  });
 
-  const reports = [
-    {
-      title: 'TT Overdue Report',
-      description: 'List of mothers with overdue TT vaccinations',
-      count: mothers.filter(m => getTTStatus(m).status === 'overdue').length
+  const grouped = reports.reduce<Record<ReportDef["category"], ReportDef[]>>(
+    (acc, r) => {
+      if (!acc[r.category]) acc[r.category] = [];
+      acc[r.category].push(r);
+      return acc;
     },
-    {
-      title: 'Vaccine Overdue Report',
-      description: 'List of children with overdue vaccines',
-      count: children.filter(c => getNextVaccineStatus(c).status === 'overdue').length
-    },
-    {
-      title: 'Underweight Children Report',
-      description: 'List of children flagged as underweight risk',
-      count: children.filter(c => isUnderweightRisk(c)).length
-    },
-    {
-      title: 'Senior Meds Pickup Report',
-      description: 'Seniors with pending medication pickups',
-      count: seniors.filter(s => getSeniorPickupStatus(s).status !== 'upcoming').length
-    },
-    {
-      title: 'Stock-out Report',
-      description: 'Barangays with zero stock on any item',
-      count: inventory.filter(inv => {
-        const v = inv.vaccines as any;
-        return v && (v.bcgQty === 0 || v.pentaQty === 0 || v.opvQty === 0);
-      }).length
-    }
-  ];
+    { fhsis: [], program: [], surveillance: [], performance: [] },
+  );
+
+  const orderedCategories: ReportDef["category"][] = ["fhsis", "program", "surveillance", "performance"];
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold flex items-center gap-2" data-testid="text-page-title">
-          <FileText className="w-6 h-6 text-blue-400" />
-          Reports
+        <h1 className="text-2xl font-semibold flex items-center gap-2" data-testid="reports-title">
+          <FileText className="w-5 h-5 text-primary" /> Reports
         </h1>
-        <p className="text-muted-foreground">Generate and export reports</p>
+        <p className="text-sm text-muted-foreground">
+          DOH-mandated reports drawn from operational data. Generate, preview, and export by period.
+        </p>
       </div>
 
-      <div className="grid md:grid-cols-2 gap-4">
-        {reports.map((report, idx) => (
-          <Card key={idx}>
-            <CardHeader>
-              <CardTitle className="text-base">{report.title}</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground mb-3">{report.description}</p>
-              <p className="text-2xl font-bold mb-4">{report.count} items</p>
-              <div className="flex gap-2">
-                <Button size="sm" variant="outline" className="gap-1" data-testid={`button-export-${idx}`}>
-                  <Download className="w-3 h-3" /> Export CSV
-                </Button>
-                <Button size="sm" variant="outline" className="gap-1" data-testid={`button-print-${idx}`}>
-                  <Printer className="w-3 h-3" /> Print
-                </Button>
+      {isLoading ? (
+        <Card><CardContent className="pt-6 text-sm text-muted-foreground">Loading reports…</CardContent></Card>
+      ) : (
+        orderedCategories.map((cat) => {
+          const list = grouped[cat] ?? [];
+          if (list.length === 0) return null;
+          const Icon = CATEGORY_ICONS[cat];
+          return (
+            <section key={cat} className="space-y-3" data-testid={`reports-section-${cat}`}>
+              <h2 className="text-base font-medium flex items-center gap-2 text-muted-foreground">
+                <Icon className="w-4 h-4" /> {CATEGORY_LABELS[cat]}
+              </h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                {list.map((r) => (
+                  <Card
+                    key={r.slug}
+                    className="hover-elevate cursor-pointer"
+                    onClick={() => navigate(`/reports/${r.slug}`)}
+                    data-testid={`report-tile-${r.slug}`}
+                  >
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-base flex items-start gap-2">
+                        <span className="flex-1">{r.title}</span>
+                        <Badge variant="outline" className={`text-[10px] font-normal ${CADENCE_TONE[r.cadence]}`}>
+                          {r.cadence}
+                        </Badge>
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-xs text-muted-foreground mb-2">{r.description}</p>
+                      {r.source && (
+                        <p className="text-[10px] text-muted-foreground italic mb-3">{r.source}</p>
+                      )}
+                      <Button size="sm" variant="outline" className="gap-1 w-full" data-testid={`report-open-${r.slug}`}>
+                        Open <ArrowRight className="w-3 h-3" />
+                      </Button>
+                    </CardContent>
+                  </Card>
+                ))}
               </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Note</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-muted-foreground">
-            This is a demo version. Export and print functionality would connect to a reporting service in production.
-          </p>
-        </CardContent>
-      </Card>
+            </section>
+          );
+        })
+      )}
     </div>
   );
 }

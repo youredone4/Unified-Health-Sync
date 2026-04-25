@@ -1,0 +1,224 @@
+import { useMemo, useState } from "react";
+import { useParams, useLocation } from "wouter";
+import { useQuery } from "@tanstack/react-query";
+import { useBarangay } from "@/contexts/barangay-context";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { ArrowLeft, FileText, Printer, Download } from "lucide-react";
+
+interface ReportColumn { key: string; label: string; align?: "left" | "center" | "right" }
+interface ReportRow { id?: string; cells: Record<string, string | number | null>; isTotal?: boolean; indent?: number }
+interface ReportResponse {
+  definition: { slug: string; title: string; cadence: string; category: string; source: string | null };
+  period: { fromDate: string; toDate: string; periodLabel: string; month: number; year: number };
+  barangay: string | null;
+  columns: ReportColumn[];
+  rows: ReportRow[];
+  meta: { sourceCount?: number; notes?: string };
+}
+
+const MONTHS = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
+
+export default function ReportDetailPage() {
+  const params = useParams<{ slug: string }>();
+  const [, navigate] = useLocation();
+  const { selectedBarangay } = useBarangay();
+
+  const now = new Date();
+  const [month, setMonth] = useState<number>(now.getMonth() + 1);
+  const [year, setYear] = useState<number>(now.getFullYear());
+
+  const queryKey = useMemo(
+    () => [
+      `/api/reports/${params.slug}?month=${month}&year=${year}${
+        selectedBarangay ? `&barangay=${encodeURIComponent(selectedBarangay)}` : ""
+      }`,
+    ],
+    [params.slug, month, year, selectedBarangay],
+  );
+
+  const { data, isLoading, error } = useQuery<ReportResponse>({
+    queryKey,
+    enabled: !!params.slug,
+  });
+
+  const printable = () => {
+    window.print();
+  };
+
+  const exportCsv = () => {
+    if (!data) return;
+    const header = data.columns.map((c) => `"${c.label.replace(/"/g, '""')}"`).join(",");
+    const lines = data.rows.map((row) =>
+      data.columns
+        .map((c) => {
+          const v = row.cells[c.key];
+          if (v === null || v === undefined) return "";
+          const s = typeof v === "string" ? v : String(v);
+          return `"${s.replace(/"/g, '""')}"`;
+        })
+        .join(","),
+    );
+    const csv = [header, ...lines].join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${data.definition.slug}-${year}-${String(month).padStart(2, "0")}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const yearOptions = useMemo(() => {
+    const ys: number[] = [];
+    for (let y = now.getFullYear() + 1; y >= now.getFullYear() - 4; y--) ys.push(y);
+    return ys;
+  }, [now]);
+
+  return (
+    <div className="space-y-4">
+      <Button variant="ghost" onClick={() => navigate("/reports")} className="gap-2 -ml-2 print:hidden" data-testid="button-back-reports">
+        <ArrowLeft className="w-4 h-4" /> All reports
+      </Button>
+
+      <div>
+        <h1 className="text-2xl font-semibold flex items-center gap-2" data-testid="report-title">
+          <FileText className="w-5 h-5 text-primary" />
+          {data?.definition.title ?? "Report"}
+        </h1>
+        {data?.definition.source && (
+          <p className="text-xs text-muted-foreground italic">{data.definition.source}</p>
+        )}
+      </div>
+
+      <Card className="print:hidden">
+        <CardContent className="pt-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
+            <div>
+              <label className="text-xs text-muted-foreground">Month</label>
+              <Select value={String(month)} onValueChange={(v) => setMonth(Number(v))}>
+                <SelectTrigger data-testid="select-month"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {MONTHS.map((m, i) => (
+                    <SelectItem key={i} value={String(i + 1)}>{m}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground">Year</label>
+              <Select value={String(year)} onValueChange={(v) => setYear(Number(v))}>
+                <SelectTrigger data-testid="select-year"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {yearOptions.map((y) => (
+                    <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground">Barangay</label>
+              <Input
+                value={selectedBarangay ?? "All"}
+                disabled
+                className="cursor-not-allowed"
+                data-testid="input-barangay"
+              />
+            </div>
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" size="sm" onClick={printable} className="gap-1" data-testid="button-print">
+                <Printer className="w-4 h-4" /> Print
+              </Button>
+              <Button variant="outline" size="sm" onClick={exportCsv} className="gap-1" data-testid="button-csv">
+                <Download className="w-4 h-4" /> CSV
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {error ? (
+        <Card>
+          <CardContent className="pt-6 text-sm text-destructive">
+            Could not load report: {(error as Error).message}
+          </CardContent>
+        </Card>
+      ) : isLoading ? (
+        <Card><CardContent className="pt-6 text-sm text-muted-foreground">Computing…</CardContent></Card>
+      ) : data ? (
+        <>
+          <Card data-testid="report-meta">
+            <CardContent className="pt-4 flex items-center gap-3 flex-wrap text-sm">
+              <Badge variant="outline">{data.period.periodLabel}</Badge>
+              {data.barangay && <Badge variant="outline">{data.barangay}</Badge>}
+              <span className="text-xs text-muted-foreground">
+                {data.meta.sourceCount ?? 0} matching record{data.meta.sourceCount === 1 ? "" : "s"}
+              </span>
+              {data.meta.notes && (
+                <span className="text-xs text-muted-foreground italic">· {data.meta.notes}</span>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card data-testid="report-table">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">{data.definition.title}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {data.rows.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-6 text-center">No data for this period.</p>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      {data.columns.map((c) => (
+                        <TableHead
+                          key={c.key}
+                          className={c.align === "right" ? "text-right" : c.align === "center" ? "text-center" : ""}
+                        >
+                          {c.label}
+                        </TableHead>
+                      ))}
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {data.rows.map((row, i) => (
+                      <TableRow
+                        key={row.id ?? i}
+                        className={row.isTotal ? "font-semibold bg-muted/50" : ""}
+                        data-testid={`report-row-${row.id ?? i}`}
+                      >
+                        {data.columns.map((c, ci) => {
+                          const v = row.cells[c.key];
+                          const indent = ci === 0 && row.indent ? row.indent * 12 : 0;
+                          return (
+                            <TableCell
+                              key={c.key}
+                              className={c.align === "right" ? "text-right tabular-nums" : c.align === "center" ? "text-center" : ""}
+                              style={ci === 0 ? { paddingLeft: 12 + indent } : undefined}
+                            >
+                              {v === null || v === undefined ? "" : v}
+                            </TableCell>
+                          );
+                        })}
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </>
+      ) : null}
+    </div>
+  );
+}
