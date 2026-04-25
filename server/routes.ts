@@ -9,7 +9,7 @@ import { z } from "zod";
 import { setupAuth, registerAuthRoutes } from "./auth";
 import { registerAdminRoutes } from "./routes/admin";
 import { loadUserInfo, requireAuth, requireRole, createAuditLog } from "./middleware/rbac";
-import { UserRole } from "@shared/schema";
+import { UserRole, diseaseCases } from "@shared/schema";
 import { ensureReportsRegistered, listReports, getReport } from "./reports";
 import { monthRange, quarterRange, annualRange } from "./reports/types";
 
@@ -35,14 +35,14 @@ export async function registerRoutes(
   // since drizzle's RETURNING * only emits columns defined in the
   // running TS schema. Strip once this saga is closed.
   try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const { diseaseCases } = require("@shared/schema");
     const cols = Object.keys(diseaseCases ?? {}).filter(
       (k) => typeof (diseaseCases as any)[k]?.name === "string",
     );
     console.log("[startup] disease_cases TS schema columns:", cols.join(", "));
-    console.log("[startup] additionalConditions in schema?",
-      Object.prototype.hasOwnProperty.call(diseaseCases ?? {}, "additionalConditions"));
+    console.log(
+      "[startup] additionalConditions in schema?",
+      Object.prototype.hasOwnProperty.call(diseaseCases ?? {}, "additionalConditions"),
+    );
   } catch (err) {
     console.error("[startup] schema inspection failed:", err);
   }
