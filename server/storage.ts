@@ -2981,6 +2981,23 @@ export class DatabaseStorage implements IStorage {
         ADD COLUMN IF NOT EXISTS is_fetal_death BOOLEAN NOT NULL DEFAULT FALSE,
         ADD COLUMN IF NOT EXISTS is_live_born_early_neonatal BOOLEAN NOT NULL DEFAULT FALSE
     `);
+    // Theme migration: switch deployments still on the original
+    // placer-brand (green) defaults to the HealthSync teal/blue palette.
+    // Only updates rows that haven't been customized — manual theme
+    // tweaks via the Settings UI are preserved (we match on the exact
+    // factory tuple of placer-brand + 142/60/38).
+    await db.execute(sql`
+      UPDATE theme_settings
+         SET color_scheme       = 'healthsync',
+             primary_hue        = 172,
+             primary_saturation = 53,
+             primary_lightness  = 49
+       WHERE color_scheme       = 'placer-brand'
+         AND primary_hue        = 142
+         AND primary_saturation = 60
+         AND primary_lightness  = 38
+    `);
+
     // HRH workforce module (Admin/MGMT) — DOH HHRDB / NHWSS aligned.
     // CREATE … IF NOT EXISTS so deployments that haven't db:push'd
     // since PR #66 still get the tables on next boot.
@@ -3512,16 +3529,19 @@ export class DatabaseStorage implements IStorage {
       },
     ]);
 
-    // THEME SETTINGS - Default LGU branding
+    // THEME SETTINGS - Default LGU branding (HealthSync teal+blue palette).
+    // The lguName / lguSubtitle still reflect the LGU; they're surfaced
+    // inside the app post-login. Login page uses the HealthSync brand
+    // verbatim (see landing.tsx).
     await db.insert(themeSettings).values([
       {
         lguName: "Placer Municipality",
         lguSubtitle: "Province of Surigao del Norte",
         logoUrl: null,
-        colorScheme: "placer-brand",
-        primaryHue: 142,
-        primarySaturation: 60,
-        primaryLightness: 38,
+        colorScheme: "healthsync",
+        primaryHue: 172,
+        primarySaturation: 53,
+        primaryLightness: 49,
       }
     ]);
 

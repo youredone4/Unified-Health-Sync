@@ -13,6 +13,7 @@ interface ThemeContextType {
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 const colorSchemePresets: Record<string, { hue: number; saturation: number; lightness: number; name: string }> = {
+  "healthsync": { hue: 172, saturation: 53, lightness: 49, name: "HealthSync (Teal · Blue)" },
   "placer-brand": { hue: 142, saturation: 60, lightness: 38, name: "Placer Brand (Green · Gold · Blue)" },
   "healthcare-green": { hue: 152, saturation: 60, lightness: 40, name: "Healthcare Green" },
   "government-blue": { hue: 210, saturation: 65, lightness: 45, name: "Government Blue" },
@@ -43,6 +44,37 @@ function applyPlacerBrandOverrides() {
   root.style.setProperty('--secondary', PLACER_BRAND_OVERRIDES.goldHsl);
   root.style.setProperty('--secondary-foreground', PLACER_BRAND_OVERRIDES.goldFgHsl);
   root.style.setProperty('--chart-2', PLACER_BRAND_OVERRIDES.blueHsl);
+}
+
+// HealthSync brand: teal primary (#3CBFAE) + blue secondary (#2B6CB0).
+// Single-hue pipeline takes teal as primary; we inject blue as the accent
+// + secondary slot and chart-2 so the gradient pair surfaces across the
+// app. Light tints (#6EE7D8, #63B3ED) are used for soft chips. Semantic
+// success/warning/error/info match the spec.
+const HEALTHSYNC_BRAND_OVERRIDES = {
+  blueHsl: "211 61% 43%",        // #2B6CB0
+  blueFgHsl: "0 0% 100%",
+  softBlueHsl: "210 79% 66%",    // #63B3ED
+  successHsl: "139 49% 43%",     // #38A169
+  warningHsl: "39 67% 51%",      // #D69E2E
+  errorHsl: "0 75% 57%",         // #E53E3E
+  infoHsl: "210 67% 51%",        // #3182CE
+} as const;
+
+function applyHealthSyncBrandOverrides() {
+  const root = document.documentElement;
+  root.style.setProperty('--accent', HEALTHSYNC_BRAND_OVERRIDES.blueHsl);
+  root.style.setProperty('--accent-foreground', HEALTHSYNC_BRAND_OVERRIDES.blueFgHsl);
+  root.style.setProperty('--secondary', HEALTHSYNC_BRAND_OVERRIDES.blueHsl);
+  root.style.setProperty('--secondary-foreground', HEALTHSYNC_BRAND_OVERRIDES.blueFgHsl);
+  root.style.setProperty('--chart-2', HEALTHSYNC_BRAND_OVERRIDES.blueHsl);
+  root.style.setProperty('--chart-3', HEALTHSYNC_BRAND_OVERRIDES.softBlueHsl);
+  // Status-color slots used by .status-* utility classes.
+  root.style.setProperty('--status-available', HEALTHSYNC_BRAND_OVERRIDES.successHsl);
+  root.style.setProperty('--status-completed', HEALTHSYNC_BRAND_OVERRIDES.successHsl);
+  root.style.setProperty('--status-due-soon', HEALTHSYNC_BRAND_OVERRIDES.warningHsl);
+  root.style.setProperty('--status-overdue', HEALTHSYNC_BRAND_OVERRIDES.errorHsl);
+  root.style.setProperty('--destructive', HEALTHSYNC_BRAND_OVERRIDES.errorHsl);
 }
 
 function applyThemeColors(hue: number, saturation: number, lightness: number) {
@@ -109,12 +141,14 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (settings) {
-      const hue = settings.primaryHue ?? 142;
-      const saturation = settings.primarySaturation ?? 60;
-      const lightness = settings.primaryLightness ?? 38;
+      const hue = settings.primaryHue ?? 172;
+      const saturation = settings.primarySaturation ?? 53;
+      const lightness = settings.primaryLightness ?? 49;
       applyThemeColors(hue, saturation, lightness);
       if (settings.colorScheme === "placer-brand") {
         applyPlacerBrandOverrides();
+      } else if (settings.colorScheme === "healthsync") {
+        applyHealthSyncBrandOverrides();
       }
     }
   }, [settings]);

@@ -11,43 +11,44 @@
   --elevate-1: rgba(0,0,0, .04);
   --elevate-2: rgba(0,0,0, .08);
 
-  /* Placer Municipality brand: Green primary, Gold accent, Blue chart-2.
-     Runtime theme-context.tsx reinjects these values from the active scheme;
-     keeping the static defaults aligned avoids a color flash on first paint. */
-  --background: 142 30% 98%;
-  --foreground: 142 40% 10%;
-  --border: 142 20% 88%;
+  /* HealthSync brand: Teal primary (#3CBFAE = 172 53% 49%), Blue accent
+     (#2B6CB0 = 211 61% 43%). Runtime theme-context.tsx reinjects these
+     values from the active scheme; keeping the static defaults aligned
+     avoids a color flash on first paint. */
+  --background: 172 30% 98%;
+  --foreground: 220 25% 14%;
+  --border: 214 32% 91%;
   --card: 0 0% 100%;
-  --card-foreground: 142 40% 10%;
-  --card-border: 142 20% 90%;
-  --sidebar: 142 35% 95%;
-  --sidebar-foreground: 142 40% 15%;
-  --sidebar-border: 142 25% 88%;
-  --sidebar-primary: 142 60% 38%;
+  --card-foreground: 220 25% 14%;
+  --card-border: 214 32% 91%;
+  --sidebar: 172 30% 96%;
+  --sidebar-foreground: 220 25% 18%;
+  --sidebar-border: 172 25% 88%;
+  --sidebar-primary: 172 53% 49%;
   --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-accent: 142 30% 90%;
-  --sidebar-accent-foreground: 142 40% 15%;
-  --sidebar-ring: 142 60% 38%;
+  --sidebar-accent: 172 30% 90%;
+  --sidebar-accent-foreground: 220 25% 18%;
+  --sidebar-ring: 172 53% 49%;
   --popover: 0 0% 100%;
-  --popover-foreground: 142 40% 10%;
-  --popover-border: 142 20% 88%;
-  --primary: 142 60% 38%;
+  --popover-foreground: 220 25% 14%;
+  --popover-border: 214 32% 91%;
+  --primary: 172 53% 49%;
   --primary-foreground: 0 0% 100%;
-  --secondary: 45 92% 50%;
-  --secondary-foreground: 40 90% 15%;
-  --muted: 142 20% 94%;
-  --muted-foreground: 142 15% 45%;
-  --accent: 45 92% 50%;
-  --accent-foreground: 40 90% 15%;
-  --destructive: 0 84% 60%;
+  --secondary: 211 61% 43%;
+  --secondary-foreground: 0 0% 100%;
+  --muted: 210 17% 95%;
+  --muted-foreground: 218 17% 35%;
+  --accent: 211 61% 43%;
+  --accent-foreground: 0 0% 100%;
+  --destructive: 0 75% 57%;
   --destructive-foreground: 0 0% 100%;
-  --input: 142 20% 92%;
-  --ring: 142 60% 38%;
-  --chart-1: 142 60% 38%;
-  --chart-2: 210 75% 45%;
-  --chart-3: 45 92% 50%;
-  --chart-4: 120 40% 50%;
-  --chart-5: 180 50% 45%;
+  --input: 214 32% 91%;
+  --ring: 172 53% 49%;
+  --chart-1: 172 53% 49%;
+  --chart-2: 211 61% 43%;
+  --chart-3: 210 79% 66%;
+  --chart-4: 172 71% 67%;
+  --chart-5: 210 67% 51%;
 
   --font-sans: 'Inter', sans-serif;
   --font-serif: Georgia, serif;
@@ -72,10 +73,10 @@
   --accent-border: hsl(var(--accent));
   --destructive-border: hsl(var(--destructive));
 
-  --status-overdue: 0 84% 55%;
-  --status-due-soon: 38 92% 50%;
-  --status-available: 142 60% 38%;
-  --status-completed: 142 60% 38%;
+  --status-overdue: 0 75% 57%;       /* #E53E3E */
+  --status-due-soon: 39 67% 51%;     /* #D69E2E */
+  --status-available: 139 49% 43%;   /* #38A169 */
+  --status-completed: 139 49% 43%;
 }
 
 .dark {
@@ -85,40 +86,42 @@
   --elevate-1: rgba(255,255,255, .04);
   --elevate-2: rgba(255,255,255, .09);
 
-  --background: 142 20% 10%;
-  --foreground: 140 30% 95%;
-  --border: 142 15% 20%;
-  --card: 142 20% 13%;
-  --card-foreground: 140 30% 95%;
-  --card-border: 142 15% 22%;
-  --sidebar: 142 22% 8%;
-  --sidebar-foreground: 140 30% 95%;
-  --sidebar-border: 142 15% 18%;
-  --sidebar-primary: 142 65% 45%;
-  --sidebar-primary-foreground: 142 20% 10%;
-  --sidebar-accent: 142 15% 18%;
-  --sidebar-accent-foreground: 140 30% 95%;
-  --sidebar-ring: 142 65% 45%;
-  --popover: 142 20% 13%;
-  --popover-foreground: 140 30% 95%;
-  --popover-border: 142 15% 22%;
-  --primary: 142 65% 45%;
-  --primary-foreground: 142 20% 10%;
-  --secondary: 45 70% 45%;
-  --secondary-foreground: 40 15% 10%;
-  --muted: 142 15% 18%;
-  --muted-foreground: 142 15% 60%;
-  --accent: 45 70% 45%;
-  --accent-foreground: 40 15% 10%;
-  --destructive: 0 84% 60%;
-  --destructive-foreground: 140 30% 95%;
-  --input: 142 15% 22%;
-  --ring: 142 65% 45%;
-  --chart-1: 142 65% 45%;
-  --chart-2: 210 75% 55%;
-  --chart-3: 45 70% 55%;
-  --chart-4: 120 40% 50%;
-  --chart-5: 180 50% 45%;
+  /* HealthSync dark mode: bases shift to #0F172A / #1E293B (slate-900 /
+     slate-800), brand colors slightly luminance-bumped for contrast. */
+  --background: 222 47% 11%;        /* #0F172A */
+  --foreground: 210 40% 96%;
+  --border: 217 33% 22%;
+  --card: 217 33% 17%;              /* #1E293B */
+  --card-foreground: 210 40% 96%;
+  --card-border: 217 33% 24%;
+  --sidebar: 222 47% 9%;
+  --sidebar-foreground: 210 40% 96%;
+  --sidebar-border: 217 33% 20%;
+  --sidebar-primary: 172 60% 56%;   /* teal, brighter for dark bg */
+  --sidebar-primary-foreground: 222 47% 11%;
+  --sidebar-accent: 217 33% 20%;
+  --sidebar-accent-foreground: 210 40% 96%;
+  --sidebar-ring: 172 60% 56%;
+  --popover: 217 33% 17%;
+  --popover-foreground: 210 40% 96%;
+  --popover-border: 217 33% 24%;
+  --primary: 172 60% 56%;
+  --primary-foreground: 222 47% 11%;
+  --secondary: 211 70% 56%;         /* blue, brighter for dark bg */
+  --secondary-foreground: 0 0% 100%;
+  --muted: 217 33% 20%;
+  --muted-foreground: 215 20% 65%;
+  --accent: 211 70% 56%;
+  --accent-foreground: 0 0% 100%;
+  --destructive: 0 75% 60%;
+  --destructive-foreground: 210 40% 96%;
+  --input: 217 33% 24%;
+  --ring: 172 60% 56%;
+  --chart-1: 172 60% 56%;
+  --chart-2: 211 70% 56%;
+  --chart-3: 210 79% 70%;
+  --chart-4: 172 71% 70%;
+  --chart-5: 210 67% 60%;
   --shadow-2xs: 0px 2px 4px 0px rgba(0,0,0, 0.3);
   --shadow-xs: 0px 2px 4px 0px rgba(0,0,0, 0.3);
   --shadow-sm: 0px 2px 4px 0px rgba(0,0,0, 0.3);
