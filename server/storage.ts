@@ -274,6 +274,32 @@ export interface IStorage {
   seedData(): Promise<void>;
 }
 
+/**
+ * Maps a raw row from `SELECT * FROM disease_cases` (snake_case keys)
+ * into the camelCase shape that drizzle-orm normally returns. Used by
+ * the raw-SQL fallback in createDiseaseCase / updateDiseaseCase when
+ * we bypass drizzle to guarantee additional_conditions persistence.
+ */
+function rawDiseaseCaseToCamel(row: any): DiseaseCase {
+  return {
+    id: row.id,
+    patientName: row.patient_name,
+    age: row.age,
+    barangay: row.barangay,
+    addressLine: row.address_line,
+    phone: row.phone,
+    condition: row.condition,
+    additionalConditions: row.additional_conditions ?? [],
+    dateReported: row.date_reported,
+    status: row.status,
+    notes: row.notes,
+    linkedPersonType: row.linked_person_type,
+    linkedPersonId: row.linked_person_id,
+    latitude: row.latitude,
+    longitude: row.longitude,
+  } as DiseaseCase;
+}
+
 export class DatabaseStorage implements IStorage {
   async getMothers(): Promise<Mother[]> {
     return await db.select().from(mothers);
@@ -836,26 +862,58 @@ export class DatabaseStorage implements IStorage {
 
   async createDiseaseCase(data: InsertDiseaseCase): Promise<DiseaseCase> {
     const [created] = await db.insert(diseaseCases).values(data).returning();
+    // Belt-and-suspenders: if drizzle-zod / drizzle-orm dropped the
+    // additionalConditions field somewhere upstream, write it via raw
+    // SQL after the insert lands. Idempotent — sets to whatever the
+    // input contains (empty array when absent).
+    const extras = (data as any).additionalConditions;
+    if (Array.isArray(extras)) {
+      const out = await db.execute(sql`
+        UPDATE disease_cases
+        SET additional_conditions = ${JSON.stringify(extras)}::jsonb
+        WHERE id = ${created.id}
+        RETURNING *
+      `);
+      const row = ((out as any).rows ?? (out as any))?.[0];
+      if (row) return rawDiseaseCaseToCamel(row);
+    }
     return created;
   }
 
   async updateDiseaseCase(id: number, updates: Partial<InsertDiseaseCase>): Promise<DiseaseCase> {
-    // Belt-and-suspenders: if drizzle-zod silently stripped
-    // additionalConditions during request parsing on the route side,
-    // we'd never receive it here. We pass updates as-is, but also
-    // explicitly inspect and pass additionalConditions (when present)
-    // so that even if some upstream layer drops the field, the column
-    // still gets the array. The redundant assignment is a no-op when
-    // the schema layer kept it.
+    // Belt-and-suspenders: drizzle's auto schema introspection has
+    // been losing additionalConditions on this column on some
+    // deployments despite the TS schema declaring it. Writing the
+    // column via raw SQL after the drizzle UPDATE guarantees the
+    // value lands and is returned. The drizzle UPDATE handles every
+    // other field the normal way.
     const setObj: any = { ...updates };
-    if ("additionalConditions" in updates && Array.isArray((updates as any).additionalConditions)) {
-      setObj.additionalConditions = (updates as any).additionalConditions;
+    delete (setObj as any).additionalConditions;
+    let updated: any;
+    if (Object.keys(setObj).length > 0) {
+      const [r] = await db.update(diseaseCases)
+        .set(setObj)
+        .where(eq(diseaseCases.id, id))
+        .returning();
+      updated = r;
     }
-    const [updated] = await db.update(diseaseCases)
-      .set(setObj)
-      .where(eq(diseaseCases.id, id))
-      .returning();
-    return updated;
+    // Always overwrite additional_conditions when present in the input.
+    const extras = (updates as any).additionalConditions;
+    if (Array.isArray(extras)) {
+      const out = await db.execute(sql`
+        UPDATE disease_cases
+        SET additional_conditions = ${JSON.stringify(extras)}::jsonb
+        WHERE id = ${id}
+        RETURNING *
+      `);
+      const row = ((out as any).rows ?? (out as any))?.[0];
+      if (row) return rawDiseaseCaseToCamel(row);
+    }
+    if (updated) return updated;
+    // Fallback when the caller passed neither a regular field nor
+    // additionalConditions — return the row as-is.
+    const [existing] = await db.select().from(diseaseCases).where(eq(diseaseCases.id, id));
+    return existing;
   }
 
   async deleteDiseaseCase(id: number): Promise<void> {
