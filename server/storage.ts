@@ -3669,6 +3669,243 @@ export class DatabaseStorage implements IStorage {
       await db.insert(schoolImmunizations).values(rows);
       console.log(`[seed] school_immunizations: inserted ${rows.length} demo rows across ${seedBarangays.length} barangays`);
     }
+
+    // 5) Cold-chain logs (vaccine refrigerator AM/PM readings)
+    const existingCc = await db.execute(sql`SELECT COUNT(*)::int AS n FROM cold_chain_logs`);
+    const ccCount = Number(((existingCc as any).rows ?? existingCc)[0]?.n ?? 0);
+    if (ccCount === 0) {
+      const rows: any[] = [];
+      seedBarangays.forEach((b, i) => {
+        // AM + PM reading on a recent date — temp drift slightly across barangays.
+        const date = isoOffset(2 + i);
+        rows.push({
+          barangay: b, readingDate: date, readingPeriod: "AM",
+          tempCelsius: 2.6 + (i % 3) * 0.4, vvmStatus: "OK", notes: null,
+        });
+        rows.push({
+          barangay: b, readingDate: date, readingPeriod: "PM",
+          tempCelsius: 4.1 + (i % 3) * 0.3, vvmStatus: i === 5 ? "STAGE_2" : "OK",
+          notes: i === 5 ? "VVM stage 2 noted on Penta Vial #4" : null,
+        });
+      });
+      await db.insert(coldChainLogs).values(rows);
+      console.log(`[seed] cold_chain_logs: inserted ${rows.length} demo rows across ${seedBarangays.length} barangays`);
+    }
+
+    // 6) PhilPEN risk assessments (G1)
+    const existingPp = await db.execute(sql`SELECT COUNT(*)::int AS n FROM philpen_assessments`);
+    const ppCount = Number(((existingPp as any).rows ?? existingPp)[0]?.n ?? 0);
+    if (ppCount === 0) {
+      const rows: any[] = [];
+      seedBarangays.forEach((b, i) => {
+        rows.push({
+          patientName: `Adult ${i + 1}A`, barangay: b,
+          dob: `${1975 + i}-04-15`, sex: i % 2 === 0 ? "M" : "F",
+          assessmentDate: isoOffset(8 + i * 2),
+          smokingHistory: i < 3, bingeDrinker: i < 2,
+          insufficientActivity: i < 4, unhealthyDiet: i < 4,
+          bmiCategory: i < 2 ? "OBESE" : i < 4 ? "OVERWEIGHT" : "NORMAL",
+          notes: null,
+        });
+        rows.push({
+          patientName: `Adult ${i + 1}B`, barangay: b,
+          dob: `${1968 + i}-09-22`, sex: i % 2 === 0 ? "F" : "M",
+          assessmentDate: isoOffset(22 + i * 3),
+          smokingHistory: false, bingeDrinker: false,
+          insufficientActivity: i % 2 === 0, unhealthyDiet: i % 2 === 0,
+          bmiCategory: i < 3 ? "NORMAL" : "OVERWEIGHT", notes: null,
+        });
+      });
+      await db.insert(philpenAssessments).values(rows);
+      console.log(`[seed] philpen_assessments: inserted ${rows.length} demo rows across ${seedBarangays.length} barangays`);
+    }
+
+    // 7) NCD screenings (G2 — HTN/DM)
+    const existingNcd = await db.execute(sql`SELECT COUNT(*)::int AS n FROM ncd_screenings`);
+    const ncdCount = Number(((existingNcd as any).rows ?? existingNcd)[0]?.n ?? 0);
+    if (ncdCount === 0) {
+      const rows: any[] = [];
+      seedBarangays.forEach((b, i) => {
+        rows.push({
+          patientName: `Adult ${i + 1}A`, barangay: b,
+          dob: `${1975 + i}-04-15`, sex: i % 2 === 0 ? "M" : "F",
+          screenDate: isoOffset(9 + i * 2), condition: "HTN",
+          diagnosed: i < 3, medsProvided: i < 3,
+          medsSource: i < 3 ? "FACILITY" : null, notes: null,
+        });
+        rows.push({
+          patientName: `Adult ${i + 1}C`, barangay: b,
+          dob: `${1972 + i}-12-03`, sex: i % 2 === 0 ? "F" : "M",
+          screenDate: isoOffset(28 + i * 2), condition: "DM",
+          diagnosed: i < 2, medsProvided: i < 2,
+          medsSource: i === 0 ? "FACILITY" : i === 1 ? "OUT_OF_POCKET" : null, notes: null,
+        });
+      });
+      await db.insert(ncdScreenings).values(rows);
+      console.log(`[seed] ncd_screenings: inserted ${rows.length} demo rows across ${seedBarangays.length} barangays`);
+    }
+
+    // 8) Vision screenings (G4 — 60+)
+    const existingVision = await db.execute(sql`SELECT COUNT(*)::int AS n FROM vision_screenings`);
+    const visionCount = Number(((existingVision as any).rows ?? existingVision)[0]?.n ?? 0);
+    if (visionCount === 0) {
+      const rows: any[] = [];
+      seedBarangays.forEach((b, i) => {
+        rows.push({
+          patientName: `Senior ${i + 1}A`, barangay: b,
+          dob: `${1955 + i}-06-12`, sex: i % 2 === 0 ? "M" : "F",
+          screenDate: isoOffset(11 + i * 2),
+          eyeDiseaseFound: i % 3 === 0, referredToEyeCare: i % 3 === 0, notes: null,
+        });
+        rows.push({
+          patientName: `Senior ${i + 1}B`, barangay: b,
+          dob: `${1950 + i}-11-30`, sex: i % 2 === 0 ? "F" : "M",
+          screenDate: isoOffset(33 + i * 2),
+          eyeDiseaseFound: i === 1, referredToEyeCare: i === 1, notes: null,
+        });
+      });
+      await db.insert(visionScreenings).values(rows);
+      console.log(`[seed] vision_screenings: inserted ${rows.length} demo rows across ${seedBarangays.length} barangays`);
+    }
+
+    // 9) Cervical cancer screenings (G6 — women 30-65)
+    const existingCx = await db.execute(sql`SELECT COUNT(*)::int AS n FROM cervical_cancer_screenings`);
+    const cxCount = Number(((existingCx as any).rows ?? existingCx)[0]?.n ?? 0);
+    if (cxCount === 0) {
+      const rows: any[] = [];
+      seedBarangays.forEach((b, i) => {
+        rows.push({
+          patientName: `Woman ${i + 1}A`, barangay: b,
+          dob: `${1980 + i}-02-18`, screenDate: isoOffset(14 + i * 2),
+          screenMethod: "VIA",
+          suspicious: i === 1, linkedToCare: i === 1,
+          linkedOutcome: i === 1 ? "REFERRED" : null,
+          precancerous: i === 2, precancerousOutcome: i === 2 ? "TREATED" : null,
+          notes: null,
+        });
+        rows.push({
+          patientName: `Woman ${i + 1}B`, barangay: b,
+          dob: `${1975 + i}-08-05`, screenDate: isoOffset(36 + i * 2),
+          screenMethod: i % 2 === 0 ? "PAP_SMEAR" : "HPV_TEST",
+          suspicious: false, linkedToCare: false, linkedOutcome: null,
+          precancerous: false, precancerousOutcome: null, notes: null,
+        });
+      });
+      await db.insert(cervicalCancerScreenings).values(rows);
+      console.log(`[seed] cervical_cancer_screenings: inserted ${rows.length} demo rows across ${seedBarangays.length} barangays`);
+    }
+
+    // 10) Mental health screenings (G8 — mhGAP)
+    const existingMh = await db.execute(sql`SELECT COUNT(*)::int AS n FROM mental_health_screenings`);
+    const mhCount = Number(((existingMh as any).rows ?? existingMh)[0]?.n ?? 0);
+    if (mhCount === 0) {
+      const rows: any[] = [];
+      seedBarangays.forEach((b, i) => {
+        rows.push({
+          patientName: `Adult ${i + 1}D`, barangay: b,
+          dob: `${1985 + i}-05-21`, sex: i % 2 === 0 ? "M" : "F",
+          screenDate: isoOffset(13 + i * 2), tool: "mhGAP",
+          positive: i === 0 || i === 4, notes: null,
+        });
+        rows.push({
+          patientName: `Adult ${i + 1}E`, barangay: b,
+          dob: `${1990 + i}-01-09`, sex: i % 2 === 0 ? "F" : "M",
+          screenDate: isoOffset(38 + i * 2), tool: "mhGAP",
+          positive: false, notes: null,
+        });
+      });
+      await db.insert(mentalHealthScreenings).values(rows);
+      console.log(`[seed] mental_health_screenings: inserted ${rows.length} demo rows across ${seedBarangays.length} barangays`);
+    }
+
+    // 11) Filariasis surveillance
+    const existingFil = await db.execute(sql`SELECT COUNT(*)::int AS n FROM filariasis_records`);
+    const filCount = Number(((existingFil as any).rows ?? existingFil)[0]?.n ?? 0);
+    if (filCount === 0) {
+      const rows: any[] = [];
+      seedBarangays.forEach((b, i) => {
+        rows.push({
+          patientName: `Resident ${i + 1}A`, barangay: b,
+          dob: `${1970 + i}-07-12`, sex: i % 2 === 0 ? "M" : "F",
+          examDate: isoOffset(18 + i * 2),
+          result: i === 2 ? "POSITIVE" : "NEGATIVE",
+          manifestation: i === 2 ? "LYMPHEDEMA" : "NONE", notes: null,
+        });
+      });
+      await db.insert(filariasisRecords).values(rows);
+      console.log(`[seed] filariasis_records: inserted ${rows.length} demo rows across ${seedBarangays.length} barangays`);
+    }
+
+    // 12) Rabies exposures
+    const existingRab = await db.execute(sql`SELECT COUNT(*)::int AS n FROM rabies_exposures`);
+    const rabCount = Number(((existingRab as any).rows ?? existingRab)[0]?.n ?? 0);
+    if (rabCount === 0) {
+      const rows: any[] = [];
+      seedBarangays.forEach((b, i) => {
+        rows.push({
+          patientName: `Resident ${i + 1}B`, barangay: b,
+          dob: `${2000 + i}-03-18`, sex: i % 2 === 0 ? "M" : "F",
+          exposureDate: isoOffset(6 + i),
+          category: i < 2 ? "II" : i < 4 ? "III" : "I",
+          treatmentCenter: i < 4 ? "ABTC" : "NON_ABTC",
+          completeDoses: i < 3, notes: i === 3 ? "Stray dog bite, RHU referral" : null,
+        });
+      });
+      await db.insert(rabiesExposures).values(rows);
+      console.log(`[seed] rabies_exposures: inserted ${rows.length} demo rows across ${seedBarangays.length} barangays`);
+    }
+
+    // 13) Schistosomiasis surveillance
+    const existingSchisto = await db.execute(sql`SELECT COUNT(*)::int AS n FROM schistosomiasis_records`);
+    const schistoCount = Number(((existingSchisto as any).rows ?? existingSchisto)[0]?.n ?? 0);
+    if (schistoCount === 0) {
+      const rows: any[] = [];
+      seedBarangays.forEach((b, i) => {
+        rows.push({
+          patientName: `Resident ${i + 1}C`, barangay: b,
+          dob: `${1995 + i}-10-04`, sex: i % 2 === 0 ? "M" : "F",
+          seenDate: isoOffset(20 + i * 2),
+          suspected: i < 3, treated: i < 2,
+          confirmed: i === 0, complicated: false, notes: null,
+        });
+      });
+      await db.insert(schistosomiasisRecords).values(rows);
+      console.log(`[seed] schistosomiasis_records: inserted ${rows.length} demo rows across ${seedBarangays.length} barangays`);
+    }
+
+    // 14) STH (Soil-Transmitted Helminthiasis) — schoolchild deworming
+    const existingSth = await db.execute(sql`SELECT COUNT(*)::int AS n FROM sth_records`);
+    const sthCount = Number(((existingSth as any).rows ?? existingSth)[0]?.n ?? 0);
+    if (sthCount === 0) {
+      const rows: any[] = [];
+      seedBarangays.forEach((b, i) => {
+        rows.push({
+          patientName: `Schoolchild ${i + 1}A`, barangay: b,
+          dob: `${2014 + (i % 4)}-06-15`, sex: i % 2 === 0 ? "M" : "F",
+          screenDate: isoOffset(24 + i * 2),
+          confirmed: i === 1, residency: "RESIDENT", notes: null,
+        });
+      });
+      await db.insert(sthRecords).values(rows);
+      console.log(`[seed] sth_records: inserted ${rows.length} demo rows across ${seedBarangays.length} barangays`);
+    }
+
+    // 15) Leprosy registry
+    const existingLep = await db.execute(sql`SELECT COUNT(*)::int AS n FROM leprosy_records`);
+    const lepCount = Number(((existingLep as any).rows ?? existingLep)[0]?.n ?? 0);
+    if (lepCount === 0) {
+      const rows: any[] = [];
+      seedBarangays.forEach((b, i) => {
+        rows.push({
+          patientName: `Resident ${i + 1}D`, barangay: b,
+          dob: `${1965 + i}-04-29`, sex: i % 2 === 0 ? "M" : "F",
+          registeredDate: isoOffset(60 + i * 5),
+          newCase: i < 2, confirmed: i < 3, notes: null,
+        });
+      });
+      await db.insert(leprosyRecords).values(rows);
+      console.log(`[seed] leprosy_records: inserted ${rows.length} demo rows across ${seedBarangays.length} barangays`);
+    }
   }
 
   // Seed historical M1 report data for all barangays from 2020 to 2025
