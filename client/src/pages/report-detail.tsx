@@ -4,7 +4,6 @@ import { useQuery } from "@tanstack/react-query";
 import { useBarangay } from "@/contexts/barangay-context";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -144,7 +143,7 @@ export default function ReportDetailPage() {
 
       <Card className="print:hidden">
         <CardContent className="pt-4">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
             {isCustom ? (
               <>
                 <div>
@@ -225,15 +224,6 @@ export default function ReportDetailPage() {
                 </div>
               </>
             )}
-            <div>
-              <label className="text-xs text-muted-foreground">Barangay</label>
-              <Input
-                value={selectedBarangay ?? "All"}
-                disabled
-                className="cursor-not-allowed"
-                data-testid="input-barangay"
-              />
-            </div>
             <div className="flex gap-2 justify-end">
               <Button variant="outline" size="sm" onClick={printable} className="gap-1" data-testid="button-print">
                 <Printer className="w-4 h-4" /> Print
