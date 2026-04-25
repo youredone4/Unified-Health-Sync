@@ -14,14 +14,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { ArrowLeft, MoreHorizontal } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { ReactNode } from "react";
 
@@ -147,38 +140,24 @@ export function PatientProfileShell({
               {primaryAction.label}
             </Button>
           )}
-          {overflowActions.length > 0 && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="icon" data-testid="profile-overflow">
-                  <MoreHorizontal className="w-4 h-4" />
-                  <span className="sr-only">More actions</span>
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                {overflowActions.map((a, i) => {
-                  const Icon = a.icon;
-                  const prev = overflowActions[i - 1];
-                  // Insert a separator just before the first destructive entry
-                  // so Delete feels distinct from Edit.
-                  const needsSep = a.destructive && prev && !prev.destructive;
-                  return (
-                    <span key={a.label}>
-                      {needsSep ? <DropdownMenuSeparator /> : null}
-                      <DropdownMenuItem
-                        onClick={a.onClick}
-                        className={a.destructive ? "text-destructive focus:text-destructive" : undefined}
-                        data-testid={a.testId ?? `profile-action-${a.label.toLowerCase().replace(/\s+/g, "-")}`}
-                      >
-                        {Icon ? <Icon className="w-4 h-4 mr-2" /> : null}
-                        {a.label}
-                      </DropdownMenuItem>
-                    </span>
-                  );
-                })}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
+          {/* Secondary actions are rendered as visible buttons (no 3-dot
+              overflow menu) so they're never missed. Destructive actions use
+              the destructive variant for clear visual distinction. */}
+          {overflowActions.map((a) => {
+            const Icon = a.icon;
+            return (
+              <Button
+                key={a.label}
+                variant={a.destructive ? "destructive" : "outline"}
+                onClick={a.onClick}
+                className="gap-2"
+                data-testid={a.testId ?? `profile-action-${a.label.toLowerCase().replace(/\s+/g, "-")}`}
+              >
+                {Icon ? <Icon className="w-4 h-4" /> : null}
+                {a.label}
+              </Button>
+            );
+          })}
         </div>
       </div>
 
