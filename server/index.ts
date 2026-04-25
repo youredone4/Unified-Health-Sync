@@ -89,8 +89,14 @@ app.use((req, res, next) => {
     console.error("[express] Unhandled promise rejection:", reason);
   });
 
-  process.on("uncaughtException", (err) => {
+  process.on("uncaughtException", (err: NodeJS.ErrnoException) => {
     console.error("[express] Uncaught exception:", err.message || err);
+    // Fatal system errors (e.g. port already in use) must kill the process so
+    // the next workflow restart can acquire the port cleanly.
+    if (err.code === "EADDRINUSE" || err.code === "EACCES") {
+      console.error("[express] Fatal: cannot bind to port — exiting.");
+      process.exit(1);
+    }
   });
 
   // importantly only setup vite in development and after

@@ -148,15 +148,22 @@ export default function M1ReportPage({ initialMode }: { initialMode?: "view" | "
     enabled: !!selectedBarangayId && !!reportInstancesQueryKey,
   });
 
+  // Stable key derived from instance IDs — avoids triggering the effect when
+  // TanStack Query returns a new [] reference for the same (empty) result.
+  const reportInstanceIds = reportInstances.map(r => r.id).join(",");
+
   // Auto-load first instance when report list changes (declared AFTER reportInstances)
   useEffect(() => {
     if (reportInstances.length > 0) {
       setActiveReportId(prev => prev ?? reportInstances[0].id);
     } else {
       setActiveReportId(null);
-      setEditedValues({});
+      // Guard against unnecessary re-renders: only reset if there is
+      // actually something to clear (avoids creating a new {} reference).
+      setEditedValues(prev => Object.keys(prev).length === 0 ? prev : {});
     }
-  }, [reportInstances]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reportInstanceIds]);
 
   const { data: activeReport } = useQuery<{ instance: M1ReportInstance; values: M1IndicatorValue[] }>({
     queryKey: [`/api/m1/reports/${activeReportId}`],
