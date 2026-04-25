@@ -5,6 +5,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { useLocation, useRoute } from "wouter";
 import { z } from "zod";
 import type { DiseaseCase, Barangay, Mother, Child, Senior } from "@shared/schema";
+import { DISEASE_CONDITION_DEFAULTS } from "@shared/schema";
 import { apiRequest, queryClient, invalidateScopedQueries } from "@/lib/queryClient";
 import { useBarangay } from "@/contexts/barangay-context";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -174,8 +175,37 @@ export default function DiseaseForm() {
     form.setValue("linkedPersonId", undefined);
   };
 
-  const conditions = ["Diarrhea", "Chickenpox", "ARI", "Dengue suspected", "Measles suspected", "COVID-19 suspected", "Other"];
+  // Build the condition dropdown by merging the PIDSR-categorized defaults
+  // with any condition values that have been recorded previously (so a
+  // condition typed via "Other..." once is available for next time).
+  const { data: existingConditions = [] } = useQuery<string[]>({
+    queryKey: ["/api/disease-cases/conditions"],
+  });
+  const defaultNames = new Set(DISEASE_CONDITION_DEFAULTS.map((d) => d.name));
+  const customConditions = existingConditions.filter((c) => !defaultNames.has(c));
+  const groupedConditions: Array<{ label: string; items: string[] }> = [
+    { label: "PIDSR Cat-I — immediate (24h)", items: DISEASE_CONDITION_DEFAULTS.filter((d) => d.group === "PIDSR_CAT_I").map((d) => d.name) },
+    { label: "PIDSR Cat-II — weekly cutoff",  items: DISEASE_CONDITION_DEFAULTS.filter((d) => d.group === "PIDSR_CAT_II").map((d) => d.name) },
+    { label: "Endemic / commonly flagged",     items: DISEASE_CONDITION_DEFAULTS.filter((d) => d.group === "ENDEMIC").map((d) => d.name) },
+    ...(customConditions.length > 0 ? [{ label: "Previously recorded", items: customConditions }] : []),
+  ];
+  const allKnownConditionNames = new Set([
+    ...DISEASE_CONDITION_DEFAULTS.map((d) => d.name),
+    ...customConditions,
+  ]);
+  const OTHER_VALUE = "__OTHER__";
   const statuses = ["New", "Monitoring", "Referred", "Closed"];
+
+  // Track whether the user picked "Other..." so we can render a free-text
+  // input. Initialised from the existing case's condition value if editing.
+  const [isOtherMode, setIsOtherMode] = useState<boolean>(() => {
+    const initial = diseaseCase?.condition;
+    return !!initial && !allKnownConditionNames.has(initial);
+  });
+  const [customCondition, setCustomCondition] = useState<string>(() => {
+    const initial = diseaseCase?.condition;
+    return initial && !allKnownConditionNames.has(initial) ? initial : "";
+  });
 
   const existingLink = isEdit && diseaseCase?.linkedPersonType ? `${diseaseCase.linkedPersonType} #${diseaseCase.linkedPersonId}` : null;
 
@@ -352,18 +382,52 @@ export default function DiseaseForm() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Condition *</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
+                      <Select
+                        onValueChange={(v) => {
+                          if (v === OTHER_VALUE) {
+                            setIsOtherMode(true);
+                            field.onChange(customCondition);
+                          } else {
+                            setIsOtherMode(false);
+                            field.onChange(v);
+                          }
+                        }}
+                        value={isOtherMode ? OTHER_VALUE : field.value || ""}
+                      >
                         <FormControl>
                           <SelectTrigger data-testid="select-condition">
                             <SelectValue placeholder="Select condition" />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          {conditions.map(c => (
-                            <SelectItem key={c} value={c}>{c}</SelectItem>
+                          {groupedConditions.map((group) => (
+                            <div key={group.label}>
+                              <div className="px-2 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                                {group.label}
+                              </div>
+                              {group.items.map((c) => (
+                                <SelectItem key={c} value={c}>{c}</SelectItem>
+                              ))}
+                            </div>
                           ))}
+                          <div className="px-2 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground border-t mt-1">
+                            Custom
+                          </div>
+                          <SelectItem value={OTHER_VALUE}>Other (type below)</SelectItem>
                         </SelectContent>
                       </Select>
+                      {isOtherMode && (
+                        <Input
+                          className="mt-2"
+                          placeholder="Type the condition (e.g. Mpox, Lyme disease)"
+                          value={customCondition}
+                          onChange={(e) => {
+                            setCustomCondition(e.target.value);
+                            field.onChange(e.target.value);
+                          }}
+                          data-testid="input-condition-other"
+                        />
+                      )}
                       <FormMessage />
                     </FormItem>
                   )}

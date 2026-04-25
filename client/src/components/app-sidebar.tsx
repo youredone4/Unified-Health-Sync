@@ -108,7 +108,7 @@ const DAILY_OPS_CHILDREN: NavItem[] = [
 // modules driven by registry maintenance and surveillance reporting.
 const SURVEILLANCE_CHILDREN: NavItem[] = [
   {
-    title: "Disease Surveillance",
+    title: "Disease Programs",
     url: "/disease-surveillance",
     icon: ShieldAlert,
     roles: rolesFor("/disease-surveillance"),
@@ -168,7 +168,7 @@ const PATIENT_CHILDREN: NavItem[] = [
     tier: "main",
   },
   {
-    title: "Disease",
+    title: "Disease Cases",
     url: "/disease",
     icon: Siren,
     roles: rolesFor("/disease"),

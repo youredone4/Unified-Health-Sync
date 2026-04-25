@@ -278,6 +278,53 @@ export type SmsMessage = typeof smsOutbox.$inferSelect;
 export type InsertSmsMessage = z.infer<typeof insertSmsSchema>;
 
 // === DISEASE CASES (Communicable Disease Surveillance) ===
+//
+// Default list of disease conditions presented in the "+ New Case" form.
+// Categorized by PIDSR tier so the dropdown groups Cat-I (immediate, 24h),
+// Cat-II (weekly Friday cutoff), and Endemic conditions distinctly. The
+// list is intentionally not exhaustive — new conditions typed in via the
+// "Other..." free-text option are persisted on the case row and surface
+// in the dropdown for future cases (the form unions in distinct values
+// from existing disease_cases at runtime).
+//
+// Sources: PIDSR Manual of Operations 2nd Ed. (2014), DOH AO 2008-0029
+// (notifiable diseases), HARP / DOH AIDS Registry (HIV / AIDS).
+export interface DiseaseConditionDef {
+  name: string;
+  group: "PIDSR_CAT_I" | "PIDSR_CAT_II" | "ENDEMIC" | "OTHER";
+}
+export const DISEASE_CONDITION_DEFAULTS: readonly DiseaseConditionDef[] = [
+  // Category I — immediate / within-24h notification
+  { name: "AFP (Acute Flaccid Paralysis)", group: "PIDSR_CAT_I" },
+  { name: "Measles / Rubella suspected",   group: "PIDSR_CAT_I" },
+  { name: "Neonatal Tetanus",              group: "PIDSR_CAT_I" },
+  { name: "Cholera suspected",             group: "PIDSR_CAT_I" },
+  { name: "Anthrax",                       group: "PIDSR_CAT_I" },
+  { name: "Meningococcal Disease",         group: "PIDSR_CAT_I" },
+  { name: "HFMD outbreak",                 group: "PIDSR_CAT_I" },
+  { name: "Rabies (human)",                group: "PIDSR_CAT_I" },
+  // Category II — weekly Friday cutoff
+  { name: "Dengue suspected",              group: "PIDSR_CAT_II" },
+  { name: "Leptospirosis suspected",       group: "PIDSR_CAT_II" },
+  { name: "Typhoid Fever",                 group: "PIDSR_CAT_II" },
+  { name: "ILI (Influenza-like illness)",  group: "PIDSR_CAT_II" },
+  { name: "SARI (Severe Acute Respiratory Infection)", group: "PIDSR_CAT_II" },
+  { name: "Hepatitis A",                   group: "PIDSR_CAT_II" },
+  { name: "Acute Bloody Diarrhea",         group: "PIDSR_CAT_II" },
+  { name: "Diarrhea (non-bloody)",         group: "PIDSR_CAT_II" },
+  { name: "Pertussis",                     group: "PIDSR_CAT_II" },
+  { name: "Diphtheria",                    group: "PIDSR_CAT_II" },
+  // Endemic / commonly flagged at primary care
+  { name: "ARI / Pneumonia",               group: "ENDEMIC" },
+  { name: "Chickenpox / Varicella",        group: "ENDEMIC" },
+  { name: "Mumps",                         group: "ENDEMIC" },
+  { name: "COVID-19 suspected",            group: "ENDEMIC" },
+  { name: "HIV (positive test result)",    group: "ENDEMIC" },
+  { name: "AIDS",                          group: "ENDEMIC" },
+  { name: "Hepatitis B (chronic)",         group: "ENDEMIC" },
+  { name: "Sexually Transmitted Infection (other)", group: "ENDEMIC" },
+];
+
 export const diseaseCases = pgTable("disease_cases", {
   id: serial("id").primaryKey(),
   patientName: text("patient_name").notNull(),

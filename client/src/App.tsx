@@ -186,11 +186,11 @@ function SeniorsHub({ children }: { children: React.ReactNode }) {
 function DiseaseHub({ children }: { children: React.ReactNode }) {
   return (
     <ProgramHub
-      title="Disease"
+      title="Disease Cases"
       icon={Siren}
       primaryAction={{ label: "New Case", icon: Plus, path: "/disease/new" }}
       tabs={[
-        { label: "Patients", path: "/disease", testId: "hub-tab-disease-patients" },
+        { label: "Cases", path: "/disease", testId: "hub-tab-disease-patients" },
         { label: "Map", path: "/disease/map", testId: "hub-tab-disease-map", roles: ["SYSTEM_ADMIN", "MHO", "SHA"] },
       ]}
     >
