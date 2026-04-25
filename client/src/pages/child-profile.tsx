@@ -38,6 +38,7 @@ import {
   Trash2,
 } from "lucide-react";
 import ConsultationHistoryCard from "@/components/consultation-history-card";
+import { SickChildVisitsCard } from "@/components/sick-child-visits-card";
 import VisitHistoryCard from "@/components/visit-history-card";
 import NutritionFollowUpHistoryCard from "@/components/nutrition-followup-history-card";
 import { useState, useMemo } from "react";
@@ -291,6 +292,7 @@ export default function ChildProfile() {
   // ── Clinical tab ─────────────────────────────────────────────────────────
   const clinicalTab = (
     <div className="space-y-4">
+      <SickChildVisitsCard child={child} />
       <Card
         className={
           vax.status === "completed"

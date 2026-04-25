@@ -40,6 +40,7 @@ import {
   Sparkles,
   Scale,
   Snowflake,
+  GraduationCap,
 } from "lucide-react";
 import { useTheme } from "@/contexts/theme-context";
 import { useAuth, sidebarPermissions, ALL_ROLES } from "@/hooks/use-auth";
@@ -153,6 +154,14 @@ const NAV_ITEMS: NavItem[] = [
     icon: Snowflake,
     roles: rolesFor("/cold-chain"),
     activePrefixes: ["/cold-chain"],
+    tier: "util",
+  },
+  {
+    title: "School Immunization",
+    url: "/school-immunizations",
+    icon: GraduationCap,
+    roles: rolesFor("/school-immunizations"),
+    activePrefixes: ["/school-immunizations"],
     tier: "util",
   },
   {

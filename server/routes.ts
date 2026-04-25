@@ -3,7 +3,7 @@ import type { Server } from "http";
 import { storage } from "./storage";
 import { db } from "./db";
 import { max, eq } from "drizzle-orm";
-import { prenatalVisits, childVisits, seniorVisits, insertFpServiceRecordSchema, insertNutritionFollowUpSchema, insertColdChainLogSchema, insertTbDoseLogSchema, insertPostpartumVisitSchema, insertPrenatalScreeningSchema, insertBirthAttendanceRecordSchema } from "@shared/schema";
+import { prenatalVisits, childVisits, seniorVisits, insertFpServiceRecordSchema, insertNutritionFollowUpSchema, insertColdChainLogSchema, insertTbDoseLogSchema, insertPostpartumVisitSchema, insertPrenatalScreeningSchema, insertBirthAttendanceRecordSchema, insertSickChildVisitSchema, insertSchoolImmunizationSchema } from "@shared/schema";
 import { api } from "@shared/routes";
 import { z } from "zod";
 import { setupAuth, registerAuthRoutes } from "./auth";
@@ -754,6 +754,93 @@ export async function registerRoutes(
         "CREATE", "PRENATAL_SCREENING", String(created.id),
         mother.barangay, undefined,
         { motherId: created.motherId, screeningDate: created.screeningDate },
+        req,
+      );
+      res.status(201).json(created);
+    }),
+  );
+
+  // === SICK CHILD VISITS — feeds M1 Section F (IMCI) ===
+  app.get("/api/sick-child-visits", loadUserInfo, requireAuth, ar(async (req, res) => {
+    const childIdRaw = req.query.childId ? Number(req.query.childId) : undefined;
+    if (childIdRaw === undefined || !Number.isFinite(childIdRaw)) {
+      return res.status(400).json({ message: "childId query param is required" });
+    }
+    const child = await storage.getChild(childIdRaw);
+    if (!child) return res.status(404).json({ message: "Child not found" });
+    if (req.userInfo?.role === UserRole.TL && !req.userInfo.assignedBarangays.includes(child.barangay)) {
+      return res.status(403).json({ message: "Access denied to this barangay" });
+    }
+    const data = await storage.getSickChildVisits(childIdRaw);
+    res.json(data);
+  }));
+
+  app.post("/api/sick-child-visits", loadUserInfo, requireAuth,
+    requireRole(UserRole.SYSTEM_ADMIN, UserRole.MHO, UserRole.SHA, UserRole.TL),
+    ar(async (req, res) => {
+      const parsed = insertSickChildVisitSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: "Invalid sick child visit", issues: parsed.error.issues });
+      }
+      const input = parsed.data;
+      const child = await storage.getChild(input.childId);
+      if (!child) return res.status(404).json({ message: "Child not found" });
+      if (req.userInfo?.role === UserRole.TL && !req.userInfo.assignedBarangays.includes(child.barangay)) {
+        return res.status(403).json({ message: "Access denied to this barangay" });
+      }
+      const created = await storage.createSickChildVisit({
+        ...input,
+        recordedByUserId: req.userInfo?.id ?? null,
+      });
+      await createAuditLog(
+        req.userInfo!.id, req.userInfo!.role,
+        "CREATE", "SICK_CHILD_VISIT", String(created.id),
+        child.barangay, undefined,
+        { childId: created.childId, visitDate: created.visitDate, vitaminAGiven: created.vitaminAGiven, hasAcuteDiarrhea: created.hasAcuteDiarrhea },
+        req,
+      );
+      res.status(201).json(created);
+    }),
+  );
+
+  // === SCHOOL IMMUNIZATIONS — feeds M1 Section D4 (HPV/Td) ===
+  app.get("/api/school-immunizations", loadUserInfo, requireAuth, ar(async (req, res) => {
+    const requestedBarangay = req.query.barangay ? String(req.query.barangay) : undefined;
+    const vaccine = req.query.vaccine ? String(req.query.vaccine) : undefined;
+    if (req.userInfo?.role === UserRole.TL) {
+      const assigned = req.userInfo.assignedBarangays;
+      if (assigned.length === 0) return res.json([]);
+      if (requestedBarangay && !assigned.includes(requestedBarangay)) {
+        return res.status(403).json({ message: "Access denied to this barangay" });
+      }
+      const all = await storage.getSchoolImmunizations({ barangay: requestedBarangay, vaccine });
+      const scoped = requestedBarangay ? all : all.filter(r => assigned.includes(r.barangay));
+      return res.json(scoped);
+    }
+    const data = await storage.getSchoolImmunizations({ barangay: requestedBarangay, vaccine });
+    res.json(data);
+  }));
+
+  app.post("/api/school-immunizations", loadUserInfo, requireAuth,
+    requireRole(UserRole.SYSTEM_ADMIN, UserRole.MHO, UserRole.SHA, UserRole.TL),
+    ar(async (req, res) => {
+      const parsed = insertSchoolImmunizationSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: "Invalid school immunization record", issues: parsed.error.issues });
+      }
+      const input = parsed.data;
+      if (req.userInfo?.role === UserRole.TL && !req.userInfo.assignedBarangays.includes(input.barangay)) {
+        return res.status(403).json({ message: "Access denied to this barangay" });
+      }
+      const created = await storage.createSchoolImmunization({
+        ...input,
+        recordedByUserId: req.userInfo?.id ?? null,
+      });
+      await createAuditLog(
+        req.userInfo!.id, req.userInfo!.role,
+        "CREATE", "SCHOOL_IMMUNIZATION", String(created.id),
+        created.barangay, undefined,
+        { learnerName: created.learnerName, vaccine: created.vaccine, doseNumber: created.doseNumber, vaccinationDate: created.vaccinationDate },
         req,
       );
       res.status(201).json(created);
