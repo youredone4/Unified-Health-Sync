@@ -30,6 +30,23 @@ export async function registerRoutes(
     console.error("[seed] seedData failed:", err)
   );
 
+  // Startup schema banner — prints the columns drizzle knows for the
+  // disease_cases table. Useful when diagnosing "stale bundle" reports
+  // since drizzle's RETURNING * only emits columns defined in the
+  // running TS schema. Strip once this saga is closed.
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { diseaseCases } = require("@shared/schema");
+    const cols = Object.keys(diseaseCases ?? {}).filter(
+      (k) => typeof (diseaseCases as any)[k]?.name === "string",
+    );
+    console.log("[startup] disease_cases TS schema columns:", cols.join(", "));
+    console.log("[startup] additionalConditions in schema?",
+      Object.prototype.hasOwnProperty.call(diseaseCases ?? {}, "additionalConditions"));
+  } catch (err) {
+    console.error("[startup] schema inspection failed:", err);
+  }
+
   // RBAC middleware for registry read - all authenticated users can read
   const registryReadRBAC = [loadUserInfo, requireAuth];
   // RBAC middleware for registry CRUD - all operational roles can create/update
