@@ -84,9 +84,18 @@ function Header() {
   return (
     <div>
       <h1 className="text-2xl font-semibold flex items-center gap-2" data-testid="dis-title">
-        <ShieldAlert className="w-5 h-5 text-primary" /> Disease surveillance
+        <ShieldAlert className="w-5 h-5 text-primary" /> Disease Programs
       </h1>
-      <p className="text-sm text-muted-foreground">Feeds M1 Sections DIS-FIL, DIS-RAB, DIS-SCH, DIS-STH, DIS-LEP.</p>
+      <p className="text-sm text-muted-foreground">
+        Vertical-program registers for Filariasis, Rabies, Schistosomiasis, STH, and Leprosy
+        — each captures program-specific fields (e.g. Rabies Category I/II/III + ABTC center)
+        that the generic Disease Cases tracker can&rsquo;t hold. Feeds M1 Sections DIS-FIL,
+        DIS-RAB, DIS-SCH, DIS-STH, DIS-LEP.
+      </p>
+      <p className="text-xs text-muted-foreground italic mt-1">
+        For general communicable-disease case reporting (PIDSR Cat-I / Cat-II), use{" "}
+        <span className="font-mono">/disease</span> instead.
+      </p>
     </div>
   );
 }

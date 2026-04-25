@@ -489,6 +489,20 @@ export async function registerRoutes(
     res.json(data);
   });
 
+  // Distinct condition values previously used. Combined with
+  // DISEASE_CONDITION_DEFAULTS by the New Case form so any condition
+  // typed via the "Other..." free-text option stays in the dropdown
+  // for future cases. Trimmed/de-duped server-side.
+  app.get("/api/disease-cases/conditions", loadUserInfo, requireAuth, ar(async (_req, res) => {
+    const all = await storage.getDiseaseCases();
+    const set = new Set<string>();
+    for (const c of all) {
+      const trimmed = (c.condition ?? "").trim();
+      if (trimmed) set.add(trimmed);
+    }
+    res.json(Array.from(set).sort());
+  }));
+
   app.get(api.diseaseCases.get.path, loadUserInfo, requireAuth, ar(async (req, res) => {
     const id = parseId(req.params.id, res); if (id === null) return;
     const diseaseCase = await storage.getDiseaseCase(id);
