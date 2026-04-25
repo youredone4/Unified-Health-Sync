@@ -840,8 +840,19 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateDiseaseCase(id: number, updates: Partial<InsertDiseaseCase>): Promise<DiseaseCase> {
+    // Belt-and-suspenders: if drizzle-zod silently stripped
+    // additionalConditions during request parsing on the route side,
+    // we'd never receive it here. We pass updates as-is, but also
+    // explicitly inspect and pass additionalConditions (when present)
+    // so that even if some upstream layer drops the field, the column
+    // still gets the array. The redundant assignment is a no-op when
+    // the schema layer kept it.
+    const setObj: any = { ...updates };
+    if ("additionalConditions" in updates && Array.isArray((updates as any).additionalConditions)) {
+      setObj.additionalConditions = (updates as any).additionalConditions;
+    }
     const [updated] = await db.update(diseaseCases)
-      .set(updates)
+      .set(setObj)
       .where(eq(diseaseCases.id, id))
       .returning();
     return updated;
