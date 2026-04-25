@@ -44,6 +44,7 @@ import {
   Smile,
   HeartPulse,
   ShieldAlert,
+  Skull,
 } from "lucide-react";
 import { useTheme } from "@/contexts/theme-context";
 import { useAuth, sidebarPermissions, ALL_ROLES } from "@/hooks/use-auth";
@@ -189,6 +190,14 @@ const NAV_ITEMS: NavItem[] = [
     icon: ShieldAlert,
     roles: rolesFor("/disease-surveillance"),
     activePrefixes: ["/disease-surveillance"],
+    tier: "util",
+  },
+  {
+    title: "Mortality Registry",
+    url: "/mortality",
+    icon: Skull,
+    roles: rolesFor("/mortality"),
+    activePrefixes: ["/mortality"],
     tier: "util",
   },
   {

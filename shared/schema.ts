@@ -546,6 +546,14 @@ export type SeniorMedClaim = typeof seniorMedClaims.$inferSelect;
 export type InsertSeniorMedClaim = z.infer<typeof insertSeniorMedClaimSchema>;
 
 // === DEATH EVENTS (Mortality tracking) ===
+// Extended with M1 Section H indicators (Phase 6): maternal-death cause
+// classification, residency, and age-in-days (for neonatal/perinatal).
+// Existing rows keep working — new fields are nullable.
+export const MATERNAL_DEATH_CAUSES = ["DIRECT", "INDIRECT"] as const;
+export type MaternalDeathCause = typeof MATERNAL_DEATH_CAUSES[number];
+export const DEATH_RESIDENCIES = ["RESIDENT", "NON_RESIDENT"] as const;
+export type DeathResidency = typeof DEATH_RESIDENCIES[number];
+
 export const deathEvents = pgTable("death_events", {
   id: serial("id").primaryKey(),
   deceasedName: text("deceased_name").notNull(),
@@ -560,6 +568,12 @@ export const deathEvents = pgTable("death_events", {
   linkedPersonId: integer("linked_person_id"),
   reportedBy: text("reported_by"),
   notes: text("notes"),
+  // M1 Section H additions (Phase 6)
+  ageDays: integer("age_days"),     // for neonatal (≤28d) and early-neonatal (≤6d)
+  maternalDeathCause: text("maternal_death_cause").$type<MaternalDeathCause>(),
+  residency: text("residency").$type<DeathResidency>(),
+  isFetalDeath: boolean("is_fetal_death").default(false),
+  isLiveBornEarlyNeonatal: boolean("is_live_born_early_neonatal").default(false),
   createdAt: text("created_at").notNull(),
 });
 

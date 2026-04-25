@@ -3,7 +3,7 @@ import type { Server } from "http";
 import { storage } from "./storage";
 import { db } from "./db";
 import { max, eq } from "drizzle-orm";
-import { prenatalVisits, childVisits, seniorVisits, insertFpServiceRecordSchema, insertNutritionFollowUpSchema, insertColdChainLogSchema, insertTbDoseLogSchema, insertPostpartumVisitSchema, insertPrenatalScreeningSchema, insertBirthAttendanceRecordSchema, insertSickChildVisitSchema, insertSchoolImmunizationSchema, insertOralHealthVisitSchema, insertPhilpenAssessmentSchema, insertNcdScreeningSchema, insertVisionScreeningSchema, insertCervicalCancerScreeningSchema, insertMentalHealthScreeningSchema, insertFilariasisRecordSchema, insertRabiesExposureSchema, insertSchistosomiasisRecordSchema, insertSthRecordSchema, insertLeprosyRecordSchema } from "@shared/schema";
+import { prenatalVisits, childVisits, seniorVisits, insertFpServiceRecordSchema, insertNutritionFollowUpSchema, insertColdChainLogSchema, insertTbDoseLogSchema, insertPostpartumVisitSchema, insertPrenatalScreeningSchema, insertBirthAttendanceRecordSchema, insertSickChildVisitSchema, insertSchoolImmunizationSchema, insertOralHealthVisitSchema, insertPhilpenAssessmentSchema, insertNcdScreeningSchema, insertVisionScreeningSchema, insertCervicalCancerScreeningSchema, insertMentalHealthScreeningSchema, insertFilariasisRecordSchema, insertRabiesExposureSchema, insertSchistosomiasisRecordSchema, insertSthRecordSchema, insertLeprosyRecordSchema, insertDeathEventSchema } from "@shared/schema";
 import { api } from "@shared/routes";
 import { z } from "zod";
 import { setupAuth, registerAuthRoutes } from "./auth";
@@ -918,6 +918,45 @@ export async function registerRoutes(
     (p) => storage.getSthRecords(p), (r) => storage.createSthRecord(r));
   ncdRoute("/api/leprosy-records", "LEPROSY_RECORD", insertLeprosyRecordSchema,
     (p) => storage.getLeprosyRecords(p), (r) => storage.createLeprosyRecord(r));
+
+  // ===== PHASE 6 — Mortality registry =====
+  app.get("/api/death-events", loadUserInfo, requireAuth, ar(async (req, res) => {
+    const requestedBarangay = req.query.barangay ? String(req.query.barangay) : undefined;
+    if (req.userInfo?.role === UserRole.TL) {
+      const assigned = req.userInfo.assignedBarangays;
+      if (assigned.length === 0) return res.json([]);
+      if (requestedBarangay && !assigned.includes(requestedBarangay)) {
+        return res.status(403).json({ message: "Access denied to this barangay" });
+      }
+      const all = await storage.getDeathEvents({ barangay: requestedBarangay });
+      return res.json(requestedBarangay ? all : all.filter(r => assigned.includes(r.barangay)));
+    }
+    const data = await storage.getDeathEvents({ barangay: requestedBarangay });
+    res.json(data);
+  }));
+
+  app.post("/api/death-events", loadUserInfo, requireAuth,
+    requireRole(UserRole.SYSTEM_ADMIN, UserRole.MHO, UserRole.SHA, UserRole.TL),
+    ar(async (req, res) => {
+      const parsed = insertDeathEventSchema.safeParse({ ...req.body, createdAt: new Date().toISOString() });
+      if (!parsed.success) {
+        return res.status(400).json({ message: "Invalid death event", issues: parsed.error.issues });
+      }
+      const input = parsed.data;
+      if (req.userInfo?.role === UserRole.TL && !req.userInfo.assignedBarangays.includes(input.barangay)) {
+        return res.status(403).json({ message: "Access denied to this barangay" });
+      }
+      const created = await storage.createDeathEvent({ ...input, reportedBy: req.userInfo?.id ?? null });
+      await createAuditLog(
+        req.userInfo!.id, req.userInfo!.role,
+        "CREATE", "DEATH_EVENT", String(created.id),
+        created.barangay, undefined,
+        { deceasedName: created.deceasedName, dateOfDeath: created.dateOfDeath },
+        req,
+      );
+      res.status(201).json(created);
+    }),
+  );
 
   // === ORAL HEALTH VISITS — feeds M1 Section ORAL ===
   app.get("/api/oral-health-visits", loadUserInfo, requireAuth, ar(async (req, res) => {

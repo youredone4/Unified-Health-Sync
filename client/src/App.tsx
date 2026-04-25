@@ -77,6 +77,7 @@ import SchoolImmunizationsPage from "@/pages/school-immunizations";
 import OralHealthPage from "@/pages/oral-health";
 import NcdScreeningsPage from "@/pages/ncd-screenings";
 import DiseaseSurveillancePage from "@/pages/disease-surveillance";
+import MortalityPage from "@/pages/mortality";
 
 const roleLabels: Record<string, string> = {
   SYSTEM_ADMIN: "Admin",
@@ -374,6 +375,9 @@ function Router() {
 
       {/* Disease surveillance (Sections DIS-FIL, DIS-RAB, DIS-SCH, DIS-STH, DIS-LEP) */}
       <Route path="/disease-surveillance"><DiseaseSurveillancePage /></Route>
+
+      {/* Mortality registry (Section H) */}
+      <Route path="/mortality"><MortalityPage /></Route>
 
       {/* Reports hub */}
       <Route path="/m1/encode"><ReportsHub><RoleRoute component={M1ReportEncode} /></ReportsHub></Route>
