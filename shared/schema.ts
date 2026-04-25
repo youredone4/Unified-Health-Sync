@@ -743,6 +743,31 @@ export const insertSchoolImmunizationSchema = createInsertSchema(schoolImmunizat
 export type SchoolImmunization = typeof schoolImmunizations.$inferSelect;
 export type InsertSchoolImmunization = z.infer<typeof insertSchoolImmunizationSchema>;
 
+// === ORAL HEALTH VISITS — feeds M1 Section ORAL ===
+// First-visit roster (per DOH Oral Health Program). Age bands:
+// 0-11m, 1-4y, 5-9y, 10-19y, 20-59y, 60+. Pregnant women tracked
+// separately for ORAL-06.
+export const oralHealthVisits = pgTable("oral_health_visits", {
+  id: serial("id").primaryKey(),
+  patientName: text("patient_name").notNull(),
+  barangay: text("barangay").notNull(),
+  dob: text("dob").notNull(),
+  sex: text("sex").notNull(), // 'M' | 'F'
+  visitDate: text("visit_date").notNull(),
+  isFirstVisit: boolean("is_first_visit").default(true),
+  facilityBased: boolean("facility_based").default(true),
+  isPregnant: boolean("is_pregnant").default(false),
+  notes: text("notes"),
+  recordedByUserId: varchar("recorded_by_user_id"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertOralHealthVisitSchema = createInsertSchema(oralHealthVisits)
+  .omit({ id: true, createdAt: true })
+  .extend({ sex: z.enum(["M", "F"]) });
+export type OralHealthVisit = typeof oralHealthVisits.$inferSelect;
+export type InsertOralHealthVisit = z.infer<typeof insertOralHealthVisitSchema>;
+
 // Child monitoring visits
 export const childVisits = pgTable("child_visits", {
   id: serial("id").primaryKey(),

@@ -3,7 +3,7 @@ import type { Server } from "http";
 import { storage } from "./storage";
 import { db } from "./db";
 import { max, eq } from "drizzle-orm";
-import { prenatalVisits, childVisits, seniorVisits, insertFpServiceRecordSchema, insertNutritionFollowUpSchema, insertColdChainLogSchema, insertTbDoseLogSchema, insertPostpartumVisitSchema, insertPrenatalScreeningSchema, insertBirthAttendanceRecordSchema, insertSickChildVisitSchema, insertSchoolImmunizationSchema } from "@shared/schema";
+import { prenatalVisits, childVisits, seniorVisits, insertFpServiceRecordSchema, insertNutritionFollowUpSchema, insertColdChainLogSchema, insertTbDoseLogSchema, insertPostpartumVisitSchema, insertPrenatalScreeningSchema, insertBirthAttendanceRecordSchema, insertSickChildVisitSchema, insertSchoolImmunizationSchema, insertOralHealthVisitSchema } from "@shared/schema";
 import { api } from "@shared/routes";
 import { z } from "zod";
 import { setupAuth, registerAuthRoutes } from "./auth";
@@ -841,6 +841,49 @@ export async function registerRoutes(
         "CREATE", "SCHOOL_IMMUNIZATION", String(created.id),
         created.barangay, undefined,
         { learnerName: created.learnerName, vaccine: created.vaccine, doseNumber: created.doseNumber, vaccinationDate: created.vaccinationDate },
+        req,
+      );
+      res.status(201).json(created);
+    }),
+  );
+
+  // === ORAL HEALTH VISITS — feeds M1 Section ORAL ===
+  app.get("/api/oral-health-visits", loadUserInfo, requireAuth, ar(async (req, res) => {
+    const requestedBarangay = req.query.barangay ? String(req.query.barangay) : undefined;
+    if (req.userInfo?.role === UserRole.TL) {
+      const assigned = req.userInfo.assignedBarangays;
+      if (assigned.length === 0) return res.json([]);
+      if (requestedBarangay && !assigned.includes(requestedBarangay)) {
+        return res.status(403).json({ message: "Access denied to this barangay" });
+      }
+      const all = await storage.getOralHealthVisits({ barangay: requestedBarangay });
+      const scoped = requestedBarangay ? all : all.filter(r => assigned.includes(r.barangay));
+      return res.json(scoped);
+    }
+    const data = await storage.getOralHealthVisits({ barangay: requestedBarangay });
+    res.json(data);
+  }));
+
+  app.post("/api/oral-health-visits", loadUserInfo, requireAuth,
+    requireRole(UserRole.SYSTEM_ADMIN, UserRole.MHO, UserRole.SHA, UserRole.TL),
+    ar(async (req, res) => {
+      const parsed = insertOralHealthVisitSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: "Invalid oral health visit", issues: parsed.error.issues });
+      }
+      const input = parsed.data;
+      if (req.userInfo?.role === UserRole.TL && !req.userInfo.assignedBarangays.includes(input.barangay)) {
+        return res.status(403).json({ message: "Access denied to this barangay" });
+      }
+      const created = await storage.createOralHealthVisit({
+        ...input,
+        recordedByUserId: req.userInfo?.id ?? null,
+      });
+      await createAuditLog(
+        req.userInfo!.id, req.userInfo!.role,
+        "CREATE", "ORAL_HEALTH_VISIT", String(created.id),
+        created.barangay, undefined,
+        { patientName: created.patientName, visitDate: created.visitDate },
         req,
       );
       res.status(201).json(created);
