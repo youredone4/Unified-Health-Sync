@@ -3,7 +3,7 @@ import type { Server } from "http";
 import { storage } from "./storage";
 import { db } from "./db";
 import { max, eq } from "drizzle-orm";
-import { prenatalVisits, childVisits, seniorVisits, insertFpServiceRecordSchema, insertNutritionFollowUpSchema, insertColdChainLogSchema, insertTbDoseLogSchema, insertPostpartumVisitSchema, insertPrenatalScreeningSchema, insertBirthAttendanceRecordSchema, insertSickChildVisitSchema, insertSchoolImmunizationSchema, insertOralHealthVisitSchema, insertPhilpenAssessmentSchema, insertNcdScreeningSchema, insertVisionScreeningSchema, insertCervicalCancerScreeningSchema, insertMentalHealthScreeningSchema } from "@shared/schema";
+import { prenatalVisits, childVisits, seniorVisits, insertFpServiceRecordSchema, insertNutritionFollowUpSchema, insertColdChainLogSchema, insertTbDoseLogSchema, insertPostpartumVisitSchema, insertPrenatalScreeningSchema, insertBirthAttendanceRecordSchema, insertSickChildVisitSchema, insertSchoolImmunizationSchema, insertOralHealthVisitSchema, insertPhilpenAssessmentSchema, insertNcdScreeningSchema, insertVisionScreeningSchema, insertCervicalCancerScreeningSchema, insertMentalHealthScreeningSchema, insertFilariasisRecordSchema, insertRabiesExposureSchema, insertSchistosomiasisRecordSchema, insertSthRecordSchema, insertLeprosyRecordSchema } from "@shared/schema";
 import { api } from "@shared/routes";
 import { z } from "zod";
 import { setupAuth, registerAuthRoutes } from "./auth";
@@ -906,6 +906,18 @@ export async function registerRoutes(
     (p) => storage.getCervicalCancerScreenings(p), (r) => storage.createCervicalCancerScreening(r));
   ncdRoute("/api/mental-health-screenings", "MENTAL_HEALTH_SCREENING", insertMentalHealthScreeningSchema,
     (p) => storage.getMentalHealthScreenings(p), (r) => storage.createMentalHealthScreening(r));
+
+  // ===== PHASE 5 — Disease surveillance =====
+  ncdRoute("/api/filariasis-records", "FILARIASIS_RECORD", insertFilariasisRecordSchema,
+    (p) => storage.getFilariasisRecords(p), (r) => storage.createFilariasisRecord(r));
+  ncdRoute("/api/rabies-exposures", "RABIES_EXPOSURE", insertRabiesExposureSchema,
+    (p) => storage.getRabiesExposures(p), (r) => storage.createRabiesExposure(r));
+  ncdRoute("/api/schistosomiasis-records", "SCHISTOSOMIASIS_RECORD", insertSchistosomiasisRecordSchema,
+    (p) => storage.getSchistosomiasisRecords(p), (r) => storage.createSchistosomiasisRecord(r));
+  ncdRoute("/api/sth-records", "STH_RECORD", insertSthRecordSchema,
+    (p) => storage.getSthRecords(p), (r) => storage.createSthRecord(r));
+  ncdRoute("/api/leprosy-records", "LEPROSY_RECORD", insertLeprosyRecordSchema,
+    (p) => storage.getLeprosyRecords(p), (r) => storage.createLeprosyRecord(r));
 
   // === ORAL HEALTH VISITS — feeds M1 Section ORAL ===
   app.get("/api/oral-health-visits", loadUserInfo, requireAuth, ar(async (req, res) => {
