@@ -326,16 +326,14 @@ export default function LandingPage() {
   // the HealthSync brand instead of the municipality settings. The DB
   // settings (lguName / lguSubtitle / logoUrl) still drive every other
   // page in the app.
-  const logoUrl = settings?.logoUrl;
+  const logoUrl = "/healthsync-logo.png";
   const lguName = "HealthSync";
   const lguSubtitle = "Unified Digital Health Information System";
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4">
       <div className="flex flex-col items-center gap-6 max-w-sm w-full">
-        {logoUrl && (
-          <img src={logoUrl} alt={lguName} className="w-24 h-24 object-contain" data-testid="img-logo" />
-        )}
+        <img src={logoUrl} alt={lguName} className="w-32 h-32 object-contain" data-testid="img-logo" />
 
         <div className="text-center">
           <h1 className="text-2xl font-bold" data-testid="text-lgu-name">
