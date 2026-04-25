@@ -3141,6 +3141,14 @@ export class DatabaseStorage implements IStorage {
     await this.seedM1MortalityRows();
     await this.seedM1WaterRows();
 
+    // Demo data for the MGMT-consolidated operational pages. Runs every
+    // boot — each table inside is itself idempotent (skips when non-empty),
+    // and we deliberately call it BEFORE the existingMothers early-return
+    // because seedMgmtConsolidatedDemo doesn't depend on the patient seed.
+    // Putting it after that return meant it only ran on the very first
+    // boot of a fresh database and got skipped on every subsequent run.
+    await this.seedMgmtConsolidatedDemo();
+
     const existingMothers = await this.getMothers();
     if (existingMothers.length > 0) return;
 
@@ -3546,7 +3554,6 @@ export class DatabaseStorage implements IStorage {
     ]);
 
     console.log("Database seeded successfully!");
-    await this.seedMgmtConsolidatedDemo();
   }
 
   /**
