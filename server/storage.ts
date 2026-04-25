@@ -8,7 +8,7 @@ import {
   sickChildVisits, schoolImmunizations, oralHealthVisits,
   philpenAssessments, ncdScreenings, visionScreenings, cervicalCancerScreenings, mentalHealthScreenings,
   filariasisRecords, rabiesExposures, schistosomiasisRecords, sthRecords, leprosyRecords,
-  deathEvents,
+  deathEvents, householdWaterRecords,
   nutritionFollowUps,
   fpServiceRecords, FP_METHOD_ROW_KEY,
   globalChatMessages,
@@ -37,6 +37,7 @@ import {
   type SthRecord, type InsertSthRecord,
   type LeprosyRecord, type InsertLeprosyRecord,
   type DeathEvent, type InsertDeathEvent,
+  type HouseholdWaterRecord, type InsertHouseholdWaterRecord,
   type HealthStation,
   type SmsMessage, type InsertSmsMessage,
   type DiseaseCase, type InsertDiseaseCase,
@@ -130,6 +131,10 @@ export interface IStorage {
   // Phase 6 — Mortality registry (death_events extensions)
   getDeathEvents(params: { barangay?: string }): Promise<DeathEvent[]>;
   createDeathEvent(r: InsertDeathEvent): Promise<DeathEvent>;
+
+  // Phase 7 — Water & Sanitation
+  getHouseholdWaterRecords(params: { barangay?: string }): Promise<HouseholdWaterRecord[]>;
+  createHouseholdWaterRecord(r: InsertHouseholdWaterRecord): Promise<HouseholdWaterRecord>;
 
   // Phase 5 — Disease surveillance
   getFilariasisRecords(params: { barangay?: string }): Promise<FilariasisRecord[]>;
@@ -681,6 +686,16 @@ export class DatabaseStorage implements IStorage {
   }
   async createDeathEvent(r: InsertDeathEvent): Promise<DeathEvent> {
     const [c] = await db.insert(deathEvents).values(r).returning();
+    return c;
+  }
+
+  // ── Phase 7 Water & Sanitation ──────────────────────────────────────
+  async getHouseholdWaterRecords(params: { barangay?: string }): Promise<HouseholdWaterRecord[]> {
+    const conds = params.barangay ? [eq(householdWaterRecords.barangay, params.barangay)] : [];
+    return await db.select().from(householdWaterRecords).where(conds.length ? and(...conds) : undefined).orderBy(desc(householdWaterRecords.surveyDate));
+  }
+  async createHouseholdWaterRecord(r: InsertHouseholdWaterRecord): Promise<HouseholdWaterRecord> {
+    const [c] = await db.insert(householdWaterRecords).values(r).returning();
     return c;
   }
 
@@ -1967,6 +1982,30 @@ export class DatabaseStorage implements IStorage {
     add("H-07b", "VALUE", h07b);
     add("H-08", "VALUE", h08);
 
+    // === SECTION W — Water & Sanitation ===
+    // Cumulative latest survey state (not month-bound) — counts unique
+    // households by their most recent record.
+    const hwAll = await db.select().from(householdWaterRecords).where(
+      barangayName ? eq(householdWaterRecords.barangay, barangayName) : undefined,
+    ).orderBy(desc(householdWaterRecords.surveyDate));
+    const seenHh = new Set<string>();
+    let wL1 = 0, wL2 = 0, wL3 = 0, wSafely = 0;
+    for (const r of hwAll) {
+      const key = r.householdId || `${r.householdHead || ""}|${r.barangay}`;
+      if (!key) continue;
+      if (seenHh.has(key)) continue;
+      seenHh.add(key);
+      if (r.waterLevel === "I") wL1++;
+      else if (r.waterLevel === "II") wL2++;
+      else if (r.waterLevel === "III") wL3++;
+      if (r.safelyManaged) wSafely++;
+    }
+    add("W-01", "VALUE", wL1 + wL2 + wL3);
+    add("W-01a", "VALUE", wL1);
+    add("W-01b", "VALUE", wL2);
+    add("W-01c", "VALUE", wL3);
+    add("W-02", "VALUE", wSafely);
+
     // Save all computed values (ENCODED already excluded via `add`)
     if (computedRaw.length > 0) {
       await this.updateM1IndicatorValues(reportId, computedRaw.map(v => ({
@@ -2747,6 +2786,32 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
+  /** Phase 7 catalog rows — Section W (Water & Sanitation). */
+  private async seedM1WaterRows(): Promise<void> {
+    const [activeTpl] = await db.select().from(m1TemplateVersions).where(eq(m1TemplateVersions.isActive, true)).limit(1);
+    if (!activeTpl) return;
+    const singleSpec = { columns: ["VALUE"] };
+    const tplId = activeTpl.id;
+    const mk = (rowKey: string, label: string, order: number, indent: number = 0): InsertM1IndicatorCatalog => ({
+      templateVersionId: tplId, pageNumber: 3, sectionCode: "W", rowKey, officialLabel: label,
+      dataType: "INT", rowOrder: order, indentLevel: indent,
+      columnGroupType: "SINGLE", columnSpec: singleSpec, isComputed: true, isRequired: true,
+    });
+    const rows: InsertM1IndicatorCatalog[] = [
+      mk("W-01", "Households with access to improved water supply — Total", 900),
+      mk("W-01a", "HH with Level I", 901, 1),
+      mk("W-01b", "HH with Level II", 902, 1),
+      mk("W-01c", "HH with Level III", 903, 1),
+      mk("W-02", "HH using safely managed drinking water service", 910),
+    ];
+    for (const row of rows) {
+      const existing = await db.select({ id: m1IndicatorCatalog.id }).from(m1IndicatorCatalog)
+        .where(and(eq(m1IndicatorCatalog.templateVersionId, row.templateVersionId), eq(m1IndicatorCatalog.rowKey, row.rowKey)))
+        .limit(1);
+      if (existing.length === 0) await db.insert(m1IndicatorCatalog).values(row);
+    }
+  }
+
   async seedData(): Promise<void> {
     // Auto-migrate: add columns introduced after the initial deployment.
     // Every statement is fully idempotent (IF NOT EXISTS / IF EXISTS) so it is
@@ -2861,6 +2926,7 @@ export class DatabaseStorage implements IStorage {
     await this.seedM1NcdRows();
     await this.seedM1DiseaseRows();
     await this.seedM1MortalityRows();
+    await this.seedM1WaterRows();
 
     const existingMothers = await this.getMothers();
     if (existingMothers.length > 0) return;

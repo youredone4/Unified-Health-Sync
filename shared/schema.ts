@@ -1030,6 +1030,30 @@ export const insertLeprosyRecordSchema = createInsertSchema(leprosyRecords)
 export type LeprosyRecord = typeof leprosyRecords.$inferSelect;
 export type InsertLeprosyRecord = z.infer<typeof insertLeprosyRecordSchema>;
 
+// ===========================================================================
+// PHASE 7 — Water & Sanitation (Section W; PDF "G1. Water")
+// ===========================================================================
+export const WATER_LEVELS = ["I", "II", "III"] as const;
+export type WaterLevel = typeof WATER_LEVELS[number];
+
+export const householdWaterRecords = pgTable("household_water_records", {
+  id: serial("id").primaryKey(),
+  barangay: text("barangay").notNull(),
+  surveyDate: text("survey_date").notNull(),
+  householdId: text("household_id"), // optional external key
+  householdHead: text("household_head"),
+  waterLevel: text("water_level").$type<WaterLevel>(),
+  safelyManaged: boolean("safely_managed").default(false),
+  notes: text("notes"),
+  recordedByUserId: varchar("recorded_by_user_id"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+export const insertHouseholdWaterRecordSchema = createInsertSchema(householdWaterRecords)
+  .omit({ id: true, createdAt: true })
+  .extend({ waterLevel: z.enum(WATER_LEVELS).optional().nullable() });
+export type HouseholdWaterRecord = typeof householdWaterRecords.$inferSelect;
+export type InsertHouseholdWaterRecord = z.infer<typeof insertHouseholdWaterRecordSchema>;
+
 // Child monitoring visits
 export const childVisits = pgTable("child_visits", {
   id: serial("id").primaryKey(),

@@ -45,6 +45,7 @@ import {
   HeartPulse,
   ShieldAlert,
   Skull,
+  Droplet,
 } from "lucide-react";
 import { useTheme } from "@/contexts/theme-context";
 import { useAuth, sidebarPermissions, ALL_ROLES } from "@/hooks/use-auth";
@@ -198,6 +199,14 @@ const NAV_ITEMS: NavItem[] = [
     icon: Skull,
     roles: rolesFor("/mortality"),
     activePrefixes: ["/mortality"],
+    tier: "util",
+  },
+  {
+    title: "Household Water",
+    url: "/household-water",
+    icon: Droplet,
+    roles: rolesFor("/household-water"),
+    activePrefixes: ["/household-water"],
     tier: "util",
   },
   {
