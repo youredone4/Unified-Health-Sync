@@ -270,6 +270,7 @@ function ReportsHub({ children }: { children: React.ReactNode }) {
       title="Reports"
       icon={ClipboardList}
       tabs={[
+        { label: "All Reports", path: "/reports", testId: "hub-tab-reports-all" },
         { label: "Encode M1", path: "/m1/encode", testId: "hub-tab-reports-encode" },
         { label: "M1 Summary & Export", path: "/reports/m1", testId: "hub-tab-reports-m1" },
         { label: "Health Analytics", path: "/reports/ai", testId: "hub-tab-reports-ai", roles: ["SYSTEM_ADMIN", "MHO", "SHA"] },

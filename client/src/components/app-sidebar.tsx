@@ -206,9 +206,9 @@ const NAV_ITEMS: NavItem[] = [
   },
   {
     title: "Reports",
-    url: "/reports/m1",
+    url: "/reports",
     icon: ClipboardList,
-    roles: rolesFor("/reports/m1"),
+    roles: rolesFor("/reports"),
     activePrefixes: ["/reports", "/m1/encode"],
     tier: "decision",
   },
