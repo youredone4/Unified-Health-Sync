@@ -4,7 +4,7 @@ import {
   barangays, users, userBarangays, municipalitySettings, UserRole, consults, seniorMedClaims,
   m1TemplateVersions, m1IndicatorCatalog, m1ReportInstances, m1ReportHeader, m1IndicatorValues, barangaySettings,
   directMessages,
-  prenatalVisits, childVisits, seniorVisits, postpartumVisits,
+  prenatalVisits, childVisits, seniorVisits, postpartumVisits, prenatalScreenings, birthAttendanceRecords,
   nutritionFollowUps,
   fpServiceRecords, FP_METHOD_ROW_KEY,
   globalChatMessages,
@@ -17,6 +17,8 @@ import {
   type ColdChainLog, type InsertColdChainLog,
   type TbDoseLog, type InsertTbDoseLog,
   type PostpartumVisit, type InsertPostpartumVisit,
+  type PrenatalScreening, type InsertPrenatalScreening,
+  type BirthAttendanceRecord, type InsertBirthAttendanceRecord,
   type HealthStation,
   type SmsMessage, type InsertSmsMessage,
   type DiseaseCase, type InsertDiseaseCase,
@@ -86,6 +88,14 @@ export interface IStorage {
     dueCheckpoints: string[];
   }[]>;
   createPostpartumVisit(visit: InsertPostpartumVisit): Promise<PostpartumVisit>;
+
+  // Prenatal screenings (M1 Section A page-19 extras)
+  getPrenatalScreenings(motherId: number): Promise<PrenatalScreening[]>;
+  createPrenatalScreening(screening: InsertPrenatalScreening): Promise<PrenatalScreening>;
+
+  // Birth-attendance records (M1 B-04 delivery type breakdown)
+  getBirthAttendanceRecords(motherId: number): Promise<BirthAttendanceRecord[]>;
+  createBirthAttendanceRecord(record: InsertBirthAttendanceRecord): Promise<BirthAttendanceRecord>;
 
   getHealthStations(filter?: { facilityType?: string; hasTbDots?: boolean }): Promise<HealthStation[]>;
 
@@ -475,6 +485,32 @@ export class DatabaseStorage implements IStorage {
 
   async createPostpartumVisit(visit: InsertPostpartumVisit): Promise<PostpartumVisit> {
     const [created] = await db.insert(postpartumVisits).values(visit).returning();
+    return created;
+  }
+
+  async getPrenatalScreenings(motherId: number): Promise<PrenatalScreening[]> {
+    return await db
+      .select()
+      .from(prenatalScreenings)
+      .where(eq(prenatalScreenings.motherId, motherId))
+      .orderBy(desc(prenatalScreenings.screeningDate));
+  }
+
+  async createPrenatalScreening(screening: InsertPrenatalScreening): Promise<PrenatalScreening> {
+    const [created] = await db.insert(prenatalScreenings).values(screening).returning();
+    return created;
+  }
+
+  async getBirthAttendanceRecords(motherId: number): Promise<BirthAttendanceRecord[]> {
+    return await db
+      .select()
+      .from(birthAttendanceRecords)
+      .where(eq(birthAttendanceRecords.motherId, motherId))
+      .orderBy(desc(birthAttendanceRecords.deliveryDate));
+  }
+
+  async createBirthAttendanceRecord(record: InsertBirthAttendanceRecord): Promise<BirthAttendanceRecord> {
+    const [created] = await db.insert(birthAttendanceRecords).values(record).returning();
     return created;
   }
 
@@ -942,6 +978,9 @@ export class DatabaseStorage implements IStorage {
       .select({
         motherId: postpartumVisits.motherId,
         visitDate: postpartumVisits.visitDate,
+        transIn: postpartumVisits.transInFromLgu,
+        transOut: postpartumVisits.transOutWithMov,
+        transOutDate: postpartumVisits.transOutDate,
         age: mothers.age,
       })
       .from(postpartumVisits)
@@ -949,36 +988,202 @@ export class DatabaseStorage implements IStorage {
       .where(pncWhere)
       .orderBy(postpartumVisits.motherId, postpartumVisits.visitDate);
 
-    const visitsByMother: Record<number, { dates: string[]; age: number }> = {};
+    interface PncMotherSummary {
+      dates: string[];
+      age: number;
+      transIn: boolean;
+      transOut: boolean;
+      transOutDate: string | null;
+    }
+    const visitsByMother: Record<number, PncMotherSummary> = {};
     for (const r of pncRows) {
       if (!visitsByMother[r.motherId]) {
-        visitsByMother[r.motherId] = { dates: [], age: r.age };
+        visitsByMother[r.motherId] = {
+          dates: [],
+          age: r.age,
+          transIn: false,
+          transOut: false,
+          transOutDate: null,
+        };
       }
-      visitsByMother[r.motherId].dates.push(r.visitDate);
+      const m = visitsByMother[r.motherId];
+      m.dates.push(r.visitDate);
+      if (r.transIn) m.transIn = true;
+      if (r.transOut) {
+        m.transOut = true;
+        m.transOutDate = r.transOutDate;
+      }
     }
+
+    const ageBucket = (age: number): "10-14" | "15-19" | "20-49" | null => {
+      if (age >= 10 && age <= 14) return "10-14";
+      if (age >= 15 && age <= 19) return "15-19";
+      if (age >= 20 && age <= 49) return "20-49";
+      return null;
+    };
 
     let c01a = 0;
     const c01b: Record<string, number> = { "10-14": 0, "15-19": 0, "20-49": 0, TOTAL: 0 };
-    for (const { dates, age } of Object.values(visitsByMother)) {
-      if (dates.length >= 2 && inReportMonth(dates[1])) {
-        c01a++;
+    let c01ba = 0; // 1st-4th on schedule (not TRANS-IN)
+    let c01bb = 0; // ≥4 PNC, TRANS-IN
+    let c01ca = 0; // tracked during pregnancy (new, not TRANS-IN, has any visit)
+    let c01cb = 0; // TRANS-IN
+    let c01cc = 0; // TRANS-OUT before completing 4 PNC
+    const c01c: Record<string, number> = { "10-14": 0, "15-19": 0, "20-49": 0, TOTAL: 0 };
+
+    for (const m of Object.values(visitsByMother)) {
+      const completed4 = m.dates.length >= 4 && inReportMonth(m.dates[3]);
+      const completed2 = m.dates.length >= 2 && inReportMonth(m.dates[1]);
+      const bucket = ageBucket(m.age);
+
+      if (completed2) c01a++;
+      if (completed4 && bucket) {
+        c01b[bucket]++;
+        c01b.TOTAL++;
+        if (m.transIn) c01bb++;
+        else c01ba++;
       }
-      if (dates.length >= 4 && inReportMonth(dates[3])) {
-        let bucket: "10-14" | "15-19" | "20-49" | null = null;
-        if (age >= 10 && age <= 14) bucket = "10-14";
-        else if (age >= 15 && age <= 19) bucket = "15-19";
-        else if (age >= 20 && age <= 49) bucket = "20-49";
-        if (bucket) {
-          c01b[bucket]++;
-          c01b.TOTAL++;
-        }
+
+      // C-01c family — tracked during pregnancy this month
+      const tracked = m.dates.some(d => inReportMonth(d));
+      if (tracked) {
+        if (m.transIn) c01cb++;
+        else c01ca++;
+      }
+      if (m.transOut && m.transOutDate && inReportMonth(m.transOutDate) && !completed4) {
+        c01cc++;
+      }
+      // C-01c (AGE_GROUP) = (a + b - c) — emit at the per-mother level so we
+      // can bucket by age. A mother contributes 1 to the bucket if she's
+      // counted in (ca | cb) and not in cc.
+      const inA = tracked && !m.transIn;
+      const inB = tracked && m.transIn;
+      const inC = m.transOut && m.transOutDate && inReportMonth(m.transOutDate) && !completed4;
+      if ((inA || inB) && !inC && bucket) {
+        c01c[bucket]++;
+        c01c.TOTAL++;
       }
     }
+
     add("C-01a", "VALUE", c01a);
     add("C-01b", "10-14", c01b["10-14"]);
     add("C-01b", "15-19", c01b["15-19"]);
     add("C-01b", "20-49", c01b["20-49"]);
     add("C-01b", "TOTAL", c01b.TOTAL);
+    add("C-01b-a", "VALUE", c01ba);
+    add("C-01b-b", "VALUE", c01bb);
+    add("C-01c", "10-14", c01c["10-14"]);
+    add("C-01c", "15-19", c01c["15-19"]);
+    add("C-01c", "20-49", c01c["20-49"]);
+    add("C-01c", "TOTAL", c01c.TOTAL);
+    add("C-01c-a", "VALUE", c01ca);
+    add("C-01c-b", "VALUE", c01cb);
+    add("C-01c-c", "VALUE", c01cc);
+
+    // === SECTION B — Skilled attendant + delivery type breakdown ===
+    // B-03: deliveries this month attended by physician/nurse/midwife
+    const mB03 = [...mDelivered, sql`delivery_attendant IN ('physician', 'nurse', 'midwife')`];
+    add("B-03", "10-14", await countQ(mothers, [...mB03, sql`age BETWEEN 10 AND 14`]));
+    add("B-03", "15-19", await countQ(mothers, [...mB03, sql`age BETWEEN 15 AND 19`]));
+    add("B-03", "20-49", await countQ(mothers, [...mB03, sql`age BETWEEN 20 AND 49`]));
+    add("B-03", "TOTAL", await countQ(mothers, mB03));
+    add("B-03a", "VALUE", await countQ(mothers, [...mDelivered, sql`delivery_attendant = 'physician'`]));
+    add("B-03b", "VALUE", await countQ(mothers, [...mDelivered, sql`delivery_attendant = 'nurse'`]));
+    add("B-03c", "VALUE", await countQ(mothers, [...mDelivered, sql`delivery_attendant = 'midwife'`]));
+
+    // B-04 family: delivery type breakdown from birth_attendance_records
+    const baRows = await db
+      .select({
+        deliveryType: birthAttendanceRecords.deliveryType,
+        deliveryTerm: birthAttendanceRecords.deliveryTerm,
+        deliveryDate: birthAttendanceRecords.deliveryDate,
+        age: mothers.age,
+      })
+      .from(birthAttendanceRecords)
+      .innerJoin(mothers, eq(birthAttendanceRecords.motherId, mothers.id))
+      .where(and(
+        barangayName ? eq(mothers.barangay, barangayName) : undefined,
+        sql`delivery_date LIKE ${monthLike}`,
+      ));
+
+    const b04 = {
+      total: { "10-14": 0, "15-19": 0, "20-49": 0, TOTAL: 0 } as Record<string, number>,
+      a:     { "10-14": 0, "15-19": 0, "20-49": 0, TOTAL: 0 } as Record<string, number>,
+      b:     { "10-14": 0, "15-19": 0, "20-49": 0, TOTAL: 0 } as Record<string, number>,
+      c:     { "10-14": 0, "15-19": 0, "20-49": 0, TOTAL: 0 } as Record<string, number>,
+      d:     { "10-14": 0, "15-19": 0, "20-49": 0, TOTAL: 0 } as Record<string, number>,
+    };
+    for (const r of baRows) {
+      const bucket = ageBucket(r.age);
+      if (!bucket) continue;
+      const incr = (key: keyof typeof b04) => {
+        b04[key][bucket]++;
+        b04[key].TOTAL++;
+      };
+      incr("total");
+      if (r.deliveryType === "VAGINAL" && r.deliveryTerm === "FULL_TERM") incr("a");
+      else if (r.deliveryType === "VAGINAL" && r.deliveryTerm === "PRE_TERM") incr("b");
+      else if (r.deliveryType === "CESAREAN" && r.deliveryTerm === "FULL_TERM") incr("c");
+      else if (r.deliveryType === "CESAREAN" && r.deliveryTerm === "PRE_TERM") incr("d");
+    }
+    for (const col of ["10-14", "15-19", "20-49", "TOTAL"]) {
+      add("B-04", col, b04.total[col]);
+      add("B-04a", col, b04.a[col]);
+      add("B-04b", col, b04.b[col]);
+      add("B-04c", col, b04.c[col]);
+      add("B-04d", col, b04.d[col]);
+    }
+
+    // === SECTION A — Prenatal screenings (page-19 extras) ===
+    const psRows = await db
+      .select({
+        motherId: prenatalScreenings.motherId,
+        screeningDate: prenatalScreenings.screeningDate,
+        hepBScreened: prenatalScreenings.hepBScreened,
+        hepBPositive: prenatalScreenings.hepBPositive,
+        anemiaScreened: prenatalScreenings.anemiaScreened,
+        hgbLevelGdl: prenatalScreenings.hgbLevelGdl,
+        gdmScreened: prenatalScreenings.gdmScreened,
+        ironFolicComplete: prenatalScreenings.ironFolicComplete,
+        mmsGiven: prenatalScreenings.mmsGiven,
+        calciumGiven: prenatalScreenings.calciumGiven,
+        dewormingGiven: prenatalScreenings.dewormingGiven,
+        age: mothers.age,
+      })
+      .from(prenatalScreenings)
+      .innerJoin(mothers, eq(prenatalScreenings.motherId, mothers.id))
+      .where(and(
+        barangayName ? eq(mothers.barangay, barangayName) : undefined,
+        sql`screening_date LIKE ${monthLike}`,
+      ));
+
+    type PsRow = typeof psRows[number];
+    const emitPs = (rowKey: string, predicate: (r: PsRow) => boolean) => {
+      const matched = new Set<number>();
+      const buckets: Record<string, Set<number>> = {
+        "10-14": new Set(), "15-19": new Set(), "20-49": new Set(),
+      };
+      for (const r of psRows) {
+        if (!predicate(r)) continue;
+        matched.add(r.motherId);
+        const b = ageBucket(r.age);
+        if (b) buckets[b].add(r.motherId);
+      }
+      add(rowKey, "10-14", buckets["10-14"].size);
+      add(rowKey, "15-19", buckets["15-19"].size);
+      add(rowKey, "20-49", buckets["20-49"].size);
+      add(rowKey, "TOTAL", matched.size);
+    };
+
+    emitPs("A-05", r => !!r.hepBScreened);
+    emitPs("A-06", r => r.hepBPositive === true);
+    emitPs("A-07", r => !!r.anemiaScreened);
+    emitPs("A-08", r => r.hgbLevelGdl !== null && (r.hgbLevelGdl as number) < 11);
+    emitPs("A-09", r => !!r.gdmScreened);
+    emitPs("A-10", r => !!r.ironFolicComplete);
+    emitPs("A-11", r => !!r.mmsGiven);
+    emitPs("A-12", r => !!r.calciumGiven);
+    emitPs("A-13", r => !!r.dewormingGiven);
 
     // Save all computed values (ENCODED already excluded via `add`)
     if (computedRaw.length > 0) {
@@ -1350,6 +1555,135 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
+  /**
+   * Idempotent insert of M1 Section A page-19 extras (A-05..A-13) and
+   * Section B skilled-attendant + delivery-type breakdown (B-03 family,
+   * B-04 family). All flagged isComputed=true since computeM1Values now
+   * fills them from prenatal_screenings, mothers, and birth_attendance_records.
+   */
+  private async seedM1MaternalRows(): Promise<void> {
+    const [activeTpl] = await db
+      .select()
+      .from(m1TemplateVersions)
+      .where(eq(m1TemplateVersions.isActive, true))
+      .limit(1);
+    if (!activeTpl) return;
+
+    const ageGroupSpec = { columns: ["10-14", "15-19", "20-49", "TOTAL"], hasTotal: true };
+    const singleSpec = { columns: ["VALUE"] };
+    const tplId = activeTpl.id;
+
+    const rows: InsertM1IndicatorCatalog[] = [
+      // === SECTION A — Prenatal screenings (page 19) ===
+      { templateVersionId: tplId, pageNumber: 1, sectionCode: "A",
+        rowKey: "A-05", officialLabel: "Pregnant women screened for Hepatitis B",
+        dataType: "INT", rowOrder: 105, indentLevel: 0,
+        columnGroupType: "AGE_GROUP", columnSpec: ageGroupSpec,
+        isComputed: true, isRequired: true },
+      { templateVersionId: tplId, pageNumber: 1, sectionCode: "A",
+        rowKey: "A-06", officialLabel: "Pregnant women tested positive for Hepatitis B",
+        dataType: "INT", rowOrder: 106, indentLevel: 0,
+        columnGroupType: "AGE_GROUP", columnSpec: ageGroupSpec,
+        isComputed: true, isRequired: true },
+      { templateVersionId: tplId, pageNumber: 1, sectionCode: "A",
+        rowKey: "A-07", officialLabel: "Pregnant women screened for anemia",
+        dataType: "INT", rowOrder: 107, indentLevel: 0,
+        columnGroupType: "AGE_GROUP", columnSpec: ageGroupSpec,
+        isComputed: true, isRequired: true },
+      { templateVersionId: tplId, pageNumber: 1, sectionCode: "A",
+        rowKey: "A-08", officialLabel: "Pregnant women identified as anemic",
+        dataType: "INT", rowOrder: 108, indentLevel: 0,
+        columnGroupType: "AGE_GROUP", columnSpec: ageGroupSpec,
+        isComputed: true, isRequired: true },
+      { templateVersionId: tplId, pageNumber: 1, sectionCode: "A",
+        rowKey: "A-09", officialLabel: "Pregnant women screened for Gestational Diabetes Mellitus (GDM)",
+        dataType: "INT", rowOrder: 109, indentLevel: 0,
+        columnGroupType: "AGE_GROUP", columnSpec: ageGroupSpec,
+        isComputed: true, isRequired: true },
+      { templateVersionId: tplId, pageNumber: 1, sectionCode: "A",
+        rowKey: "A-10", officialLabel: "Pregnant women given complete iron / folic acid supplementation",
+        dataType: "INT", rowOrder: 110, indentLevel: 0,
+        columnGroupType: "AGE_GROUP", columnSpec: ageGroupSpec,
+        isComputed: true, isRequired: true },
+      { templateVersionId: tplId, pageNumber: 1, sectionCode: "A",
+        rowKey: "A-11", officialLabel: "Pregnant women given Multiple Micronutrient Supplementation (MMS)",
+        dataType: "INT", rowOrder: 111, indentLevel: 0,
+        columnGroupType: "AGE_GROUP", columnSpec: ageGroupSpec,
+        isComputed: true, isRequired: true },
+      { templateVersionId: tplId, pageNumber: 1, sectionCode: "A",
+        rowKey: "A-12", officialLabel: "Pregnant women given calcium supplementation",
+        dataType: "INT", rowOrder: 112, indentLevel: 0,
+        columnGroupType: "AGE_GROUP", columnSpec: ageGroupSpec,
+        isComputed: true, isRequired: true },
+      { templateVersionId: tplId, pageNumber: 1, sectionCode: "A",
+        rowKey: "A-13", officialLabel: "Pregnant women dewormed",
+        dataType: "INT", rowOrder: 113, indentLevel: 0,
+        columnGroupType: "AGE_GROUP", columnSpec: ageGroupSpec,
+        isComputed: true, isRequired: true },
+
+      // === SECTION B — Skilled attendant + delivery type ===
+      { templateVersionId: tplId, pageNumber: 2, sectionCode: "B",
+        rowKey: "B-03", officialLabel: "No. of deliveries attended by skilled health professionals",
+        dataType: "INT", rowOrder: 130, indentLevel: 0,
+        columnGroupType: "AGE_GROUP", columnSpec: ageGroupSpec,
+        isComputed: true, isRequired: true },
+      { templateVersionId: tplId, pageNumber: 2, sectionCode: "B",
+        rowKey: "B-03a", officialLabel: "Physicians",
+        dataType: "INT", rowOrder: 131, indentLevel: 1,
+        columnGroupType: "SINGLE", columnSpec: singleSpec,
+        isComputed: true, isRequired: true },
+      { templateVersionId: tplId, pageNumber: 2, sectionCode: "B",
+        rowKey: "B-03b", officialLabel: "Nurses",
+        dataType: "INT", rowOrder: 132, indentLevel: 1,
+        columnGroupType: "SINGLE", columnSpec: singleSpec,
+        isComputed: true, isRequired: true },
+      { templateVersionId: tplId, pageNumber: 2, sectionCode: "B",
+        rowKey: "B-03c", officialLabel: "Midwives",
+        dataType: "INT", rowOrder: 133, indentLevel: 1,
+        columnGroupType: "SINGLE", columnSpec: singleSpec,
+        isComputed: true, isRequired: true },
+      { templateVersionId: tplId, pageNumber: 2, sectionCode: "B",
+        rowKey: "B-04", officialLabel: "Total Deliveries by Type",
+        dataType: "INT", rowOrder: 140, indentLevel: 0,
+        columnGroupType: "AGE_GROUP", columnSpec: ageGroupSpec,
+        isComputed: true, isRequired: true },
+      { templateVersionId: tplId, pageNumber: 2, sectionCode: "B",
+        rowKey: "B-04a", officialLabel: "Vaginal, full-term",
+        dataType: "INT", rowOrder: 141, indentLevel: 1,
+        columnGroupType: "AGE_GROUP", columnSpec: ageGroupSpec,
+        isComputed: true, isRequired: true },
+      { templateVersionId: tplId, pageNumber: 2, sectionCode: "B",
+        rowKey: "B-04b", officialLabel: "Vaginal, pre-term",
+        dataType: "INT", rowOrder: 142, indentLevel: 1,
+        columnGroupType: "AGE_GROUP", columnSpec: ageGroupSpec,
+        isComputed: true, isRequired: true },
+      { templateVersionId: tplId, pageNumber: 2, sectionCode: "B",
+        rowKey: "B-04c", officialLabel: "Cesarean, full-term",
+        dataType: "INT", rowOrder: 143, indentLevel: 1,
+        columnGroupType: "AGE_GROUP", columnSpec: ageGroupSpec,
+        isComputed: true, isRequired: true },
+      { templateVersionId: tplId, pageNumber: 2, sectionCode: "B",
+        rowKey: "B-04d", officialLabel: "Cesarean, pre-term",
+        dataType: "INT", rowOrder: 144, indentLevel: 1,
+        columnGroupType: "AGE_GROUP", columnSpec: ageGroupSpec,
+        isComputed: true, isRequired: true },
+    ];
+
+    for (const row of rows) {
+      const existing = await db
+        .select({ id: m1IndicatorCatalog.id })
+        .from(m1IndicatorCatalog)
+        .where(and(
+          eq(m1IndicatorCatalog.templateVersionId, row.templateVersionId),
+          eq(m1IndicatorCatalog.rowKey, row.rowKey),
+        ))
+        .limit(1);
+      if (existing.length === 0) {
+        await db.insert(m1IndicatorCatalog).values(row);
+      }
+    }
+  }
+
   async seedData(): Promise<void> {
     // Auto-migrate: add columns introduced after the initial deployment.
     // Every statement is fully idempotent (IF NOT EXISTS / IF EXISTS) so it is
@@ -1453,10 +1787,11 @@ export class DatabaseStorage implements IStorage {
         AND primary_lightness = 40
     `);
 
-    // M1 Section C (Postpartum Care) catalog rows. Idempotent: insert one
-    // row per (template_version_id, row_key) only if not already present.
+    // M1 catalog rows for Phase 1 (Maternal expansion). Idempotent: insert
+    // one row per (template_version_id, row_key) only if not already present.
     // Source of truth is docs/m1-data-source-audit.md.
     await this.seedM1SectionCRows();
+    await this.seedM1MaternalRows();
 
     const existingMothers = await this.getMothers();
     if (existingMothers.length > 0) return;

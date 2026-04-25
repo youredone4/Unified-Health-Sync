@@ -609,6 +609,14 @@ export const postpartumVisits = pgTable("postpartum_visits", {
   breastfeedingExclusive: boolean("breastfeeding_exclusive"),
   ironSuppGiven: boolean("iron_supp_given"),
   fpCounselingGiven: boolean("fp_counseling_given"),
+  // TRANS-IN: mother started PNC at another LGU and transferred in. Drives
+  // C-01b-b and C-01c-b. Defaults to false for backwards-compat with rows
+  // logged before this column existed.
+  transInFromLgu: boolean("trans_in_from_lgu").default(false),
+  // TRANS-OUT (with Movement of Verification) before completing 4 PNC.
+  // Drives C-01c-c. transOutDate is the date the mother left the catchment.
+  transOutWithMov: boolean("trans_out_with_mov").default(false),
+  transOutDate: text("trans_out_date"),
   notes: text("notes"),
   recordedByUserId: varchar("recorded_by_user_id"),
   createdAt: timestamp("created_at").defaultNow(),
@@ -623,6 +631,66 @@ export const insertPostpartumVisitSchema = createInsertSchema(postpartumVisits)
   });
 export type PostpartumVisit = typeof postpartumVisits.$inferSelect;
 export type InsertPostpartumVisit = z.infer<typeof insertPostpartumVisitSchema>;
+
+// === PRENATAL SCREENINGS — DOH MNCHN AO 2008-0029 (page 19 extras) ===
+// Per-pregnancy screening + supplementation log. Feeds Section A-05..A-13.
+export const prenatalScreenings = pgTable("prenatal_screenings", {
+  id: serial("id").primaryKey(),
+  motherId: integer("mother_id").notNull().references(() => mothers.id, { onDelete: "cascade" }),
+  screeningDate: text("screening_date").notNull(),
+  hepBScreened: boolean("hep_b_screened").default(false),
+  hepBPositive: boolean("hep_b_positive"),
+  anemiaScreened: boolean("anemia_screened").default(false),
+  hgbLevelGdl: real("hgb_level_g_dl"),
+  gdmScreened: boolean("gdm_screened").default(false),
+  gdmPositive: boolean("gdm_positive"),
+  ironFolicComplete: boolean("iron_folic_complete").default(false),
+  mmsGiven: boolean("mms_given").default(false),
+  calciumGiven: boolean("calcium_given").default(false),
+  dewormingGiven: boolean("deworming_given").default(false),
+  notes: text("notes"),
+  recordedByUserId: varchar("recorded_by_user_id"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertPrenatalScreeningSchema = createInsertSchema(prenatalScreenings)
+  .omit({ id: true, createdAt: true })
+  .extend({
+    hgbLevelGdl: z.number().min(0).max(25).optional().nullable(),
+  });
+export type PrenatalScreening = typeof prenatalScreenings.$inferSelect;
+export type InsertPrenatalScreening = z.infer<typeof insertPrenatalScreeningSchema>;
+
+// === BIRTH ATTENDANCE RECORDS — captures delivery type for M1 B-04 ===
+// One record per delivery event. mother.deliveryAttendant covers B-03's
+// "skilled attendant" breakdown directly; this table adds the delivery-type
+// breakdown (vaginal/cesarean × full-term/pre-term) the existing schema
+// doesn't capture.
+export const DELIVERY_TYPES = ["VAGINAL", "CESAREAN", "FETAL_DEATH", "ABORTION"] as const;
+export type DeliveryType = typeof DELIVERY_TYPES[number];
+
+export const DELIVERY_TERMS = ["FULL_TERM", "PRE_TERM"] as const;
+export type DeliveryTerm = typeof DELIVERY_TERMS[number];
+
+export const birthAttendanceRecords = pgTable("birth_attendance_records", {
+  id: serial("id").primaryKey(),
+  motherId: integer("mother_id").notNull().references(() => mothers.id, { onDelete: "cascade" }),
+  deliveryDate: text("delivery_date").notNull(),
+  deliveryType: text("delivery_type").$type<DeliveryType>().notNull(),
+  deliveryTerm: text("delivery_term").$type<DeliveryTerm>(),
+  notes: text("notes"),
+  recordedByUserId: varchar("recorded_by_user_id"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertBirthAttendanceRecordSchema = createInsertSchema(birthAttendanceRecords)
+  .omit({ id: true, createdAt: true })
+  .extend({
+    deliveryType: z.enum(DELIVERY_TYPES),
+    deliveryTerm: z.enum(DELIVERY_TERMS).optional().nullable(),
+  });
+export type BirthAttendanceRecord = typeof birthAttendanceRecords.$inferSelect;
+export type InsertBirthAttendanceRecord = z.infer<typeof insertBirthAttendanceRecordSchema>;
 
 // Child monitoring visits
 export const childVisits = pgTable("child_visits", {

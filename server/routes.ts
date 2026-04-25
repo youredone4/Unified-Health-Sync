@@ -3,7 +3,7 @@ import type { Server } from "http";
 import { storage } from "./storage";
 import { db } from "./db";
 import { max, eq } from "drizzle-orm";
-import { prenatalVisits, childVisits, seniorVisits, insertFpServiceRecordSchema, insertNutritionFollowUpSchema, insertColdChainLogSchema, insertTbDoseLogSchema, insertPostpartumVisitSchema } from "@shared/schema";
+import { prenatalVisits, childVisits, seniorVisits, insertFpServiceRecordSchema, insertNutritionFollowUpSchema, insertColdChainLogSchema, insertTbDoseLogSchema, insertPostpartumVisitSchema, insertPrenatalScreeningSchema, insertBirthAttendanceRecordSchema } from "@shared/schema";
 import { api } from "@shared/routes";
 import { z } from "zod";
 import { setupAuth, registerAuthRoutes } from "./auth";
@@ -711,6 +711,92 @@ export async function registerRoutes(
         "CREATE", "POSTPARTUM_VISIT", String(created.id),
         mother.barangay, undefined,
         { motherId: created.motherId, visitDate: created.visitDate, visitType: created.visitType },
+        req,
+      );
+      res.status(201).json(created);
+    }),
+  );
+
+  // === PRENATAL SCREENINGS — feeds M1 Section A page-19 extras ===
+  app.get("/api/prenatal-screenings", loadUserInfo, requireAuth, ar(async (req, res) => {
+    const motherIdRaw = req.query.motherId ? Number(req.query.motherId) : undefined;
+    if (motherIdRaw === undefined || !Number.isFinite(motherIdRaw)) {
+      return res.status(400).json({ message: "motherId query param is required" });
+    }
+    const mother = await storage.getMother(motherIdRaw);
+    if (!mother) return res.status(404).json({ message: "Mother not found" });
+    if (req.userInfo?.role === UserRole.TL && !req.userInfo.assignedBarangays.includes(mother.barangay)) {
+      return res.status(403).json({ message: "Access denied to this barangay" });
+    }
+    const data = await storage.getPrenatalScreenings(motherIdRaw);
+    res.json(data);
+  }));
+
+  app.post("/api/prenatal-screenings", loadUserInfo, requireAuth,
+    requireRole(UserRole.SYSTEM_ADMIN, UserRole.MHO, UserRole.SHA, UserRole.TL),
+    ar(async (req, res) => {
+      const parsed = insertPrenatalScreeningSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: "Invalid prenatal screening", issues: parsed.error.issues });
+      }
+      const input = parsed.data;
+      const mother = await storage.getMother(input.motherId);
+      if (!mother) return res.status(404).json({ message: "Mother not found" });
+      if (req.userInfo?.role === UserRole.TL && !req.userInfo.assignedBarangays.includes(mother.barangay)) {
+        return res.status(403).json({ message: "Access denied to this barangay" });
+      }
+      const created = await storage.createPrenatalScreening({
+        ...input,
+        recordedByUserId: req.userInfo?.id ?? null,
+      });
+      await createAuditLog(
+        req.userInfo!.id, req.userInfo!.role,
+        "CREATE", "PRENATAL_SCREENING", String(created.id),
+        mother.barangay, undefined,
+        { motherId: created.motherId, screeningDate: created.screeningDate },
+        req,
+      );
+      res.status(201).json(created);
+    }),
+  );
+
+  // === BIRTH ATTENDANCE RECORDS — feeds M1 B-04 delivery type breakdown ===
+  app.get("/api/birth-attendance-records", loadUserInfo, requireAuth, ar(async (req, res) => {
+    const motherIdRaw = req.query.motherId ? Number(req.query.motherId) : undefined;
+    if (motherIdRaw === undefined || !Number.isFinite(motherIdRaw)) {
+      return res.status(400).json({ message: "motherId query param is required" });
+    }
+    const mother = await storage.getMother(motherIdRaw);
+    if (!mother) return res.status(404).json({ message: "Mother not found" });
+    if (req.userInfo?.role === UserRole.TL && !req.userInfo.assignedBarangays.includes(mother.barangay)) {
+      return res.status(403).json({ message: "Access denied to this barangay" });
+    }
+    const data = await storage.getBirthAttendanceRecords(motherIdRaw);
+    res.json(data);
+  }));
+
+  app.post("/api/birth-attendance-records", loadUserInfo, requireAuth,
+    requireRole(UserRole.SYSTEM_ADMIN, UserRole.MHO, UserRole.SHA, UserRole.TL),
+    ar(async (req, res) => {
+      const parsed = insertBirthAttendanceRecordSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: "Invalid birth-attendance record", issues: parsed.error.issues });
+      }
+      const input = parsed.data;
+      const mother = await storage.getMother(input.motherId);
+      if (!mother) return res.status(404).json({ message: "Mother not found" });
+      if (req.userInfo?.role === UserRole.TL && !req.userInfo.assignedBarangays.includes(mother.barangay)) {
+        return res.status(403).json({ message: "Access denied to this barangay" });
+      }
+      const created = await storage.createBirthAttendanceRecord({
+        ...input,
+        recordedByUserId: req.userInfo?.id ?? null,
+      });
+      await createAuditLog(
+        req.userInfo!.id, req.userInfo!.role,
+        "CREATE", "BIRTH_ATTENDANCE", String(created.id),
+        mother.barangay, undefined,
+        { motherId: created.motherId, deliveryDate: created.deliveryDate, deliveryType: created.deliveryType },
         req,
       );
       res.status(201).json(created);
