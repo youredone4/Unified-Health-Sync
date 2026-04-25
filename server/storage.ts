@@ -7,6 +7,7 @@ import {
   prenatalVisits, childVisits, seniorVisits, postpartumVisits, prenatalScreenings, birthAttendanceRecords,
   sickChildVisits, schoolImmunizations, oralHealthVisits,
   philpenAssessments, ncdScreenings, visionScreenings, cervicalCancerScreenings, mentalHealthScreenings,
+  filariasisRecords, rabiesExposures, schistosomiasisRecords, sthRecords, leprosyRecords,
   nutritionFollowUps,
   fpServiceRecords, FP_METHOD_ROW_KEY,
   globalChatMessages,
@@ -29,6 +30,11 @@ import {
   type VisionScreening, type InsertVisionScreening,
   type CervicalCancerScreening, type InsertCervicalCancerScreening,
   type MentalHealthScreening, type InsertMentalHealthScreening,
+  type FilariasisRecord, type InsertFilariasisRecord,
+  type RabiesExposure, type InsertRabiesExposure,
+  type SchistosomiasisRecord, type InsertSchistosomiasisRecord,
+  type SthRecord, type InsertSthRecord,
+  type LeprosyRecord, type InsertLeprosyRecord,
   type HealthStation,
   type SmsMessage, type InsertSmsMessage,
   type DiseaseCase, type InsertDiseaseCase,
@@ -118,6 +124,18 @@ export interface IStorage {
   // Oral health visits (M1 Section ORAL)
   getOralHealthVisits(params: { barangay?: string }): Promise<OralHealthVisit[]>;
   createOralHealthVisit(record: InsertOralHealthVisit): Promise<OralHealthVisit>;
+
+  // Phase 5 — Disease surveillance
+  getFilariasisRecords(params: { barangay?: string }): Promise<FilariasisRecord[]>;
+  createFilariasisRecord(r: InsertFilariasisRecord): Promise<FilariasisRecord>;
+  getRabiesExposures(params: { barangay?: string }): Promise<RabiesExposure[]>;
+  createRabiesExposure(r: InsertRabiesExposure): Promise<RabiesExposure>;
+  getSchistosomiasisRecords(params: { barangay?: string }): Promise<SchistosomiasisRecord[]>;
+  createSchistosomiasisRecord(r: InsertSchistosomiasisRecord): Promise<SchistosomiasisRecord>;
+  getSthRecords(params: { barangay?: string }): Promise<SthRecord[]>;
+  createSthRecord(r: InsertSthRecord): Promise<SthRecord>;
+  getLeprosyRecords(params: { barangay?: string }): Promise<LeprosyRecord[]>;
+  createLeprosyRecord(r: InsertLeprosyRecord): Promise<LeprosyRecord>;
 
   // Phase 4 — NCD & Lifestyle screenings
   getPhilpenAssessments(params: { barangay?: string }): Promise<PhilpenAssessment[]>;
@@ -648,6 +666,48 @@ export class DatabaseStorage implements IStorage {
   async createMentalHealthScreening(record: InsertMentalHealthScreening): Promise<MentalHealthScreening> {
     const [created] = await db.insert(mentalHealthScreenings).values(record).returning();
     return created;
+  }
+
+  // ── Phase 5 Disease surveillance ────────────────────────────────────
+  async getFilariasisRecords(params: { barangay?: string }): Promise<FilariasisRecord[]> {
+    const conds = params.barangay ? [eq(filariasisRecords.barangay, params.barangay)] : [];
+    return await db.select().from(filariasisRecords).where(conds.length ? and(...conds) : undefined).orderBy(desc(filariasisRecords.examDate));
+  }
+  async createFilariasisRecord(r: InsertFilariasisRecord): Promise<FilariasisRecord> {
+    const [c] = await db.insert(filariasisRecords).values(r).returning();
+    return c;
+  }
+  async getRabiesExposures(params: { barangay?: string }): Promise<RabiesExposure[]> {
+    const conds = params.barangay ? [eq(rabiesExposures.barangay, params.barangay)] : [];
+    return await db.select().from(rabiesExposures).where(conds.length ? and(...conds) : undefined).orderBy(desc(rabiesExposures.exposureDate));
+  }
+  async createRabiesExposure(r: InsertRabiesExposure): Promise<RabiesExposure> {
+    const [c] = await db.insert(rabiesExposures).values(r).returning();
+    return c;
+  }
+  async getSchistosomiasisRecords(params: { barangay?: string }): Promise<SchistosomiasisRecord[]> {
+    const conds = params.barangay ? [eq(schistosomiasisRecords.barangay, params.barangay)] : [];
+    return await db.select().from(schistosomiasisRecords).where(conds.length ? and(...conds) : undefined).orderBy(desc(schistosomiasisRecords.seenDate));
+  }
+  async createSchistosomiasisRecord(r: InsertSchistosomiasisRecord): Promise<SchistosomiasisRecord> {
+    const [c] = await db.insert(schistosomiasisRecords).values(r).returning();
+    return c;
+  }
+  async getSthRecords(params: { barangay?: string }): Promise<SthRecord[]> {
+    const conds = params.barangay ? [eq(sthRecords.barangay, params.barangay)] : [];
+    return await db.select().from(sthRecords).where(conds.length ? and(...conds) : undefined).orderBy(desc(sthRecords.screenDate));
+  }
+  async createSthRecord(r: InsertSthRecord): Promise<SthRecord> {
+    const [c] = await db.insert(sthRecords).values(r).returning();
+    return c;
+  }
+  async getLeprosyRecords(params: { barangay?: string }): Promise<LeprosyRecord[]> {
+    const conds = params.barangay ? [eq(leprosyRecords.barangay, params.barangay)] : [];
+    return await db.select().from(leprosyRecords).where(conds.length ? and(...conds) : undefined).orderBy(desc(leprosyRecords.registeredDate));
+  }
+  async createLeprosyRecord(r: InsertLeprosyRecord): Promise<LeprosyRecord> {
+    const [c] = await db.insert(leprosyRecords).values(r).returning();
+    return c;
   }
 
   async getHealthStations(filter?: { facilityType?: string; hasTbDots?: boolean }): Promise<HealthStation[]> {
@@ -1698,6 +1758,143 @@ export class DatabaseStorage implements IStorage {
     ));
     add("G8-01", "TOTAL", mhRows.length);
 
+    // === DIS-FIL (Filariasis) ===
+    const filRows = await db.select().from(filariasisRecords).where(and(
+      barangayName ? eq(filariasisRecords.barangay, barangayName) : undefined,
+      sql`${filariasisRecords.examDate} LIKE ${monthLike}`,
+    ));
+    const filByKey = (predicate: (r: typeof filRows[number]) => boolean) => {
+      const g = { M: 0, F: 0, TOTAL: 0 };
+      for (const r of filRows) {
+        if (!predicate(r)) continue;
+        const sx = r.sex === "F" ? "F" : "M";
+        g[sx as "M" | "F"]++;
+        g.TOTAL++;
+      }
+      return g;
+    };
+    const fil01 = filByKey(() => true);
+    const fil02 = filByKey(r => r.result === "POSITIVE");
+    const fil03 = filByKey(r => r.manifestation === "LYMPHEDEMA");
+    const fil04 = filByKey(r => r.manifestation === "HYDROCELE");
+    for (const [rk, g] of [["DIS-FIL-01", fil01], ["DIS-FIL-02", fil02], ["DIS-FIL-03", fil03], ["DIS-FIL-04", fil04]] as const) {
+      add(rk, "M", g.M); add(rk, "F", g.F); add(rk, "TOTAL", g.TOTAL);
+    }
+
+    // === DIS-RAB (Rabies) ===
+    const rabRows = await db.select().from(rabiesExposures).where(and(
+      barangayName ? eq(rabiesExposures.barangay, barangayName) : undefined,
+      sql`${rabiesExposures.exposureDate} LIKE ${monthLike}`,
+    ));
+    const rabByCat = (cat: "I" | "II" | "III") => filByKey.bind(null);
+    void rabByCat;
+    const rabAggregate = (predicate: (r: typeof rabRows[number]) => boolean) => {
+      const g = { M: 0, F: 0, TOTAL: 0 };
+      for (const r of rabRows) {
+        if (!predicate(r)) continue;
+        const sx = r.sex === "F" ? "F" : "M";
+        g[sx as "M" | "F"]++;
+        g.TOTAL++;
+      }
+      return g;
+    };
+    const rab01 = rabAggregate(r => r.category === "I");
+    const rab02 = rabAggregate(r => r.category === "II");
+    const rab03 = rabAggregate(r => r.category === "III");
+    const rab04 = rabAggregate(() => true);
+    const rab05 = rabAggregate(r => r.category === "II" && !!r.completeDoses);
+    const rab01a = rabRows.filter(r => r.category === "I" && r.treatmentCenter === "ABTC").length;
+    const rab01b = rabRows.filter(r => r.category === "I" && r.treatmentCenter === "NON_ABTC").length;
+    const rab02a = rabRows.filter(r => r.category === "II" && r.treatmentCenter === "ABTC").length;
+    const rab02b = rabRows.filter(r => r.category === "II" && r.treatmentCenter === "NON_ABTC").length;
+    const rab03a = rabRows.filter(r => r.category === "III" && r.treatmentCenter === "ABTC").length;
+    const rab03b = rabRows.filter(r => r.category === "III" && r.treatmentCenter === "NON_ABTC").length;
+    for (const [rk, g] of [["DIS-RAB-01", rab01], ["DIS-RAB-02", rab02], ["DIS-RAB-03", rab03], ["DIS-RAB-04", rab04], ["DIS-RAB-05", rab05]] as const) {
+      add(rk, "M", g.M); add(rk, "F", g.F); add(rk, "TOTAL", g.TOTAL);
+    }
+    add("DIS-RAB-01a", "VALUE", rab01a);
+    add("DIS-RAB-01b", "VALUE", rab01b);
+    add("DIS-RAB-02a", "VALUE", rab02a);
+    add("DIS-RAB-02b", "VALUE", rab02b);
+    add("DIS-RAB-03a", "VALUE", rab03a);
+    add("DIS-RAB-03b", "VALUE", rab03b);
+
+    // === DIS-SCH (Schistosomiasis) ===
+    const schRows = await db.select().from(schistosomiasisRecords).where(and(
+      barangayName ? eq(schistosomiasisRecords.barangay, barangayName) : undefined,
+      sql`${schistosomiasisRecords.seenDate} LIKE ${monthLike}`,
+    ));
+    const schAgg = (predicate: (r: typeof schRows[number]) => boolean) => {
+      const g = { M: 0, F: 0, TOTAL: 0 };
+      for (const r of schRows) {
+        if (!predicate(r)) continue;
+        const sx = r.sex === "F" ? "F" : "M";
+        g[sx as "M" | "F"]++;
+        g.TOTAL++;
+      }
+      return g;
+    };
+    for (const [rk, p] of [
+      ["DIS-SCH-01", () => true],
+      ["DIS-SCH-02", (r: any) => r.suspected],
+      ["DIS-SCH-03", (r: any) => r.treated],
+      ["DIS-SCH-04", (r: any) => r.confirmed],
+      ["DIS-SCH-04a", (r: any) => r.confirmed && r.complicated],
+      ["DIS-SCH-04b", (r: any) => r.confirmed && !r.complicated],
+    ] as const) {
+      const g = schAgg(p as any);
+      add(rk, "M", g.M); add(rk, "F", g.F); add(rk, "TOTAL", g.TOTAL);
+    }
+
+    // === DIS-STH (Soil-Transmitted Helminth) ===
+    const sthRows2 = await db.select().from(sthRecords).where(and(
+      barangayName ? eq(sthRecords.barangay, barangayName) : undefined,
+      sql`${sthRecords.screenDate} LIKE ${monthLike}`,
+    ));
+    const sthAgg = (predicate: (r: typeof sthRows2[number]) => boolean) => {
+      const g = { M: 0, F: 0, TOTAL: 0 };
+      for (const r of sthRows2) {
+        if (!predicate(r)) continue;
+        const sx = r.sex === "F" ? "F" : "M";
+        g[sx as "M" | "F"]++;
+        g.TOTAL++;
+      }
+      return g;
+    };
+    for (const [rk, p] of [
+      ["DIS-STH-01", () => true],
+      ["DIS-STH-02", (r: any) => r.confirmed],
+      ["DIS-STH-02a", (r: any) => r.confirmed && r.residency === "RESIDENT"],
+      ["DIS-STH-02b", (r: any) => r.confirmed && r.residency === "NON_RESIDENT"],
+    ] as const) {
+      const g = sthAgg(p as any);
+      add(rk, "M", g.M); add(rk, "F", g.F); add(rk, "TOTAL", g.TOTAL);
+    }
+
+    // === DIS-LEP (Leprosy) ===
+    const lepRows = await db.select().from(leprosyRecords).where(and(
+      barangayName ? eq(leprosyRecords.barangay, barangayName) : undefined,
+      sql`${leprosyRecords.registeredDate} LIKE ${monthLike}`,
+    ));
+    const lepAgg = (predicate: (r: typeof lepRows[number]) => boolean) => {
+      const g = { M: 0, F: 0, TOTAL: 0 };
+      for (const r of lepRows) {
+        if (!predicate(r)) continue;
+        const sx = r.sex === "F" ? "F" : "M";
+        g[sx as "M" | "F"]++;
+        g.TOTAL++;
+      }
+      return g;
+    };
+    for (const [rk, p] of [
+      ["DIS-LEP-01", () => true],
+      ["DIS-LEP-02", (r: any) => r.newCase],
+      ["DIS-LEP-03", (r: any) => r.confirmed],
+    ] as const) {
+      const g = lepAgg(p as any);
+      add(rk, "M", g.M); add(rk, "F", g.F); add(rk, "TOTAL", g.TOTAL);
+    }
+
     // Save all computed values (ENCODED already excluded via `add`)
     if (computedRaw.length > 0) {
       await this.updateM1IndicatorValues(reportId, computedRaw.map(v => ({
@@ -2390,6 +2587,63 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
+  /** Phase 5 catalog rows — DIS-FIL, DIS-RAB, DIS-SCH, DIS-STH, DIS-LEP. */
+  private async seedM1DiseaseRows(): Promise<void> {
+    const [activeTpl] = await db.select().from(m1TemplateVersions).where(eq(m1TemplateVersions.isActive, true)).limit(1);
+    if (!activeTpl) return;
+    const sexRateSpec = { columns: ["M", "F", "TOTAL"], hasTotal: true };
+    const singleSpec = { columns: ["VALUE"] };
+    const tplId = activeTpl.id;
+
+    const sr = (rowKey: string, label: string, section: string, order: number, indent: number = 0): InsertM1IndicatorCatalog => ({
+      templateVersionId: tplId, pageNumber: 3, sectionCode: section, rowKey,
+      officialLabel: label, dataType: "INT", rowOrder: order, indentLevel: indent,
+      columnGroupType: "SEX_RATE", columnSpec: sexRateSpec, isComputed: true, isRequired: true,
+    });
+    const sg = (rowKey: string, label: string, section: string, order: number, indent: number = 1): InsertM1IndicatorCatalog => ({
+      templateVersionId: tplId, pageNumber: 3, sectionCode: section, rowKey,
+      officialLabel: label, dataType: "INT", rowOrder: order, indentLevel: indent,
+      columnGroupType: "SINGLE", columnSpec: singleSpec, isComputed: true, isRequired: true,
+    });
+
+    const rows: InsertM1IndicatorCatalog[] = [
+      sr("DIS-FIL-01", "Individuals examined for lymphatic filariasis", "DIS-FIL", 700),
+      sr("DIS-FIL-02", "Individuals examined and found POSITIVE", "DIS-FIL", 701),
+      sr("DIS-FIL-03", "Individuals with lymphedema / elephantiasis", "DIS-FIL", 702),
+      sr("DIS-FIL-04", "Individuals with hydrocele", "DIS-FIL", 703),
+      sr("DIS-RAB-01", "Rabies exposure — Category I", "DIS-RAB", 720),
+      sg("DIS-RAB-01a", "ABTC/ABC", "DIS-RAB", 721),
+      sg("DIS-RAB-01b", "Non-ABTC/ABC", "DIS-RAB", 722),
+      sr("DIS-RAB-02", "Rabies exposure — Category II", "DIS-RAB", 723),
+      sg("DIS-RAB-02a", "ABTC/ABC", "DIS-RAB", 724),
+      sg("DIS-RAB-02b", "Non-ABTC/ABC", "DIS-RAB", 725),
+      sr("DIS-RAB-03", "Rabies exposure — Category III", "DIS-RAB", 726),
+      sg("DIS-RAB-03a", "ABTC/ABC", "DIS-RAB", 727),
+      sg("DIS-RAB-03b", "Non-ABTC/ABC", "DIS-RAB", 728),
+      sr("DIS-RAB-04", "Total rabies exposure (all categories)", "DIS-RAB", 729),
+      sr("DIS-RAB-05", "Category II with complete anti-rabies doses", "DIS-RAB", 730),
+      sr("DIS-SCH-01", "Schistosomiasis — patients seen", "DIS-SCH", 740),
+      sr("DIS-SCH-02", "Suspected cases seen", "DIS-SCH", 741),
+      sr("DIS-SCH-03", "Suspected cases treated", "DIS-SCH", 742),
+      sr("DIS-SCH-04", "Confirmed cases", "DIS-SCH", 743),
+      sr("DIS-SCH-04a", "Complicated cases", "DIS-SCH", 744, 1),
+      sr("DIS-SCH-04b", "Non-complicated cases", "DIS-SCH", 745, 1),
+      sr("DIS-STH-01", "Individuals screened for STH", "DIS-STH", 760),
+      sr("DIS-STH-02", "Individuals confirmed for STH", "DIS-STH", 761),
+      sr("DIS-STH-02a", "Resident", "DIS-STH", 762, 1),
+      sr("DIS-STH-02b", "Non-resident", "DIS-STH", 763, 1),
+      sr("DIS-LEP-01", "Leprosy old & new cases registered", "DIS-LEP", 780),
+      sr("DIS-LEP-02", "Newly detected cases", "DIS-LEP", 781),
+      sr("DIS-LEP-03", "Confirmed leprosy cases", "DIS-LEP", 782),
+    ];
+    for (const row of rows) {
+      const existing = await db.select({ id: m1IndicatorCatalog.id }).from(m1IndicatorCatalog)
+        .where(and(eq(m1IndicatorCatalog.templateVersionId, row.templateVersionId), eq(m1IndicatorCatalog.rowKey, row.rowKey)))
+        .limit(1);
+      if (existing.length === 0) await db.insert(m1IndicatorCatalog).values(row);
+    }
+  }
+
   async seedData(): Promise<void> {
     // Auto-migrate: add columns introduced after the initial deployment.
     // Every statement is fully idempotent (IF NOT EXISTS / IF EXISTS) so it is
@@ -2502,6 +2756,7 @@ export class DatabaseStorage implements IStorage {
     await this.seedM1ChildHealthRows();
     await this.seedM1OralHealthRows();
     await this.seedM1NcdRows();
+    await this.seedM1DiseaseRows();
 
     const existingMothers = await this.getMothers();
     if (existingMothers.length > 0) return;

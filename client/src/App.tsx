@@ -76,6 +76,7 @@ import ColdChainPage from "@/pages/cold-chain";
 import SchoolImmunizationsPage from "@/pages/school-immunizations";
 import OralHealthPage from "@/pages/oral-health";
 import NcdScreeningsPage from "@/pages/ncd-screenings";
+import DiseaseSurveillancePage from "@/pages/disease-surveillance";
 
 const roleLabels: Record<string, string> = {
   SYSTEM_ADMIN: "Admin",
@@ -370,6 +371,9 @@ function Router() {
 
       {/* NCD & lifestyle screenings (Sections G1, G2, G4, G6, G8) */}
       <Route path="/ncd-screenings"><NcdScreeningsPage /></Route>
+
+      {/* Disease surveillance (Sections DIS-FIL, DIS-RAB, DIS-SCH, DIS-STH, DIS-LEP) */}
+      <Route path="/disease-surveillance"><DiseaseSurveillancePage /></Route>
 
       {/* Reports hub */}
       <Route path="/m1/encode"><ReportsHub><RoleRoute component={M1ReportEncode} /></ReportsHub></Route>

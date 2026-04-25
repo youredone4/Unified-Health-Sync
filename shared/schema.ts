@@ -901,6 +901,121 @@ export const insertMentalHealthScreeningSchema = createInsertSchema(mentalHealth
 export type MentalHealthScreening = typeof mentalHealthScreenings.$inferSelect;
 export type InsertMentalHealthScreening = z.infer<typeof insertMentalHealthScreeningSchema>;
 
+// ===========================================================================
+// PHASE 5 — Disease surveillance (filariasis, rabies, schisto, STH, leprosy)
+// ===========================================================================
+
+export const FIL_RESULTS = ["POSITIVE", "NEGATIVE"] as const;
+export const FIL_MANIFESTATIONS = ["LYMPHEDEMA", "HYDROCELE", "NONE"] as const;
+export const filariasisRecords = pgTable("filariasis_records", {
+  id: serial("id").primaryKey(),
+  patientName: text("patient_name").notNull(),
+  barangay: text("barangay").notNull(),
+  dob: text("dob").notNull(),
+  sex: text("sex").notNull(),
+  examDate: text("exam_date").notNull(),
+  result: text("result").$type<typeof FIL_RESULTS[number]>(),
+  manifestation: text("manifestation").$type<typeof FIL_MANIFESTATIONS[number]>().default("NONE"),
+  notes: text("notes"),
+  recordedByUserId: varchar("recorded_by_user_id"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+export const insertFilariasisRecordSchema = createInsertSchema(filariasisRecords)
+  .omit({ id: true, createdAt: true })
+  .extend({
+    sex: z.enum(["M", "F"]),
+    result: z.enum(FIL_RESULTS).optional().nullable(),
+    manifestation: z.enum(FIL_MANIFESTATIONS).optional().nullable(),
+  });
+export type FilariasisRecord = typeof filariasisRecords.$inferSelect;
+export type InsertFilariasisRecord = z.infer<typeof insertFilariasisRecordSchema>;
+
+export const RABIES_CATEGORIES = ["I", "II", "III"] as const;
+export const RABIES_CENTERS = ["ABTC", "NON_ABTC"] as const;
+export const rabiesExposures = pgTable("rabies_exposures", {
+  id: serial("id").primaryKey(),
+  patientName: text("patient_name").notNull(),
+  barangay: text("barangay").notNull(),
+  dob: text("dob").notNull(),
+  sex: text("sex").notNull(),
+  exposureDate: text("exposure_date").notNull(),
+  category: text("category").$type<typeof RABIES_CATEGORIES[number]>().notNull(),
+  treatmentCenter: text("treatment_center").$type<typeof RABIES_CENTERS[number]>(),
+  completeDoses: boolean("complete_doses").default(false),
+  notes: text("notes"),
+  recordedByUserId: varchar("recorded_by_user_id"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+export const insertRabiesExposureSchema = createInsertSchema(rabiesExposures)
+  .omit({ id: true, createdAt: true })
+  .extend({
+    sex: z.enum(["M", "F"]),
+    category: z.enum(RABIES_CATEGORIES),
+    treatmentCenter: z.enum(RABIES_CENTERS).optional().nullable(),
+  });
+export type RabiesExposure = typeof rabiesExposures.$inferSelect;
+export type InsertRabiesExposure = z.infer<typeof insertRabiesExposureSchema>;
+
+export const schistosomiasisRecords = pgTable("schistosomiasis_records", {
+  id: serial("id").primaryKey(),
+  patientName: text("patient_name").notNull(),
+  barangay: text("barangay").notNull(),
+  dob: text("dob").notNull(),
+  sex: text("sex").notNull(),
+  seenDate: text("seen_date").notNull(),
+  suspected: boolean("suspected").default(false),
+  treated: boolean("treated").default(false),
+  confirmed: boolean("confirmed").default(false),
+  complicated: boolean("complicated").default(false),
+  notes: text("notes"),
+  recordedByUserId: varchar("recorded_by_user_id"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+export const insertSchistosomiasisRecordSchema = createInsertSchema(schistosomiasisRecords)
+  .omit({ id: true, createdAt: true })
+  .extend({ sex: z.enum(["M", "F"]) });
+export type SchistosomiasisRecord = typeof schistosomiasisRecords.$inferSelect;
+export type InsertSchistosomiasisRecord = z.infer<typeof insertSchistosomiasisRecordSchema>;
+
+export const STH_RESIDENCIES = ["RESIDENT", "NON_RESIDENT"] as const;
+export const sthRecords = pgTable("sth_records", {
+  id: serial("id").primaryKey(),
+  patientName: text("patient_name").notNull(),
+  barangay: text("barangay").notNull(),
+  dob: text("dob").notNull(),
+  sex: text("sex").notNull(),
+  screenDate: text("screen_date").notNull(),
+  confirmed: boolean("confirmed").default(false),
+  residency: text("residency").$type<typeof STH_RESIDENCIES[number]>().default("RESIDENT"),
+  notes: text("notes"),
+  recordedByUserId: varchar("recorded_by_user_id"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+export const insertSthRecordSchema = createInsertSchema(sthRecords)
+  .omit({ id: true, createdAt: true })
+  .extend({ sex: z.enum(["M", "F"]), residency: z.enum(STH_RESIDENCIES).optional().nullable() });
+export type SthRecord = typeof sthRecords.$inferSelect;
+export type InsertSthRecord = z.infer<typeof insertSthRecordSchema>;
+
+export const leprosyRecords = pgTable("leprosy_records", {
+  id: serial("id").primaryKey(),
+  patientName: text("patient_name").notNull(),
+  barangay: text("barangay").notNull(),
+  dob: text("dob").notNull(),
+  sex: text("sex").notNull(),
+  registeredDate: text("registered_date").notNull(),
+  newCase: boolean("new_case").default(false),
+  confirmed: boolean("confirmed").default(false),
+  notes: text("notes"),
+  recordedByUserId: varchar("recorded_by_user_id"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+export const insertLeprosyRecordSchema = createInsertSchema(leprosyRecords)
+  .omit({ id: true, createdAt: true })
+  .extend({ sex: z.enum(["M", "F"]) });
+export type LeprosyRecord = typeof leprosyRecords.$inferSelect;
+export type InsertLeprosyRecord = z.infer<typeof insertLeprosyRecordSchema>;
+
 // Child monitoring visits
 export const childVisits = pgTable("child_visits", {
   id: serial("id").primaryKey(),

@@ -43,6 +43,7 @@ import {
   GraduationCap,
   Smile,
   HeartPulse,
+  ShieldAlert,
 } from "lucide-react";
 import { useTheme } from "@/contexts/theme-context";
 import { useAuth, sidebarPermissions, ALL_ROLES } from "@/hooks/use-auth";
@@ -180,6 +181,14 @@ const NAV_ITEMS: NavItem[] = [
     icon: HeartPulse,
     roles: rolesFor("/ncd-screenings"),
     activePrefixes: ["/ncd-screenings"],
+    tier: "util",
+  },
+  {
+    title: "Disease Surveillance",
+    url: "/disease-surveillance",
+    icon: ShieldAlert,
+    roles: rolesFor("/disease-surveillance"),
+    activePrefixes: ["/disease-surveillance"],
     tier: "util",
   },
   {
