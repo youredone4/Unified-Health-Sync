@@ -26,6 +26,7 @@ export const m2Morbidity: ReportDefinition = {
     const rows = await db
       .select({
         condition: diseaseCases.condition,
+        additionalConditions: diseaseCases.additionalConditions,
         age: diseaseCases.age,
       })
       .from(diseaseCases)
@@ -43,12 +44,23 @@ export const m2Morbidity: ReportDefinition = {
     const byCondition: Record<string, Tally> = {};
     let grand = 0;
     for (const r of rows) {
-      const cond = r.condition || "Unspecified";
       const bk = ageBucket(r.age ?? 0);
-      if (!byCondition[cond]) byCondition[cond] = { "0-4": 0, "5-14": 0, "15-49": 0, "50+": 0, total: 0 };
-      byCondition[cond][bk]++;
-      byCondition[cond].total++;
-      grand++;
+      // A case row can carry a primary condition + co-conditions (e.g.
+      // HIV + TB co-infection). Each disease gets its own tally bump
+      // so per-disease morbidity stays correct.
+      const allConds = [r.condition, ...((r.additionalConditions ?? []) as string[])]
+        .map((c) => (c ?? "").trim())
+        .filter((c) => c.length > 0);
+      const seen = new Set<string>();
+      for (const raw of allConds) {
+        if (seen.has(raw)) continue; // dedupe within a single row
+        seen.add(raw);
+        const cond = raw || "Unspecified";
+        if (!byCondition[cond]) byCondition[cond] = { "0-4": 0, "5-14": 0, "15-49": 0, "50+": 0, total: 0 };
+        byCondition[cond][bk]++;
+        byCondition[cond].total++;
+        grand++;
+      }
     }
 
     const orderedConditions = Object.keys(byCondition).sort();

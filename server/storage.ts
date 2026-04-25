@@ -1196,7 +1196,11 @@ export class DatabaseStorage implements IStorage {
     const dcBase = barangayName ? [eq(diseaseCases.barangay, barangayName)] : [];
     const dcPeriod = [...dcBase, sql`date_reported LIKE ${monthLike}`];
 
-    // Map M1 row keys to disease condition ILIKE patterns
+    // Map M1 row keys to disease condition ILIKE patterns. A case row's
+    // primary condition lives in `condition`; co-conditions are in the
+    // jsonb array additional_conditions. We match either column so a
+    // case carrying "HIV + Dengue" still counts under I-01 (Dengue)
+    // even though Dengue is on the additional_conditions array.
     const diseaseMappings: Array<[string, string]> = [
       ["I-01", "Dengue"],
       ["I-03", "Measles"],
@@ -1206,7 +1210,11 @@ export class DatabaseStorage implements IStorage {
       ["I-08", "Leprosy"],
     ];
     for (const [rowKey, condKeyword] of diseaseMappings) {
-      const cond = [...dcPeriod, sql`condition ILIKE ${"%" + condKeyword + "%"}`];
+      const pattern = "%" + condKeyword + "%";
+      const cond = [
+        ...dcPeriod,
+        sql`(condition ILIKE ${pattern} OR additional_conditions::text ILIKE ${pattern})`,
+      ];
       add(rowKey, "TOTAL", await countQ(diseaseCases, cond));
     }
 
@@ -2887,6 +2895,12 @@ export class DatabaseStorage implements IStorage {
       ALTER TABLE health_stations
         ADD COLUMN IF NOT EXISTS facility_type TEXT,
         ADD COLUMN IF NOT EXISTS has_tb_dots   BOOLEAN NOT NULL DEFAULT FALSE
+    `);
+    // Co-conditions on a disease case (e.g. HIV + TB co-infection
+    // recorded on the same case row). Aggregators unfold per condition.
+    await db.execute(sql`
+      ALTER TABLE disease_cases
+        ADD COLUMN IF NOT EXISTS additional_conditions JSONB NOT NULL DEFAULT '[]'::jsonb
     `);
     await db.execute(sql`
       ALTER TABLE tb_patients

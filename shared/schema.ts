@@ -1,4 +1,5 @@
 import { pgTable, text, serial, integer, boolean, timestamp, jsonb, unique, uniqueIndex, real, varchar } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -332,6 +333,12 @@ export const diseaseCases = pgTable("disease_cases", {
   barangay: text("barangay").notNull(),
   addressLine: text("address_line"),
   phone: text("phone"),
+  // Co-conditions on this case. The primary condition stays in `condition`
+  // for back-compat; additional ones live here. PIDSR / M2 / Cat-II
+  // aggregators expand each disease_cases row into 1 + len(additional)
+  // counts so per-disease morbidity tallies stay correct without
+  // duplicating patient rows.
+  additionalConditions: jsonb("additional_conditions").$type<string[]>().default(sql`'[]'::jsonb`),
   condition: text("condition").notNull(), // Diarrhea, Chickenpox, ARI, Dengue suspected, Measles suspected
   dateReported: text("date_reported").notNull(),
   status: text("status").default("New"), // New, Monitoring, Referred, Closed

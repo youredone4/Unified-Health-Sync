@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -121,52 +121,20 @@ export default function DiseaseForm() {
     },
   });
 
-  const onSubmit = async (data: FormValues) => {
-    const basePayload = {
+  const onSubmit = (data: FormValues) => {
+    // ONE case row holds the primary condition + an additional_conditions
+    // array. Reports/aggregators unfold each row into 1 + N counts so
+    // per-disease morbidity tallies (M2, PIDSR Cat-II, M1 Section I)
+    // stay correct without duplicating the patient/case row.
+    const extras = additionalConditions.map((c) => c.trim()).filter((c) => c.length > 0);
+    const payload = {
       ...data,
+      additionalConditions: extras,
       linkedPersonType: linkedPerson?.type || (isEdit ? data.linkedPersonType : undefined) || undefined,
       linkedPersonId: linkedPerson?.id || (isEdit ? data.linkedPersonId : undefined) || undefined,
     };
-
-    // Multi-condition: file one case per condition. The primary
-    // condition either updates the current case (edit mode) or creates
-    // a new one (new mode); extras are always POSTed as new cases.
-    // Each disease is its own surveillance row — PIDSR + M2 both
-    // require that. Empty extra conditions are ignored.
-    const extras = additionalConditions.map((c) => c.trim()).filter((c) => c.length > 0);
-
-    if (extras.length === 0) {
-      // Single-condition path: existing simple flow.
-      if (isEdit) updateMutation.mutate(basePayload);
-      else createMutation.mutate(basePayload);
-      return;
-    }
-
-    try {
-      // Sequential calls so audit logs are clearly ordered and a
-      // mid-flight failure doesn't leave half the conditions unsent.
-      if (isEdit) {
-        await apiRequest("PUT", `/api/disease-cases/${params?.id}`, basePayload);
-      } else {
-        await apiRequest("POST", "/api/disease-cases", basePayload);
-      }
-      for (const cond of extras) {
-        await apiRequest("POST", "/api/disease-cases", { ...basePayload, condition: cond });
-      }
-      invalidateScopedQueries("/api/disease-cases");
-      toast({
-        title: isEdit
-          ? `Case updated · ${extras.length} additional case${extras.length === 1 ? "" : "s"} filed for ${basePayload.patientName}`
-          : `${extras.length + 1} cases filed for ${basePayload.patientName}`,
-      });
-      navigate(isEdit ? `/disease/${params?.id}` : "/disease/registry");
-    } catch (err) {
-      toast({
-        title: "Some cases could not be saved",
-        description: (err as Error).message,
-        variant: "destructive",
-      });
-    }
+    if (isEdit) updateMutation.mutate(payload);
+    else createMutation.mutate(payload);
   };
 
   const getCandidates = (): SearchCandidate[] => {
@@ -225,6 +193,13 @@ export default function DiseaseForm() {
   // extra rows; the primary condition still lives in the form's
   // `condition` field.
   const [additionalConditions, setAdditionalConditions] = useState<string[]>([]);
+  // When editing, hydrate the extras list from the existing case once
+  // it loads so the user sees their previously-entered co-conditions.
+  useEffect(() => {
+    if (isEdit && diseaseCase?.additionalConditions && Array.isArray(diseaseCase.additionalConditions)) {
+      setAdditionalConditions(diseaseCase.additionalConditions);
+    }
+  }, [isEdit, diseaseCase?.id]);
 
   const existingLink = isEdit && diseaseCase?.linkedPersonType ? `${diseaseCase.linkedPersonType} #${diseaseCase.linkedPersonId}` : null;
 

@@ -97,7 +97,7 @@ export default function DiseaseWorklist() {
       if (statusFilter === "active" && status === "closed") return false;
       if (barangayFilter !== "all" && c.barangay !== barangayFilter) return false;
       if (q) {
-        const hay = `${c.patientName ?? ""} ${c.barangay ?? ""} ${c.condition ?? ""}`.toLowerCase();
+        const hay = `${c.patientName ?? ""} ${c.barangay ?? ""} ${c.condition ?? ""} ${((c.additionalConditions ?? []) as string[]).join(" ")}`.toLowerCase();
         if (!hay.includes(q)) return false;
       }
       return true;
@@ -223,9 +223,13 @@ export default function DiseaseWorklist() {
                     {c.patientName}
                   </p>
                   <Badge variant={getStatusVariant(c.status || "New")}>{c.status}</Badge>
-                  <Badge variant="outline" className="font-normal">
-                    {c.condition}
-                  </Badge>
+                  {[c.condition, ...((c.additionalConditions ?? []) as string[])]
+                    .filter((x): x is string => !!x)
+                    .map((cond) => (
+                      <Badge key={cond} variant="outline" className="font-normal">
+                        {cond}
+                      </Badge>
+                    ))}
                 </div>
                 <p className="text-xs text-muted-foreground" data-testid={`text-details-${c.id}`}>
                   {c.barangay}
