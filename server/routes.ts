@@ -11,7 +11,7 @@ import { registerAdminRoutes } from "./routes/admin";
 import { loadUserInfo, requireAuth, requireRole, createAuditLog } from "./middleware/rbac";
 import { UserRole } from "@shared/schema";
 import { ensureReportsRegistered, listReports, getReport } from "./reports";
-import { monthRange, quarterRange, annualRange } from "./reports/types";
+import { monthRange, quarterRange, annualRange, customRange } from "./reports/types";
 
 export async function registerRoutes(
   httpServer: Server,
@@ -1301,15 +1301,18 @@ export async function registerRoutes(
   // Lazy-register on first hit so the route file stays self-contained.
   ensureReportsRegistered();
 
-  app.get("/api/reports", loadUserInfo, requireAuth, ar(async (_req, res) => {
-    const defs = listReports().map((d) => ({
-      slug: d.slug,
-      title: d.title,
-      description: d.description,
-      cadence: d.cadence,
-      category: d.category,
-      source: d.source ?? null,
-    }));
+  app.get("/api/reports", loadUserInfo, requireAuth, ar(async (req, res) => {
+    const role = req.userInfo?.role;
+    const defs = listReports()
+      .filter((d) => !d.requiredRoles || (role && d.requiredRoles.includes(role)))
+      .map((d) => ({
+        slug: d.slug,
+        title: d.title,
+        description: d.description,
+        cadence: d.cadence,
+        category: d.category,
+        source: d.source ?? null,
+      }));
     res.json(defs);
   }));
 
@@ -1317,27 +1320,42 @@ export async function registerRoutes(
     const def = getReport(req.params.slug);
     if (!def) return res.status(404).json({ message: "Report not found" });
 
-    const year = Number(req.query.year);
-    if (!Number.isInteger(year) || year < 2000 || year > 2100) {
-      return res.status(400).json({ message: "year query param required (2000-2100)" });
+    // Per-report role gate (e.g. Registered Users → MGMT only).
+    if (def.requiredRoles && req.userInfo?.role && !def.requiredRoles.includes(req.userInfo.role)) {
+      return res.status(403).json({ message: "Access denied to this report" });
     }
 
     // Period selection by cadence:
+    //   custom    → ?fromDate=YYYY-MM-DD &toDate=YYYY-MM-DD
     //   annual    → ?year= only
     //   quarterly → ?quarter=1-4 &year=
     //   anything else (monthly/weekly) → ?month=1-12 &year=
     let fromDate: string, toDate: string, periodLabel: string;
-    const quarter = req.query.quarter !== undefined ? Number(req.query.quarter) : NaN;
-    if (def.cadence === "annual") {
-      ({ fromDate, toDate, periodLabel } = annualRange(year));
-    } else if (Number.isInteger(quarter) && quarter >= 1 && quarter <= 4) {
-      ({ fromDate, toDate, periodLabel } = quarterRange(quarter, year));
-    } else {
-      const month = Number(req.query.month);
-      if (!Number.isInteger(month) || month < 1 || month > 12) {
-        return res.status(400).json({ message: "month query param required (1-12) — or pass quarter (1-4) for quarterly reports" });
+    if (def.cadence === "custom") {
+      const from = req.query.fromDate ? String(req.query.fromDate) : "";
+      const to = req.query.toDate ? String(req.query.toDate) : "";
+      try {
+        ({ fromDate, toDate, periodLabel } = customRange(from, to));
+      } catch (err) {
+        return res.status(400).json({ message: (err as Error).message });
       }
-      ({ fromDate, toDate, periodLabel } = monthRange(month, year));
+    } else {
+      const year = Number(req.query.year);
+      if (!Number.isInteger(year) || year < 2000 || year > 2100) {
+        return res.status(400).json({ message: "year query param required (2000-2100)" });
+      }
+      const quarter = req.query.quarter !== undefined ? Number(req.query.quarter) : NaN;
+      if (def.cadence === "annual") {
+        ({ fromDate, toDate, periodLabel } = annualRange(year));
+      } else if (Number.isInteger(quarter) && quarter >= 1 && quarter <= 4) {
+        ({ fromDate, toDate, periodLabel } = quarterRange(quarter, year));
+      } else {
+        const month = Number(req.query.month);
+        if (!Number.isInteger(month) || month < 1 || month > 12) {
+          return res.status(400).json({ message: "month query param required (1-12) — or pass quarter (1-4) for quarterly reports" });
+        }
+        ({ fromDate, toDate, periodLabel } = monthRange(month, year));
+      }
     }
     const requestedBarangay = req.query.barangay ? String(req.query.barangay) : undefined;
 
@@ -1355,19 +1373,19 @@ export async function registerRoutes(
     }
 
     const result = await def.fetch({ fromDate, toDate, periodLabel, barangay: scopedBarangay });
+    // Build the period payload for the client. Custom-cadence reports
+    // omit year/month/quarter (they only have from/to); other cadences
+    // echo back whichever discriminator the URL used.
+    const periodPayload: Record<string, unknown> = { fromDate, toDate, periodLabel };
+    if (def.cadence !== "custom") {
+      periodPayload.year = Number(req.query.year);
+      const q = req.query.quarter !== undefined ? Number(req.query.quarter) : NaN;
+      if (def.cadence === "quarterly" && Number.isInteger(q)) periodPayload.quarter = q;
+      else if (def.cadence === "monthly" || def.cadence === "weekly") periodPayload.month = Number(req.query.month);
+    }
     res.json({
       definition: { slug: def.slug, title: def.title, cadence: def.cadence, category: def.category, source: def.source ?? null },
-      period: {
-        fromDate,
-        toDate,
-        periodLabel,
-        year,
-        ...(def.cadence === "annual"
-          ? {}
-          : Number.isInteger(quarter) && quarter >= 1 && quarter <= 4
-          ? { quarter }
-          : { month: Number(req.query.month) }),
-      },
+      period: periodPayload,
       barangay: scopedBarangay ?? null,
       ...result,
     });

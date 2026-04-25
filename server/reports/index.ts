@@ -18,6 +18,8 @@ import { ntpTb3a } from "./ntp-tb-3a";
 import { ntpTb5a } from "./ntp-tb-5a";
 import { lguScorecard } from "./lgu-scorecard";
 import { hrhRoster } from "./hrh-roster";
+import { m1DateRangeExport } from "./m1-date-range";
+import { registeredUsers } from "./registered-users";
 
 let registered = false;
 
@@ -36,6 +38,8 @@ export function ensureReportsRegistered() {
   registerReport(ntpTb5a);
   registerReport(lguScorecard);
   registerReport(hrhRoster);
+  registerReport(m1DateRangeExport);
+  registerReport(registeredUsers);
   registered = true;
 }
 
