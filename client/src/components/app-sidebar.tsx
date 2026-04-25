@@ -41,6 +41,7 @@ import {
   Scale,
   Snowflake,
   GraduationCap,
+  Smile,
 } from "lucide-react";
 import { useTheme } from "@/contexts/theme-context";
 import { useAuth, sidebarPermissions, ALL_ROLES } from "@/hooks/use-auth";
@@ -162,6 +163,14 @@ const NAV_ITEMS: NavItem[] = [
     icon: GraduationCap,
     roles: rolesFor("/school-immunizations"),
     activePrefixes: ["/school-immunizations"],
+    tier: "util",
+  },
+  {
+    title: "Oral Health",
+    url: "/oral-health",
+    icon: Smile,
+    roles: rolesFor("/oral-health"),
+    activePrefixes: ["/oral-health"],
     tier: "util",
   },
   {

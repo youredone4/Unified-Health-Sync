@@ -5,7 +5,7 @@ import {
   m1TemplateVersions, m1IndicatorCatalog, m1ReportInstances, m1ReportHeader, m1IndicatorValues, barangaySettings,
   directMessages,
   prenatalVisits, childVisits, seniorVisits, postpartumVisits, prenatalScreenings, birthAttendanceRecords,
-  sickChildVisits, schoolImmunizations,
+  sickChildVisits, schoolImmunizations, oralHealthVisits,
   nutritionFollowUps,
   fpServiceRecords, FP_METHOD_ROW_KEY,
   globalChatMessages,
@@ -22,6 +22,7 @@ import {
   type BirthAttendanceRecord, type InsertBirthAttendanceRecord,
   type SickChildVisit, type InsertSickChildVisit,
   type SchoolImmunization, type InsertSchoolImmunization,
+  type OralHealthVisit, type InsertOralHealthVisit,
   type HealthStation,
   type SmsMessage, type InsertSmsMessage,
   type DiseaseCase, type InsertDiseaseCase,
@@ -107,6 +108,10 @@ export interface IStorage {
   // School immunizations (M1 Section D4 — HPV / Td)
   getSchoolImmunizations(params: { barangay?: string; vaccine?: string }): Promise<SchoolImmunization[]>;
   createSchoolImmunization(record: InsertSchoolImmunization): Promise<SchoolImmunization>;
+
+  // Oral health visits (M1 Section ORAL)
+  getOralHealthVisits(params: { barangay?: string }): Promise<OralHealthVisit[]>;
+  createOralHealthVisit(record: InsertOralHealthVisit): Promise<OralHealthVisit>;
 
   getHealthStations(filter?: { facilityType?: string; hasTbDots?: boolean }): Promise<HealthStation[]>;
 
@@ -551,6 +556,21 @@ export class DatabaseStorage implements IStorage {
 
   async createSchoolImmunization(record: InsertSchoolImmunization): Promise<SchoolImmunization> {
     const [created] = await db.insert(schoolImmunizations).values(record).returning();
+    return created;
+  }
+
+  async getOralHealthVisits(params: { barangay?: string }): Promise<OralHealthVisit[]> {
+    const conditions = [];
+    if (params.barangay) conditions.push(eq(oralHealthVisits.barangay, params.barangay));
+    return await db
+      .select()
+      .from(oralHealthVisits)
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .orderBy(desc(oralHealthVisits.visitDate));
+  }
+
+  async createOralHealthVisit(record: InsertOralHealthVisit): Promise<OralHealthVisit> {
+    const [created] = await db.insert(oralHealthVisits).values(record).returning();
     return created;
   }
 
@@ -1388,6 +1408,84 @@ export class DatabaseStorage implements IStorage {
     // D4-03 is mixed-sex, just emit TOTAL for now
     add("D4-03", "TOTAL", d403);
 
+    // === SECTION ORAL — First-visit dental care ===
+    const ohRows = await db
+      .select()
+      .from(oralHealthVisits)
+      .where(and(
+        barangayName ? eq(oralHealthVisits.barangay, barangayName) : undefined,
+        sql`${oralHealthVisits.visitDate} LIKE ${monthLike}`,
+        eq(oralHealthVisits.isFirstVisit, true),
+      ));
+
+    const ohBands = {
+      "ORAL-00": { M: 0, F: 0, TOTAL: 0 } as Record<string, number>,
+      "ORAL-01": { M: 0, F: 0, TOTAL: 0 } as Record<string, number>,
+      "ORAL-02": { M: 0, F: 0, TOTAL: 0 } as Record<string, number>,
+      "ORAL-03": { M: 0, F: 0, TOTAL: 0 } as Record<string, number>,
+      "ORAL-04": { M: 0, F: 0, TOTAL: 0 } as Record<string, number>,
+      "ORAL-05": { M: 0, F: 0, TOTAL: 0 } as Record<string, number>,
+    };
+    const ohSubFac: Record<string, number> = {};
+    const ohSubNon: Record<string, number> = {};
+    let oral06 = 0;
+    let oral06a = 0;
+    let oral06b = 0;
+    const setSub = (band: string, facility: boolean, sx: "M" | "F") => {
+      const baseKey = `${band}|${sx}`;
+      const totalKey = `${band}|TOTAL`;
+      if (facility) {
+        ohSubFac[`${band}a|${sx}`] = (ohSubFac[`${band}a|${sx}`] ?? 0) + 1;
+        ohSubFac[`${band}a|TOTAL`] = (ohSubFac[`${band}a|TOTAL`] ?? 0) + 1;
+      } else {
+        ohSubNon[`${band}b|${sx}`] = (ohSubNon[`${band}b|${sx}`] ?? 0) + 1;
+        ohSubNon[`${band}b|TOTAL`] = (ohSubNon[`${band}b|TOTAL`] ?? 0) + 1;
+      }
+      void baseKey; void totalKey;
+    };
+
+    for (const r of ohRows) {
+      const dob = new Date(r.dob);
+      const ref = new Date(r.visitDate);
+      if (isNaN(dob.getTime()) || isNaN(ref.getTime())) continue;
+      const ageMos = (ref.getFullYear() - dob.getFullYear()) * 12 + (ref.getMonth() - dob.getMonth());
+      const ageYrs = Math.floor(ageMos / 12);
+      const sx = r.sex === "F" ? "F" : "M";
+      let band: keyof typeof ohBands | null = null;
+      if (ageMos >= 0 && ageMos <= 11) band = "ORAL-00";
+      else if (ageYrs >= 1 && ageYrs <= 4) band = "ORAL-01";
+      else if (ageYrs >= 5 && ageYrs <= 9) band = "ORAL-02";
+      else if (ageYrs >= 10 && ageYrs <= 19) band = "ORAL-03";
+      else if (ageYrs >= 20 && ageYrs <= 59) band = "ORAL-04";
+      else if (ageYrs >= 60) band = "ORAL-05";
+      if (band) {
+        ohBands[band][sx]++;
+        ohBands[band].TOTAL++;
+        if (band !== "ORAL-00") setSub(band, !!r.facilityBased, sx);
+      }
+      if (r.isPregnant) {
+        oral06++;
+        if (r.facilityBased) oral06a++;
+        else oral06b++;
+      }
+    }
+    for (const [rk, group] of Object.entries(ohBands)) {
+      add(rk, "M", group.M);
+      add(rk, "F", group.F);
+      add(rk, "TOTAL", group.TOTAL);
+    }
+    for (const [k, v] of Object.entries(ohSubFac)) {
+      const [rowKey, columnKey] = k.split("|");
+      add(rowKey, columnKey, v);
+    }
+    for (const [k, v] of Object.entries(ohSubNon)) {
+      const [rowKey, columnKey] = k.split("|");
+      add(rowKey, columnKey, v);
+    }
+    add("ORAL-06", "TOTAL", oral06);
+    add("ORAL-06a", "TOTAL", oral06a);
+    add("ORAL-06b", "TOTAL", oral06b);
+
     // Save all computed values (ENCODED already excluded via `add`)
     if (computedRaw.length > 0) {
       await this.updateM1IndicatorValues(reportId, computedRaw.map(v => ({
@@ -1959,6 +2057,76 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
+  /**
+   * Phase 3 catalog rows — Section ORAL (first dental visit by age band).
+   */
+  private async seedM1OralHealthRows(): Promise<void> {
+    const [activeTpl] = await db
+      .select()
+      .from(m1TemplateVersions)
+      .where(eq(m1TemplateVersions.isActive, true))
+      .limit(1);
+    if (!activeTpl) return;
+
+    const sexRateSpec = { columns: ["M", "F", "TOTAL"], hasTotal: true };
+    const ageGroupSpec = { columns: ["10-14", "15-19", "20-49", "TOTAL"], hasTotal: true };
+    const tplId = activeTpl.id;
+
+    const mk = (
+      rowKey: string, label: string, order: number,
+      indent: number = 0, columnGroupType: "SEX_RATE" | "AGE_GROUP" = "SEX_RATE",
+    ): InsertM1IndicatorCatalog => ({
+      templateVersionId: tplId,
+      pageNumber: 2,
+      sectionCode: "ORAL",
+      rowKey,
+      officialLabel: label,
+      dataType: "INT",
+      rowOrder: order,
+      indentLevel: indent,
+      columnGroupType,
+      columnSpec: columnGroupType === "AGE_GROUP" ? ageGroupSpec : sexRateSpec,
+      isComputed: true,
+      isRequired: true,
+    });
+
+    const rows: InsertM1IndicatorCatalog[] = [
+      mk("ORAL-00", "Infants 0–11 mos who had their first dental visit", 500),
+      mk("ORAL-01", "Children 1–4 yo who had 1st dental visit", 510),
+      mk("ORAL-01a", "Facility-based", 511, 1),
+      mk("ORAL-01b", "Non-facility-based", 512, 1),
+      mk("ORAL-02", "Children 5–9 yo who had 1st dental visit", 520),
+      mk("ORAL-02a", "Facility-based", 521, 1),
+      mk("ORAL-02b", "Non-facility-based", 522, 1),
+      mk("ORAL-03", "Adolescents 10–19 yo who had 1st dental visit", 530),
+      mk("ORAL-03a", "Facility-based", 531, 1),
+      mk("ORAL-03b", "Non-facility-based", 532, 1),
+      mk("ORAL-04", "Adults 20–59 yo who had 1st dental visit", 540),
+      mk("ORAL-04a", "Facility-based", 541, 1),
+      mk("ORAL-04b", "Non-facility-based", 542, 1),
+      mk("ORAL-05", "Senior Citizens 60+ yo who had 1st dental visit", 550),
+      mk("ORAL-05a", "Facility-based", 551, 1),
+      mk("ORAL-05b", "Non-facility-based", 552, 1),
+      mk("ORAL-06", "Pregnant Women who had 1st dental visit", 560, 0, "AGE_GROUP"),
+      mk("ORAL-06a", "Facility-based", 561, 1, "AGE_GROUP"),
+      mk("ORAL-06b", "Non-facility-based", 562, 1, "AGE_GROUP"),
+    ];
+
+    for (const row of rows) {
+      const existing = await db
+        .select({ id: m1IndicatorCatalog.id })
+        .from(m1IndicatorCatalog)
+        .where(and(
+          eq(m1IndicatorCatalog.templateVersionId, row.templateVersionId),
+          eq(m1IndicatorCatalog.rowKey, row.rowKey),
+        ))
+        .limit(1);
+      if (existing.length === 0) {
+        await db.insert(m1IndicatorCatalog).values(row);
+      }
+    }
+  }
+
   async seedData(): Promise<void> {
     // Auto-migrate: add columns introduced after the initial deployment.
     // Every statement is fully idempotent (IF NOT EXISTS / IF EXISTS) so it is
@@ -2069,6 +2237,7 @@ export class DatabaseStorage implements IStorage {
     await this.seedM1SectionCRows();
     await this.seedM1MaternalRows();
     await this.seedM1ChildHealthRows();
+    await this.seedM1OralHealthRows();
 
     const existingMothers = await this.getMothers();
     if (existingMothers.length > 0) return;
