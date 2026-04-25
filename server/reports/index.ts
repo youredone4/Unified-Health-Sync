@@ -4,7 +4,7 @@
  * this list — no other wiring needed.
  */
 
-import { registerReport } from "./types";
+import { registerReport, listReports } from "./types";
 import { m2Morbidity } from "./m2-morbidity";
 import { fpForm1 } from "./fp-form-1";
 import { epiCoverage } from "./epi-coverage";
@@ -21,10 +21,11 @@ import { hrhRoster } from "./hrh-roster";
 import { m1DateRangeExport } from "./m1-date-range";
 import { registeredUsers } from "./registered-users";
 
-let registered = false;
-
 export function ensureReportsRegistered() {
-  if (registered) return;
+  // Always (re-)register. registerReport is idempotent — overwriting an
+  // existing slug is fine. This keeps the registry in sync after a tsx
+  // hot-reload of this file when types.ts (and its REGISTRY map) hasn't
+  // re-evaluated.
   registerReport(m2Morbidity);
   registerReport(fpForm1);
   registerReport(epiCoverage);
@@ -40,7 +41,8 @@ export function ensureReportsRegistered() {
   registerReport(hrhRoster);
   registerReport(m1DateRangeExport);
   registerReport(registeredUsers);
-  registered = true;
+  const slugs = listReports().map((r) => r.slug);
+  console.log(`[reports] ${slugs.length} reports registered: ${slugs.join(", ")}`);
 }
 
 export { listReports, getReport } from "./types";

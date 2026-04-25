@@ -71,9 +71,10 @@ export interface ReportDefinition {
 const REGISTRY = new Map<string, ReportDefinition>();
 
 export function registerReport(def: ReportDefinition) {
-  if (REGISTRY.has(def.slug)) {
-    throw new Error(`Duplicate report slug: ${def.slug}`);
-  }
+  // Idempotent: tsx hot-reload re-evaluates index.ts (so its module-level
+  // `registered` flag resets) without re-evaluating types.ts (so REGISTRY
+  // persists). Throwing on duplicate killed the rebuild silently and left
+  // the registry stuck on whatever was loaded at boot. Overwrite instead.
   REGISTRY.set(def.slug, def);
 }
 
