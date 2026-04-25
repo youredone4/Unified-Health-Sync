@@ -33,7 +33,15 @@ export async function registerRoutes(
   // RBAC middleware for registry read - all authenticated users can read
   const registryReadRBAC = [loadUserInfo, requireAuth];
   // RBAC middleware for registry CRUD - all operational roles can create/update
+  // (still used by some endpoints — kept for back-compat).
   const registryRBAC = [loadUserInfo, requireAuth, requireRole(UserRole.SYSTEM_ADMIN, UserRole.MHO, UserRole.SHA, UserRole.TL)];
+  // RBAC middleware for registry CREATE — TL only.
+  // Per the DOH operational model, BHS-level TLs encode patient registries
+  // (mothers, children, seniors, disease cases, TB patients). RHU-level
+  // MGMT roles validate and submit; they don't create transactional rows.
+  // The UI hides "+ New X" buttons for MGMT (#96); this is the server-side
+  // counterpart that blocks direct API POSTs.
+  const registryCreateRBAC = [loadUserInfo, requireAuth, requireRole(UserRole.TL)];
   // RBAC middleware for registry DELETE - SYSTEM_ADMIN only
   const adminOnlyRBAC = [loadUserInfo, requireAuth, requireRole(UserRole.SYSTEM_ADMIN)];
 
@@ -123,7 +131,7 @@ export async function registerRoutes(
     res.json(mother);
   }));
 
-  app.post(api.mothers.create.path, registryRBAC, async (req, res) => {
+  app.post(api.mothers.create.path, registryCreateRBAC, async (req, res) => {
     try {
       const input = api.mothers.create.input.parse(req.body);
       // TL can only create records in their assigned barangays
@@ -172,7 +180,7 @@ export async function registerRoutes(
     res.json(child);
   }));
 
-  app.post(api.children.create.path, registryRBAC, ar(async (req, res) => {
+  app.post(api.children.create.path, registryCreateRBAC, ar(async (req, res) => {
     const input = api.children.create.input.parse(req.body);
     if (req.userInfo?.role === UserRole.TL && !req.userInfo.assignedBarangays.includes(input.barangay)) {
       return res.status(403).json({ message: "You can only add patients to your assigned barangays" });
@@ -216,7 +224,7 @@ export async function registerRoutes(
     res.json(senior);
   }));
 
-  app.post(api.seniors.create.path, registryRBAC, ar(async (req, res) => {
+  app.post(api.seniors.create.path, registryCreateRBAC, ar(async (req, res) => {
     const input = api.seniors.create.input.parse(req.body);
     if (req.userInfo?.role === UserRole.TL && !req.userInfo.assignedBarangays.includes(input.barangay)) {
       return res.status(403).json({ message: "You can only add patients to your assigned barangays" });
@@ -364,7 +372,7 @@ export async function registerRoutes(
   }));
 
   app.post("/api/cold-chain/logs", loadUserInfo, requireAuth,
-    requireRole(UserRole.SYSTEM_ADMIN, UserRole.MHO, UserRole.SHA, UserRole.TL),
+    requireRole(UserRole.TL),
     ar(async (req, res) => {
       const parsed = insertColdChainLogSchema.safeParse(req.body);
       if (!parsed.success) {
@@ -523,7 +531,7 @@ export async function registerRoutes(
     res.json(diseaseCase);
   }));
 
-  app.post(api.diseaseCases.create.path, registryRBAC, ar(async (req, res) => {
+  app.post(api.diseaseCases.create.path, registryCreateRBAC, ar(async (req, res) => {
     const input = api.diseaseCases.create.input.parse(req.body);
     const created = await storage.createDiseaseCase(input);
     res.status(201).json(created);
@@ -593,7 +601,7 @@ export async function registerRoutes(
     res.json(patient);
   }));
 
-  app.post(api.tbPatients.create.path, registryRBAC, ar(async (req, res) => {
+  app.post(api.tbPatients.create.path, registryCreateRBAC, ar(async (req, res) => {
     const input = api.tbPatients.create.input.parse(req.body);
     // Only run the referral consistency check when the write actually touches
     // those fields — legacy rows where referralToRHU=true but referredRhuId is
@@ -662,7 +670,7 @@ export async function registerRoutes(
   }));
 
   app.post("/api/tb-dose-logs", loadUserInfo, requireAuth,
-    requireRole(UserRole.SYSTEM_ADMIN, UserRole.MHO, UserRole.SHA, UserRole.TL),
+    requireRole(UserRole.TL),
     ar(async (req, res) => {
       const parsed = insertTbDoseLogSchema.safeParse(req.body);
       if (!parsed.success) {
@@ -716,7 +724,7 @@ export async function registerRoutes(
   }));
 
   app.post("/api/postpartum-visits", loadUserInfo, requireAuth,
-    requireRole(UserRole.SYSTEM_ADMIN, UserRole.MHO, UserRole.SHA, UserRole.TL),
+    requireRole(UserRole.TL),
     ar(async (req, res) => {
       const parsed = insertPostpartumVisitSchema.safeParse(req.body);
       if (!parsed.success) {
@@ -759,7 +767,7 @@ export async function registerRoutes(
   }));
 
   app.post("/api/prenatal-screenings", loadUserInfo, requireAuth,
-    requireRole(UserRole.SYSTEM_ADMIN, UserRole.MHO, UserRole.SHA, UserRole.TL),
+    requireRole(UserRole.TL),
     ar(async (req, res) => {
       const parsed = insertPrenatalScreeningSchema.safeParse(req.body);
       if (!parsed.success) {
@@ -802,7 +810,7 @@ export async function registerRoutes(
   }));
 
   app.post("/api/sick-child-visits", loadUserInfo, requireAuth,
-    requireRole(UserRole.SYSTEM_ADMIN, UserRole.MHO, UserRole.SHA, UserRole.TL),
+    requireRole(UserRole.TL),
     ar(async (req, res) => {
       const parsed = insertSickChildVisitSchema.safeParse(req.body);
       if (!parsed.success) {
@@ -848,7 +856,7 @@ export async function registerRoutes(
   }));
 
   app.post("/api/school-immunizations", loadUserInfo, requireAuth,
-    requireRole(UserRole.SYSTEM_ADMIN, UserRole.MHO, UserRole.SHA, UserRole.TL),
+    requireRole(UserRole.TL),
     ar(async (req, res) => {
       const parsed = insertSchoolImmunizationSchema.safeParse(req.body);
       if (!parsed.success) {
@@ -900,7 +908,9 @@ export async function registerRoutes(
     }));
 
     app.post(pathBase, loadUserInfo, requireAuth,
-      requireRole(UserRole.SYSTEM_ADMIN, UserRole.MHO, UserRole.SHA, UserRole.TL),
+      // TL-only encode: per the role split (BHS captures, RHU reviews),
+      // MGMT roles see consolidated history but cannot add records.
+      requireRole(UserRole.TL),
       ar(async (req, res) => {
         const parsed = schema.safeParse(req.body);
         if (!parsed.success) {
@@ -966,7 +976,7 @@ export async function registerRoutes(
   }));
 
   app.post("/api/death-events", loadUserInfo, requireAuth,
-    requireRole(UserRole.SYSTEM_ADMIN, UserRole.MHO, UserRole.SHA, UserRole.TL),
+    requireRole(UserRole.TL),
     ar(async (req, res) => {
       const parsed = insertDeathEventSchema.safeParse({ ...req.body, createdAt: new Date().toISOString() });
       if (!parsed.success) {
@@ -1006,7 +1016,7 @@ export async function registerRoutes(
   }));
 
   app.post("/api/oral-health-visits", loadUserInfo, requireAuth,
-    requireRole(UserRole.SYSTEM_ADMIN, UserRole.MHO, UserRole.SHA, UserRole.TL),
+    requireRole(UserRole.TL),
     ar(async (req, res) => {
       const parsed = insertOralHealthVisitSchema.safeParse(req.body);
       if (!parsed.success) {
@@ -1047,7 +1057,7 @@ export async function registerRoutes(
   }));
 
   app.post("/api/birth-attendance-records", loadUserInfo, requireAuth,
-    requireRole(UserRole.SYSTEM_ADMIN, UserRole.MHO, UserRole.SHA, UserRole.TL),
+    requireRole(UserRole.TL),
     ar(async (req, res) => {
       const parsed = insertBirthAttendanceRecordSchema.safeParse(req.body);
       if (!parsed.success) {
@@ -1904,7 +1914,8 @@ export async function registerRoutes(
   // RBAC: any authenticated role can read; only SYSTEM_ADMIN and TL can write.
   // Additionally, TL users are scoped to their assigned barangays via the parent record.
   const nurseVisitReadRBAC = [loadUserInfo, requireAuth];
-  const nurseVisitWriteRBAC = [loadUserInfo, requireAuth, requireRole(UserRole.SYSTEM_ADMIN, UserRole.TL)];
+  // TL-only: nurse visits are captured at BHS by the team leader.
+  const nurseVisitWriteRBAC = [loadUserInfo, requireAuth, requireRole(UserRole.TL)];
 
   // Helper: resolve next visit number using DB-level MAX aggregation.
   async function nextPrenatalVisitNumber(motherId: number): Promise<number> {
@@ -2095,6 +2106,9 @@ export async function registerRoutes(
 
   // === FP SERVICE RECORDS ===
   const fpRBAC = [loadUserInfo, requireAuth];
+  // TL-only for FP record CREATE — MGMT roles see consolidated history but
+  // don't add new FP entries (BHS captures, RHU reviews).
+  const fpCreateRBAC = [loadUserInfo, requireAuth, requireRole(UserRole.TL)];
 
   app.get("/api/fp-records", fpRBAC, ar(async (req, res) => {
     const { barangay, month } = req.query as { barangay?: string; month?: string };
@@ -2123,7 +2137,7 @@ export async function registerRoutes(
     res.json(record);
   }));
 
-  app.post("/api/fp-records", fpRBAC, ar(async (req, res) => {
+  app.post("/api/fp-records", fpCreateRBAC, ar(async (req, res) => {
     const user = req.userInfo!;
     const parsed = insertFpServiceRecordSchema.safeParse({
       ...req.body,
@@ -2165,7 +2179,11 @@ export async function registerRoutes(
 
   // === NUTRITION FOLLOW-UPS (PIMAM / OPT-Plus register) ===
   const nutritionRBAC = [loadUserInfo, requireAuth];
-  const nutritionWriteRBAC = [loadUserInfo, requireAuth, requireRole(UserRole.SYSTEM_ADMIN, UserRole.MHO, UserRole.TL)];
+  // TL-only: nutrition follow-ups are encoded at BHS by the team leader.
+  // MGMT (Admin / MHO / SHA) sees consolidated history but doesn't add new
+  // follow-ups. PUTs remain via nutritionUpdateRBAC for review/correction.
+  const nutritionWriteRBAC = [loadUserInfo, requireAuth, requireRole(UserRole.TL)];
+  const nutritionUpdateRBAC = [loadUserInfo, requireAuth, requireRole(UserRole.SYSTEM_ADMIN, UserRole.MHO, UserRole.TL)];
 
   // If the operator checks REFER_RHU they must pick an actual RHU facility.
   // Returns an error message when the pairing is invalid, or null when OK.
@@ -2304,7 +2322,7 @@ export async function registerRoutes(
     res.send([headers.join(","), body].filter(Boolean).join("\n"));
   }));
 
-  app.put("/api/nutrition-followups/:id", nutritionWriteRBAC, ar(async (req, res) => {
+  app.put("/api/nutrition-followups/:id", nutritionUpdateRBAC, ar(async (req, res) => {
     const id = parseId(req.params.id, res); if (id === null) return;
     const existing = (await storage.getNutritionFollowUps({ childId: undefined })).find(r => r.id === id);
     if (!existing) return res.status(404).json({ message: "Follow-up not found" });
