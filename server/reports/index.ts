@@ -17,6 +17,7 @@ import { pidsrCat2 } from "./pidsr-cat2";
 import { ntpTb3a } from "./ntp-tb-3a";
 import { ntpTb5a } from "./ntp-tb-5a";
 import { lguScorecard } from "./lgu-scorecard";
+import { hrhRoster } from "./hrh-roster";
 
 let registered = false;
 
@@ -34,6 +35,7 @@ export function ensureReportsRegistered() {
   registerReport(ntpTb3a);
   registerReport(ntpTb5a);
   registerReport(lguScorecard);
+  registerReport(hrhRoster);
   registered = true;
 }
 

@@ -46,6 +46,7 @@ import {
   ShieldAlert,
   Skull,
   Droplet,
+  UsersRound,
 } from "lucide-react";
 import { useTheme } from "@/contexts/theme-context";
 import { useAuth, sidebarPermissions, ALL_ROLES } from "@/hooks/use-auth";
@@ -217,6 +218,14 @@ const NAV_ITEMS: NavItem[] = [
     icon: Package,
     roles: rolesFor("/inventory"),
     activePrefixes: ["/inventory"],
+    tier: "decision",
+  },
+  {
+    title: "Workforce",
+    url: "/workforce",
+    icon: UsersRound,
+    roles: rolesFor("/workforce"),
+    activePrefixes: ["/workforce"],
     tier: "decision",
   },
   // Daily Operations and Registries & Surveillance groups are rendered as

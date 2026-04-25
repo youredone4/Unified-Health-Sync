@@ -8,7 +8,7 @@ import {
   sickChildVisits, schoolImmunizations, oralHealthVisits,
   philpenAssessments, ncdScreenings, visionScreenings, cervicalCancerScreenings, mentalHealthScreenings,
   filariasisRecords, rabiesExposures, schistosomiasisRecords, sthRecords, leprosyRecords,
-  deathEvents, pidsrSubmissions, householdWaterRecords,
+  deathEvents, pidsrSubmissions, workforceMembers, workforceCredentials, householdWaterRecords,
   nutritionFollowUps,
   fpServiceRecords, FP_METHOD_ROW_KEY,
   globalChatMessages,
@@ -38,6 +38,8 @@ import {
   type LeprosyRecord, type InsertLeprosyRecord,
   type DeathEvent, type InsertDeathEvent,
   type PidsrSubmission, type InsertPidsrSubmission,
+  type WorkforceMember, type InsertWorkforceMember,
+  type WorkforceCredential, type InsertWorkforceCredential,
   type HouseholdWaterRecord, type InsertHouseholdWaterRecord,
   type HealthStation,
   type SmsMessage, type InsertSmsMessage,
@@ -137,6 +139,14 @@ export interface IStorage {
   getPidsrSubmissions(params: { barangay?: string; fromDate?: string }): Promise<PidsrSubmission[]>;
   getPidsrSubmissionForWeek(barangay: string, weekEndDate: string): Promise<PidsrSubmission | null>;
   createPidsrSubmission(r: InsertPidsrSubmission): Promise<PidsrSubmission>;
+
+  // HRH workforce module (NHWSS / RA 11223 §22-§25)
+  getWorkforceMembers(params: { barangay?: string; activeOnly?: boolean }): Promise<WorkforceMember[]>;
+  getWorkforceMember(id: number): Promise<WorkforceMember | null>;
+  createWorkforceMember(r: InsertWorkforceMember): Promise<WorkforceMember>;
+  updateWorkforceMember(id: number, updates: Partial<InsertWorkforceMember>): Promise<WorkforceMember>;
+  getWorkforceCredentials(memberId: number): Promise<WorkforceCredential[]>;
+  createWorkforceCredential(r: InsertWorkforceCredential): Promise<WorkforceCredential>;
 
   // Phase 7 — Water & Sanitation
   getHouseholdWaterRecords(params: { barangay?: string }): Promise<HouseholdWaterRecord[]>;
@@ -712,6 +722,37 @@ export class DatabaseStorage implements IStorage {
   }
   async createPidsrSubmission(r: InsertPidsrSubmission): Promise<PidsrSubmission> {
     const [c] = await db.insert(pidsrSubmissions).values(r).returning();
+    return c;
+  }
+
+  // ── HRH workforce module ───────────────────────────────────────────
+  async getWorkforceMembers(params: { barangay?: string; activeOnly?: boolean }): Promise<WorkforceMember[]> {
+    const conds: any[] = [];
+    if (params.barangay) conds.push(eq(workforceMembers.barangay, params.barangay));
+    if (params.activeOnly) conds.push(isNull(workforceMembers.dateSeparated));
+    return await db.select().from(workforceMembers)
+      .where(conds.length ? and(...conds) : undefined)
+      .orderBy(desc(workforceMembers.createdAt));
+  }
+  async getWorkforceMember(id: number): Promise<WorkforceMember | null> {
+    const [m] = await db.select().from(workforceMembers).where(eq(workforceMembers.id, id)).limit(1);
+    return m ?? null;
+  }
+  async createWorkforceMember(r: InsertWorkforceMember): Promise<WorkforceMember> {
+    const [c] = await db.insert(workforceMembers).values(r).returning();
+    return c;
+  }
+  async updateWorkforceMember(id: number, updates: Partial<InsertWorkforceMember>): Promise<WorkforceMember> {
+    const [u] = await db.update(workforceMembers).set(updates).where(eq(workforceMembers.id, id)).returning();
+    return u;
+  }
+  async getWorkforceCredentials(memberId: number): Promise<WorkforceCredential[]> {
+    return await db.select().from(workforceCredentials)
+      .where(eq(workforceCredentials.memberId, memberId))
+      .orderBy(desc(workforceCredentials.dateObtained));
+  }
+  async createWorkforceCredential(r: InsertWorkforceCredential): Promise<WorkforceCredential> {
+    const [c] = await db.insert(workforceCredentials).values(r).returning();
     return c;
   }
 
