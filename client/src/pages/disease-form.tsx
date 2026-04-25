@@ -5,7 +5,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { useLocation, useRoute } from "wouter";
 import { z } from "zod";
 import type { DiseaseCase, Barangay, Mother, Child, Senior } from "@shared/schema";
-import { DISEASE_CONDITION_DEFAULTS } from "@shared/schema";
+import { ConditionPicker } from "@/components/condition-picker";
 import { apiRequest, queryClient, invalidateScopedQueries } from "@/lib/queryClient";
 import { useBarangay } from "@/contexts/barangay-context";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,7 +15,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { ClipboardList, ArrowLeft, Save, Search, Link2, X } from "lucide-react";
+import { ClipboardList, ArrowLeft, Save, Search, Link2, X, Plus } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
 const formSchema = z.object({
@@ -121,16 +121,41 @@ export default function DiseaseForm() {
     },
   });
 
-  const onSubmit = (data: FormValues) => {
-    const payload = {
+  const onSubmit = async (data: FormValues) => {
+    const basePayload = {
       ...data,
       linkedPersonType: linkedPerson?.type || (isEdit ? data.linkedPersonType : undefined) || undefined,
       linkedPersonId: linkedPerson?.id || (isEdit ? data.linkedPersonId : undefined) || undefined,
     };
     if (isEdit) {
-      updateMutation.mutate(payload);
-    } else {
-      createMutation.mutate(payload);
+      updateMutation.mutate(basePayload);
+      return;
+    }
+
+    // Multi-condition: file the primary case + one additional case per
+    // entered co-condition. Each disease is its own surveillance row
+    // (PIDSR + M2 both require that). Empty extra conditions are ignored.
+    const extras = additionalConditions.map((c) => c.trim()).filter((c) => c.length > 0);
+    if (extras.length === 0) {
+      createMutation.mutate(basePayload);
+      return;
+    }
+    try {
+      // Sequential POSTs so audit logs are clearly ordered + a
+      // mid-flight failure doesn't leave half the conditions unsent.
+      await apiRequest("POST", "/api/disease-cases", basePayload);
+      for (const cond of extras) {
+        await apiRequest("POST", "/api/disease-cases", { ...basePayload, condition: cond });
+      }
+      invalidateScopedQueries("/api/disease-cases");
+      toast({ title: `${extras.length + 1} cases filed for ${basePayload.patientName}` });
+      navigate("/disease/registry");
+    } catch (err) {
+      toast({
+        title: "Some cases could not be saved",
+        description: (err as Error).message,
+        variant: "destructive",
+      });
     }
   };
 
@@ -175,37 +200,21 @@ export default function DiseaseForm() {
     form.setValue("linkedPersonId", undefined);
   };
 
-  // Build the condition dropdown by merging the PIDSR-categorized defaults
-  // with any condition values that have been recorded previously (so a
-  // condition typed via "Other..." once is available for next time).
+  // Distinct conditions from existing cases — feeds the "Previously
+  // recorded" group inside ConditionPicker so user-typed "Other..."
+  // values stay available next time.
   const { data: existingConditions = [] } = useQuery<string[]>({
     queryKey: ["/api/disease-cases/conditions"],
   });
-  const defaultNames = new Set(DISEASE_CONDITION_DEFAULTS.map((d) => d.name));
-  const customConditions = existingConditions.filter((c) => !defaultNames.has(c));
-  const groupedConditions: Array<{ label: string; items: string[] }> = [
-    { label: "PIDSR Cat-I — immediate (24h)", items: DISEASE_CONDITION_DEFAULTS.filter((d) => d.group === "PIDSR_CAT_I").map((d) => d.name) },
-    { label: "PIDSR Cat-II — weekly cutoff",  items: DISEASE_CONDITION_DEFAULTS.filter((d) => d.group === "PIDSR_CAT_II").map((d) => d.name) },
-    { label: "Endemic / commonly flagged",     items: DISEASE_CONDITION_DEFAULTS.filter((d) => d.group === "ENDEMIC").map((d) => d.name) },
-    ...(customConditions.length > 0 ? [{ label: "Previously recorded", items: customConditions }] : []),
-  ];
-  const allKnownConditionNames = new Set([
-    ...DISEASE_CONDITION_DEFAULTS.map((d) => d.name),
-    ...customConditions,
-  ]);
-  const OTHER_VALUE = "__OTHER__";
   const statuses = ["New", "Monitoring", "Referred", "Closed"];
 
-  // Track whether the user picked "Other..." so we can render a free-text
-  // input. Initialised from the existing case's condition value if editing.
-  const [isOtherMode, setIsOtherMode] = useState<boolean>(() => {
-    const initial = diseaseCase?.condition;
-    return !!initial && !allKnownConditionNames.has(initial);
-  });
-  const [customCondition, setCustomCondition] = useState<string>(() => {
-    const initial = diseaseCase?.condition;
-    return initial && !allKnownConditionNames.has(initial) ? initial : "";
-  });
+  // Multi-condition support (new-case mode only): a patient with co-
+  // infections (e.g. HIV + TB) is reported as N separate disease_cases
+  // rows — one per disease, since each has its own surveillance status,
+  // PIDSR tier, and M2 morbidity count. additionalConditions holds the
+  // extra rows; the primary condition still lives in the form's
+  // `condition` field.
+  const [additionalConditions, setAdditionalConditions] = useState<string[]>([]);
 
   const existingLink = isEdit && diseaseCase?.linkedPersonType ? `${diseaseCase.linkedPersonType} #${diseaseCase.linkedPersonId}` : null;
 
@@ -382,53 +391,65 @@ export default function DiseaseForm() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Condition *</FormLabel>
-                      <Select
-                        onValueChange={(v) => {
-                          if (v === OTHER_VALUE) {
-                            setIsOtherMode(true);
-                            field.onChange(customCondition);
-                          } else {
-                            setIsOtherMode(false);
-                            field.onChange(v);
-                          }
-                        }}
-                        value={isOtherMode ? OTHER_VALUE : field.value || ""}
-                      >
-                        <FormControl>
-                          <SelectTrigger data-testid="select-condition">
-                            <SelectValue placeholder="Select condition" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {groupedConditions.map((group) => (
-                            <div key={group.label}>
-                              <div className="px-2 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                                {group.label}
-                              </div>
-                              {group.items.map((c) => (
-                                <SelectItem key={c} value={c}>{c}</SelectItem>
-                              ))}
-                            </div>
-                          ))}
-                          <div className="px-2 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground border-t mt-1">
-                            Custom
-                          </div>
-                          <SelectItem value={OTHER_VALUE}>Other (type below)</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      {isOtherMode && (
-                        <Input
-                          className="mt-2"
-                          placeholder="Type the condition (e.g. Mpox, Lyme disease)"
-                          value={customCondition}
-                          onChange={(e) => {
-                            setCustomCondition(e.target.value);
-                            field.onChange(e.target.value);
-                          }}
-                          data-testid="input-condition-other"
+                      <FormControl>
+                        <ConditionPicker
+                          value={field.value || ""}
+                          onChange={field.onChange}
+                          existingConditions={existingConditions}
+                          testIdPrefix="condition"
                         />
-                      )}
+                      </FormControl>
                       <FormMessage />
+                      {!isEdit && additionalConditions.map((extra, idx) => (
+                        <div key={idx} className="mt-3 flex items-start gap-2" data-testid={`extra-condition-row-${idx}`}>
+                          <div className="flex-1">
+                            <FormLabel className="text-xs text-muted-foreground">
+                              Additional condition {idx + 2}
+                            </FormLabel>
+                            <ConditionPicker
+                              value={extra}
+                              onChange={(next) => {
+                                const copy = [...additionalConditions];
+                                copy[idx] = next;
+                                setAdditionalConditions(copy);
+                              }}
+                              existingConditions={existingConditions}
+                              testIdPrefix={`extra-condition-${idx}`}
+                            />
+                          </div>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="mt-6 h-8 w-8 shrink-0"
+                            onClick={() => {
+                              setAdditionalConditions(additionalConditions.filter((_, i) => i !== idx));
+                            }}
+                            data-testid={`remove-extra-condition-${idx}`}
+                            aria-label={`Remove condition ${idx + 2}`}
+                          >
+                            <X className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      ))}
+                      {!isEdit && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="mt-2 gap-1 text-xs"
+                          onClick={() => setAdditionalConditions([...additionalConditions, ""])}
+                          data-testid="button-add-condition"
+                        >
+                          <Plus className="w-3 h-3" /> Add another condition (co-infection)
+                        </Button>
+                      )}
+                      {!isEdit && additionalConditions.length > 0 && (
+                        <p className="text-xs text-muted-foreground italic mt-1">
+                          Each condition is filed as a separate case row, sharing this patient&rsquo;s details.
+                          Required by DOH PIDSR/M2 — each disease has its own surveillance status.
+                        </p>
+                      )}
                     </FormItem>
                   )}
                 />
