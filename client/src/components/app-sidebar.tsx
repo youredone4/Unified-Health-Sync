@@ -187,6 +187,16 @@ const NAV_ITEMS: NavItem[] = [
     activePrefixes: ["/today"],
     tier: "main",
   },
+  // Calendar sits immediately under Today since users frequently glance at
+  // it alongside the daily worklist (visit schedules, appointments, OTPs).
+  {
+    title: "Calendar",
+    url: "/calendar",
+    icon: Calendar,
+    roles: rolesFor("/calendar"),
+    activePrefixes: ["/calendar"],
+    tier: "main",
+  },
   // Patients group handled separately (collapsible)
   {
     title: "Nutrition",
@@ -236,14 +246,6 @@ const NAV_ITEMS: NavItem[] = [
     icon: ClipboardPlus,
     roles: rolesFor("/patient-checkup"),
     activePrefixes: ["/patient-checkup"],
-    tier: "util",
-  },
-  {
-    title: "Calendar",
-    url: "/calendar",
-    icon: Calendar,
-    roles: rolesFor("/calendar"),
-    activePrefixes: ["/calendar"],
     tier: "util",
   },
   {
@@ -375,7 +377,7 @@ export function AppSidebar() {
           <SidebarGroupContent>
             <SidebarMenu>
               {mainTop
-                .filter((i) => i.url === "/today")
+                .filter((i) => i.url === "/today" || i.url === "/calendar")
                 .map((item) => (
                   <SidebarItemRow key={item.title} item={item} location={location} unreadCount={unreadCount} />
                 ))}
@@ -429,7 +431,7 @@ export function AppSidebar() {
               )}
 
               {mainTop
-                .filter((i) => i.url !== "/today")
+                .filter((i) => i.url !== "/today" && i.url !== "/calendar")
                 .map((item) => (
                   <SidebarItemRow key={item.title} item={item} location={location} unreadCount={unreadCount} />
                 ))}
