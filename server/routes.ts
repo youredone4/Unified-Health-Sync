@@ -11,7 +11,7 @@ import { registerAdminRoutes } from "./routes/admin";
 import { loadUserInfo, requireAuth, requireRole, createAuditLog } from "./middleware/rbac";
 import { UserRole } from "@shared/schema";
 import { ensureReportsRegistered, listReports, getReport } from "./reports";
-import { monthRange } from "./reports/types";
+import { monthRange, quarterRange } from "./reports/types";
 
 export async function registerRoutes(
   httpServer: Server,
@@ -1144,16 +1144,23 @@ export async function registerRoutes(
     const def = getReport(req.params.slug);
     if (!def) return res.status(404).json({ message: "Report not found" });
 
-    const month = Number(req.query.month);
     const year = Number(req.query.year);
-    if (!Number.isInteger(month) || month < 1 || month > 12) {
-      return res.status(400).json({ message: "month query param required (1-12)" });
-    }
     if (!Number.isInteger(year) || year < 2000 || year > 2100) {
       return res.status(400).json({ message: "year query param required (2000-2100)" });
     }
 
-    const { fromDate, toDate, periodLabel } = monthRange(month, year);
+    // Accept quarter (1-4) for quarterly reports; fall back to month (1-12).
+    let fromDate: string, toDate: string, periodLabel: string;
+    const quarter = req.query.quarter !== undefined ? Number(req.query.quarter) : NaN;
+    if (Number.isInteger(quarter) && quarter >= 1 && quarter <= 4) {
+      ({ fromDate, toDate, periodLabel } = quarterRange(quarter, year));
+    } else {
+      const month = Number(req.query.month);
+      if (!Number.isInteger(month) || month < 1 || month > 12) {
+        return res.status(400).json({ message: "month query param required (1-12) — or pass quarter (1-4) for quarterly reports" });
+      }
+      ({ fromDate, toDate, periodLabel } = monthRange(month, year));
+    }
     const requestedBarangay = req.query.barangay ? String(req.query.barangay) : undefined;
 
     // TL scoping: must specify a barangay they're assigned to.
@@ -1172,7 +1179,15 @@ export async function registerRoutes(
     const result = await def.fetch({ fromDate, toDate, periodLabel, barangay: scopedBarangay });
     res.json({
       definition: { slug: def.slug, title: def.title, cadence: def.cadence, category: def.category, source: def.source ?? null },
-      period: { fromDate, toDate, periodLabel, month, year },
+      period: {
+        fromDate,
+        toDate,
+        periodLabel,
+        year,
+        ...(Number.isInteger(quarter) && quarter >= 1 && quarter <= 4
+          ? { quarter }
+          : { month: Number(req.query.month) }),
+      },
       barangay: scopedBarangay ?? null,
       ...result,
     });
