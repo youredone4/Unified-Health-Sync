@@ -1148,6 +1148,59 @@ export type ReferralRecord = typeof referralRecords.$inferSelect;
 export type InsertReferralRecord = z.infer<typeof insertReferralRecordSchema>;
 
 // ===========================================================================
+// DEATH REVIEWS — MDR / PDR (Phase 5 of operational-actions framework)
+// ===========================================================================
+// DOH AO 2008-0029 (Maternal Death Review) and AO 2016-0035 (Newborn /
+// Perinatal Death Review) require an MDR Form 1 (or PDR) within 30
+// days of every maternal / perinatal / neonatal death. This table
+// tracks the lifecycle of each review so the deadline counter can
+// drive reminders and the audit trail proves compliance.
+//
+// Auto-created when a death_event is recorded with the relevant
+// flags (maternalDeathCause set → MDR; isFetalDeath OR ageDays ≤ 28
+// → PDR). Status progresses PENDING_NOTIFY → NOTIFIED → REVIEW_
+// SCHEDULED → REVIEWED → CLOSED.
+export const DEATH_REVIEW_TYPES = ["MDR", "PDR"] as const;
+export type DeathReviewType = typeof DEATH_REVIEW_TYPES[number];
+
+export const DEATH_REVIEW_STATUSES = [
+  "PENDING_NOTIFY",  // death entered, MHO not yet notified (target ≤48h)
+  "NOTIFIED",        // MHO + RESU/PHO notified, awaiting review schedule
+  "REVIEW_SCHEDULED",// committee meeting on the calendar
+  "REVIEWED",        // committee met, findings captured
+  "CLOSED",          // recommendations actioned, file closed
+] as const;
+export type DeathReviewStatus = typeof DEATH_REVIEW_STATUSES[number];
+
+export const deathReviews = pgTable("death_reviews", {
+  id: serial("id").primaryKey(),
+  deathEventId: integer("death_event_id").notNull(),
+  reviewType: text("review_type").$type<DeathReviewType>().notNull(),
+  status: text("status").$type<DeathReviewStatus>().notNull().default("PENDING_NOTIFY"),
+  // Lifecycle timestamps — 30-day deadline counted from dateOfDeath
+  // on the linked death_events row.
+  dueDate: text("due_date").notNull(),               // YYYY-MM-DD, dateOfDeath + 30
+  notifiedAt: timestamp("notified_at"),
+  reviewScheduledAt: timestamp("review_scheduled_at"),
+  reviewedAt: timestamp("reviewed_at"),
+  closedAt: timestamp("closed_at"),
+  // Review committee + findings captured at REVIEWED transition
+  committeeMembers: jsonb("committee_members").$type<string[]>(),
+  findings: text("findings"),
+  recommendations: text("recommendations"),
+  // Provenance
+  barangayName: text("barangay_name"),               // denormalized from death_events for scoping
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+export const insertDeathReviewSchema = createInsertSchema(deathReviews)
+  .omit({ id: true, createdAt: true, notifiedAt: true, reviewScheduledAt: true, reviewedAt: true, closedAt: true, status: true })
+  .extend({
+    reviewType: z.enum(DEATH_REVIEW_TYPES),
+  });
+export type DeathReview = typeof deathReviews.$inferSelect;
+export type InsertDeathReview = z.infer<typeof insertDeathReviewSchema>;
+
+// ===========================================================================
 // PHASE 7 — Water & Sanitation (Section W; PDF "G1. Water")
 // ===========================================================================
 export const WATER_LEVELS = ["I", "II", "III"] as const;
