@@ -128,7 +128,19 @@ export default function DiseaseMap() {
     return <div className="flex items-center justify-center h-64"><p className="text-muted-foreground">Loading map...</p></div>;
   }
 
-  const mapCenter: [number, number] = [9.6564, 125.6023];
+  // Compute bounds that snug around all 20 barangays so the map shows
+  // every catchment without manual zoom. Locked-zoom + locked-pan below
+  // turns the map into a fixed reference view (page scroll no longer
+  // hijacks zoom, and operators can't accidentally lose their place).
+  const mapBounds: [[number, number], [number, number]] = (() => {
+    const coords = Object.values(BARANGAY_COORDS);
+    const lats = coords.map(([lat]) => lat);
+    const lngs = coords.map(([, lng]) => lng);
+    return [
+      [Math.min(...lats), Math.min(...lngs)],
+      [Math.max(...lats), Math.max(...lngs)],
+    ];
+  })();
 
   const alerts: AlertSpec[] = [];
   if (outbreak.isOutbreak) {
@@ -171,9 +183,16 @@ export default function DiseaseMap() {
           <CardContent className="p-0">
             <div className="h-[600px] rounded-b-md overflow-hidden">
               <MapContainer
-                center={mapCenter}
-                zoom={13}
+                bounds={mapBounds}
+                boundsOptions={{ padding: [30, 30] }}
                 style={{ height: '100%', width: '100%' }}
+                scrollWheelZoom={false}
+                doubleClickZoom={false}
+                touchZoom={false}
+                boxZoom={false}
+                keyboard={false}
+                dragging={false}
+                zoomControl={false}
               >
                 <TileLayer
                   attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
@@ -204,13 +223,13 @@ export default function DiseaseMap() {
                         radius={200}
                         pathOptions={{ color: color, fillColor: color, fillOpacity: 0.55, weight: 1 }}
                       >
-                        <Popup>
-                          <div className="p-1 min-w-[180px]">
-                            <p className="font-semibold flex items-center gap-1">
-                              <MapPin className="w-3 h-3" />
+                        <Popup minWidth={240} maxWidth={320}>
+                          <div className="p-2 min-w-[240px]">
+                            <p className="font-semibold text-base flex items-center gap-1.5">
+                              <MapPin className="w-4 h-4" />
                               {barangay}
                             </p>
-                            <p className="text-sm mt-1">Active cases: <strong>{count}</strong></p>
+                            <p className="text-sm mt-2">Active cases: <strong>{count}</strong></p>
                             <p className="text-sm">
                               Risk level:{" "}
                               <span style={{ color: heatColor(intensity), fontWeight: 600 }}>
@@ -218,13 +237,13 @@ export default function DiseaseMap() {
                               </span>
                             </p>
                             {count > 0 && conditionsByBarangay[barangay] && (
-                              <div className="mt-2 pt-2 border-t border-gray-200">
-                                <p className="text-xs font-medium text-gray-600 mb-1">Conditions</p>
-                                <div className="space-y-0.5 max-h-32 overflow-y-auto pr-1">
+                              <div className="mt-3 pt-2 border-t border-gray-200">
+                                <p className="text-sm font-medium text-gray-700 mb-1">Conditions</p>
+                                <div className="space-y-1 max-h-40 overflow-y-auto pr-1">
                                   {Object.entries(conditionsByBarangay[barangay])
                                     .sort(([, a], [, b]) => b - a)
                                     .map(([condition, n]) => (
-                                      <div key={condition} className="flex items-center justify-between text-xs gap-2">
+                                      <div key={condition} className="flex items-center justify-between text-sm gap-3">
                                         <span className="truncate">{condition}</span>
                                         <strong className="flex-shrink-0">{n}</strong>
                                       </div>
@@ -236,7 +255,7 @@ export default function DiseaseMap() {
                               <button
                                 type="button"
                                 onClick={() => navigate(`/disease/registry?barangay=${encodeURIComponent(barangay)}`)}
-                                className="mt-2 text-xs text-blue-600 hover:underline font-medium"
+                                className="mt-3 text-sm text-blue-600 hover:underline font-medium"
                               >
                                 View all cases →
                               </button>
