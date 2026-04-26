@@ -1,6 +1,7 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { startScheduler } from "./scheduler";
+import { freePort } from "./startup-port-cleanup";
 import { serveStatic } from "./static";
 import { createServer } from "http";
 
@@ -121,18 +122,25 @@ app.use((req, res, next) => {
   // It is the only port that is not firewalled.
   const port = parseInt(process.env.PORT || "5000", 10);
 
-  // Retry binding with back-off so a zombie from the previous run doesn't
-  // permanently block the port.  Tries up to 10 times, 1 second apart.
+  // Pre-emptively free the port: if a zombie tsx from a previous run
+  // is still bound, SIGKILL it before we try to listen. Eliminates
+  // the "kill old tsx with the inode one-liner" friction that has
+  // come up repeatedly in dev.
+  await freePort(port);
+
+  // Retry binding with active port-cleanup between attempts so a
+  // zombie that respawns can't block the new boot indefinitely.
   const bindWithRetry = (attemptsLeft: number) => {
     httpServer.listen({ port, host: "0.0.0.0", reusePort: true }, () => {
       log(`serving on port ${port}`);
       startScheduler();
     });
-    httpServer.once("error", (err: NodeJS.ErrnoException) => {
+    httpServer.once("error", async (err: NodeJS.ErrnoException) => {
       if (err.code === "EADDRINUSE" && attemptsLeft > 0) {
         console.error(
-          `[express] Port ${port} busy — retrying in 1 s (${attemptsLeft} left)`,
+          `[express] Port ${port} busy — killing holder + retrying in 1 s (${attemptsLeft} left)`,
         );
+        await freePort(port);
         setTimeout(() => bindWithRetry(attemptsLeft - 1), 1000);
       } else {
         console.error("[express] Fatal: cannot bind to port — exiting.", err.message);
