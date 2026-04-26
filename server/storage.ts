@@ -3057,6 +3057,29 @@ export class DatabaseStorage implements IStorage {
         ON inventory_snapshots (barangay, snapshot_date, item_type, item_key)
     `);
 
+    // PIDSR weekly attestations (RA 11332). Schema was defined in
+    // shared/schema.ts but no CREATE TABLE migration ever shipped, so
+    // older deployments don't have the table — the Phase 3 scheduler's
+    // pidsr-friday-cutoff job blew up with "relation does not exist."
+    // Idempotent CREATE so existing data (if any) is preserved.
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS pidsr_submissions (
+        id                    SERIAL PRIMARY KEY,
+        barangay              TEXT NOT NULL,
+        week_start_date       TEXT NOT NULL,
+        week_end_date         TEXT NOT NULL,
+        submitted_at          TIMESTAMP NOT NULL DEFAULT NOW(),
+        submitted_by_user_id  VARCHAR,
+        cat2_case_count       INTEGER DEFAULT 0,
+        zero_report_diseases  JSONB,
+        notes                 TEXT
+      )
+    `);
+    await db.execute(sql`
+      CREATE UNIQUE INDEX IF NOT EXISTS pidsr_submissions_unique_idx
+        ON pidsr_submissions (barangay, week_end_date)
+    `);
+
     // Phase 2 — unified referral records. Replaces ad-hoc TB referralToRHU
     // and postpartum trans-in/out flags with a queryable lifecycle table.
     await db.execute(sql`
