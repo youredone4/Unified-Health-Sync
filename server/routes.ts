@@ -2,14 +2,14 @@ import type { Express } from "express";
 import type { Server } from "http";
 import { storage } from "./storage";
 import { db } from "./db";
-import { max, eq } from "drizzle-orm";
+import { max, eq, and, desc } from "drizzle-orm";
 import { prenatalVisits, childVisits, seniorVisits, insertFpServiceRecordSchema, insertNutritionFollowUpSchema, insertColdChainLogSchema, insertTbDoseLogSchema, insertPostpartumVisitSchema, insertPrenatalScreeningSchema, insertBirthAttendanceRecordSchema, insertSickChildVisitSchema, insertSchoolImmunizationSchema, insertOralHealthVisitSchema, insertPhilpenAssessmentSchema, insertNcdScreeningSchema, insertVisionScreeningSchema, insertCervicalCancerScreeningSchema, insertMentalHealthScreeningSchema, insertFilariasisRecordSchema, insertRabiesExposureSchema, insertSchistosomiasisRecordSchema, insertSthRecordSchema, insertLeprosyRecordSchema, insertDeathEventSchema, insertHouseholdWaterRecordSchema, insertPidsrSubmissionSchema, insertWorkforceMemberSchema, insertWorkforceCredentialSchema } from "@shared/schema";
 import { api } from "@shared/routes";
 import { z } from "zod";
 import { setupAuth, registerAuthRoutes } from "./auth";
 import { registerAdminRoutes } from "./routes/admin";
 import { loadUserInfo, requireAuth, requireRole, createAuditLog } from "./middleware/rbac";
-import { UserRole } from "@shared/schema";
+import { UserRole, auditLogs } from "@shared/schema";
 import { ensureReportsRegistered, listReports, getReport } from "./reports";
 import { monthRange, quarterRange, annualRange, customRange } from "./reports/types";
 
@@ -139,6 +139,7 @@ export async function registerRoutes(
         return res.status(403).json({ message: "You can only add patients to your assigned barangays" });
       }
       const created = await storage.createMother(input);
+      await createAuditLog(req.userInfo!.id, req.userInfo!.role, "CREATE", "MOTHER", String(created.id), created.barangay, undefined, { id: created.id, name: `${created.firstName} ${created.lastName}` }, req);
       res.status(201).json(created);
     } catch (err) {
       res.status(400).json({ message: "Invalid input" });
@@ -147,8 +148,10 @@ export async function registerRoutes(
 
   app.put(api.mothers.update.path, registryRBAC, ar(async (req, res) => {
     const id = parseId(req.params.id, res); if (id === null) return;
+    const before = await storage.getMother(id);
     const input = api.mothers.update.input.parse(req.body);
     const updated = await storage.updateMother(id, input);
+    await createAuditLog(req.userInfo!.id, req.userInfo!.role, "UPDATE", "MOTHER", String(id), updated?.barangay ?? before?.barangay, before, updated, req);
     res.json(updated);
   }));
 
@@ -186,13 +189,16 @@ export async function registerRoutes(
       return res.status(403).json({ message: "You can only add patients to your assigned barangays" });
     }
     const created = await storage.createChild(input);
+    await createAuditLog(req.userInfo!.id, req.userInfo!.role, "CREATE", "CHILD", String(created.id), created.barangay, undefined, { id: created.id, name: created.name }, req);
     res.status(201).json(created);
   }));
 
   app.put(api.children.update.path, registryRBAC, ar(async (req, res) => {
     const id = parseId(req.params.id, res); if (id === null) return;
+    const before = await storage.getChild(id);
     const input = api.children.update.input.parse(req.body);
     const updated = await storage.updateChild(id, input);
+    await createAuditLog(req.userInfo!.id, req.userInfo!.role, "UPDATE", "CHILD", String(id), updated?.barangay ?? before?.barangay, before, updated, req);
     res.json(updated);
   }));
 
@@ -230,13 +236,16 @@ export async function registerRoutes(
       return res.status(403).json({ message: "You can only add patients to your assigned barangays" });
     }
     const created = await storage.createSenior(input);
+    await createAuditLog(req.userInfo!.id, req.userInfo!.role, "CREATE", "SENIOR", String(created.id), created.barangay, undefined, { id: created.id, name: `${created.firstName} ${created.lastName}` }, req);
     res.status(201).json(created);
   }));
 
   app.put(api.seniors.update.path, registryRBAC, ar(async (req, res) => {
     const id = parseId(req.params.id, res); if (id === null) return;
+    const before = await storage.getSenior(id);
     const input = api.seniors.update.input.parse(req.body);
     const updated = await storage.updateSenior(id, input);
+    await createAuditLog(req.userInfo!.id, req.userInfo!.role, "UPDATE", "SENIOR", String(id), updated?.barangay ?? before?.barangay, before, updated, req);
     res.json(updated);
   }));
 
@@ -534,13 +543,29 @@ export async function registerRoutes(
   app.post(api.diseaseCases.create.path, registryCreateRBAC, ar(async (req, res) => {
     const input = api.diseaseCases.create.input.parse(req.body);
     const created = await storage.createDiseaseCase(input);
+    await createAuditLog(req.userInfo!.id, req.userInfo!.role, "CREATE", "DISEASE_CASE", String(created.id), created.barangay, undefined, { id: created.id, condition: created.condition, status: created.status }, req);
     res.status(201).json(created);
   }));
 
   app.put(api.diseaseCases.update.path, registryRBAC, ar(async (req, res) => {
     const id = parseId(req.params.id, res); if (id === null) return;
+    const before = await storage.getDiseaseCase(id);
     const input = api.diseaseCases.update.input.parse(req.body);
     const updated = await storage.updateDiseaseCase(id, input);
+    // Promote a status change to its own action so the audit timeline
+    // shows "case marked Closed" cleanly, not buried in a UPDATE diff.
+    const statusChanged = before && updated && before.status !== updated.status;
+    await createAuditLog(
+      req.userInfo!.id,
+      req.userInfo!.role,
+      statusChanged ? "STATUS_CHANGE" : "UPDATE",
+      "DISEASE_CASE",
+      String(id),
+      updated?.barangay ?? before?.barangay,
+      before,
+      updated,
+      req,
+    );
     res.json(updated);
   }));
 
@@ -611,6 +636,7 @@ export async function registerRoutes(
       if (rhuError) return res.status(400).json({ message: rhuError });
     }
     const created = await storage.createTBPatient(input);
+    await createAuditLog(req.userInfo!.id, req.userInfo!.role, "CREATE", "TB_PATIENT", String(created.id), created.barangay, undefined, { id: created.id, name: `${created.firstName} ${created.lastName}`, outcomeStatus: created.outcomeStatus }, req);
     res.status(201).json(created);
   }));
 
@@ -620,15 +646,27 @@ export async function registerRoutes(
     // Skip validation entirely for patches that don't touch referral fields.
     // A legacy row carrying (referralToRHU=true, referredRhuId=null) must
     // still be able to record doses, sputum checks, etc.
+    const before = await storage.getTBPatient(id);
     if (input.referralToRHU !== undefined || input.referredRhuId !== undefined) {
-      const existing = await storage.getTBPatient(id);
-      if (!existing) return res.status(404).json({ message: "TB patient not found" });
-      const mergedRefer = input.referralToRHU !== undefined ? input.referralToRHU : existing.referralToRHU;
-      const mergedRhuId = input.referredRhuId !== undefined ? input.referredRhuId : existing.referredRhuId;
+      if (!before) return res.status(404).json({ message: "TB patient not found" });
+      const mergedRefer = input.referralToRHU !== undefined ? input.referralToRHU : before.referralToRHU;
+      const mergedRhuId = input.referredRhuId !== undefined ? input.referredRhuId : before.referredRhuId;
       const rhuError = await validateTbRhuReferral(!!mergedRefer, mergedRhuId ?? null);
       if (rhuError) return res.status(400).json({ message: rhuError });
     }
     const updated = await storage.updateTBPatient(id, input);
+    const outcomeChanged = before && updated && before.outcomeStatus !== updated.outcomeStatus;
+    await createAuditLog(
+      req.userInfo!.id,
+      req.userInfo!.role,
+      outcomeChanged ? "STATUS_CHANGE" : "UPDATE",
+      "TB_PATIENT",
+      String(id),
+      updated?.barangay ?? before?.barangay,
+      before,
+      updated,
+      req,
+    );
     res.json(updated);
   }));
 
@@ -1922,6 +1960,31 @@ export async function registerRoutes(
       const daily = await runDailyAlerts();
       const weekly = await runWeeklyAlerts();
       res.json({ daily, weekly });
+    }),
+  );
+
+  // === AUDIT LOGS (Phase 1) ===
+  // SYSTEM_ADMIN-only viewer of the audit_logs table. Supports filters by
+  // action, entity type, and barangay, plus a hard cap of 500 rows so a
+  // pathological query doesn't exhaust the connection. Newest first.
+  app.get("/api/admin/audit-logs", loadUserInfo, requireAuth,
+    requireRole(UserRole.SYSTEM_ADMIN),
+    ar(async (req, res) => {
+      const action = req.query.action ? String(req.query.action) : undefined;
+      const entityType = req.query.entityType ? String(req.query.entityType) : undefined;
+      const barangayName = req.query.barangayName ? String(req.query.barangayName) : undefined;
+      const limit = Math.min(Number(req.query.limit) || 200, 500);
+      const conds: any[] = [];
+      if (action) conds.push(eq(auditLogs.action, action));
+      if (entityType) conds.push(eq(auditLogs.entityType, entityType));
+      if (barangayName) conds.push(eq(auditLogs.barangayName, barangayName));
+      const rows = await db
+        .select()
+        .from(auditLogs)
+        .where(conds.length ? and(...conds) : undefined)
+        .orderBy(desc(auditLogs.createdAt))
+        .limit(limit);
+      res.json(rows);
     }),
   );
 
