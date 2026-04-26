@@ -1,5 +1,6 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
+import { startScheduler } from "./scheduler";
 import { serveStatic } from "./static";
 import { createServer } from "http";
 
@@ -122,6 +123,8 @@ app.use((req, res, next) => {
     },
     () => {
       log(`serving on port ${port}`);
+      // Start the scheduled-jobs scheduler once the HTTP server is up.
+      startScheduler();
     },
   );
 })();

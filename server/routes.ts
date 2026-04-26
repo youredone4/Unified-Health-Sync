@@ -1910,6 +1910,22 @@ export async function registerRoutes(
   app.get("/api/users/search", loadUserInfo, requireAuth, userSearchHandler);
   app.get("/api/users", loadUserInfo, requireAuth, userSearchHandler);
 
+  // === SCHEDULER MANUAL TRIGGER (Phase 3) ===
+  // Lets an admin fire the daily / weekly alert sweep now without waiting
+  // for 6 AM or Friday 4 PM. Returns per-job finding counts so we can
+  // verify the scan worked. Output rows land in audit_logs as
+  // SYSTEM_ALERT entries — visible on the Audit Logs admin page.
+  app.post("/api/admin/run-scheduler-now", loadUserInfo, requireAuth,
+    requireRole(UserRole.SYSTEM_ADMIN),
+    ar(async (_req, res) => {
+      const { runDailyAlerts, runWeeklyAlerts } = await import("./scheduler");
+      const daily = await runDailyAlerts();
+      const weekly = await runWeeklyAlerts();
+      res.json({ daily, weekly });
+    }),
+  );
+
+
   // === NURSE VISITS (Team Leader / Barangay Nurse monitoring visits) ===
   // RBAC: any authenticated role can read; only SYSTEM_ADMIN and TL can write.
   // Additionally, TL users are scoped to their assigned barangays via the parent record.
