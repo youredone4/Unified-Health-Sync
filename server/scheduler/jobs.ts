@@ -20,6 +20,7 @@ import {
   m1ReportInstances,
   pidsrSubmissions,
   diseaseCases,
+  deathReviews,
   auditLogs,
 } from "@shared/schema";
 
@@ -327,6 +328,42 @@ async function checkClusterOutbreaks(): Promise<AlertFinding[]> {
   return findings;
 }
 
+/**
+ * Death-review deadlines (Phase 5).
+ * - Open reviews where `due_date <= today + 7 days` and not yet REVIEWED/CLOSED
+ *   → "deadline approaching" alert.
+ * - Open reviews already past `due_date` → "overdue" alert.
+ */
+async function checkDeathReviewDeadlines(): Promise<AlertFinding[]> {
+  const todayStr = todayIso();
+  const sevenOut = daysFromNowIso(7);
+  const open = await db
+    .select()
+    .from(deathReviews)
+    .where(sql`status NOT IN ('REVIEWED', 'CLOSED')`);
+  const findings: AlertFinding[] = [];
+  for (const r of open) {
+    if (r.dueDate < todayStr) {
+      findings.push({
+        entityType: "DEATH_REVIEW",
+        entityId: String(r.id),
+        barangayName: r.barangayName,
+        reason: `${r.reviewType} review OVERDUE (due ${r.dueDate}, status ${r.status})`,
+        details: { reviewType: r.reviewType, status: r.status, dueDate: r.dueDate, deathEventId: r.deathEventId },
+      });
+    } else if (r.dueDate <= sevenOut) {
+      findings.push({
+        entityType: "DEATH_REVIEW",
+        entityId: String(r.id),
+        barangayName: r.barangayName,
+        reason: `${r.reviewType} review deadline in ≤7 days (due ${r.dueDate}, status ${r.status})`,
+        details: { reviewType: r.reviewType, status: r.status, dueDate: r.dueDate, deathEventId: r.deathEventId },
+      });
+    }
+  }
+  return findings;
+}
+
 /** Run all daily 6 AM alerts. */
 export async function runDailyAlerts(): Promise<{ jobName: string; count: number }[]> {
   const results: { jobName: string; count: number }[] = [];
@@ -337,6 +374,7 @@ export async function runDailyAlerts(): Promise<{ jobName: string; count: number
     ["m1-deadlines", checkM1Deadlines],
     ["outbreak-single-case", checkSingleCaseDiseases],
     ["outbreak-cluster", checkClusterOutbreaks],
+    ["death-review-deadlines", checkDeathReviewDeadlines],
   ] as const) {
     try {
       const findings = await fn();

@@ -9,7 +9,7 @@ import { z } from "zod";
 import { setupAuth, registerAuthRoutes } from "./auth";
 import { registerAdminRoutes } from "./routes/admin";
 import { loadUserInfo, requireAuth, requireRole, createAuditLog } from "./middleware/rbac";
-import { UserRole, auditLogs } from "@shared/schema";
+import { UserRole, auditLogs, deathReviews, DEATH_REVIEW_STATUSES } from "@shared/schema";
 import { ensureReportsRegistered, listReports, getReport } from "./reports";
 import { monthRange, quarterRange, annualRange, customRange } from "./reports/types";
 
@@ -1032,6 +1032,33 @@ export async function registerRoutes(
         { deceasedName: created.deceasedName, dateOfDeath: created.dateOfDeath },
         req,
       );
+
+      // Phase 5 — auto-create MDR / PDR review records per DOH AO 2008-0029
+      // and AO 2016-0035. 30-day deadline counted from dateOfDeath.
+      // - MDR (Maternal Death Review): any death with maternalDeathCause set.
+      // - PDR (Perinatal Death Review): fetal death OR neonatal (≤28 days).
+      const due = new Date(created.dateOfDeath);
+      due.setDate(due.getDate() + 30);
+      const dueDate = due.toISOString().slice(0, 10);
+      const reviewsToCreate: { reviewType: "MDR" | "PDR" }[] = [];
+      if (created.maternalDeathCause) reviewsToCreate.push({ reviewType: "MDR" });
+      const isNeonatal = created.ageDays != null && created.ageDays <= 28;
+      if (created.isFetalDeath || isNeonatal) reviewsToCreate.push({ reviewType: "PDR" });
+      for (const r of reviewsToCreate) {
+        const [review] = await db.insert(deathReviews).values({
+          deathEventId: created.id,
+          reviewType: r.reviewType,
+          dueDate,
+          barangayName: created.barangay,
+        }).returning();
+        await createAuditLog(
+          req.userInfo!.id, req.userInfo!.role,
+          "DEATH_REVIEW_OPENED", "DEATH_REVIEW", String(review.id),
+          created.barangay, undefined,
+          { deathEventId: created.id, reviewType: r.reviewType, dueDate },
+          req,
+        );
+      }
       res.status(201).json(created);
     }),
   );
@@ -2099,6 +2126,64 @@ export async function registerRoutes(
         "REFERRAL_COMPLETED", "REFERRAL", String(id),
         before.sourceBarangay ?? undefined,
         { status: before.status }, { status: "COMPLETED" }, req,
+      );
+      res.json(updated);
+    }),
+  );
+
+  // === DEATH REVIEWS — MDR / PDR (Phase 5 of operational-actions framework) ===
+  // Auto-created on death_event POST; lifecycle managed by MGMT roles.
+  // Captures committee findings + recommendations per DOH AO 2008-0029
+  // (maternal) / AO 2016-0035 (perinatal/neonatal) within the 30-day deadline.
+  app.get("/api/death-reviews", loadUserInfo, requireAuth, ar(async (req, res) => {
+    const status = req.query.status ? String(req.query.status) : undefined;
+    const conds: any[] = [];
+    if (status) conds.push(eq(deathReviews.status, status as any));
+    if (req.userInfo?.role === UserRole.TL) {
+      const assigned = req.userInfo.assignedBarangays;
+      if (assigned.length === 0) return res.json([]);
+      conds.push(eq(deathReviews.barangayName, assigned[0]));
+    }
+    const rows = await db
+      .select()
+      .from(deathReviews)
+      .where(conds.length ? and(...conds) : undefined)
+      .orderBy(desc(deathReviews.dueDate))
+      .limit(500);
+    res.json(rows);
+  }));
+
+  // PATCH advances the lifecycle. Body: { status, notifiedAt?, reviewScheduledAt?,
+  // committeeMembers?, findings?, recommendations? }. Status enum is enforced.
+  app.patch("/api/death-reviews/:id", loadUserInfo, requireAuth,
+    requireRole(UserRole.SYSTEM_ADMIN, UserRole.MHO, UserRole.SHA),
+    ar(async (req, res) => {
+      const id = parseId(req.params.id, res); if (id === null) return;
+      const before = (await db.select().from(deathReviews).where(eq(deathReviews.id, id)))[0];
+      if (!before) return res.status(404).json({ message: "Death review not found" });
+      const newStatus = req.body?.status as string | undefined;
+      if (newStatus && !DEATH_REVIEW_STATUSES.includes(newStatus as any)) {
+        return res.status(400).json({ message: `Invalid status; allowed: ${DEATH_REVIEW_STATUSES.join(", ")}` });
+      }
+      // Auto-stamp lifecycle timestamps based on the new status.
+      const set: Record<string, any> = {};
+      if (newStatus) {
+        set.status = newStatus;
+        if (newStatus === "NOTIFIED" && !before.notifiedAt) set.notifiedAt = new Date();
+        if (newStatus === "REVIEW_SCHEDULED" && !before.reviewScheduledAt) set.reviewScheduledAt = new Date();
+        if (newStatus === "REVIEWED" && !before.reviewedAt) set.reviewedAt = new Date();
+        if (newStatus === "CLOSED" && !before.closedAt) set.closedAt = new Date();
+      }
+      if (req.body?.committeeMembers !== undefined) set.committeeMembers = req.body.committeeMembers;
+      if (req.body?.findings !== undefined) set.findings = String(req.body.findings);
+      if (req.body?.recommendations !== undefined) set.recommendations = String(req.body.recommendations);
+      const [updated] = await db.update(deathReviews).set(set).where(eq(deathReviews.id, id)).returning();
+      await createAuditLog(
+        req.userInfo!.id, req.userInfo!.role,
+        newStatus ? "DEATH_REVIEW_STATUS_CHANGE" : "DEATH_REVIEW_UPDATE",
+        "DEATH_REVIEW", String(id),
+        before.barangayName ?? undefined,
+        before, updated, req,
       );
       res.json(updated);
     }),

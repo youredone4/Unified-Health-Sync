@@ -3112,6 +3112,36 @@ export class DatabaseStorage implements IStorage {
         ON referral_records (target_facility, status)
     `);
 
+    // Phase 5 — MDR / PDR death-review lifecycle. Auto-created when a
+    // qualifying death_events row is inserted. 30-day DOH deadline lives
+    // in due_date; the scheduler reads it for overdue / 7-day-warning alerts.
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS death_reviews (
+        id                      SERIAL PRIMARY KEY,
+        death_event_id          INTEGER NOT NULL,
+        review_type             TEXT NOT NULL,
+        status                  TEXT NOT NULL DEFAULT 'PENDING_NOTIFY',
+        due_date                TEXT NOT NULL,
+        notified_at             TIMESTAMP,
+        review_scheduled_at     TIMESTAMP,
+        reviewed_at             TIMESTAMP,
+        closed_at               TIMESTAMP,
+        committee_members       JSONB,
+        findings                TEXT,
+        recommendations         TEXT,
+        barangay_name           TEXT,
+        created_at              TIMESTAMP NOT NULL DEFAULT NOW()
+      )
+    `);
+    await db.execute(sql`
+      CREATE UNIQUE INDEX IF NOT EXISTS death_reviews_event_idx
+        ON death_reviews (death_event_id, review_type)
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS death_reviews_status_due_idx
+        ON death_reviews (status, due_date)
+    `);
+
     // Idempotent backfill: every health_stations row needs a facilityType now
     // that REFER_RHU records the referred facility. Runs on every startup but
     // becomes a no-op once every row has a type.
