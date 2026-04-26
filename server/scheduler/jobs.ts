@@ -21,6 +21,7 @@ import {
   pidsrSubmissions,
   diseaseCases,
   deathReviews,
+  aefiEvents,
   auditLogs,
 } from "@shared/schema";
 
@@ -364,6 +365,45 @@ async function checkDeathReviewDeadlines(): Promise<AlertFinding[]> {
   return findings;
 }
 
+/**
+ * AEFI report SLA (Phase 6).
+ * - SERIOUS not reported to CHD within 24h of eventDate → CRITICAL.
+ * - NON_SERIOUS not reported within 7d → REMINDER.
+ * Stops alerting once reportedToChd flips true.
+ */
+async function checkAefiReportSlas(): Promise<AlertFinding[]> {
+  const now = today();
+  const oneDayAgo = new Date(now); oneDayAgo.setDate(now.getDate() - 1);
+  const sevenDaysAgo = new Date(now); sevenDaysAgo.setDate(now.getDate() - 7);
+  const oneDayAgoIso = oneDayAgo.toISOString().slice(0, 10);
+  const sevenDaysAgoIso = sevenDaysAgo.toISOString().slice(0, 10);
+  const open = await db
+    .select()
+    .from(aefiEvents)
+    .where(sql`reported_to_chd = false`);
+  const findings: AlertFinding[] = [];
+  for (const e of open) {
+    if (e.severity === "SERIOUS" && e.eventDate <= oneDayAgoIso) {
+      findings.push({
+        entityType: "AEFI_EVENT",
+        entityId: String(e.id),
+        barangayName: e.barangay,
+        reason: `SERIOUS AEFI not reported to CHD within 24h (event ${e.eventDate})`,
+        details: { vaccineGiven: e.vaccineGiven, eventDate: e.eventDate, severity: e.severity },
+      });
+    } else if (e.severity === "NON_SERIOUS" && e.eventDate <= sevenDaysAgoIso) {
+      findings.push({
+        entityType: "AEFI_EVENT",
+        entityId: String(e.id),
+        barangayName: e.barangay,
+        reason: `NON-SERIOUS AEFI not reported to CHD within 7d (event ${e.eventDate})`,
+        details: { vaccineGiven: e.vaccineGiven, eventDate: e.eventDate, severity: e.severity },
+      });
+    }
+  }
+  return findings;
+}
+
 /** Run all daily 6 AM alerts. */
 export async function runDailyAlerts(): Promise<{ jobName: string; count: number }[]> {
   const results: { jobName: string; count: number }[] = [];
@@ -375,6 +415,7 @@ export async function runDailyAlerts(): Promise<{ jobName: string; count: number
     ["outbreak-single-case", checkSingleCaseDiseases],
     ["outbreak-cluster", checkClusterOutbreaks],
     ["death-review-deadlines", checkDeathReviewDeadlines],
+    ["aefi-report-slas", checkAefiReportSlas],
   ] as const) {
     try {
       const findings = await fn();
