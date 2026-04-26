@@ -3142,6 +3142,34 @@ export class DatabaseStorage implements IStorage {
         ON death_reviews (status, due_date)
     `);
 
+    // Phase 6 — AEFI events. SERIOUS events have a 24h CHD-report SLA;
+    // NON_SERIOUS have 7d. The scheduler reads this table against
+    // reported_to_chd_at to emit overdue alerts.
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS aefi_events (
+        id                    SERIAL PRIMARY KEY,
+        patient_name          TEXT NOT NULL,
+        dob                   TEXT NOT NULL,
+        sex                   TEXT NOT NULL,
+        barangay              TEXT NOT NULL,
+        vaccine_given         TEXT NOT NULL,
+        vaccination_date      TEXT NOT NULL,
+        event_date            TEXT NOT NULL,
+        event_description     TEXT NOT NULL,
+        severity              TEXT NOT NULL,
+        outcome               TEXT NOT NULL DEFAULT 'UNKNOWN',
+        reported_to_chd       BOOLEAN DEFAULT FALSE,
+        reported_to_chd_at    TIMESTAMP,
+        recorded_by_user_id   VARCHAR,
+        notes                 TEXT,
+        created_at            TIMESTAMP NOT NULL DEFAULT NOW()
+      )
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS aefi_events_severity_reported_idx
+        ON aefi_events (severity, reported_to_chd)
+    `);
+
     // Idempotent backfill: every health_stations row needs a facilityType now
     // that REFER_RHU records the referred facility. Runs on every startup but
     // becomes a no-op once every row has a type.

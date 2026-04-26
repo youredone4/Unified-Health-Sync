@@ -9,7 +9,7 @@ import { z } from "zod";
 import { setupAuth, registerAuthRoutes } from "./auth";
 import { registerAdminRoutes } from "./routes/admin";
 import { loadUserInfo, requireAuth, requireRole, createAuditLog } from "./middleware/rbac";
-import { UserRole, auditLogs, deathReviews, DEATH_REVIEW_STATUSES } from "@shared/schema";
+import { UserRole, auditLogs, deathReviews, DEATH_REVIEW_STATUSES, aefiEvents, insertAefiEventSchema } from "@shared/schema";
 import { ensureReportsRegistered, listReports, getReport } from "./reports";
 import { monthRange, quarterRange, annualRange, customRange } from "./reports/types";
 
@@ -2183,6 +2183,86 @@ export async function registerRoutes(
         newStatus ? "DEATH_REVIEW_STATUS_CHANGE" : "DEATH_REVIEW_UPDATE",
         "DEATH_REVIEW", String(id),
         before.barangayName ?? undefined,
+        before, updated, req,
+      );
+      res.json(updated);
+    }),
+  );
+
+  // === AEFI EVENTS — Phase 6 of operational-actions framework ===
+  // Adverse Event Following Immunization. SERIOUS events: 24h SLA to
+  // CHD; NON_SERIOUS: 7d. The scheduler emits SYSTEM_ALERT when SLA
+  // is missed. POST is TL-only (BHS-side encoding); MGMT marks
+  // reportedToChd via PATCH after sending the official AEFI form upstream.
+  app.get("/api/aefi-events", loadUserInfo, requireAuth, ar(async (req, res) => {
+    const requestedBarangay = req.query.barangay ? String(req.query.barangay) : undefined;
+    const conds: any[] = [];
+    if (req.userInfo?.role === UserRole.TL) {
+      const assigned = req.userInfo.assignedBarangays;
+      if (assigned.length === 0) return res.json([]);
+      if (requestedBarangay && !assigned.includes(requestedBarangay)) {
+        return res.status(403).json({ message: "Access denied to this barangay" });
+      }
+      conds.push(eq(aefiEvents.barangay, requestedBarangay ?? assigned[0]));
+    } else if (requestedBarangay) {
+      conds.push(eq(aefiEvents.barangay, requestedBarangay));
+    }
+    const rows = await db.select().from(aefiEvents)
+      .where(conds.length ? and(...conds) : undefined)
+      .orderBy(desc(aefiEvents.eventDate))
+      .limit(500);
+    res.json(rows);
+  }));
+
+  app.post("/api/aefi-events", loadUserInfo, requireAuth,
+    requireRole(UserRole.TL),
+    ar(async (req, res) => {
+      const parsed = insertAefiEventSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: "Invalid AEFI event", issues: parsed.error.issues });
+      }
+      const input = parsed.data;
+      if (!req.userInfo!.assignedBarangays.includes(input.barangay)) {
+        return res.status(403).json({ message: "Access denied to this barangay" });
+      }
+      const [created] = await db.insert(aefiEvents).values({
+        ...input,
+        recordedByUserId: req.userInfo!.id,
+      }).returning();
+      await createAuditLog(
+        req.userInfo!.id, req.userInfo!.role,
+        "CREATE", "AEFI_EVENT", String(created.id),
+        created.barangay, undefined,
+        { id: created.id, vaccineGiven: created.vaccineGiven, severity: created.severity, eventDate: created.eventDate },
+        req,
+      );
+      res.status(201).json(created);
+    }),
+  );
+
+  // PATCH lets MGMT mark reportedToChd, update outcome, or correct details.
+  app.patch("/api/aefi-events/:id", loadUserInfo, requireAuth,
+    requireRole(UserRole.SYSTEM_ADMIN, UserRole.MHO, UserRole.SHA),
+    ar(async (req, res) => {
+      const id = parseId(req.params.id, res); if (id === null) return;
+      const before = (await db.select().from(aefiEvents).where(eq(aefiEvents.id, id)))[0];
+      if (!before) return res.status(404).json({ message: "AEFI event not found" });
+      const set: Record<string, any> = {};
+      if (req.body?.reportedToChd !== undefined) {
+        set.reportedToChd = !!req.body.reportedToChd;
+        if (set.reportedToChd && !before.reportedToChdAt) {
+          set.reportedToChdAt = new Date();
+        }
+      }
+      if (req.body?.outcome !== undefined) set.outcome = String(req.body.outcome);
+      if (req.body?.notes !== undefined) set.notes = String(req.body.notes);
+      const [updated] = await db.update(aefiEvents).set(set).where(eq(aefiEvents.id, id)).returning();
+      const reportedFlipped = before.reportedToChd !== updated.reportedToChd;
+      await createAuditLog(
+        req.userInfo!.id, req.userInfo!.role,
+        reportedFlipped && updated.reportedToChd ? "AEFI_REPORTED_TO_CHD" : "UPDATE",
+        "AEFI_EVENT", String(id),
+        before.barangay,
         before, updated, req,
       );
       res.json(updated);

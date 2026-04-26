@@ -1201,6 +1201,63 @@ export type DeathReview = typeof deathReviews.$inferSelect;
 export type InsertDeathReview = z.infer<typeof insertDeathReviewSchema>;
 
 // ===========================================================================
+// AEFI — Adverse Event Following Immunization (Phase 6 of operational-actions)
+// ===========================================================================
+// DOH AEFI Surveillance Guidelines + WHO classification. Captured at BHS by
+// the TL whenever a vaccine recipient experiences a clinically significant
+// reaction. SERIOUS events must be reported to RESU/CHD within 24 hours;
+// NON_SERIOUS within 7 days. The scheduler watches reportedToCHD against
+// these SLAs and emits SYSTEM_ALERT if the deadline is missed.
+//
+// Vaccine list spans EPI childhood (BCG, Penta, OPV, MR, HPV, Td, etc.) plus
+// adult campaigns (COVID-19, flu). Open-text `vaccine_given` keeps the table
+// schema-stable across catalog changes.
+export const AEFI_SEVERITIES = ["SERIOUS", "NON_SERIOUS"] as const;
+export type AefiSeverity = typeof AEFI_SEVERITIES[number];
+
+export const AEFI_OUTCOMES = [
+  "RECOVERED",
+  "RECOVERING",
+  "NOT_RECOVERED",
+  "DEATH",
+  "UNKNOWN",
+] as const;
+export type AefiOutcome = typeof AEFI_OUTCOMES[number];
+
+export const aefiEvents = pgTable("aefi_events", {
+  id: serial("id").primaryKey(),
+  // Recipient
+  patientName: text("patient_name").notNull(),
+  dob: text("dob").notNull(),
+  sex: text("sex").notNull(),                    // 'M' | 'F'
+  barangay: text("barangay").notNull(),
+  // Vaccine
+  vaccineGiven: text("vaccine_given").notNull(), // e.g. "BCG", "Penta-1", "HPV-1"
+  vaccinationDate: text("vaccination_date").notNull(),
+  // Event
+  eventDate: text("event_date").notNull(),       // when the AE first appeared
+  eventDescription: text("event_description").notNull(),
+  severity: text("severity").$type<AefiSeverity>().notNull(),
+  outcome: text("outcome").$type<AefiOutcome>().notNull().default("UNKNOWN"),
+  // SLA tracking
+  reportedToChd: boolean("reported_to_chd").default(false),
+  reportedToChdAt: timestamp("reported_to_chd_at"),
+  // Provenance
+  recordedByUserId: varchar("recorded_by_user_id"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+export const insertAefiEventSchema = createInsertSchema(aefiEvents)
+  .omit({ id: true, createdAt: true, reportedToChdAt: true })
+  .extend({
+    sex: z.enum(["M", "F"]),
+    severity: z.enum(AEFI_SEVERITIES),
+    outcome: z.enum(AEFI_OUTCOMES).optional(),
+  });
+export type AefiEvent = typeof aefiEvents.$inferSelect;
+export type InsertAefiEvent = z.infer<typeof insertAefiEventSchema>;
+
+// ===========================================================================
 // PHASE 7 — Water & Sanitation (Section W; PDF "G1. Water")
 // ===========================================================================
 export const WATER_LEVELS = ["I", "II", "III"] as const;
