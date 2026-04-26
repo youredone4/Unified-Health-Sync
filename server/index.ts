@@ -92,13 +92,18 @@ app.use((req, res, next) => {
 
   process.on("uncaughtException", (err: NodeJS.ErrnoException) => {
     console.error("[express] Uncaught exception:", err.message || err);
-    // Fatal system errors (e.g. port already in use) must kill the process so
-    // the next workflow restart can acquire the port cleanly.
-    if (err.code === "EADDRINUSE" || err.code === "EACCES") {
-      console.error("[express] Fatal: cannot bind to port — exiting.");
-      process.exit(1);
-    }
   });
+
+  // Graceful shutdown: force-close all open connections (including Vite HMR
+  // WebSockets) so the port is freed immediately — no blocking on persistent
+  // connections that would delay the next restart.
+  const shutdown = () => {
+    (httpServer as any).closeAllConnections?.();
+    httpServer.close(() => process.exit(0));
+    setTimeout(() => process.exit(0), 2000).unref();
+  };
+  process.on("SIGTERM", shutdown);
+  process.on("SIGINT", shutdown);
 
   // importantly only setup vite in development and after
   // setting up all the other routes so the catch-all route
@@ -115,16 +120,25 @@ app.use((req, res, next) => {
   // this serves both the API and the client.
   // It is the only port that is not firewalled.
   const port = parseInt(process.env.PORT || "5000", 10);
-  httpServer.listen(
-    {
-      port,
-      host: "0.0.0.0",
-      reusePort: true,
-    },
-    () => {
+
+  // Retry binding with back-off so a zombie from the previous run doesn't
+  // permanently block the port.  Tries up to 10 times, 1 second apart.
+  const bindWithRetry = (attemptsLeft: number) => {
+    httpServer.listen({ port, host: "0.0.0.0", reusePort: true }, () => {
       log(`serving on port ${port}`);
-      // Start the scheduled-jobs scheduler once the HTTP server is up.
       startScheduler();
-    },
-  );
+    });
+    httpServer.once("error", (err: NodeJS.ErrnoException) => {
+      if (err.code === "EADDRINUSE" && attemptsLeft > 0) {
+        console.error(
+          `[express] Port ${port} busy — retrying in 1 s (${attemptsLeft} left)`,
+        );
+        setTimeout(() => bindWithRetry(attemptsLeft - 1), 1000);
+      } else {
+        console.error("[express] Fatal: cannot bind to port — exiting.", err.message);
+        process.exit(1);
+      }
+    });
+  };
+  bindWithRetry(10);
 })();
