@@ -19,6 +19,7 @@ import {
   tbPatients,
   m1ReportInstances,
   pidsrSubmissions,
+  diseaseCases,
   auditLogs,
 } from "@shared/schema";
 
@@ -196,6 +197,136 @@ async function checkPidsrFridayCutoff(): Promise<AlertFinding[]> {
   return findings;
 }
 
+/**
+ * OUTBREAK DETECTOR (Phase 4 — operational-actions framework).
+ *
+ * Anchored on PIDSR / DOH Outbreak Response (RA 11332, AO 2020-0023).
+ * Two flavors of rule:
+ *   - SINGLE-CASE: any single confirmed case is automatically a signal
+ *     (Cat-I diseases like AFP, cholera, anthrax, meningococcal, NT,
+ *      rabies-human, diphtheria).
+ *   - CLUSTER: ≥N cases of the condition in the same barangay within
+ *     a rolling window (measles, dengue, ABD, HFMD, hepatitis A,
+ *      typhoid, pertussis).
+ *
+ * Window thresholds match the most-cited Field Health Surveillance
+ * Manual figures. Aggressive but operationally tractable for an LGU
+ * MHO. Tune via the constants below if a province specifies different
+ * values.
+ */
+
+// Cat-I single-case alerts: 1 case = automatic outbreak signal.
+const SINGLE_CASE_DISEASES = [
+  "AFP (Acute Flaccid Paralysis)",
+  "Cholera suspected",
+  "Anthrax",
+  "Meningococcal Disease",
+  "Neonatal Tetanus",
+  "Rabies (human)",
+  "Diphtheria",
+] as const;
+const SINGLE_CASE_LOOKBACK_DAYS = 14;
+
+// Cluster thresholds: ≥threshold cases of `condition` in the same
+// barangay within `windowDays`.
+const CLUSTER_THRESHOLDS: Array<{ condition: string; windowDays: number; threshold: number }> = [
+  { condition: "Measles / Rubella suspected", windowDays: 14, threshold: 2 },
+  { condition: "Dengue suspected",            windowDays: 7,  threshold: 3 },
+  { condition: "Acute Bloody Diarrhea",       windowDays: 7,  threshold: 3 },
+  { condition: "HFMD outbreak",               windowDays: 7,  threshold: 5 },
+  { condition: "Hepatitis A",                 windowDays: 28, threshold: 3 },
+  { condition: "Typhoid Fever",               windowDays: 28, threshold: 3 },
+  { condition: "Pertussis",                   windowDays: 14, threshold: 2 },
+  { condition: "Diarrhea (non-bloody)",       windowDays: 7,  threshold: 5 },
+];
+
+/**
+ * Match a disease_case row against a target condition. Checks both the
+ * primary `condition` field AND the `additional_conditions` JSON array
+ * since a single case may be co-coded with multiple PIDSR conditions.
+ */
+function caseMatchesCondition(row: any, target: string): boolean {
+  if (row.condition === target) return true;
+  const extras = row.additionalConditions ?? row.additional_conditions ?? [];
+  return Array.isArray(extras) && extras.includes(target);
+}
+
+/** Pull every disease case reported in the last `lookbackDays` days. */
+async function getRecentCases(lookbackDays: number) {
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - lookbackDays);
+  const cutoffIso = cutoff.toISOString().slice(0, 10);
+  return await db
+    .select()
+    .from(diseaseCases)
+    .where(sql`date_reported >= ${cutoffIso}`);
+}
+
+/** Single-case Cat-I alerts. One alert per case. */
+async function checkSingleCaseDiseases(): Promise<AlertFinding[]> {
+  const recent = await getRecentCases(SINGLE_CASE_LOOKBACK_DAYS);
+  const findings: AlertFinding[] = [];
+  for (const c of recent) {
+    for (const disease of SINGLE_CASE_DISEASES) {
+      if (caseMatchesCondition(c, disease)) {
+        findings.push({
+          entityType: "OUTBREAK_SUSPECTED",
+          entityId: String(c.id),
+          barangayName: c.barangay,
+          reason: `Cat-I disease reported: ${disease} (case ${c.id})`,
+          details: {
+            disease,
+            caseId: c.id,
+            patientName: c.patientName,
+            dateReported: c.dateReported,
+            singleCase: true,
+          },
+        });
+      }
+    }
+  }
+  return findings;
+}
+
+/** Cluster threshold breaches. One alert per (condition × barangay) breach. */
+async function checkClusterOutbreaks(): Promise<AlertFinding[]> {
+  const findings: AlertFinding[] = [];
+  // Pull a single batch of cases covering the longest window once,
+  // then filter per rule. Cheaper than re-querying for each rule.
+  const longestWindow = Math.max(...CLUSTER_THRESHOLDS.map((r) => r.windowDays));
+  const recent = await getRecentCases(longestWindow);
+  const todayMs = Date.now();
+  for (const rule of CLUSTER_THRESHOLDS) {
+    const windowMs = rule.windowDays * 86_400_000;
+    // Group matching cases by barangay.
+    const byBarangay = new Map<string, any[]>();
+    for (const c of recent) {
+      const reportedMs = new Date(c.dateReported).getTime();
+      if (todayMs - reportedMs > windowMs) continue;
+      if (!caseMatchesCondition(c, rule.condition)) continue;
+      const list = byBarangay.get(c.barangay) ?? [];
+      list.push(c);
+      byBarangay.set(c.barangay, list);
+    }
+    for (const [barangay, cases] of Array.from(byBarangay.entries())) {
+      if (cases.length < rule.threshold) continue;
+      findings.push({
+        entityType: "OUTBREAK_SUSPECTED",
+        barangayName: barangay,
+        reason: `Cluster: ${cases.length} ${rule.condition} cases in ${barangay} within ${rule.windowDays} days (threshold ${rule.threshold})`,
+        details: {
+          disease: rule.condition,
+          caseCount: cases.length,
+          windowDays: rule.windowDays,
+          threshold: rule.threshold,
+          caseIds: cases.map((c: any) => c.id),
+        },
+      });
+    }
+  }
+  return findings;
+}
+
 /** Run all daily 6 AM alerts. */
 export async function runDailyAlerts(): Promise<{ jobName: string; count: number }[]> {
   const results: { jobName: string; count: number }[] = [];
@@ -204,6 +335,8 @@ export async function runDailyAlerts(): Promise<{ jobName: string; count: number
     ["stockouts", checkStockouts],
     ["tb-defaulters", checkTbDefaulters],
     ["m1-deadlines", checkM1Deadlines],
+    ["outbreak-single-case", checkSingleCaseDiseases],
+    ["outbreak-cluster", checkClusterOutbreaks],
   ] as const) {
     try {
       const findings = await fn();
