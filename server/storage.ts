@@ -3057,6 +3057,38 @@ export class DatabaseStorage implements IStorage {
         ON inventory_snapshots (barangay, snapshot_date, item_type, item_key)
     `);
 
+    // Phase 2 — unified referral records. Replaces ad-hoc TB referralToRHU
+    // and postpartum trans-in/out flags with a queryable lifecycle table.
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS referral_records (
+        id                  SERIAL PRIMARY KEY,
+        source_facility     TEXT NOT NULL,
+        source_user_id      VARCHAR,
+        source_barangay     TEXT,
+        target_facility     TEXT NOT NULL,
+        target_user_id      VARCHAR,
+        patient_id          INTEGER NOT NULL,
+        patient_type        TEXT NOT NULL,
+        patient_name        TEXT NOT NULL,
+        reason              TEXT NOT NULL,
+        notes               TEXT,
+        status              TEXT NOT NULL DEFAULT 'PENDING',
+        created_at          TIMESTAMP NOT NULL DEFAULT NOW(),
+        received_at         TIMESTAMP,
+        completed_at        TIMESTAMP,
+        received_notes      TEXT,
+        completion_outcome  TEXT
+      )
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS referral_records_status_idx
+        ON referral_records (status, created_at DESC)
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS referral_records_target_idx
+        ON referral_records (target_facility, status)
+    `);
+
     // Idempotent backfill: every health_stations row needs a facilityType now
     // that REFER_RHU records the referred facility. Runs on every startup but
     // becomes a no-op once every row has a type.

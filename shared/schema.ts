@@ -1093,6 +1093,61 @@ export type LeprosyRecord = typeof leprosyRecords.$inferSelect;
 export type InsertLeprosyRecord = z.infer<typeof insertLeprosyRecordSchema>;
 
 // ===========================================================================
+// REFERRAL RECORDS — Unified handoff entity (Phase 2 of operational-actions)
+// ===========================================================================
+// Replaces ad-hoc referral fields scattered across modules (TB
+// referralToRHU, postpartum trans-in/trans-out flags) with a single
+// queryable table. Every referral has a lifecycle: PENDING (created at
+// source) → RECEIVED (target acknowledges) → COMPLETED (clinical
+// outcome recorded). Lets MGMT see an inbox of pending referrals and
+// audit how long handoffs take.
+export const REFERRAL_PATIENT_TYPES = [
+  "MOTHER", "CHILD", "SENIOR", "DISEASE_CASE", "TB_PATIENT", "OTHER",
+] as const;
+export type ReferralPatientType = typeof REFERRAL_PATIENT_TYPES[number];
+
+export const REFERRAL_STATUSES = [
+  "PENDING",   // created at source, not yet acknowledged by target
+  "RECEIVED",  // target facility acknowledged
+  "COMPLETED", // clinical outcome recorded
+  "CANCELLED", // source withdrew the referral
+] as const;
+export type ReferralStatus = typeof REFERRAL_STATUSES[number];
+
+export const referralRecords = pgTable("referral_records", {
+  id: serial("id").primaryKey(),
+  // Source: who and where the referral originates (typically TL at BHS)
+  sourceFacility: text("source_facility").notNull(),     // e.g. "Amoslog BHS"
+  sourceUserId: varchar("source_user_id"),               // user who created the referral
+  sourceBarangay: text("source_barangay"),               // for TL scoping queries
+  // Target: where the patient is being referred (RHU, hospital, etc.)
+  targetFacility: text("target_facility").notNull(),     // e.g. "Placer RHU"
+  targetUserId: varchar("target_user_id"),               // optional — set when target claims
+  // Patient: polymorphic — link to whichever clinical row this referral is about
+  patientId: integer("patient_id").notNull(),
+  patientType: text("patient_type").$type<ReferralPatientType>().notNull(),
+  patientName: text("patient_name").notNull(),           // denormalized for inbox display
+  // Clinical context
+  reason: text("reason").notNull(),                       // e.g. "Cat-III rabies exposure"
+  notes: text("notes"),
+  // Lifecycle
+  status: text("status").$type<ReferralStatus>().notNull().default("PENDING"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  receivedAt: timestamp("received_at"),
+  completedAt: timestamp("completed_at"),
+  // Receiver-side data captured on RECEIVED / COMPLETED transitions
+  receivedNotes: text("received_notes"),
+  completionOutcome: text("completion_outcome"),          // free-text outcome summary
+});
+export const insertReferralRecordSchema = createInsertSchema(referralRecords)
+  .omit({ id: true, createdAt: true, receivedAt: true, completedAt: true, status: true, targetUserId: true, receivedNotes: true, completionOutcome: true })
+  .extend({
+    patientType: z.enum(REFERRAL_PATIENT_TYPES),
+  });
+export type ReferralRecord = typeof referralRecords.$inferSelect;
+export type InsertReferralRecord = z.infer<typeof insertReferralRecordSchema>;
+
+// ===========================================================================
 // PHASE 7 — Water & Sanitation (Section W; PDF "G1. Water")
 // ===========================================================================
 export const WATER_LEVELS = ["I", "II", "III"] as const;

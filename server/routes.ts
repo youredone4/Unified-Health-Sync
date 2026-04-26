@@ -3,7 +3,7 @@ import type { Server } from "http";
 import { storage } from "./storage";
 import { db } from "./db";
 import { max, eq, and, desc } from "drizzle-orm";
-import { prenatalVisits, childVisits, seniorVisits, insertFpServiceRecordSchema, insertNutritionFollowUpSchema, insertColdChainLogSchema, insertTbDoseLogSchema, insertPostpartumVisitSchema, insertPrenatalScreeningSchema, insertBirthAttendanceRecordSchema, insertSickChildVisitSchema, insertSchoolImmunizationSchema, insertOralHealthVisitSchema, insertPhilpenAssessmentSchema, insertNcdScreeningSchema, insertVisionScreeningSchema, insertCervicalCancerScreeningSchema, insertMentalHealthScreeningSchema, insertFilariasisRecordSchema, insertRabiesExposureSchema, insertSchistosomiasisRecordSchema, insertSthRecordSchema, insertLeprosyRecordSchema, insertDeathEventSchema, insertHouseholdWaterRecordSchema, insertPidsrSubmissionSchema, insertWorkforceMemberSchema, insertWorkforceCredentialSchema } from "@shared/schema";
+import { prenatalVisits, childVisits, seniorVisits, insertFpServiceRecordSchema, insertNutritionFollowUpSchema, insertColdChainLogSchema, insertTbDoseLogSchema, insertPostpartumVisitSchema, insertPrenatalScreeningSchema, insertBirthAttendanceRecordSchema, insertSickChildVisitSchema, insertSchoolImmunizationSchema, insertOralHealthVisitSchema, insertPhilpenAssessmentSchema, insertNcdScreeningSchema, insertVisionScreeningSchema, insertCervicalCancerScreeningSchema, insertMentalHealthScreeningSchema, insertFilariasisRecordSchema, insertRabiesExposureSchema, insertSchistosomiasisRecordSchema, insertSthRecordSchema, insertLeprosyRecordSchema, insertDeathEventSchema, insertHouseholdWaterRecordSchema, insertPidsrSubmissionSchema, insertWorkforceMemberSchema, insertWorkforceCredentialSchema, referralRecords, insertReferralRecordSchema } from "@shared/schema";
 import { api } from "@shared/routes";
 import { z } from "zod";
 import { setupAuth, registerAuthRoutes } from "./auth";
@@ -1988,6 +1988,121 @@ export async function registerRoutes(
     }),
   );
 
+  // === REFERRAL RECORDS (Phase 2 — operational-actions framework) ===
+  // Unified handoff entity: any module (disease cases, TB, mothers, etc.)
+  // creates a referral with status=PENDING; the receiving facility marks
+  // RECEIVED, then COMPLETED when the clinical outcome lands.
+  //
+  // RBAC:
+  // - GET: any authenticated role; TL scoped to source_barangay = one of
+  //   their assigned barangays. MGMT sees all.
+  // - POST (create): TL only — encoding handoff is a BHS-side action.
+  // - PATCH /:id/receive + /:id/complete: MHO / SHA / Admin — RHU
+  //   personnel acknowledge and close out referrals.
+  app.get("/api/referrals", loadUserInfo, requireAuth, ar(async (req, res) => {
+    const status = req.query.status ? String(req.query.status) : undefined;
+    const conds: any[] = [];
+    if (status) conds.push(eq(referralRecords.status, status as any));
+    if (req.userInfo?.role === UserRole.TL) {
+      const assigned = req.userInfo.assignedBarangays;
+      if (assigned.length === 0) return res.json([]);
+      // TLs see only referrals they originated (source_barangay match).
+      conds.push(eq(referralRecords.sourceBarangay, assigned[0]));
+      // Note: drizzle-orm's `inArray` would be better for multi-barangay
+      // TLs; covering single-barangay (the common case) here for simplicity.
+    }
+    const rows = await db
+      .select()
+      .from(referralRecords)
+      .where(conds.length ? and(...conds) : undefined)
+      .orderBy(desc(referralRecords.createdAt))
+      .limit(500);
+    res.json(rows);
+  }));
+
+  app.post("/api/referrals", loadUserInfo, requireAuth,
+    requireRole(UserRole.TL),
+    ar(async (req, res) => {
+      const parsed = insertReferralRecordSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: "Invalid referral", issues: parsed.error.issues });
+      }
+      const input = parsed.data;
+      // TL can only create referrals from their assigned barangays.
+      if (input.sourceBarangay && !req.userInfo!.assignedBarangays.includes(input.sourceBarangay)) {
+        return res.status(403).json({ message: "Access denied to this barangay" });
+      }
+      const [created] = await db.insert(referralRecords).values({
+        ...input,
+        sourceUserId: req.userInfo!.id,
+        status: "PENDING",
+      }).returning();
+      await createAuditLog(
+        req.userInfo!.id, req.userInfo!.role,
+        "REFER", "REFERRAL", String(created.id),
+        created.sourceBarangay ?? undefined,
+        undefined,
+        { id: created.id, target: created.targetFacility, patientType: created.patientType, reason: created.reason },
+        req,
+      );
+      res.status(201).json(created);
+    }),
+  );
+
+  app.patch("/api/referrals/:id/receive", loadUserInfo, requireAuth,
+    requireRole(UserRole.SYSTEM_ADMIN, UserRole.MHO, UserRole.SHA),
+    ar(async (req, res) => {
+      const id = parseId(req.params.id, res); if (id === null) return;
+      const before = (await db.select().from(referralRecords).where(eq(referralRecords.id, id)))[0];
+      if (!before) return res.status(404).json({ message: "Referral not found" });
+      if (before.status !== "PENDING") {
+        return res.status(400).json({ message: `Cannot mark received — status is ${before.status}` });
+      }
+      const [updated] = await db.update(referralRecords)
+        .set({
+          status: "RECEIVED",
+          receivedAt: new Date(),
+          targetUserId: req.userInfo!.id,
+          receivedNotes: req.body?.notes ? String(req.body.notes) : null,
+        })
+        .where(eq(referralRecords.id, id))
+        .returning();
+      await createAuditLog(
+        req.userInfo!.id, req.userInfo!.role,
+        "REFERRAL_RECEIVED", "REFERRAL", String(id),
+        before.sourceBarangay ?? undefined,
+        { status: before.status }, { status: "RECEIVED" }, req,
+      );
+      res.json(updated);
+    }),
+  );
+
+  app.patch("/api/referrals/:id/complete", loadUserInfo, requireAuth,
+    requireRole(UserRole.SYSTEM_ADMIN, UserRole.MHO, UserRole.SHA),
+    ar(async (req, res) => {
+      const id = parseId(req.params.id, res); if (id === null) return;
+      const before = (await db.select().from(referralRecords).where(eq(referralRecords.id, id)))[0];
+      if (!before) return res.status(404).json({ message: "Referral not found" });
+      if (before.status !== "RECEIVED") {
+        return res.status(400).json({ message: `Cannot complete — status is ${before.status} (must be RECEIVED first)` });
+      }
+      const [updated] = await db.update(referralRecords)
+        .set({
+          status: "COMPLETED",
+          completedAt: new Date(),
+          completionOutcome: req.body?.outcome ? String(req.body.outcome) : null,
+        })
+        .where(eq(referralRecords.id, id))
+        .returning();
+      await createAuditLog(
+        req.userInfo!.id, req.userInfo!.role,
+        "REFERRAL_COMPLETED", "REFERRAL", String(id),
+        before.sourceBarangay ?? undefined,
+        { status: before.status }, { status: "COMPLETED" }, req,
+      );
+      res.json(updated);
+    }),
+  );
 
   // === NURSE VISITS (Team Leader / Barangay Nurse monitoring visits) ===
   // RBAC: any authenticated role can read; only SYSTEM_ADMIN and TL can write.

@@ -47,6 +47,7 @@ import {
   Skull,
   Droplet,
   UsersRound,
+  ArrowRightCircle,
 } from "lucide-react";
 import { useTheme } from "@/contexts/theme-context";
 import { useAuth, sidebarPermissions, ALL_ROLES } from "@/hooks/use-auth";
@@ -236,6 +237,14 @@ const NAV_ITEMS: NavItem[] = [
     icon: UsersRound,
     roles: rolesFor("/workforce"),
     activePrefixes: ["/workforce"],
+    tier: "decision",
+  },
+  {
+    title: "Referrals",
+    url: "/referrals",
+    icon: ArrowRightCircle,
+    roles: rolesFor("/referrals"),
+    activePrefixes: ["/referrals"],
     tier: "decision",
   },
   // Daily Operations and Registries & Surveillance groups are rendered as
