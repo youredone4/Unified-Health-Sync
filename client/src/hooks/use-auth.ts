@@ -75,6 +75,7 @@ export const sidebarPermissions: Record<string, readonly string[]> = {
   "/ncd-screenings": ALL_ROLES,
   "/workforce": MGMT_ROLES,
   "/referrals": ALL_ROLES,
+  "/mgmt-inbox": MGMT_ROLES,
   "/disease-surveillance": ALL_ROLES,
   "/mortality": ALL_ROLES,
   "/household-water": ALL_ROLES,

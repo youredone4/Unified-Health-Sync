@@ -2,7 +2,7 @@ import type { Express } from "express";
 import type { Server } from "http";
 import { storage } from "./storage";
 import { db } from "./db";
-import { max, eq, and, desc } from "drizzle-orm";
+import { max, eq, and, desc, gte, or, inArray } from "drizzle-orm";
 import { prenatalVisits, childVisits, seniorVisits, insertFpServiceRecordSchema, insertNutritionFollowUpSchema, insertColdChainLogSchema, insertTbDoseLogSchema, insertPostpartumVisitSchema, insertPrenatalScreeningSchema, insertBirthAttendanceRecordSchema, insertSickChildVisitSchema, insertSchoolImmunizationSchema, insertOralHealthVisitSchema, insertPhilpenAssessmentSchema, insertNcdScreeningSchema, insertVisionScreeningSchema, insertCervicalCancerScreeningSchema, insertMentalHealthScreeningSchema, insertFilariasisRecordSchema, insertRabiesExposureSchema, insertSchistosomiasisRecordSchema, insertSthRecordSchema, insertLeprosyRecordSchema, insertDeathEventSchema, insertHouseholdWaterRecordSchema, insertPidsrSubmissionSchema, insertWorkforceMemberSchema, insertWorkforceCredentialSchema, referralRecords, insertReferralRecordSchema } from "@shared/schema";
 import { api } from "@shared/routes";
 import { z } from "zod";
@@ -2266,6 +2266,120 @@ export async function registerRoutes(
         before, updated, req,
       );
       res.json(updated);
+    }),
+  );
+
+  // === MGMT INBOX (Phase 7 of operational-actions framework) ===
+  // Single dashboard for MHO / SHA / Admin that surfaces every actionable
+  // signal from Phases 1–6 in one place: pending referrals, open death
+  // reviews, unreported AEFIs, and recent SYSTEM_ALERT audit entries.
+  // Each item has a uniform shape so the client can render a single list
+  // with a type chip and a click-through link to the detail page.
+  app.get("/api/mgmt/inbox", loadUserInfo, requireAuth,
+    requireRole(UserRole.SYSTEM_ADMIN, UserRole.MHO, UserRole.SHA),
+    ar(async (_req, res) => {
+      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+
+      const [pendingReferrals, openReviews, unreportedAefi, recentAlerts] = await Promise.all([
+        db.select().from(referralRecords)
+          .where(eq(referralRecords.status, "PENDING" as any))
+          .orderBy(desc(referralRecords.createdAt)).limit(100),
+        db.select().from(deathReviews)
+          .where(inArray(deathReviews.status, ["PENDING_NOTIFY", "NOTIFIED", "REVIEW_SCHEDULED"] as any))
+          .orderBy(desc(deathReviews.createdAt)).limit(100),
+        db.select().from(aefiEvents)
+          .where(eq(aefiEvents.reportedToChd, false))
+          .orderBy(desc(aefiEvents.createdAt)).limit(100),
+        db.select().from(auditLogs)
+          .where(and(eq(auditLogs.action, "SYSTEM_ALERT"), gte(auditLogs.createdAt, sevenDaysAgo)))
+          .orderBy(desc(auditLogs.createdAt)).limit(100),
+      ]);
+
+      type InboxItem = {
+        id: string;
+        type: "referral" | "death-review" | "aefi" | "system-alert";
+        priority: "high" | "medium" | "low";
+        title: string;
+        subtitle: string;
+        barangay?: string;
+        createdAt: string;
+        link: string;
+      };
+
+      const items: InboxItem[] = [];
+
+      for (const r of pendingReferrals) {
+        items.push({
+          id: `referral:${r.id}`,
+          type: "referral",
+          priority: "high",
+          title: `Referral pending — ${r.reason}`,
+          subtitle: `${r.patientName} → ${r.targetFacility}`,
+          barangay: r.sourceBarangay ?? undefined,
+          createdAt: (r.createdAt ?? new Date()).toISOString(),
+          link: "/referrals",
+        });
+      }
+
+      for (const d of openReviews) {
+        const overdue = d.dueDate && d.dueDate < new Date().toISOString().slice(0, 10);
+        items.push({
+          id: `death-review:${d.id}`,
+          type: "death-review",
+          priority: overdue || d.status === "PENDING_NOTIFY" ? "high" : "medium",
+          title: `${d.reviewType} ${d.status.replace(/_/g, " ").toLowerCase()}${overdue ? " — OVERDUE" : ""}`,
+          subtitle: `Due ${d.dueDate}`,
+          barangay: d.barangayName ?? undefined,
+          createdAt: (d.createdAt ?? new Date()).toISOString(),
+          link: "/death-events",
+        });
+      }
+
+      for (const a of unreportedAefi) {
+        items.push({
+          id: `aefi:${a.id}`,
+          type: "aefi",
+          priority: a.severity === "SERIOUS" ? "high" : "medium",
+          title: `AEFI ${a.severity.toLowerCase().replace("_", " ")} — ${a.vaccineGiven}`,
+          subtitle: `${a.patientName} (${a.eventDate})`,
+          barangay: a.barangay,
+          createdAt: (a.createdAt ?? new Date()).toISOString(),
+          link: "/aefi",
+        });
+      }
+
+      for (const log of recentAlerts) {
+        const after = log.afterJson as Record<string, any> | null;
+        const rule = after?.rule ?? log.entityType;
+        items.push({
+          id: `system-alert:${log.id}`,
+          type: "system-alert",
+          priority: rule?.toString().startsWith("outbreak") ? "high" : "medium",
+          title: `Alert — ${rule}`,
+          subtitle: after?.message ? String(after.message).slice(0, 120) : log.entityType,
+          barangay: log.barangayName ?? undefined,
+          createdAt: (log.createdAt ?? new Date()).toISOString(),
+          link: "/admin/audit-logs",
+        });
+      }
+
+      const priorityRank = { high: 0, medium: 1, low: 2 } as const;
+      items.sort((a, b) => {
+        const p = priorityRank[a.priority] - priorityRank[b.priority];
+        if (p !== 0) return p;
+        return b.createdAt.localeCompare(a.createdAt);
+      });
+
+      res.json({
+        items,
+        counts: {
+          referral: pendingReferrals.length,
+          deathReview: openReviews.length,
+          aefi: unreportedAefi.length,
+          systemAlert: recentAlerts.length,
+          total: items.length,
+        },
+      });
     }),
   );
 

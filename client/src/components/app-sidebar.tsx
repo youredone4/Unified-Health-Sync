@@ -48,6 +48,7 @@ import {
   Droplet,
   UsersRound,
   ArrowRightCircle,
+  Inbox,
 } from "lucide-react";
 import { useTheme } from "@/contexts/theme-context";
 import { useAuth, sidebarPermissions, ALL_ROLES } from "@/hooks/use-auth";
@@ -245,6 +246,14 @@ const NAV_ITEMS: NavItem[] = [
     icon: ArrowRightCircle,
     roles: rolesFor("/referrals"),
     activePrefixes: ["/referrals"],
+    tier: "decision",
+  },
+  {
+    title: "MGMT Inbox",
+    url: "/mgmt-inbox",
+    icon: Inbox,
+    roles: rolesFor("/mgmt-inbox"),
+    activePrefixes: ["/mgmt-inbox"],
     tier: "decision",
   },
   // Daily Operations and Registries & Surveillance groups are rendered as
