@@ -86,11 +86,10 @@ import CertificatesPage from "@/pages/certificates";
 import CampaignsPage from "@/pages/campaigns";
 import KonsultaPage from "@/pages/konsulta";
 import AefiPage from "@/pages/aefi";
-import DeathEventsPage from "@/pages/death-events";
 import PidsrPage from "@/pages/pidsr";
 import WorkforceDetailPage from "@/pages/workforce-detail";
 import DiseaseSurveillancePage from "@/pages/disease-surveillance";
-import MortalityPage from "@/pages/mortality";
+import MortalityHubPage from "@/pages/mortality-hub";
 import HouseholdWaterPage from "@/pages/household-water";
 import { InboxHeroBanner } from "@/components/inbox-hero-banner";
 
@@ -401,7 +400,12 @@ function Router() {
       <Route path="/campaigns"><RoleRoute component={CampaignsPage} /></Route>
       <Route path="/konsulta"><RoleRoute component={KonsultaPage} /></Route>
       <Route path="/aefi"><RoleRoute component={AefiPage} /></Route>
-      <Route path="/death-events"><RoleRoute component={DeathEventsPage} /></Route>
+      {/* Group 2 hub. Old /death-events URL keeps working — it lands on
+          the Reviews tab inside the unified Mortality & Death Surveillance
+          hub. The standalone /mortality URL similarly lands on the
+          Registry tab below. */}
+      <Route path="/death-events"><Redirect to="/mortality-hub?tab=reviews" /></Route>
+      <Route path="/mortality-hub"><RoleRoute component={MortalityHubPage} /></Route>
       <Route path="/pidsr"><RoleRoute component={PidsrPage} /></Route>
 
       {/* NCD & lifestyle screenings (Sections G1, G2, G4, G6, G8) */}
@@ -410,8 +414,10 @@ function Router() {
       {/* Disease surveillance (Sections DIS-FIL, DIS-RAB, DIS-SCH, DIS-STH, DIS-LEP) */}
       <Route path="/disease-surveillance"><DiseaseSurveillancePage /></Route>
 
-      {/* Mortality registry (Section H) */}
-      <Route path="/mortality"><MortalityPage /></Route>
+      {/* Mortality registry (Section H) — old URL lands on Registry tab
+          inside the Group 2 hub. Direct /mortality stays valid for any
+          deep links / bookmarks. */}
+      <Route path="/mortality"><Redirect to="/mortality-hub?tab=registry" /></Route>
 
       {/* Household water survey (Section W) */}
       <Route path="/household-water"><HouseholdWaterPage /></Route>

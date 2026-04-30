@@ -120,11 +120,15 @@ const SURVEILLANCE_CHILDREN: NavItem[] = [
     activePrefixes: ["/disease-surveillance"],
   },
   {
-    title: "Mortality Registry",
-    url: "/mortality",
+    // Group 2 hub: collapses Mortality Registry + Death Reviews into a
+    // single sidebar entry. Tabs inside the hub are role-aware
+    // (TLs see Registry only; MGMT sees both). activePrefixes covers the
+    // legacy URLs so the entry stays highlighted on old bookmarks.
+    title: "Mortality & Death Surveillance",
+    url: "/mortality-hub",
     icon: Skull,
-    roles: rolesFor("/mortality"),
-    activePrefixes: ["/mortality"],
+    roles: rolesFor("/mortality-hub"),
+    activePrefixes: ["/mortality-hub", "/mortality", "/death-events"],
   },
   {
     title: "Household Water",
@@ -291,13 +295,6 @@ const NAV_ITEMS: NavItem[] = [
     activePrefixes: ["/aefi"],
   },
   {
-    title: "Death Reviews",
-    url: "/death-events",
-    icon: Skull,
-    roles: rolesFor("/death-events"),
-    activePrefixes: ["/death-events"],
-  },
-  {
     title: "PIDSR",
     url: "/pidsr",
     icon: ShieldAlert,
@@ -374,7 +371,7 @@ const MGMT_LAYOUT: SidebarLayout = [
     { kind: "item", url: "/mgmt-inbox" },
     { kind: "item", url: "/dashboards" },
     { kind: "item", url: "/outbreaks" },
-    { kind: "item", url: "/death-events" },
+    { kind: "item", url: "/mortality-hub" },
     { kind: "item", url: "/aefi" },
     { kind: "item", url: "/referrals" },
     // The MD's "Awaiting MD review" inbox lives on this page — surfaces
