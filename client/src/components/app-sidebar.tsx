@@ -111,14 +111,12 @@ const DAILY_OPS_CHILDREN: NavItem[] = [
 
 // Children of the collapsible "Registries & Surveillance" group — periodic
 // modules driven by registry maintenance and surveillance reporting.
+//
+// Group 1 of the architecture review consolidated Disease Programs + PIDSR
+// + Disease Map under the Disease Surveillance hub (top-level item below).
+// They no longer have standalone children here; users reach them via tabs
+// inside the hub.
 const SURVEILLANCE_CHILDREN: NavItem[] = [
-  {
-    title: "Disease Programs",
-    url: "/disease-surveillance",
-    icon: ShieldAlert,
-    roles: rolesFor("/disease-surveillance"),
-    activePrefixes: ["/disease-surveillance"],
-  },
   {
     // Group 2 hub: collapses Mortality Registry + Death Reviews into a
     // single sidebar entry. Tabs inside the hub are role-aware
@@ -170,11 +168,16 @@ const PATIENT_CHILDREN: NavItem[] = [
     activePrefixes: ["/senior"],
   },
   {
-    title: "Disease Cases",
+    // Group 1 hub: consolidates Disease Cases + Vertical Programs (filariasis,
+    // rabies, schisto, STH, leprosy) + PIDSR + Disease Map. Each tab keeps
+    // its own underlying URL; the hub shell is supplied by DiseaseHub in
+    // App.tsx. activePrefixes cover all four so the sidebar entry stays
+    // highlighted on every tab and old bookmarks resolve.
+    title: "Disease Surveillance",
     url: "/disease",
     icon: Siren,
     roles: rolesFor("/disease"),
-    activePrefixes: ["/disease"],
+    activePrefixes: ["/disease", "/disease-surveillance", "/pidsr"],
   },
 ];
 
@@ -295,13 +298,6 @@ const NAV_ITEMS: NavItem[] = [
     activePrefixes: ["/aefi"],
   },
   {
-    title: "PIDSR",
-    url: "/pidsr",
-    icon: ShieldAlert,
-    roles: rolesFor("/pidsr"),
-    activePrefixes: ["/pidsr"],
-  },
-  {
     title: "Messages",
     url: "/messages",
     icon: MessageCircle,
@@ -343,7 +339,6 @@ const TL_LAYOUT: SidebarLayout = [
     { kind: "group", key: "surveillance" },
     { kind: "item",  url: "/referrals" },
     { kind: "item",  url: "/aefi" },
-    { kind: "item",  url: "/pidsr" },
     { kind: "item",  url: "/certificates" },
     { kind: "item",  url: "/campaigns" },
     { kind: "item",  url: "/konsulta" },
@@ -393,7 +388,6 @@ const MGMT_LAYOUT: SidebarLayout = [
   [
     { kind: "group", key: "daily-ops" },
     { kind: "group", key: "surveillance" },
-    { kind: "item",  url: "/pidsr" },
     { kind: "item",  url: "/certificates" },
     { kind: "item",  url: "/campaigns" },
     { kind: "item",  url: "/konsulta" },
