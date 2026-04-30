@@ -2310,6 +2310,17 @@ export async function registerRoutes(
       }
       if (req.body?.outcome !== undefined) set.outcome = String(req.body.outcome);
       if (req.body?.notes !== undefined) set.notes = String(req.body.notes);
+      // Issue #137 Phase 3: MGMT can attach a registered dose / classify
+      // a VPD onset retroactively, e.g. when more clinical detail
+      // surfaces during investigation.
+      if (req.body?.vaccinationId !== undefined) {
+        const v = req.body.vaccinationId;
+        set.vaccinationId = v === null || v === "" ? null : Number(v);
+      }
+      if (req.body?.vaccinePreventableDisease !== undefined) {
+        const vpd = req.body.vaccinePreventableDisease;
+        set.vaccinePreventableDisease = vpd === null || vpd === "" ? null : String(vpd);
+      }
       const [updated] = await db.update(aefiEvents).set(set).where(eq(aefiEvents.id, id)).returning();
       const reportedFlipped = before.reportedToChd !== updated.reportedToChd;
       await createAuditLog(

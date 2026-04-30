@@ -44,9 +44,25 @@ interface AefiEvent {
   outcome: Outcome;
   reportedToChd: boolean;
   reportedToChdAt: string | null;
+  // Phase 3 (#137): optional structured fields. Null on legacy rows.
+  vaccinationId: number | null;
+  vaccinePreventableDisease: string | null;
   notes: string | null;
   createdAt: string;
 }
+
+const VPD_OPTIONS = [
+  { value: "MEASLES",      label: "Measles" },
+  { value: "RUBELLA",      label: "Rubella" },
+  { value: "POLIO",        label: "Polio" },
+  { value: "DIPHTHERIA",   label: "Diphtheria" },
+  { value: "PERTUSSIS",    label: "Pertussis" },
+  { value: "TETANUS",      label: "Tetanus" },
+  { value: "HEP_B",        label: "Hepatitis B" },
+  { value: "HIB",          label: "Haemophilus influenzae b" },
+  { value: "TUBERCULOSIS", label: "Tuberculosis" },
+  { value: "OTHER",        label: "Other" },
+] as const;
 
 const newAefiSchema = z.object({
   patientName:      z.string().min(1, "Patient name is required").max(120),
@@ -58,6 +74,9 @@ const newAefiSchema = z.object({
   eventDate:        z.string().min(1, "Event date is required"),
   eventDescription: z.string().min(1, "Event description is required").max(500),
   severity:         z.enum(["SERIOUS", "NON_SERIOUS"]),
+  // Phase 3 (#137): optional VPD classification. Empty string maps to
+  // null on submit. Free-text vaccineGiven keeps working alongside it.
+  vaccinePreventableDisease: z.string().optional().or(z.literal("")),
   notes:            z.string().max(500).optional().or(z.literal("")),
 });
 type NewAefiValues = z.infer<typeof newAefiSchema>;
@@ -158,6 +177,11 @@ function AefiRow({
             <span className="font-semibold">{item.patientName}</span>
             <Badge variant="outline" className="text-xs">{item.barangay}</Badge>
             <Badge variant="outline" className="text-xs">{item.vaccineGiven}</Badge>
+            {item.vaccinePreventableDisease ? (
+              <Badge variant="outline" className="text-[10px] uppercase" data-testid={`vpd-${item.id}`}>
+                VPD · {item.vaccinePreventableDisease.replace(/_/g, " ").toLowerCase()}
+              </Badge>
+            ) : null}
             <span className={severityBadge({ severity: item.severity === "SERIOUS" ? "high" : "medium" })}>
               {item.severity.replace("_", "-")}
             </span>
@@ -230,13 +254,20 @@ function NewAefiDialog({
       barangay: defaultBarangay,
       vaccineGiven: "", vaccinationDate: today, eventDate: today,
       eventDescription: "", severity: "NON_SERIOUS",
+      vaccinePreventableDisease: "",
       notes: "",
     },
   });
 
   const create = useMutation({
-    mutationFn: async (data: NewAefiValues) =>
-      (await apiRequest("POST", "/api/aefi-events", data)).json(),
+    mutationFn: async (data: NewAefiValues) => {
+      // Empty VPD select → null on the wire so the column stays NULL.
+      const body = {
+        ...data,
+        vaccinePreventableDisease: data.vaccinePreventableDisease || null,
+      };
+      return (await apiRequest("POST", "/api/aefi-events", body)).json();
+    },
     onSuccess: () => {
       toast({ title: "AEFI reported" });
       onCreated();
@@ -290,6 +321,25 @@ function NewAefiDialog({
                     <SelectContent>
                       <SelectItem value="NON_SERIOUS">Non-serious (7-day SLA)</SelectItem>
                       <SelectItem value="SERIOUS">Serious (24-hour SLA)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )} />
+              {/* Phase 3 (#137): optional vaccine-preventable disease.
+                  Set when the AEFI is a post-vaccination VPD onset; the
+                  Phase 5 cluster detector watches this column to bridge
+                  AEFI to PIDSR. Leave blank for non-VPD AEs. */}
+              <FormField control={form.control} name="vaccinePreventableDisease" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>VPD onset (optional)</FormLabel>
+                  <Select value={field.value ?? ""} onValueChange={field.onChange}>
+                    <FormControl><SelectTrigger data-testid="select-vpd"><SelectValue placeholder="None / not VPD" /></SelectTrigger></FormControl>
+                    <SelectContent>
+                      <SelectItem value="">None</SelectItem>
+                      {VPD_OPTIONS.map((o) => (
+                        <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                   <FormMessage />

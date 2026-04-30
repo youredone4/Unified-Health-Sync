@@ -1701,6 +1701,25 @@ export type InsertDeathReview = z.infer<typeof insertDeathReviewSchema>;
 export const AEFI_SEVERITIES = ["SERIOUS", "NON_SERIOUS"] as const;
 export type AefiSeverity = typeof AEFI_SEVERITIES[number];
 
+// Vaccine-preventable diseases (issue #137 Phase 3). Populated when an
+// AEFI event is the post-vaccination onset of a VPD — bridges AEFI to
+// PIDSR Cat-I disease reporting via the cluster detector in Phase 5.
+// Free to extend; the column is plain TEXT so adding a new VPD doesn't
+// require a migration.
+export const VACCINE_PREVENTABLE_DISEASES = [
+  "MEASLES",
+  "RUBELLA",
+  "POLIO",
+  "DIPHTHERIA",
+  "PERTUSSIS",
+  "TETANUS",
+  "HEP_B",
+  "HIB",            // Haemophilus influenzae type b
+  "TUBERCULOSIS",
+  "OTHER",
+] as const;
+export type VaccinePreventableDisease = typeof VACCINE_PREVENTABLE_DISEASES[number];
+
 export const AEFI_OUTCOMES = [
   "RECOVERED",
   "RECOVERING",
@@ -1720,6 +1739,15 @@ export const aefiEvents = pgTable("aefi_events", {
   // Vaccine
   vaccineGiven: text("vaccine_given").notNull(), // e.g. "BCG", "Penta-1", "HPV-1"
   vaccinationDate: text("vaccination_date").notNull(),
+  // Issue #137 Phase 3: structured link to the dose. When the recipient
+  // is a registered child / school enrollee, the form picks the matching
+  // vaccinations row; otherwise vaccineGiven (free text) remains the
+  // only descriptor. Cluster detection in Phase 5 reads through this FK
+  // to medicine_inventory.lot_number.
+  vaccinationId: integer("vaccination_id").references(() => vaccinations.id),
+  // VPD onset post-vaccination (e.g. measles after MR vaccine). Phase 5
+  // surveillance bridges AEFI → PIDSR via this column.
+  vaccinePreventableDisease: text("vaccine_preventable_disease").$type<VaccinePreventableDisease>(),
   // Event
   eventDate: text("event_date").notNull(),       // when the AE first appeared
   eventDescription: text("event_description").notNull(),
@@ -1739,6 +1767,9 @@ export const insertAefiEventSchema = createInsertSchema(aefiEvents)
     sex: z.enum(["M", "F"]),
     severity: z.enum(AEFI_SEVERITIES),
     outcome: z.enum(AEFI_OUTCOMES).optional(),
+    // Tight enum so Drizzle's typed insert accepts the parsed value.
+    // Issue #137 Phase 3: optional VPD onset classification.
+    vaccinePreventableDisease: z.enum(VACCINE_PREVENTABLE_DISEASES).nullish(),
   });
 export type AefiEvent = typeof aefiEvents.$inferSelect;
 export type InsertAefiEvent = z.infer<typeof insertAefiEventSchema>;
