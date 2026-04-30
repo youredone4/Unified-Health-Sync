@@ -89,7 +89,10 @@ export default function TodayPage() {
     return "Good evening";
   }, []);
 
-  const displayName = user?.firstName || user?.username || "there";
+  const displayName =
+    [user?.firstName, user?.lastName].filter(Boolean).join(" ").trim() ||
+    user?.username ||
+    "there";
   const barangayLabel = selectedBarangay || "your barangays";
   const totalToDo = allItems.length;
 
