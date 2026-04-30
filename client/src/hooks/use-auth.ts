@@ -74,7 +74,8 @@ export const sidebarPermissions: Record<string, readonly string[]> = {
   "/certificates": ALL_ROLES,
   "/campaigns": ALL_ROLES,
   "/konsulta": ALL_ROLES,
-  "/aefi": ALL_ROLES,
+  "/aefi": ALL_ROLES,                    // legacy URL — redirects into the hub
+  "/immunization": ALL_ROLES,            // unified Group 3 hub
   "/death-events": MGMT_ROLES,           // legacy URL — redirects into the hub
   "/mortality-hub": ALL_ROLES,           // unified Group 2 hub; tab visibility is role-aware inside the page
   "/pidsr": ALL_ROLES,

@@ -86,6 +86,7 @@ import CertificatesPage from "@/pages/certificates";
 import CampaignsPage from "@/pages/campaigns";
 import KonsultaPage from "@/pages/konsulta";
 import AefiPage from "@/pages/aefi";
+import ImmunizationHubPage from "@/pages/immunization-hub";
 import PidsrPage from "@/pages/pidsr";
 import WorkforceDetailPage from "@/pages/workforce-detail";
 import DiseaseSurveillancePage from "@/pages/disease-surveillance";
@@ -387,11 +388,11 @@ function Router() {
       <Route path="/inventory/:id/edit"><RoleRoute component={InventoryForm} /></Route>
       <Route path="/inventory/medicine/:id/edit"><RoleRoute component={InventoryForm} /></Route>
 
-      {/* Cold-chain temperature log */}
-      <Route path="/cold-chain"><ColdChainPage /></Route>
-
-      {/* School-based immunization (HPV / Td) */}
-      <Route path="/school-immunizations"><SchoolImmunizationsPage /></Route>
+      {/* Group 3 hub: Immunization & Adverse Events. Old standalone URLs
+          redirect into the matching tab so existing bookmarks resolve. */}
+      <Route path="/immunization"><RoleRoute component={ImmunizationHubPage} /></Route>
+      <Route path="/cold-chain"><Redirect to="/immunization?tab=cold-chain" /></Route>
+      <Route path="/school-immunizations"><Redirect to="/immunization?tab=school" /></Route>
 
       {/* Oral health visits (Section ORAL) */}
       <Route path="/oral-health"><OralHealthPage /></Route>
@@ -407,7 +408,8 @@ function Router() {
       <Route path="/certificates"><RoleRoute component={CertificatesPage} /></Route>
       <Route path="/campaigns"><RoleRoute component={CampaignsPage} /></Route>
       <Route path="/konsulta"><RoleRoute component={KonsultaPage} /></Route>
-      <Route path="/aefi"><RoleRoute component={AefiPage} /></Route>
+      {/* /aefi redirects into the Group 3 hub's AEFI tab. */}
+      <Route path="/aefi"><Redirect to="/immunization?tab=aefi" /></Route>
       {/* Group 2 hub. Old /death-events URL keeps working — it lands on
           the Reviews tab inside the unified Mortality & Death Surveillance
           hub. The standalone /mortality URL similarly lands on the
