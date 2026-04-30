@@ -470,7 +470,72 @@ export const consults = pgTable("consults", {
   // ── Phase 11: walk-in OPD log ──
   isWalkIn: boolean("is_walk_in").default(false),       // TL-captured BHS walk-in
   serviceCodes: jsonb("service_codes").$type<string[]>().default([]),
+  // ── Triage redesign (replaces /patient-checkup) ──
+  // 3-level acuity per DOH RHU primary-care standards. Auto-suggested by the
+  // rule engine in lib/triage.ts; nurse can override with reason.
+  acuityLevel: text("acuity_level"),               // EMERGENT | URGENT | NON_URGENT | null
+  acuityOverrideReason: text("acuity_override_reason"),
+  triagedByUserId: varchar("triaged_by_user_id"),
+  triagedAt: timestamp("triaged_at"),
+  // Vitals — extending the original block
+  respiratoryRate: text("respiratory_rate"),       // breaths / min
+  spo2: text("spo2"),                              // % oxygen saturation
+  rbsMmol: text("rbs_mmol"),                       // random blood sugar (mmol/L)
+  muacCm: text("muac_cm"),                         // mid-upper arm circumference (under-5)
+  painScore: integer("pain_score"),                // 0–10 (NRS / Wong-Baker / FLACC by age)
+  // History at-time-of-triage — re-verified each visit
+  allergiesVerified: boolean("allergies_verified").default(false),
+  knownAllergies: text("known_allergies"),
+  knownNcdPrograms: jsonb("known_ncd_programs").$type<string[]>().default([]), // ["HTN","DM","ASTHMA"]
+  // Age-aware screens — only one of these is populated per consult
+  imciDangerSigns: jsonb("imci_danger_signs").$type<string[]>(),    // under-5
+  imciMainSymptoms: jsonb("imci_main_symptoms").$type<string[]>(),  // under-5
+  adultDangerSigns: jsonb("adult_danger_signs").$type<string[]>(),  // ≥5 years
+  pregnancyStatus: text("pregnancy_status"),       // NOT_PREGNANT | POSSIBLE | CONFIRMED | UNKNOWN_LMP
+  lmpDate: text("lmp_date"),                       // last menstrual period — if pregnancy widget fires
 });
+
+// Triage-specific enums + danger-sign vocabularies. Centralised here so the
+// rule engine + UI + reports all read the same set.
+export const ACUITY_LEVELS = ["EMERGENT", "URGENT", "NON_URGENT"] as const;
+export type AcuityLevel = typeof ACUITY_LEVELS[number];
+
+export const PREGNANCY_STATUSES = ["NOT_PREGNANT", "POSSIBLE", "CONFIRMED", "UNKNOWN_LMP"] as const;
+export type PregnancyStatus = typeof PREGNANCY_STATUSES[number];
+
+// IMCI general danger signs (under-5). DOH IMCI Manual.
+export const IMCI_DANGER_SIGNS = [
+  "UNABLE_TO_DRINK_OR_BREASTFEED",
+  "VOMITS_EVERYTHING",
+  "CONVULSIONS_THIS_ILLNESS",
+  "LETHARGIC_OR_UNCONSCIOUS",
+  "CONVULSING_NOW",
+] as const;
+export type ImciDangerSign = typeof IMCI_DANGER_SIGNS[number];
+
+// IMCI 4 main symptoms screened at every under-5 visit.
+export const IMCI_MAIN_SYMPTOMS = [
+  "COUGH_OR_DIFFICULT_BREATHING",
+  "DIARRHEA",
+  "FEVER",
+  "EAR_PROBLEM",
+] as const;
+export type ImciMainSymptom = typeof IMCI_MAIN_SYMPTOMS[number];
+
+// Adult / ≥5 danger signs that auto-escalate acuity to EMERGENT.
+export const ADULT_DANGER_SIGNS = [
+  "CHEST_PAIN",
+  "SEVERE_DYSPNEA",
+  "SYNCOPE",
+  "SEVERE_HEADACHE",
+  "FOCAL_NEURO_DEFICIT",
+  "FAST_POSITIVE_STROKE",
+  "SEVERE_BLEEDING",
+  "ANAPHYLAXIS",
+  "ALTERED_MENTAL_STATUS",
+  "ACTIVE_SEIZURE",
+] as const;
+export type AdultDangerSign = typeof ADULT_DANGER_SIGNS[number];
 
 // ─── Phase 11: walk-in service codes ────────────────────────────────────────
 // Multi-select set on consults.service_codes for walk-in encounters. Maps

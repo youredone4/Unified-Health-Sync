@@ -3209,6 +3209,28 @@ export class DatabaseStorage implements IStorage {
     await db.execute(sql`ALTER TABLE consults ADD COLUMN IF NOT EXISTS is_walk_in BOOLEAN DEFAULT FALSE`);
     await db.execute(sql`ALTER TABLE consults ADD COLUMN IF NOT EXISTS service_codes JSONB DEFAULT '[]'::jsonb`);
 
+    // Triage redesign — extends consults with the fields the rule engine
+    // needs to compute acuity + the contextual fields the nurse needs to
+    // capture once at triage.
+    await db.execute(sql`ALTER TABLE consults ADD COLUMN IF NOT EXISTS acuity_level TEXT`);
+    await db.execute(sql`ALTER TABLE consults ADD COLUMN IF NOT EXISTS acuity_override_reason TEXT`);
+    await db.execute(sql`ALTER TABLE consults ADD COLUMN IF NOT EXISTS triaged_by_user_id VARCHAR`);
+    await db.execute(sql`ALTER TABLE consults ADD COLUMN IF NOT EXISTS triaged_at TIMESTAMP`);
+    await db.execute(sql`ALTER TABLE consults ADD COLUMN IF NOT EXISTS respiratory_rate TEXT`);
+    await db.execute(sql`ALTER TABLE consults ADD COLUMN IF NOT EXISTS spo2 TEXT`);
+    await db.execute(sql`ALTER TABLE consults ADD COLUMN IF NOT EXISTS rbs_mmol TEXT`);
+    await db.execute(sql`ALTER TABLE consults ADD COLUMN IF NOT EXISTS muac_cm TEXT`);
+    await db.execute(sql`ALTER TABLE consults ADD COLUMN IF NOT EXISTS pain_score INTEGER`);
+    await db.execute(sql`ALTER TABLE consults ADD COLUMN IF NOT EXISTS allergies_verified BOOLEAN DEFAULT FALSE`);
+    await db.execute(sql`ALTER TABLE consults ADD COLUMN IF NOT EXISTS known_allergies TEXT`);
+    await db.execute(sql`ALTER TABLE consults ADD COLUMN IF NOT EXISTS known_ncd_programs JSONB DEFAULT '[]'::jsonb`);
+    await db.execute(sql`ALTER TABLE consults ADD COLUMN IF NOT EXISTS imci_danger_signs JSONB`);
+    await db.execute(sql`ALTER TABLE consults ADD COLUMN IF NOT EXISTS imci_main_symptoms JSONB`);
+    await db.execute(sql`ALTER TABLE consults ADD COLUMN IF NOT EXISTS adult_danger_signs JSONB`);
+    await db.execute(sql`ALTER TABLE consults ADD COLUMN IF NOT EXISTS pregnancy_status TEXT`);
+    await db.execute(sql`ALTER TABLE consults ADD COLUMN IF NOT EXISTS lmp_date TEXT`);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS consults_acuity_idx ON consults (acuity_level, created_at DESC) WHERE acuity_level IS NOT NULL`);
+
     // Phase 11 — medication dispensing ledger. One row per dispense event,
     // tied to a consult and (optionally) a medicine_inventory row so the
     // BHS pharmacy log + inventory consumption reconcile end-to-end.
