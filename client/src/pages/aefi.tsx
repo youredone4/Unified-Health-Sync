@@ -47,6 +47,14 @@ interface AefiEvent {
   // Phase 3 (#137): optional structured fields. Null on legacy rows.
   vaccinationId: number | null;
   vaccinePreventableDisease: string | null;
+  // Phase 4 (#137): investigation lifecycle. status defaults NOTIFIED;
+  // existing rows backfill REPORTED_TO_FDA when reported_to_chd was true.
+  status: "NOTIFIED" | "INVESTIGATING" | "CLASSIFIED" | "REPORTED_TO_FDA" | "CLOSED";
+  whoCausality: string | null;
+  investigatedAt: string | null;
+  classifiedAt: string | null;
+  fdaSubmissionId: string | null;
+  fdaSubmittedAt: string | null;
   notes: string | null;
   createdAt: string;
 }
@@ -155,6 +163,11 @@ function AefiRow({
   const [outcomeDraft, setOutcomeDraft] = useState<Outcome>(item.outcome);
   const [notesDraft, setNotesDraft] = useState<string>(item.notes ?? "");
 
+  // Phase 4 (#137): lifecycle drafts. Pre-fill from the row so MGMT can
+  // refine WHO causality + FDA submission id before advancing.
+  const [whoDraft, setWhoDraft] = useState<string>(item.whoCausality ?? "");
+  const [fdaIdDraft, setFdaIdDraft] = useState<string>(item.fdaSubmissionId ?? "");
+
   const reportToChd = useMutation({
     mutationFn: async () =>
       (await apiRequest("PATCH", `/api/aefi-events/${item.id}`, { reportedToChd: true })).json(),
@@ -167,6 +180,19 @@ function AefiRow({
       (await apiRequest("PATCH", `/api/aefi-events/${item.id}`, { outcome: outcomeDraft, notes: notesDraft })).json(),
     onSuccess: () => { toast({ title: "AEFI updated" }); onChanged(); },
     onError: (e: Error) => toast({ title: "Could not update", description: e.message, variant: "destructive" }),
+  });
+
+  // Generic transition runner. The backend enforces forward-only and
+  // demands whoCausality before CLASSIFIED.
+  const transitionTo = useMutation({
+    mutationFn: async (status: string) => {
+      const body: Record<string, unknown> = { status };
+      if (status === "CLASSIFIED" && whoDraft) body.whoCausality = whoDraft;
+      if (status === "REPORTED_TO_FDA" && fdaIdDraft) body.fdaSubmissionId = fdaIdDraft;
+      return (await apiRequest("PATCH", `/api/aefi-events/${item.id}`, body)).json();
+    },
+    onSuccess: (_, status) => { toast({ title: `Status → ${status}` }); onChanged(); },
+    onError: (e: Error) => toast({ title: "Could not advance status", description: e.message, variant: "destructive" }),
   });
 
   return (
@@ -190,6 +216,15 @@ function AefiRow({
             ) : (
               <span className={severityBadge({ severity: "high" })}>Awaiting CHD report</span>
             )}
+            {/* Phase 4 (#137): lifecycle status pill. */}
+            <Badge variant="outline" className="text-[10px] uppercase" data-testid={`status-${item.id}`}>
+              {item.status.replace(/_/g, " ").toLowerCase()}
+            </Badge>
+            {item.whoCausality ? (
+              <Badge variant="outline" className="text-[10px]">
+                WHO · {item.whoCausality.replace(/_/g, " ").toLowerCase()}
+              </Badge>
+            ) : null}
             <span className="text-xs text-muted-foreground">Event {item.eventDate}</span>
           </div>
           <div className="text-sm">{item.eventDescription}</div>
@@ -199,34 +234,92 @@ function AefiRow({
           {item.notes ? <div className="text-xs italic text-muted-foreground">{item.notes}</div> : null}
 
           {canEdit ? (
-            <div className="border-t pt-3 mt-2 grid md:grid-cols-3 gap-2">
-              <Select value={outcomeDraft} onValueChange={(v) => setOutcomeDraft(v as Outcome)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="RECOVERED">Recovered</SelectItem>
-                  <SelectItem value="RECOVERING">Recovering</SelectItem>
-                  <SelectItem value="NOT_RECOVERED">Not recovered</SelectItem>
-                  <SelectItem value="DEATH">Death</SelectItem>
-                  <SelectItem value="UNKNOWN">Unknown</SelectItem>
-                </SelectContent>
-              </Select>
-              <Textarea
-                rows={1}
-                placeholder="Outcome notes"
-                value={notesDraft}
-                onChange={(e) => setNotesDraft(e.target.value)}
-                className="md:col-span-1"
-              />
-              <div className="flex gap-2">
-                <Button size="sm" variant="outline" onClick={() => update.mutate()} disabled={update.isPending}>
-                  Save
-                </Button>
-                {!item.reportedToChd ? (
-                  <Button size="sm" onClick={() => reportToChd.mutate()} disabled={reportToChd.isPending} data-testid={`aefi-report-${item.id}`}>
-                    <CheckCircle2 className="w-3.5 h-3.5 mr-1" aria-hidden /> Mark CHD-reported
+            <div className="border-t pt-3 mt-2 space-y-3">
+              <div className="grid md:grid-cols-3 gap-2">
+                <Select value={outcomeDraft} onValueChange={(v) => setOutcomeDraft(v as Outcome)}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="RECOVERED">Recovered</SelectItem>
+                    <SelectItem value="RECOVERING">Recovering</SelectItem>
+                    <SelectItem value="NOT_RECOVERED">Not recovered</SelectItem>
+                    <SelectItem value="DEATH">Death</SelectItem>
+                    <SelectItem value="UNKNOWN">Unknown</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Textarea
+                  rows={1}
+                  placeholder="Outcome notes"
+                  value={notesDraft}
+                  onChange={(e) => setNotesDraft(e.target.value)}
+                  className="md:col-span-1"
+                />
+                <div className="flex gap-2">
+                  <Button size="sm" variant="outline" onClick={() => update.mutate()} disabled={update.isPending}>
+                    Save
                   </Button>
-                ) : null}
+                  {!item.reportedToChd ? (
+                    <Button size="sm" onClick={() => reportToChd.mutate()} disabled={reportToChd.isPending} data-testid={`aefi-report-${item.id}`}>
+                      <CheckCircle2 className="w-3.5 h-3.5 mr-1" aria-hidden /> Mark CHD-reported
+                    </Button>
+                  ) : null}
+                </div>
               </div>
+
+              {/* Phase 4 (#137): lifecycle controls. The backend enforces
+                  forward-only transitions and demands WHO causality
+                  before CLASSIFIED. Buttons appear contextually for the
+                  next forward state. */}
+              <div className="grid md:grid-cols-3 gap-2 items-end">
+                {item.status === "INVESTIGATING" || item.status === "CLASSIFIED" ? (
+                  <Select value={whoDraft || ""} onValueChange={setWhoDraft}>
+                    <SelectTrigger data-testid={`who-causality-${item.id}`}>
+                      <SelectValue placeholder="WHO causality" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="CONSISTENT_WITH_CAUSAL">Consistent with causal</SelectItem>
+                      <SelectItem value="INDETERMINATE">Indeterminate</SelectItem>
+                      <SelectItem value="INCONSISTENT_WITH_CAUSAL">Inconsistent with causal</SelectItem>
+                      <SelectItem value="UNCLASSIFIABLE">Unclassifiable</SelectItem>
+                    </SelectContent>
+                  </Select>
+                ) : <div />}
+
+                {item.status === "CLASSIFIED" || item.status === "REPORTED_TO_FDA" ? (
+                  <Textarea
+                    rows={1}
+                    placeholder="FDA submission ID"
+                    value={fdaIdDraft}
+                    onChange={(e) => setFdaIdDraft(e.target.value)}
+                    data-testid={`fda-submission-${item.id}`}
+                  />
+                ) : <div />}
+
+                <div className="flex gap-2 flex-wrap">
+                  {item.status === "NOTIFIED" ? (
+                    <Button size="sm" onClick={() => transitionTo.mutate("INVESTIGATING")} disabled={transitionTo.isPending} data-testid={`advance-investigating-${item.id}`}>
+                      Start investigation
+                    </Button>
+                  ) : null}
+                  {item.status === "INVESTIGATING" ? (
+                    <Button size="sm" onClick={() => transitionTo.mutate("CLASSIFIED")} disabled={transitionTo.isPending || !whoDraft} data-testid={`advance-classified-${item.id}`}>
+                      Mark classified
+                    </Button>
+                  ) : null}
+                  {item.status === "CLASSIFIED" ? (
+                    <Button size="sm" onClick={() => transitionTo.mutate("REPORTED_TO_FDA")} disabled={transitionTo.isPending} data-testid={`advance-fda-${item.id}`}>
+                      Report to FDA
+                    </Button>
+                  ) : null}
+                  {item.status === "REPORTED_TO_FDA" ? (
+                    <Button size="sm" variant="outline" onClick={() => transitionTo.mutate("CLOSED")} disabled={transitionTo.isPending} data-testid={`advance-closed-${item.id}`}>
+                      Close case
+                    </Button>
+                  ) : null}
+                </div>
+              </div>
+              {item.fdaSubmissionId ? (
+                <div className="text-xs text-muted-foreground">FDA ref: {item.fdaSubmissionId}</div>
+              ) : null}
             </div>
           ) : null}
         </CardContent>

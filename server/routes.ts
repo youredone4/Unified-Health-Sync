@@ -2301,18 +2301,76 @@ export async function registerRoutes(
       const id = parseId(req.params.id, res); if (id === null) return;
       const before = (await db.select().from(aefiEvents).where(eq(aefiEvents.id, id)))[0];
       if (!before) return res.status(404).json({ message: "AEFI event not found" });
+
+      // Issue #137 Phase 4: investigation lifecycle.
+      //
+      // Allowed transitions (forward only):
+      //   NOTIFIED → INVESTIGATING → CLASSIFIED → REPORTED_TO_FDA → CLOSED
+      // Plus: any state can be re-entered for late corrections (idempotent).
+      // CLASSIFIED requires whoCausality. REPORTED_TO_FDA stamps
+      // fdaSubmittedAt + fdaSubmissionId and flips reportedToChd=true so
+      // the SLA scheduler stays consistent without changes.
+      const ORDER: Record<string, number> = {
+        NOTIFIED: 0, INVESTIGATING: 1, CLASSIFIED: 2, REPORTED_TO_FDA: 3, CLOSED: 4,
+      };
+
       const set: Record<string, any> = {};
+      const newStatus = req.body?.status ? String(req.body.status) : null;
+      if (newStatus) {
+        if (!(newStatus in ORDER)) {
+          return res.status(400).json({ message: `Invalid status: ${newStatus}` });
+        }
+        if (ORDER[newStatus] < ORDER[before.status ?? "NOTIFIED"]) {
+          return res.status(400).json({ message: "AEFI status cannot move backwards" });
+        }
+        if (newStatus === "CLASSIFIED" && !before.whoCausality && !req.body?.whoCausality) {
+          return res.status(400).json({ message: "WHO causality required to mark CLASSIFIED" });
+        }
+        set.status = newStatus;
+        // Stamp the right timestamp + actor for the transition.
+        if (newStatus === "INVESTIGATING" && !before.investigatedAt) {
+          set.investigatedAt = new Date();
+          set.investigatedByUserId = req.userInfo!.id;
+        }
+        if (newStatus === "CLASSIFIED" && !before.classifiedAt) {
+          set.classifiedAt = new Date();
+          set.classifiedByUserId = req.userInfo!.id;
+        }
+        if (newStatus === "REPORTED_TO_FDA" && !before.fdaSubmittedAt) {
+          set.fdaSubmittedAt = new Date();
+          set.reportedToChd = true;
+          if (!before.reportedToChdAt) set.reportedToChdAt = new Date();
+        }
+      }
+
+      if (req.body?.whoCausality !== undefined) {
+        const c = req.body.whoCausality;
+        set.whoCausality = c === null || c === "" ? null : String(c);
+      }
+      if (req.body?.fdaSubmissionId !== undefined) {
+        const f = req.body.fdaSubmissionId;
+        set.fdaSubmissionId = f === null || f === "" ? null : String(f);
+      }
+
+      // Pre-existing fields — kept working for legacy callers. The
+      // explicit reportedToChd path stays so the SLA scheduler's "mark
+      // reported" button continues to work; flipping it true also
+      // jumps status forward to REPORTED_TO_FDA so the lifecycle
+      // doesn't fall behind.
       if (req.body?.reportedToChd !== undefined) {
         set.reportedToChd = !!req.body.reportedToChd;
         if (set.reportedToChd && !before.reportedToChdAt) {
           set.reportedToChdAt = new Date();
         }
+        if (set.reportedToChd && (set.status ?? before.status) !== "CLOSED") {
+          if (ORDER[set.status ?? before.status ?? "NOTIFIED"] < ORDER.REPORTED_TO_FDA) {
+            set.status = "REPORTED_TO_FDA";
+            if (!before.fdaSubmittedAt) set.fdaSubmittedAt = new Date();
+          }
+        }
       }
       if (req.body?.outcome !== undefined) set.outcome = String(req.body.outcome);
       if (req.body?.notes !== undefined) set.notes = String(req.body.notes);
-      // Issue #137 Phase 3: MGMT can attach a registered dose / classify
-      // a VPD onset retroactively, e.g. when more clinical detail
-      // surfaces during investigation.
       if (req.body?.vaccinationId !== undefined) {
         const v = req.body.vaccinationId;
         set.vaccinationId = v === null || v === "" ? null : Number(v);
@@ -2321,11 +2379,14 @@ export async function registerRoutes(
         const vpd = req.body.vaccinePreventableDisease;
         set.vaccinePreventableDisease = vpd === null || vpd === "" ? null : String(vpd);
       }
+
       const [updated] = await db.update(aefiEvents).set(set).where(eq(aefiEvents.id, id)).returning();
+      const statusChanged = newStatus && before.status !== updated.status;
       const reportedFlipped = before.reportedToChd !== updated.reportedToChd;
       await createAuditLog(
         req.userInfo!.id, req.userInfo!.role,
-        reportedFlipped && updated.reportedToChd ? "AEFI_REPORTED_TO_CHD" : "UPDATE",
+        statusChanged ? `AEFI_STATUS_${updated.status}` :
+          reportedFlipped && updated.reportedToChd ? "AEFI_REPORTED_TO_CHD" : "UPDATE",
         "AEFI_EVENT", String(id),
         before.barangay,
         before, updated, req,
