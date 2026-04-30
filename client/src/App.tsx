@@ -193,14 +193,22 @@ function SeniorsHub({ children }: { children: React.ReactNode }) {
 }
 
 function DiseaseHub({ children }: { children: React.ReactNode }) {
+  // Group 1 of the Phase 1 architecture review collapses the four
+  // surveillance entries (Disease Cases, Disease Programs, PIDSR, Disease
+  // Map) under one "Disease Surveillance" hub with four tabs. The data
+  // model is unchanged — each tab keeps its own page, routes, and audit
+  // codes; this hub is pure UI shell. TB DOTS and Outbreaks stay peer
+  // top-level entries per the review.
   return (
     <ProgramHub
-      title="Disease Cases"
+      title="Disease Surveillance"
       icon={Siren}
       primaryAction={{ label: "New Case", icon: Plus, path: "/disease/new" }}
       tabs={[
-        { label: "Cases", path: "/disease", testId: "hub-tab-disease-patients" },
-        { label: "Map", path: "/disease/map", testId: "hub-tab-disease-map", roles: ["SYSTEM_ADMIN", "MHO", "SHA"] },
+        { label: "Case Registry",     path: "/disease",              testId: "hub-tab-disease-cases" },
+        { label: "Vertical Programs", path: "/disease-surveillance", testId: "hub-tab-disease-programs" },
+        { label: "PIDSR",             path: "/pidsr",                testId: "hub-tab-disease-pidsr" },
+        { label: "Disease Map",       path: "/disease/map",          testId: "hub-tab-disease-map", roles: ["SYSTEM_ADMIN", "MHO", "SHA"] },
       ]}
     >
       {children}
@@ -406,13 +414,18 @@ function Router() {
           Registry tab below. */}
       <Route path="/death-events"><Redirect to="/mortality-hub?tab=reviews" /></Route>
       <Route path="/mortality-hub"><RoleRoute component={MortalityHubPage} /></Route>
-      <Route path="/pidsr"><RoleRoute component={PidsrPage} /></Route>
+      {/* PIDSR — wrapped in DiseaseHub so it renders as a tab inside the
+          unified Disease Surveillance hub (Group 1 review). URL unchanged. */}
+      <Route path="/pidsr"><DiseaseHub><RoleRoute component={PidsrPage} /></DiseaseHub></Route>
 
       {/* NCD & lifestyle screenings (Sections G1, G2, G4, G6, G8) */}
       <Route path="/ncd-screenings"><NcdScreeningsPage /></Route>
 
       {/* Disease surveillance (Sections DIS-FIL, DIS-RAB, DIS-SCH, DIS-STH, DIS-LEP) */}
-      <Route path="/disease-surveillance"><DiseaseSurveillancePage /></Route>
+      {/* Vertical disease programs (filariasis/rabies/schisto/STH/leprosy)
+          — wrapped in DiseaseHub as the "Vertical Programs" tab. URL
+          unchanged so existing program-officer bookmarks still resolve. */}
+      <Route path="/disease-surveillance"><DiseaseHub><DiseaseSurveillancePage /></DiseaseHub></Route>
 
       {/* Mortality registry (Section H) — old URL lands on Registry tab
           inside the Group 2 hub. Direct /mortality stays valid for any
