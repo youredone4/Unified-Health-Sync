@@ -249,11 +249,11 @@ const NAV_ITEMS: NavItem[] = [
     activePrefixes: ["/outbreaks"],
   },
   {
-    title: "Walk-in",
+    title: "Triage / Walk-in",
     url: "/walk-in",
     icon: ClipboardCheck,
     roles: rolesFor("/walk-in"),
-    activePrefixes: ["/walk-in"],
+    activePrefixes: ["/walk-in", "/patient-checkup"],
   },
   {
     title: "Restock Requests",
@@ -305,13 +305,6 @@ const NAV_ITEMS: NavItem[] = [
     activePrefixes: ["/pidsr"],
   },
   {
-    title: "Clinic Check-up",
-    url: "/patient-checkup",
-    icon: ClipboardPlus,
-    roles: rolesFor("/patient-checkup"),
-    activePrefixes: ["/patient-checkup"],
-  },
-  {
     title: "Messages",
     url: "/messages",
     icon: MessageCircle,
@@ -351,7 +344,6 @@ const TL_LAYOUT: SidebarLayout = [
   [
     { kind: "group", key: "daily-ops" },
     { kind: "group", key: "surveillance" },
-    { kind: "item",  url: "/patient-checkup" },
     { kind: "item",  url: "/referrals" },
     { kind: "item",  url: "/aefi" },
     { kind: "item",  url: "/pidsr" },
@@ -399,7 +391,6 @@ const MGMT_LAYOUT: SidebarLayout = [
   [
     { kind: "group", key: "daily-ops" },
     { kind: "group", key: "surveillance" },
-    { kind: "item",  url: "/patient-checkup" },
     { kind: "item",  url: "/pidsr" },
     { kind: "item",  url: "/certificates" },
     { kind: "item",  url: "/campaigns" },
