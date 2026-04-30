@@ -49,6 +49,7 @@ import {
   UsersRound,
   ArrowRightCircle,
   Inbox,
+  AlertOctagon,
 } from "lucide-react";
 import { useTheme } from "@/contexts/theme-context";
 import { useAuth, sidebarPermissions, ALL_ROLES } from "@/hooks/use-auth";
@@ -254,6 +255,14 @@ const NAV_ITEMS: NavItem[] = [
     icon: Inbox,
     roles: rolesFor("/mgmt-inbox"),
     activePrefixes: ["/mgmt-inbox"],
+    tier: "decision",
+  },
+  {
+    title: "Outbreaks",
+    url: "/outbreaks",
+    icon: AlertOctagon,
+    roles: rolesFor("/outbreaks"),
+    activePrefixes: ["/outbreaks"],
     tier: "decision",
   },
   // Daily Operations and Registries & Surveillance groups are rendered as

@@ -26,6 +26,7 @@ import {
   fpServiceRecords,
   ncdScreenings,
   children,
+  outbreaks,
 } from "@shared/schema";
 
 const SYSTEM_USER_ID = "system-scheduler";
@@ -267,6 +268,23 @@ async function getRecentCases(lookbackDays: number) {
     .where(sql`date_reported >= ${cutoffIso}`);
 }
 
+// Auto-create or refresh an open outbreaks row for a (disease, barangay).
+// The partial unique index outbreaks_open_unique_idx guarantees at most one
+// non-CLOSED row per pair, so this becomes an upsert. Updates case_count and
+// case_ids on every run so the lifecycle page always shows latest data.
+async function upsertOpenOutbreak(args: {
+  disease: string; barangay: string; caseCount: number; caseIds: number[]; windowDays?: number | null;
+}) {
+  await db.execute(sql`
+    INSERT INTO outbreaks (disease, barangay, case_count, case_ids, window_days)
+    VALUES (${args.disease}, ${args.barangay}, ${args.caseCount}, ${JSON.stringify(args.caseIds)}::jsonb, ${args.windowDays ?? null})
+    ON CONFLICT (disease, barangay) WHERE status != 'CLOSED'
+    DO UPDATE SET case_count = EXCLUDED.case_count,
+                  case_ids   = EXCLUDED.case_ids,
+                  window_days = EXCLUDED.window_days
+  `);
+}
+
 /** Single-case Cat-I alerts. One alert per case. */
 async function checkSingleCaseDiseases(): Promise<AlertFinding[]> {
   const recent = await getRecentCases(SINGLE_CASE_LOOKBACK_DAYS);
@@ -287,6 +305,7 @@ async function checkSingleCaseDiseases(): Promise<AlertFinding[]> {
             singleCase: true,
           },
         });
+        await upsertOpenOutbreak({ disease, barangay: c.barangay, caseCount: 1, caseIds: [c.id] });
       }
     }
   }
@@ -315,6 +334,7 @@ async function checkClusterOutbreaks(): Promise<AlertFinding[]> {
     }
     for (const [barangay, cases] of Array.from(byBarangay.entries())) {
       if (cases.length < rule.threshold) continue;
+      const caseIds = cases.map((c: any) => c.id as number);
       findings.push({
         entityType: "OUTBREAK_SUSPECTED",
         barangayName: barangay,
@@ -324,8 +344,11 @@ async function checkClusterOutbreaks(): Promise<AlertFinding[]> {
           caseCount: cases.length,
           windowDays: rule.windowDays,
           threshold: rule.threshold,
-          caseIds: cases.map((c: any) => c.id),
+          caseIds,
         },
+      });
+      await upsertOpenOutbreak({
+        disease: rule.condition, barangay, caseCount: cases.length, caseIds, windowDays: rule.windowDays,
       });
     }
   }

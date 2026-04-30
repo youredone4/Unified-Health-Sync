@@ -1258,6 +1258,51 @@ export type AefiEvent = typeof aefiEvents.$inferSelect;
 export type InsertAefiEvent = z.infer<typeof insertAefiEventSchema>;
 
 // ===========================================================================
+// OUTBREAKS LIFECYCLE (Phase 9 of operational-actions framework)
+// ===========================================================================
+// The Phase 4 cluster detector identifies suspected outbreaks but had no
+// place to track resolution. This table closes the loop:
+//   SUSPECTED → DECLARED → CONTAINED → CLOSED
+// Auto-created when checkSingleCaseDiseases or checkClusterOutbreaks fires;
+// MGMT advances the status as the response progresses (notify RESU/PHO,
+// case investigation, contact tracing, declare outbreak, contain, close).
+//
+// Dedup invariant: at most one row per (disease, barangay) where status is
+// not CLOSED. The detector checks this before inserting.
+export const OUTBREAK_STATUSES = [
+  "SUSPECTED",   // detector flagged; awaiting investigation
+  "DECLARED",    // confirmed by MHO; response activated
+  "CONTAINED",   // no new cases for 2× incubation; demobilizing
+  "CLOSED",      // formally closed; lessons logged
+] as const;
+export type OutbreakStatus = typeof OUTBREAK_STATUSES[number];
+
+export const outbreaks = pgTable("outbreaks", {
+  id: serial("id").primaryKey(),
+  disease: text("disease").notNull(),                    // matches CLUSTER_THRESHOLDS condition keys
+  barangay: text("barangay").notNull(),
+  status: text("status").$type<OutbreakStatus>().notNull().default("SUSPECTED"),
+  // Cluster context — populated by the auto-create path
+  caseCount: integer("case_count").notNull().default(1),
+  caseIds: jsonb("case_ids").$type<number[]>(),
+  windowDays: integer("window_days"),
+  // Lifecycle timestamps
+  detectedAt: timestamp("detected_at").defaultNow().notNull(),
+  declaredAt: timestamp("declared_at"),
+  containedAt: timestamp("contained_at"),
+  closedAt: timestamp("closed_at"),
+  // Free-text response notes captured at each transition
+  investigationNotes: text("investigation_notes"),
+  containmentActions: text("containment_actions"),
+  closureSummary: text("closure_summary"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+export const insertOutbreakSchema = createInsertSchema(outbreaks)
+  .omit({ id: true, createdAt: true, detectedAt: true, declaredAt: true, containedAt: true, closedAt: true, status: true });
+export type Outbreak = typeof outbreaks.$inferSelect;
+export type InsertOutbreak = z.infer<typeof insertOutbreakSchema>;
+
+// ===========================================================================
 // PHASE 7 — Water & Sanitation (Section W; PDF "G1. Water")
 // ===========================================================================
 export const WATER_LEVELS = ["I", "II", "III"] as const;
