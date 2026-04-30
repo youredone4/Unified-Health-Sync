@@ -9,7 +9,7 @@ import { z } from "zod";
 import { setupAuth, registerAuthRoutes } from "./auth";
 import { registerAdminRoutes } from "./routes/admin";
 import { loadUserInfo, requireAuth, requireRole, createAuditLog } from "./middleware/rbac";
-import { UserRole, auditLogs, deathReviews, DEATH_REVIEW_STATUSES, aefiEvents, insertAefiEventSchema, outbreaks, OUTBREAK_STATUSES, consults, medicineInventory, medicationDispensings, insertMedicationDispensingSchema, inventoryRequests, insertInventoryRequestSchema, RESTOCK_STATUSES, SERVICE_CODES, medicalCertificates, insertMedicalCertificateSchema, CERTIFICATE_TYPES, campaignTallies, insertCampaignTallySchema, CAMPAIGN_TYPES, konsultaEnrollments, insertKonsultaEnrollmentSchema, KONSULTA_ENROLLMENT_STATUSES, konsultaEncounters, insertKonsultaEncounterSchema, KONSULTA_ENCOUNTER_STATUSES, philhealthSubmissions } from "@shared/schema";
+import { UserRole, auditLogs, deathReviews, DEATH_REVIEW_STATUSES, aefiEvents, insertAefiEventSchema, outbreaks, OUTBREAK_STATUSES, consults, medicineInventory, medicationDispensings, insertMedicationDispensingSchema, inventoryRequests, insertInventoryRequestSchema, RESTOCK_STATUSES, SERVICE_CODES, MD_DISPOSITIONS, medicalCertificates, insertMedicalCertificateSchema, CERTIFICATE_TYPES, campaignTallies, insertCampaignTallySchema, CAMPAIGN_TYPES, konsultaEnrollments, insertKonsultaEnrollmentSchema, KONSULTA_ENROLLMENT_STATUSES, konsultaEncounters, insertKonsultaEncounterSchema, KONSULTA_ENCOUNTER_STATUSES, philhealthSubmissions } from "@shared/schema";
 import * as philhealth from "./integrations/philhealth";
 import { ensureReportsRegistered, listReports, getReport } from "./reports";
 import { monthRange, quarterRange, annualRange, customRange } from "./reports/types";
@@ -2601,6 +2601,56 @@ export async function registerRoutes(
       .orderBy(desc(medicationDispensings.dispensedAt));
     res.json(rows);
   }));
+
+  // PATCH /api/walk-ins/:id/md-review — Municipal Doctor signs off on the
+  // BHS triage with their own assessment + plan + final disposition. Gated
+  // to MHO/SHA/SYSTEM_ADMIN. Once signed (md_signed_at IS NOT NULL) the
+  // row drops out of the "Awaiting MD review" inbox; further edits land
+  // on the same fields (we don't keep a history yet — single-MD review).
+  app.patch("/api/walk-ins/:id/md-review", loadUserInfo, requireAuth,
+    requireRole(UserRole.MHO, UserRole.SHA, UserRole.SYSTEM_ADMIN),
+    ar(async (req, res) => {
+      const id = parseId(req.params.id, res); if (id === null) return;
+      const body = req.body ?? {};
+
+      const disposition = body.mdDisposition ? String(body.mdDisposition) : null;
+      if (disposition && !(MD_DISPOSITIONS as readonly string[]).includes(disposition)) {
+        return res.status(400).json({ message: "Invalid mdDisposition" });
+      }
+      // Require at least an assessment OR plan OR diagnosis OR disposition so
+      // signing the row means *something*; an empty submit shouldn't lock it.
+      const anything =
+        (body.mdAssessment && String(body.mdAssessment).trim()) ||
+        (body.mdPlan && String(body.mdPlan).trim()) ||
+        (body.mdDiagnosis && String(body.mdDiagnosis).trim()) ||
+        disposition;
+      if (!anything) {
+        return res.status(400).json({ message: "Provide at least an assessment, diagnosis, plan, or disposition" });
+      }
+
+      const existing = (await db.select().from(consults).where(eq(consults.id, id)))[0];
+      if (!existing) return res.status(404).json({ message: "Walk-in not found" });
+
+      const [updated] = await db.update(consults).set({
+        mdAssessment:    body.mdAssessment    ? String(body.mdAssessment)    : null,
+        mdDiagnosis:     body.mdDiagnosis     ? String(body.mdDiagnosis)     : null,
+        mdPlan:          body.mdPlan          ? String(body.mdPlan)          : null,
+        mdDisposition:   disposition,
+        mdReferredTo:    body.mdReferredTo    ? String(body.mdReferredTo)    : null,
+        mdSignedByUserId: req.userInfo!.id,
+        mdSignedAt:      new Date(),
+      }).where(eq(consults.id, id)).returning();
+
+      await createAuditLog(
+        req.userInfo!.id, req.userInfo!.role,
+        existing.mdSignedAt ? "MD_REVIEW_UPDATE" : "MD_REVIEW_SIGN",
+        "WALK_IN", String(id),
+        existing.barangay, undefined,
+        { id, mdDisposition: disposition, hadPriorReview: !!existing.mdSignedAt }, req,
+      );
+      res.json(updated);
+    }),
+  );
 
   // === RESTOCK REQUESTS (Phase 11) ===
   // TL files; MGMT fulfills. Pending requests surface in /api/mgmt/inbox.

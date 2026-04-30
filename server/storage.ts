@@ -3236,7 +3236,20 @@ export class DatabaseStorage implements IStorage {
     await db.execute(sql`ALTER TABLE consults ADD COLUMN IF NOT EXISTS adult_danger_signs JSONB`);
     await db.execute(sql`ALTER TABLE consults ADD COLUMN IF NOT EXISTS pregnancy_status TEXT`);
     await db.execute(sql`ALTER TABLE consults ADD COLUMN IF NOT EXISTS lmp_date TEXT`);
+    // RHU MD review — Municipal Doctor's assessment + plan + final disposition
+    // on top of the BHS triage. md_signed_at is the source of truth for "this
+    // consult has been reviewed by the MD".
+    await db.execute(sql`ALTER TABLE consults ADD COLUMN IF NOT EXISTS md_assessment TEXT`);
+    await db.execute(sql`ALTER TABLE consults ADD COLUMN IF NOT EXISTS md_diagnosis TEXT`);
+    await db.execute(sql`ALTER TABLE consults ADD COLUMN IF NOT EXISTS md_plan TEXT`);
+    await db.execute(sql`ALTER TABLE consults ADD COLUMN IF NOT EXISTS md_disposition TEXT`);
+    await db.execute(sql`ALTER TABLE consults ADD COLUMN IF NOT EXISTS md_referred_to TEXT`);
+    await db.execute(sql`ALTER TABLE consults ADD COLUMN IF NOT EXISTS md_signed_by_user_id VARCHAR`);
+    await db.execute(sql`ALTER TABLE consults ADD COLUMN IF NOT EXISTS md_signed_at TIMESTAMP`);
     await db.execute(sql`CREATE INDEX IF NOT EXISTS consults_acuity_idx ON consults (acuity_level, created_at DESC) WHERE acuity_level IS NOT NULL`);
+    // Index for the MD "awaiting review" inbox — fast lookup of unsigned
+    // emergent/urgent rows ordered by when the BHS captured them.
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS consults_awaiting_md_idx ON consults (acuity_level, created_at DESC) WHERE md_signed_at IS NULL AND acuity_level IS NOT NULL`);
 
     // Phase 11 — medication dispensing ledger. One row per dispense event,
     // tied to a consult and (optionally) a medicine_inventory row so the
