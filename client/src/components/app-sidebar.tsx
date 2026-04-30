@@ -377,6 +377,11 @@ const MGMT_LAYOUT: SidebarLayout = [
     { kind: "item", url: "/death-events" },
     { kind: "item", url: "/aefi" },
     { kind: "item", url: "/referrals" },
+    // The MD's "Awaiting MD review" inbox lives on this page — surfaces
+    // EMERGENT/URGENT and BHS-escalated encounters that still need the MD
+    // to sign off. Sits next to /referrals because both are BHS→RHU
+    // handoff queues.
+    { kind: "item", url: "/walk-in" },
     { kind: "item", url: "/restock-requests" },
     { kind: "item", url: "/reports" },
   ],
