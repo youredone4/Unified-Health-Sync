@@ -50,6 +50,8 @@ import {
   ArrowRightCircle,
   Inbox,
   AlertOctagon,
+  ClipboardCheck,
+  Boxes,
 } from "lucide-react";
 import { useTheme } from "@/contexts/theme-context";
 import { useAuth, sidebarPermissions, ALL_ROLES } from "@/hooks/use-auth";
@@ -243,6 +245,20 @@ const NAV_ITEMS: NavItem[] = [
     activePrefixes: ["/outbreaks"],
   },
   {
+    title: "Walk-in",
+    url: "/walk-in",
+    icon: ClipboardCheck,
+    roles: rolesFor("/walk-in"),
+    activePrefixes: ["/walk-in"],
+  },
+  {
+    title: "Restock Requests",
+    url: "/restock-requests",
+    icon: Boxes,
+    roles: rolesFor("/restock-requests"),
+    activePrefixes: ["/restock-requests"],
+  },
+  {
     title: "Clinic Check-up",
     url: "/patient-checkup",
     icon: ClipboardPlus,
@@ -282,6 +298,7 @@ const TL_LAYOUT: SidebarLayout = [
   // Action — what they're working on right now
   [
     { kind: "item",  url: "/today" },
+    { kind: "item",  url: "/walk-in" },
     { kind: "group", key: "patients" },
   ],
   // Capture — registries and clinical entry
@@ -291,12 +308,16 @@ const TL_LAYOUT: SidebarLayout = [
     { kind: "item",  url: "/patient-checkup" },
     { kind: "item",  url: "/referrals" },
   ],
+  // Stock — TL view of inventory + restock requests they file
+  [
+    { kind: "item", url: "/inventory" },
+    { kind: "item", url: "/restock-requests" },
+  ],
   // Schedule + analytics + utilities
   [
     { kind: "item", url: "/calendar" },
     { kind: "item", url: "/nutrition" },
     { kind: "item", url: "/reports" },
-    { kind: "item", url: "/inventory" },
     { kind: "item", url: "/workforce" },
     { kind: "item", url: "/messages" },
   ],
@@ -311,6 +332,7 @@ const MGMT_LAYOUT: SidebarLayout = [
     { kind: "item", url: "/dashboards" },
     { kind: "item", url: "/outbreaks" },
     { kind: "item", url: "/referrals" },
+    { kind: "item", url: "/restock-requests" },
     { kind: "item", url: "/reports" },
   ],
   // Operational view — consolidated data they monitor

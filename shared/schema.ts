@@ -467,11 +467,94 @@ export const consults = pgTable("consults", {
   heightCm: text("height_cm"), // numeric string, cm
   // Disposition details
   dispositionNotes: text("disposition_notes"), // required when disposition = "Other"
+  // ── Phase 11: walk-in OPD log ──
+  isWalkIn: boolean("is_walk_in").default(false),       // TL-captured BHS walk-in
+  serviceCodes: jsonb("service_codes").$type<string[]>().default([]),
 });
+
+// ─── Phase 11: walk-in service codes ────────────────────────────────────────
+// Multi-select set on consults.service_codes for walk-in encounters. Maps
+// to the "service rendered" column in the BHS daily logbook (DOH AO 2008-
+// 0029 BHS standards) and the line items in PhilHealth Konsulta encounter
+// forms. Free to extend; the array is jsonb so adding a code is a no-op.
+export const SERVICE_CODES = [
+  "BP_CHECK",
+  "VITAL_SIGNS",
+  "WOUND_DRESSING",
+  "SUTURE",
+  "SUTURE_REMOVAL",
+  "NEBULIZATION",
+  "INJECTION",
+  "ANIMAL_BITE_FA",
+  "PREGNANCY_TEST",
+  "HEALTH_TEACHING",
+  "MEDICAL_CERT",
+  "MED_DISPENSE",
+  "REFERRAL_OUT",
+  "VITAMIN_A",
+  "DEWORMING",
+  "FP_RESUPPLY",
+  "TB_SPUTUM",
+  "OTHER",
+] as const;
+export type ServiceCode = typeof SERVICE_CODES[number];
 
 export const insertConsultSchema = createInsertSchema(consults).omit({ id: true });
 export type Consult = typeof consults.$inferSelect;
 export type InsertConsult = z.infer<typeof insertConsultSchema>;
+
+// ─── Phase 11: medication dispensing ledger ─────────────────────────────────
+// Each row is one dispense event tied to a consult/walk-in. Decrements the
+// linked medicine_inventory.qty so consumption is auditable end-to-end.
+export const medicationDispensings = pgTable("medication_dispensings", {
+  id: serial("id").primaryKey(),
+  consultId: integer("consult_id").notNull(),                // FK to consults.id
+  medicineInventoryId: integer("medicine_inventory_id"),     // FK to medicine_inventory.id (nullable for free-text)
+  medicineName: text("medicine_name").notNull(),             // denormalized snapshot
+  strength: text("strength"),
+  unit: text("unit"),
+  quantityDispensed: integer("quantity_dispensed").notNull(),
+  barangay: text("barangay").notNull(),                      // denormalized for scoping queries
+  dispensedByUserId: varchar("dispensed_by_user_id"),
+  dispensedAt: timestamp("dispensed_at").defaultNow().notNull(),
+  notes: text("notes"),
+});
+export const insertMedicationDispensingSchema = createInsertSchema(medicationDispensings)
+  .omit({ id: true, dispensedAt: true });
+export type MedicationDispensing = typeof medicationDispensings.$inferSelect;
+export type InsertMedicationDispensing = z.infer<typeof insertMedicationDispensingSchema>;
+
+// ─── Phase 11: restock requests (TL → RHU MGMT) ─────────────────────────────
+// TL files a request when stock is low; MGMT marks fulfilled when the supply
+// is delivered to the BHS. Pending requests surface in the MGMT inbox.
+export const RESTOCK_URGENCIES = ["NORMAL", "URGENT"] as const;
+export type RestockUrgency = typeof RESTOCK_URGENCIES[number];
+
+export const RESTOCK_STATUSES = ["PENDING", "FULFILLED", "REJECTED"] as const;
+export type RestockStatus = typeof RESTOCK_STATUSES[number];
+
+export const inventoryRequests = pgTable("inventory_requests", {
+  id: serial("id").primaryKey(),
+  barangay: text("barangay").notNull(),
+  itemType: text("item_type").notNull(),                   // 'vaccine' | 'medicine'
+  itemName: text("item_name").notNull(),
+  quantityRequested: integer("quantity_requested").notNull(),
+  urgency: text("urgency").$type<RestockUrgency>().notNull().default("NORMAL"),
+  status: text("status").$type<RestockStatus>().notNull().default("PENDING"),
+  requestedByUserId: varchar("requested_by_user_id"),
+  requestedAt: timestamp("requested_at").defaultNow().notNull(),
+  fulfilledByUserId: varchar("fulfilled_by_user_id"),
+  fulfilledAt: timestamp("fulfilled_at"),
+  notes: text("notes"),
+  fulfillmentNotes: text("fulfillment_notes"),
+});
+export const insertInventoryRequestSchema = createInsertSchema(inventoryRequests)
+  .omit({ id: true, requestedAt: true, fulfilledAt: true, fulfilledByUserId: true, status: true })
+  .extend({
+    urgency: z.enum(RESTOCK_URGENCIES).optional(),
+  });
+export type InventoryRequest = typeof inventoryRequests.$inferSelect;
+export type InsertInventoryRequest = z.infer<typeof insertInventoryRequestSchema>;
 
 // === M1 TEMPLATE VERSIONS (Template-driven reporting) ===
 export const m1TemplateVersions = pgTable("m1_template_versions", {

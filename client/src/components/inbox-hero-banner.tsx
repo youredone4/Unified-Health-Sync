@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Inbox, ArrowRight, CheckCircle2 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 
-type InboxType = "referral" | "death-review" | "aefi" | "outbreak" | "system-alert";
+type InboxType = "referral" | "death-review" | "aefi" | "outbreak" | "restock" | "system-alert";
 type InboxPriority = "high" | "medium" | "low";
 
 interface InboxItem {
@@ -27,6 +27,7 @@ interface InboxResponse {
     deathReview: number;
     aefi: number;
     outbreak?: number;
+    restock?: number;
     systemAlert: number;
     total: number;
   };
@@ -37,6 +38,7 @@ const TYPE_LABEL: Record<InboxType, string> = {
   "death-review": "Death Reviews",
   "aefi":         "AEFI",
   "outbreak":     "Outbreaks",
+  "restock":      "Restock",
   "system-alert": "Alerts",
 };
 
@@ -45,6 +47,7 @@ const TYPE_DOT: Record<InboxType, string> = {
   "death-review": "bg-violet-500",
   "aefi":         "bg-rose-500",
   "outbreak":     "bg-red-500",
+  "restock":      "bg-orange-500",
   "system-alert": "bg-amber-500",
 };
 
@@ -130,6 +133,7 @@ export function InboxHeroBanner() {
               t === "death-review" ? counts?.deathReview :
               t === "aefi"         ? counts?.aefi :
               t === "outbreak"     ? counts?.outbreak ?? 0 :
+              t === "restock"      ? counts?.restock ?? 0 :
                                      counts?.systemAlert;
             if (!c) return null;
             return (

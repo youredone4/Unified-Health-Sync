@@ -9,7 +9,7 @@ import { z } from "zod";
 import { setupAuth, registerAuthRoutes } from "./auth";
 import { registerAdminRoutes } from "./routes/admin";
 import { loadUserInfo, requireAuth, requireRole, createAuditLog } from "./middleware/rbac";
-import { UserRole, auditLogs, deathReviews, DEATH_REVIEW_STATUSES, aefiEvents, insertAefiEventSchema, outbreaks, OUTBREAK_STATUSES } from "@shared/schema";
+import { UserRole, auditLogs, deathReviews, DEATH_REVIEW_STATUSES, aefiEvents, insertAefiEventSchema, outbreaks, OUTBREAK_STATUSES, consults, medicineInventory, medicationDispensings, insertMedicationDispensingSchema, inventoryRequests, insertInventoryRequestSchema, RESTOCK_STATUSES, SERVICE_CODES } from "@shared/schema";
 import { ensureReportsRegistered, listReports, getReport } from "./reports";
 import { monthRange, quarterRange, annualRange, customRange } from "./reports/types";
 
@@ -2323,6 +2323,215 @@ export async function registerRoutes(
     }),
   );
 
+  // === WALK-IN OPD LOG (Phase 11) ===
+  // Walk-ins are stored in the existing `consults` table with is_walk_in=true
+  // and an array of service_codes. TL captures; MGMT reads consolidated.
+  app.get("/api/walk-ins", loadUserInfo, requireAuth, ar(async (req, res) => {
+    const conds: any[] = [eq(consults.isWalkIn, true)];
+    if (req.userInfo?.role === UserRole.TL) {
+      const assigned = req.userInfo.assignedBarangays;
+      if (assigned.length === 0) return res.json([]);
+      conds.push(eq(consults.barangay, assigned[0]));
+    } else if (req.query.barangay) {
+      conds.push(eq(consults.barangay, String(req.query.barangay)));
+    }
+    const rows = await db.select().from(consults)
+      .where(and(...conds))
+      .orderBy(desc(consults.createdAt))
+      .limit(500);
+    res.json(rows);
+  }));
+
+  app.post("/api/walk-ins", loadUserInfo, requireAuth,
+    requireRole(UserRole.TL),
+    ar(async (req, res) => {
+      const body = req.body ?? {};
+      const barangay = String(body.barangay ?? "");
+      if (!barangay || !req.userInfo!.assignedBarangays.includes(barangay)) {
+        return res.status(403).json({ message: "Access denied to this barangay" });
+      }
+      const serviceCodes: string[] = Array.isArray(body.serviceCodes) ? body.serviceCodes : [];
+      const invalid = serviceCodes.find((c) => !(SERVICE_CODES as readonly string[]).includes(c));
+      if (invalid) return res.status(400).json({ message: `Invalid service code: ${invalid}` });
+
+      const now = new Date().toISOString();
+      const [created] = await db.insert(consults).values({
+        patientName:    String(body.patientName ?? ""),
+        age:            Number(body.age ?? 0) || 0,
+        sex:            String(body.sex ?? "F"),
+        barangay,
+        addressLine:    body.addressLine ? String(body.addressLine) : null,
+        consultDate:    String(body.consultDate ?? now.slice(0, 10)),
+        chiefComplaint: String(body.chiefComplaint ?? ""),
+        diagnosis:      String(body.diagnosis ?? "Walk-in"),
+        treatment:      body.treatment ? String(body.treatment) : null,
+        notes:          body.notes ? String(body.notes) : null,
+        bloodPressure:  body.bloodPressure ? String(body.bloodPressure) : null,
+        weightKg:       body.weightKg ? String(body.weightKg) : null,
+        temperatureC:   body.temperatureC ? String(body.temperatureC) : null,
+        pulseRate:      body.pulseRate ? String(body.pulseRate) : null,
+        heightCm:       body.heightCm ? String(body.heightCm) : null,
+        consultType:    "Walk-in",
+        disposition:    body.disposition ? String(body.disposition) : "Treated",
+        referredTo:     body.referredTo ? String(body.referredTo) : null,
+        createdBy:      req.userInfo!.id,
+        createdAt:      now,
+        isWalkIn:       true,
+        serviceCodes,
+      } as any).returning();
+      await createAuditLog(
+        req.userInfo!.id, req.userInfo!.role,
+        "CREATE", "WALK_IN", String(created.id),
+        created.barangay, undefined,
+        { id: created.id, services: serviceCodes, complaint: created.chiefComplaint }, req,
+      );
+      res.status(201).json(created);
+    }),
+  );
+
+  // POST /api/walk-ins/:id/dispense — log a medication dispense and decrement
+  // medicine_inventory. Wrapped in a transaction so a stock decrement never
+  // happens without a matching ledger row.
+  app.post("/api/walk-ins/:id/dispense", loadUserInfo, requireAuth,
+    requireRole(UserRole.TL),
+    ar(async (req, res) => {
+      const id = parseId(req.params.id, res); if (id === null) return;
+      const consult = (await db.select().from(consults).where(eq(consults.id, id)))[0];
+      if (!consult) return res.status(404).json({ message: "Walk-in not found" });
+      if (!consult.isWalkIn) return res.status(400).json({ message: "Not a walk-in encounter" });
+      if (!req.userInfo!.assignedBarangays.includes(consult.barangay)) {
+        return res.status(403).json({ message: "Access denied to this barangay" });
+      }
+
+      const parsed = insertMedicationDispensingSchema.safeParse({
+        ...req.body,
+        consultId: id,
+        barangay: consult.barangay,
+        dispensedByUserId: req.userInfo!.id,
+      });
+      if (!parsed.success) {
+        return res.status(400).json({ message: "Invalid dispense", issues: parsed.error.issues });
+      }
+      const input = parsed.data;
+      if (input.quantityDispensed <= 0) {
+        return res.status(400).json({ message: "Quantity must be positive" });
+      }
+
+      // Decrement medicine_inventory atomically when a stock row is linked.
+      if (input.medicineInventoryId) {
+        const stock = (await db.select().from(medicineInventory)
+          .where(eq(medicineInventory.id, input.medicineInventoryId)))[0];
+        if (!stock) return res.status(404).json({ message: "Inventory item not found" });
+        if (stock.barangay !== consult.barangay) {
+          return res.status(403).json({ message: "Inventory item belongs to a different barangay" });
+        }
+        if ((stock.qty ?? 0) < input.quantityDispensed) {
+          return res.status(400).json({ message: `Insufficient stock (have ${stock.qty}, need ${input.quantityDispensed})` });
+        }
+        await db.update(medicineInventory)
+          .set({ qty: (stock.qty ?? 0) - input.quantityDispensed, lastUpdated: new Date().toISOString().slice(0, 10) })
+          .where(eq(medicineInventory.id, input.medicineInventoryId));
+      }
+
+      const [created] = await db.insert(medicationDispensings).values(input as any).returning();
+      await createAuditLog(
+        req.userInfo!.id, req.userInfo!.role,
+        "DISPENSE", "MEDICATION", String(created.id),
+        consult.barangay, undefined,
+        { walkInId: id, medicine: created.medicineName, qty: created.quantityDispensed },
+        req,
+      );
+      res.status(201).json(created);
+    }),
+  );
+
+  // GET /api/walk-ins/:id/dispenses — line items for a single walk-in.
+  app.get("/api/walk-ins/:id/dispenses", loadUserInfo, requireAuth, ar(async (req, res) => {
+    const id = parseId(req.params.id, res); if (id === null) return;
+    const rows = await db.select().from(medicationDispensings)
+      .where(eq(medicationDispensings.consultId, id))
+      .orderBy(desc(medicationDispensings.dispensedAt));
+    res.json(rows);
+  }));
+
+  // === RESTOCK REQUESTS (Phase 11) ===
+  // TL files; MGMT fulfills. Pending requests surface in /api/mgmt/inbox.
+  app.get("/api/inventory-requests", loadUserInfo, requireAuth, ar(async (req, res) => {
+    const status = req.query.status ? String(req.query.status) : undefined;
+    const conds: any[] = [];
+    if (status) conds.push(eq(inventoryRequests.status, status as any));
+    if (req.userInfo?.role === UserRole.TL) {
+      const assigned = req.userInfo.assignedBarangays;
+      if (assigned.length === 0) return res.json([]);
+      conds.push(eq(inventoryRequests.barangay, assigned[0]));
+    }
+    const rows = await db.select().from(inventoryRequests)
+      .where(conds.length ? and(...conds) : undefined)
+      .orderBy(desc(inventoryRequests.requestedAt))
+      .limit(500);
+    res.json(rows);
+  }));
+
+  app.post("/api/inventory-requests", loadUserInfo, requireAuth,
+    requireRole(UserRole.TL),
+    ar(async (req, res) => {
+      const parsed = insertInventoryRequestSchema.safeParse({
+        ...req.body,
+        requestedByUserId: req.userInfo!.id,
+      });
+      if (!parsed.success) {
+        return res.status(400).json({ message: "Invalid request", issues: parsed.error.issues });
+      }
+      const input = parsed.data;
+      if (!req.userInfo!.assignedBarangays.includes(input.barangay)) {
+        return res.status(403).json({ message: "Access denied to this barangay" });
+      }
+      const [created] = await db.insert(inventoryRequests).values({
+        ...input,
+        status: "PENDING",
+      } as any).returning();
+      await createAuditLog(
+        req.userInfo!.id, req.userInfo!.role,
+        "CREATE", "RESTOCK_REQUEST", String(created.id),
+        created.barangay, undefined,
+        { item: created.itemName, qty: created.quantityRequested, urgency: created.urgency }, req,
+      );
+      res.status(201).json(created);
+    }),
+  );
+
+  app.patch("/api/inventory-requests/:id", loadUserInfo, requireAuth,
+    requireRole(UserRole.SYSTEM_ADMIN, UserRole.MHO, UserRole.SHA),
+    ar(async (req, res) => {
+      const id = parseId(req.params.id, res); if (id === null) return;
+      const before = (await db.select().from(inventoryRequests).where(eq(inventoryRequests.id, id)))[0];
+      if (!before) return res.status(404).json({ message: "Request not found" });
+      const newStatus = req.body?.status as string | undefined;
+      if (newStatus && !RESTOCK_STATUSES.includes(newStatus as any)) {
+        return res.status(400).json({ message: `Invalid status; allowed: ${RESTOCK_STATUSES.join(", ")}` });
+      }
+      const set: Record<string, any> = {};
+      if (newStatus) {
+        set.status = newStatus;
+        if (newStatus === "FULFILLED" || newStatus === "REJECTED") {
+          set.fulfilledByUserId = req.userInfo!.id;
+          set.fulfilledAt = new Date();
+        }
+      }
+      if (req.body?.fulfillmentNotes !== undefined) {
+        set.fulfillmentNotes = String(req.body.fulfillmentNotes);
+      }
+      const [updated] = await db.update(inventoryRequests).set(set).where(eq(inventoryRequests.id, id)).returning();
+      await createAuditLog(
+        req.userInfo!.id, req.userInfo!.role,
+        newStatus ? "RESTOCK_STATUS_CHANGE" : "UPDATE",
+        "RESTOCK_REQUEST", String(id),
+        before.barangay, before, updated, req,
+      );
+      res.json(updated);
+    }),
+  );
+
   // === MGMT INBOX (Phase 7 of operational-actions framework) ===
   // Single dashboard for MHO / SHA / Admin that surfaces every actionable
   // signal from Phases 1–6 in one place: pending referrals, open death
@@ -2334,7 +2543,7 @@ export async function registerRoutes(
     ar(async (_req, res) => {
       const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
-      const [pendingReferrals, openReviews, unreportedAefi, openOutbreaks, recentAlerts] = await Promise.all([
+      const [pendingReferrals, openReviews, unreportedAefi, openOutbreaks, openRestockRequests, recentAlerts] = await Promise.all([
         db.select().from(referralRecords)
           .where(eq(referralRecords.status, "PENDING" as any))
           .orderBy(desc(referralRecords.createdAt)).limit(100),
@@ -2347,6 +2556,9 @@ export async function registerRoutes(
         db.select().from(outbreaks)
           .where(inArray(outbreaks.status, ["SUSPECTED", "DECLARED", "CONTAINED"] as any))
           .orderBy(desc(outbreaks.detectedAt)).limit(100),
+        db.select().from(inventoryRequests)
+          .where(eq(inventoryRequests.status, "PENDING" as any))
+          .orderBy(desc(inventoryRequests.requestedAt)).limit(100),
         db.select().from(auditLogs)
           .where(and(eq(auditLogs.action, "SYSTEM_ALERT"), gte(auditLogs.createdAt, sevenDaysAgo)))
           .orderBy(desc(auditLogs.createdAt)).limit(100),
@@ -2354,7 +2566,7 @@ export async function registerRoutes(
 
       type InboxItem = {
         id: string;
-        type: "referral" | "death-review" | "aefi" | "outbreak" | "system-alert";
+        type: "referral" | "death-review" | "aefi" | "outbreak" | "restock" | "system-alert";
         priority: "high" | "medium" | "low";
         title: string;
         subtitle: string;
@@ -2418,6 +2630,19 @@ export async function registerRoutes(
         });
       }
 
+      for (const r of openRestockRequests) {
+        items.push({
+          id: `restock:${r.id}`,
+          type: "restock",
+          priority: r.urgency === "URGENT" ? "high" : "medium",
+          title: `Restock request — ${r.itemName}${r.urgency === "URGENT" ? " (URGENT)" : ""}`,
+          subtitle: `${r.quantityRequested} ${r.itemType === "vaccine" ? "doses" : "units"} for ${r.barangay}`,
+          barangay: r.barangay,
+          createdAt: (r.requestedAt ?? new Date()).toISOString(),
+          link: "/restock-requests",
+        });
+      }
+
       for (const log of recentAlerts) {
         const after = log.afterJson as Record<string, any> | null;
         const rule = after?.rule ?? log.entityType;
@@ -2447,6 +2672,7 @@ export async function registerRoutes(
           deathReview: openReviews.length,
           aefi: unreportedAefi.length,
           outbreak: openOutbreaks.length,
+          restock: openRestockRequests.length,
           systemAlert: recentAlerts.length,
           total: items.length,
         },
