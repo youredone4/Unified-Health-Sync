@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import type { Mother, Child, Senior, TBPatient, DiseaseCase } from "@shared/schema";
 import {
   getTTStatus,
@@ -18,32 +18,34 @@ import {
 } from "@/lib/healthLogic";
 import { useAuth } from "@/hooks/use-auth";
 import { useBarangay } from "@/contexts/barangay-context";
+import { Sparkles, ChevronDown } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import {
-  Heart,
-  Baby,
-  Pill,
-  UserCircle,
-  Siren,
-  Sparkles,
-} from "lucide-react";
+  Accordion, AccordionContent, AccordionItem, AccordionTrigger,
+} from "@/components/ui/accordion";
 import { DayBannerStrip } from "@/components/today/DayBannerStrip";
 import { M1ProgressStrip } from "@/components/today/M1ProgressStrip";
-import { ProgramWorklist, type WorklistItem } from "@/components/today/ProgramWorklist";
-import { DefaultersList } from "@/components/today/DefaultersList";
+import {
+  PriorityList,
+  type PriorityItem,
+  type ProgramKey,
+  type WorklistItem,
+} from "@/components/today/PriorityList";
 import { ColdChainPanel } from "@/components/today/ColdChainPanel";
 import { TbDosePanel } from "@/components/today/TbDosePanel";
 import { PncPanel } from "@/components/today/PncPanel";
 import { QuickAddBar } from "@/components/today/QuickAddBar";
 
 /**
- * /today — TL/PHN landing. A cadence-aware worklist that answers
- * "what's mandated for today, who's expected, who do I chase, and
- * how far am I from this month's M1 report?" Cross-program lists are
- * derived client-side from existing queries; no new endpoints.
+ * /today — TL/PHN landing. Hero priority list across all programs,
+ * sorted by urgency (Overdue → Due today → Upcoming). Operational
+ * checks (cold-chain, TB doses, PNC) live in a collapsible accordion
+ * so the screen stays scannable.
  */
 export default function TodayPage() {
   const { user } = useAuth();
   const { scopedPath, selectedBarangay } = useBarangay();
+  const [programFilter, setProgramFilter] = useState<ProgramKey | "all">("all");
 
   const { data: mothers = [] } = useQuery<Mother[]>({ queryKey: [scopedPath("/api/mothers")] });
   const { data: children = [] } = useQuery<Child[]>({ queryKey: [scopedPath("/api/children")] });
@@ -53,16 +55,32 @@ export default function TodayPage() {
 
   const dayContext = useMemo(() => getDayOfWeekContext(TODAY), []);
 
-  const prenatal = useMemo(() => splitPrenatal(mothers), [mothers]);
-  const immunization = useMemo(() => splitImmunization(children), [children]);
-  const ncd = useMemo(() => splitNcd(seniors), [seniors]);
-  const tb = useMemo(() => splitTb(tbPatients), [tbPatients]);
-  const disease = useMemo(() => splitDisease(diseaseCases), [diseaseCases]);
+  const allItems = useMemo<PriorityItem[]>(() => {
+    const tagged: PriorityItem[] = [];
+    const push = (program: ProgramKey, items: WorklistItem[]) => {
+      for (const i of items) tagged.push({ ...i, program });
+    };
+    const prenatal     = splitPrenatal(mothers);
+    const immunization = splitImmunization(children);
+    const ncd          = splitNcd(seniors);
+    const tb           = splitTb(tbPatients);
+    const disease      = splitDisease(diseaseCases);
+    push("prenatal", [...prenatal.expected, ...prenatal.defaulters]);
+    push("immunization", [...immunization.expected, ...immunization.defaulters]);
+    push("ncd", [...ncd.expected, ...ncd.defaulters]);
+    push("tb", [...tb.expected, ...tb.defaulters]);
+    push("disease", [...disease.expected, ...disease.defaulters]);
+    // Severity sort: danger first, then warning, then info.
+    const rank = { danger: 0, warning: 1, info: 2 } as const;
+    tagged.sort((a, b) => (rank[a.severity ?? "info"] - rank[b.severity ?? "info"]));
+    return tagged;
+  }, [mothers, children, seniors, tbPatients, diseaseCases]);
 
-  const defaulters = useMemo(
-    () => [...prenatal.defaulters, ...immunization.defaulters, ...ncd.defaulters, ...tb.defaulters],
-    [prenatal.defaulters, immunization.defaulters, ncd.defaulters, tb.defaulters],
-  );
+  const counts = useMemo(() => {
+    const by: Record<ProgramKey, number> = { prenatal: 0, immunization: 0, ncd: 0, tb: 0, disease: 0 };
+    for (const i of allItems) by[i.program] += 1;
+    return by;
+  }, [allItems]);
 
   const greeting = useMemo(() => {
     const h = TODAY.getHours();
@@ -73,10 +91,11 @@ export default function TodayPage() {
 
   const displayName = user?.firstName || user?.username || "there";
   const barangayLabel = selectedBarangay || "your barangays";
+  const totalToDo = allItems.length;
 
   return (
-    <div className="space-y-4">
-      {/* Greeting */}
+    <div className="space-y-5">
+      {/* Greeting + total-to-do counter */}
       <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-semibold flex items-center gap-2" data-testid="today-greeting">
@@ -87,66 +106,70 @@ export default function TodayPage() {
             {barangayLabel} · {formatDate(TODAY_STR)}
           </p>
         </div>
+        <div className="text-right">
+          <div className="text-3xl font-bold leading-tight" data-testid="today-total">{totalToDo}</div>
+          <div className="text-xs text-muted-foreground uppercase tracking-wide">
+            {totalToDo === 1 ? "thing" : "things"} to do
+          </div>
+        </div>
       </div>
 
-      {/* Day-of-week DOH cadence banners */}
-      <DayBannerStrip context={dayContext} epiExpectedCount={immunization.expected.length} />
+      {/* Program filter chips */}
+      <div className="flex flex-wrap gap-2">
+        <ProgramChip active={programFilter === "all"} onClick={() => setProgramFilter("all")} label="All" count={totalToDo} />
+        <ProgramChip active={programFilter === "prenatal"}     onClick={() => setProgramFilter("prenatal")}     label="Prenatal" count={counts.prenatal} />
+        <ProgramChip active={programFilter === "immunization"} onClick={() => setProgramFilter("immunization")} label="EPI"      count={counts.immunization} />
+        <ProgramChip active={programFilter === "ncd"}          onClick={() => setProgramFilter("ncd")}          label="NCD"      count={counts.ncd} />
+        <ProgramChip active={programFilter === "tb"}           onClick={() => setProgramFilter("tb")}           label="TB DOTS"  count={counts.tb} />
+        <ProgramChip active={programFilter === "disease"}      onClick={() => setProgramFilter("disease")}      label="Disease"  count={counts.disease} />
+      </div>
 
-      {/* M1/M2 reporting strip */}
+      {/* Hero: prioritized list grouped by severity */}
+      <PriorityList items={allItems} programFilter={programFilter} />
+
+      {/* Day-of-week DOH cadence + M1 strip — secondary, but still visible */}
+      <DayBannerStrip context={dayContext} epiExpectedCount={counts.immunization} />
       <M1ProgressStrip daysRemaining={dayContext.m1DaysRemaining} />
 
-      {/* Per-program "expected today" worklists */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <ProgramWorklist
-          title="Prenatal"
-          icon={Heart}
-          items={prenatal.expected}
-          testId="program-prenatal"
-          emptyMessage="No prenatal visits expected today"
-        />
-        <ProgramWorklist
-          title="Immunization (EPI)"
-          icon={Baby}
-          items={immunization.expected}
-          testId="program-immunization"
-          emptyMessage="No vaccines due in today's window"
-        />
-        <ProgramWorklist
-          title="NCD / Senior monthly"
-          icon={UserCircle}
-          items={ncd.expected}
-          testId="program-ncd"
-          emptyMessage="No BP / refill follow-ups due today"
-        />
-        <ProgramWorklist
-          title="TB DOTS"
-          icon={Pill}
-          items={tb.expected}
-          testId="program-tb"
-          emptyMessage="No TB DOTS visits scheduled today"
-        />
-        <ProgramWorklist
-          title="Disease surveillance"
-          icon={Siren}
-          items={disease.expected}
-          testId="program-disease"
-          emptyMessage="No new disease cases to triage"
-        />
-      </div>
+      {/* Daily DOH-cadence checks — collapsed by default */}
+      <Accordion type="single" collapsible>
+        <AccordionItem value="daily-checks">
+          <AccordionTrigger className="text-sm font-medium" data-testid="daily-checks-toggle">
+            <div className="flex items-center gap-2">
+              <ChevronDown className="w-4 h-4" />
+              Daily checks — cold-chain · TB doses · PNC
+            </div>
+          </AccordionTrigger>
+          <AccordionContent>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 pt-2">
+              <ColdChainPanel />
+              <TbDosePanel />
+              <PncPanel />
+            </div>
+          </AccordionContent>
+        </AccordionItem>
+      </Accordion>
 
-      {/* Cross-program defaulters bucket */}
-      <DefaultersList items={defaulters} />
-
-      {/* Daily DOH-cadence panels: cold-chain, TB doses, PNC checkpoints */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <ColdChainPanel />
-        <TbDosePanel />
-        <PncPanel />
-      </div>
-
-      {/* Quick add — demoted to a footer row */}
       <QuickAddBar />
     </div>
+  );
+}
+
+function ProgramChip({
+  active, onClick, label, count,
+}: { active: boolean; onClick: () => void; label: string; count: number }) {
+  return (
+    <Button
+      variant={active ? "default" : "outline"}
+      size="sm"
+      onClick={onClick}
+      data-testid={`program-chip-${label.toLowerCase().replace(/\s+/g, "-")}`}
+    >
+      {label}
+      <span className={`ml-2 inline-flex items-center justify-center px-1.5 py-0.5 rounded text-xs ${active ? "bg-white/20" : "bg-muted"}`}>
+        {count}
+      </span>
+    </Button>
   );
 }
 
