@@ -501,6 +501,18 @@ export const consults = pgTable("consults", {
   adultDangerSigns: jsonb("adult_danger_signs").$type<string[]>(),  // ≥5 years
   pregnancyStatus: text("pregnancy_status"),       // NOT_PREGNANT | POSSIBLE | CONFIRMED | UNKNOWN_LMP
   lmpDate: text("lmp_date"),                       // last menstrual period — if pregnancy widget fires
+  // RHU MD review — populated when the Municipal Doctor (MHO) signs off on
+  // the triage. The BHS captures vitals + acuity; the MD adds an
+  // assessment + plan + final disposition. mdSignedAt is the source of
+  // truth for "this consult has been reviewed by the MD"; everything else
+  // here is null until that happens.
+  mdAssessment: text("md_assessment"),             // SOAP-style narrative — subjective + objective
+  mdDiagnosis: text("md_diagnosis"),               // working/final dx — free text (ICD-10 picker is a future PR)
+  mdPlan: text("md_plan"),                         // labs, meds, procedures, education, follow-up
+  mdDisposition: text("md_disposition"),           // Discharge | Admit | Refer-out | Observe | Other
+  mdReferredTo: text("md_referred_to"),            // facility name when MD escalates further
+  mdSignedByUserId: varchar("md_signed_by_user_id"),
+  mdSignedAt: timestamp("md_signed_at"),
 });
 
 // Triage-specific enums + danger-sign vocabularies. Centralised here so the
@@ -510,6 +522,13 @@ export type AcuityLevel = typeof ACUITY_LEVELS[number];
 
 export const PREGNANCY_STATUSES = ["NOT_PREGNANT", "POSSIBLE", "CONFIRMED", "UNKNOWN_LMP"] as const;
 export type PregnancyStatus = typeof PREGNANCY_STATUSES[number];
+
+// MD review dispositions — what the RHU/Municipal Doctor decides after
+// reviewing the BHS triage. "REFER_OUT" escalates to a hospital outside
+// the LGU's facilities (the existing `referralToRHU` flag on disease_cases
+// covers BHS→RHU, this is RHU→hospital).
+export const MD_DISPOSITIONS = ["DISCHARGE", "ADMIT", "REFER_OUT", "OBSERVE", "OTHER"] as const;
+export type MdDisposition = typeof MD_DISPOSITIONS[number];
 
 // IMCI general danger signs (under-5). DOH IMCI Manual.
 export const IMCI_DANGER_SIGNS = [

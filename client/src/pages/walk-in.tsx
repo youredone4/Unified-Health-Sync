@@ -25,7 +25,7 @@ import {
 } from "@/components/ui/select";
 import {
   ClipboardPlus, Plus, Pill, Stethoscope, ChevronLeft, ChevronRight,
-  AlertTriangle, ShieldCheck, Activity, Baby,
+  AlertTriangle, ShieldCheck, Activity, Baby, ClipboardCheck,
 } from "lucide-react";
 import { EmptyState } from "@/components/states/empty-state";
 import { ListSkeleton } from "@/components/states/loading-skeleton";
@@ -39,6 +39,7 @@ import {
   IMCI_DANGER_SIGNS, IMCI_MAIN_SYMPTOMS, ADULT_DANGER_SIGNS,
   SERVICE_CODES,
 } from "@shared/schema";
+import { MDReviewDialog, type TriageEncounter } from "@/components/md-review-dialog";
 
 // Service code → human label. Source of truth for codes is `shared/schema.ts`;
 // this just maps each enum value to the BHS-logbook column name a TL would
@@ -148,27 +149,9 @@ const wizardSchema = z.object({
 });
 type WizardValues = z.infer<typeof wizardSchema>;
 
-interface WalkIn {
-  id: number;
-  patientName: string;
-  age: number;
-  sex: string;
-  barangay: string;
-  consultDate: string;
-  chiefComplaint: string;
-  diagnosis: string | null;
-  treatment: string | null;
-  bloodPressure: string | null;
-  temperatureC: string | null;
-  pulseRate: string | null;
-  weightKg: string | null;
-  heightCm: string | null;
-  serviceCodes: string[] | null;
-  notes: string | null;
-  createdAt: string;
-  acuityLevel: string | null;
-  disposition: string | null;
-}
+// The list rows reuse the full TriageEncounter shape so passing a row to
+// MDReviewDialog requires no copy/transform.
+type WalkIn = TriageEncounter;
 
 interface TriageContext {
   konsulta: {
@@ -193,13 +176,18 @@ interface MedicineItem {
   category: string | null;
 }
 
+type QueueTab = "ALL" | "AWAITING_MD" | "REVIEWED";
+
 export default function WalkInPage() {
-  const { isTL, user } = useAuth();
+  const { isTL, isMHO, isSHA, isAdmin, user } = useAuth();
+  const canMdReview = !!(isMHO || isSHA || isAdmin);
   const { selectedBarangay } = useBarangay();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [dispenseFor, setDispenseFor] = useState<WalkIn | null>(null);
+  const [reviewFor, setReviewFor] = useState<WalkIn | null>(null);
+  const [tab, setTab] = useState<QueueTab>(canMdReview ? "AWAITING_MD" : "ALL");
 
   const { data: rows = [], isLoading, error, refetch } = useQuery<WalkIn[]>({
     queryKey: ["/api/walk-ins"],
@@ -215,6 +203,33 @@ export default function WalkInPage() {
       return (b.createdAt ?? "").localeCompare(a.createdAt ?? "");
     });
   }, [rows]);
+
+  // "Awaiting MD review" = unsigned + flagged for the MD's attention
+  // (EMERGENT/URGENT or BHS escalated via Referred/Admitted). Routine
+  // non-urgent walk-ins don't need an MD signature.
+  const counts = useMemo(() => {
+    let awaiting = 0;
+    let reviewed = 0;
+    for (const r of rows) {
+      if (r.mdSignedAt) reviewed++;
+      else if (r.acuityLevel === "EMERGENT" || r.acuityLevel === "URGENT" ||
+               r.disposition === "Referred" || r.disposition === "Admitted") awaiting++;
+    }
+    return { awaiting, reviewed, total: rows.length };
+  }, [rows]);
+
+  const filtered = useMemo(() => {
+    if (tab === "AWAITING_MD") {
+      return sorted.filter((r) =>
+        !r.mdSignedAt && (
+          r.acuityLevel === "EMERGENT" || r.acuityLevel === "URGENT" ||
+          r.disposition === "Referred" || r.disposition === "Admitted"
+        ),
+      );
+    }
+    if (tab === "REVIEWED") return sorted.filter((r) => !!r.mdSignedAt);
+    return sorted;
+  }, [sorted, tab]);
 
   return (
     <div className="space-y-4">
@@ -235,22 +250,47 @@ export default function WalkInPage() {
         ) : null}
       </div>
 
+      {/* Tabs let the MD focus on what they have to act on. TLs don't need
+          this split — they see ALL by default. */}
+      {canMdReview ? (
+        <div className="flex items-center gap-1 flex-wrap" role="tablist" aria-label="Queue filter">
+          <TabPill active={tab === "AWAITING_MD"} onClick={() => setTab("AWAITING_MD")} testId="tab-awaiting-md">
+            Awaiting MD review {counts.awaiting > 0 ? <Badge variant="destructive" className="ml-1.5 text-[10px]">{counts.awaiting}</Badge> : null}
+          </TabPill>
+          <TabPill active={tab === "ALL"} onClick={() => setTab("ALL")} testId="tab-all">
+            All <span className="ml-1 text-muted-foreground">({counts.total})</span>
+          </TabPill>
+          <TabPill active={tab === "REVIEWED"} onClick={() => setTab("REVIEWED")} testId="tab-reviewed">
+            Reviewed <span className="ml-1 text-muted-foreground">({counts.reviewed})</span>
+          </TabPill>
+        </div>
+      ) : null}
+
       {error ? (
         <ErrorState onRetry={() => refetch()} />
       ) : isLoading ? (
         <ListSkeleton rows={5} />
-      ) : sorted.length === 0 ? (
+      ) : filtered.length === 0 ? (
         <EmptyState
           icon={ClipboardPlus}
-          title="No triage encounters yet"
+          title={tab === "AWAITING_MD" ? "No encounters awaiting MD review" : "No triage encounters yet"}
           description={isTL
             ? "Tap 'New Triage' to capture vitals, danger signs, and the disposition for a walk-in patient."
+            : tab === "AWAITING_MD"
+            ? "Emergent/urgent encounters and escalated walk-ins will surface here once the BHS captures them."
             : "Triage encounters captured by TLs in this barangay will appear here."}
         />
       ) : (
         <ul className="space-y-2 list-none p-0" aria-label="Triage queue">
-          {sorted.map((w) => (
-            <WalkInRow key={w.id} item={w} canDispense={!!isTL} onDispense={() => setDispenseFor(w)} />
+          {filtered.map((w) => (
+            <WalkInRow
+              key={w.id}
+              item={w}
+              canDispense={!!isTL}
+              canReview={canMdReview}
+              onDispense={() => setDispenseFor(w)}
+              onReview={() => setReviewFor(w)}
+            />
           ))}
         </ul>
       )}
@@ -273,14 +313,47 @@ export default function WalkInPage() {
           queryClient.invalidateQueries({ queryKey: ["/api/medicine-inventory"] });
         }}
       />
+
+      <MDReviewDialog
+        encounter={reviewFor}
+        onOpenChange={() => setReviewFor(null)}
+      />
     </div>
   );
 }
 
-function WalkInRow({ item, canDispense, onDispense }:
-  { item: WalkIn; canDispense: boolean; onDispense: () => void }) {
+function TabPill({
+  active, onClick, children, testId,
+}: { active: boolean; onClick: () => void; children: React.ReactNode; testId?: string }) {
+  return (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={active}
+      onClick={onClick}
+      data-testid={testId}
+      className={`px-3 py-1.5 rounded text-sm font-medium border transition-colors ${
+        active
+          ? "bg-primary text-primary-foreground border-primary"
+          : "bg-background border-input hover:bg-accent hover:text-accent-foreground"
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function WalkInRow({ item, canDispense, canReview, onDispense, onReview }:
+  {
+    item: WalkIn;
+    canDispense: boolean;
+    canReview: boolean;
+    onDispense: () => void;
+    onReview: () => void;
+  }) {
   const services = item.serviceCodes ?? [];
   const acuity = item.acuityLevel as Acuity | null;
+  const reviewed = !!item.mdSignedAt;
   return (
     <li>
       <Card>
@@ -302,7 +375,13 @@ function WalkInRow({ item, canDispense, onDispense }:
                 <Badge variant="outline" className="text-xs">{item.barangay}</Badge>
                 <span className="text-xs text-muted-foreground">{item.consultDate}</span>
                 {item.disposition ? (
-                  <Badge variant="secondary" className="text-[10px]">{item.disposition}</Badge>
+                  <Badge variant="secondary" className="text-[10px]">BHS: {item.disposition}</Badge>
+                ) : null}
+                {reviewed ? (
+                  <Badge variant="outline" className="text-[10px] flex items-center gap-1" data-testid={`md-reviewed-${item.id}`}>
+                    <ClipboardCheck className="w-3 h-3" aria-hidden /> MD reviewed
+                    {item.mdDisposition ? <span className="text-muted-foreground">· {item.mdDisposition.toLowerCase().replace("_", " ")}</span> : null}
+                  </Badge>
                 ) : null}
               </div>
               <div className="text-sm">{item.chiefComplaint}</div>
@@ -322,11 +401,24 @@ function WalkInRow({ item, canDispense, onDispense }:
                 ))}
               </div>
             </div>
-            {canDispense ? (
-              <Button size="sm" variant="outline" onClick={onDispense} data-testid={`walk-in-dispense-${item.id}`}>
-                <Pill className="w-3.5 h-3.5 mr-1" aria-hidden /> Dispense
-              </Button>
-            ) : null}
+            <div className="flex items-center gap-2 flex-wrap">
+              {canReview ? (
+                <Button
+                  size="sm"
+                  variant={reviewed ? "outline" : "default"}
+                  onClick={onReview}
+                  data-testid={`walk-in-review-${item.id}`}
+                >
+                  <ClipboardCheck className="w-3.5 h-3.5 mr-1" aria-hidden />
+                  {reviewed ? "View / Update" : "MD Review"}
+                </Button>
+              ) : null}
+              {canDispense ? (
+                <Button size="sm" variant="outline" onClick={onDispense} data-testid={`walk-in-dispense-${item.id}`}>
+                  <Pill className="w-3.5 h-3.5 mr-1" aria-hidden /> Dispense
+                </Button>
+              ) : null}
+            </div>
           </div>
         </CardContent>
       </Card>
