@@ -61,6 +61,7 @@ interface NavItem {
   roles: readonly string[];
   activePrefixes: readonly string[];
   isBadged?: boolean;
+  badgeSource?: "messages" | "mgmt-inbox";
   tier: "main" | "decision" | "util" | "admin";
 }
 
@@ -255,6 +256,8 @@ const NAV_ITEMS: NavItem[] = [
     icon: Inbox,
     roles: rolesFor("/mgmt-inbox"),
     activePrefixes: ["/mgmt-inbox"],
+    isBadged: true,
+    badgeSource: "mgmt-inbox",
     tier: "decision",
   },
   {
@@ -282,6 +285,7 @@ const NAV_ITEMS: NavItem[] = [
     roles: rolesFor("/messages"),
     activePrefixes: ["/messages"],
     isBadged: true,
+    badgeSource: "messages",
     tier: "util",
   },
   {
@@ -307,7 +311,8 @@ const SURVEILLANCE_OPEN_KEY = "sidebar.surveillance.open";
 export function AppSidebar() {
   const [location] = useLocation();
   const { settings } = useTheme();
-  const { role, isAuthenticated } = useAuth();
+  const { role, isAuthenticated, isMHO, isSHA, isAdmin } = useAuth();
+  const isMgmt = isMHO || isSHA || isAdmin;
   const [logoError, setLogoError] = useState(false);
 
   // Persisted expand/collapse state for collapsible groups.
@@ -344,6 +349,15 @@ export function AppSidebar() {
     enabled: isAuthenticated,
   });
   const unreadCount = unreadData?.count ?? 0;
+
+  // MGMT inbox count — drives the live badge on the "MGMT Inbox" sidebar
+  // entry. Only fetched for MGMT roles since the endpoint 403s for TLs.
+  const { data: inboxData } = useQuery<{ counts: { total: number } }>({
+    queryKey: ["/api/mgmt/inbox"],
+    refetchInterval: 60_000,
+    enabled: isAuthenticated && isMgmt,
+  });
+  const inboxCount = inboxData?.counts?.total ?? 0;
 
   const lguName = settings?.lguName || "HealthSync";
   const lguSubtitle = settings?.lguSubtitle || "Barangay Health System";
@@ -406,7 +420,7 @@ export function AppSidebar() {
               {mainTop
                 .filter((i) => i.url === "/today" || i.url === "/calendar")
                 .map((item) => (
-                  <SidebarItemRow key={item.title} item={item} location={location} unreadCount={unreadCount} />
+                  <SidebarItemRow key={item.title} item={item} location={location} unreadCount={unreadCount} inboxCount={inboxCount} />
                 ))}
 
               {/* Patients collapsible group */}
@@ -460,7 +474,7 @@ export function AppSidebar() {
               {mainTop
                 .filter((i) => i.url !== "/today" && i.url !== "/calendar")
                 .map((item) => (
-                  <SidebarItemRow key={item.title} item={item} location={location} unreadCount={unreadCount} />
+                  <SidebarItemRow key={item.title} item={item} location={location} unreadCount={unreadCount} inboxCount={inboxCount} />
                 ))}
             </SidebarMenu>
           </SidebarGroupContent>
@@ -474,7 +488,7 @@ export function AppSidebar() {
               <SidebarGroupContent>
                 <SidebarMenu>
                   {decision.map((item) => (
-                    <SidebarItemRow key={item.title} item={item} location={location} unreadCount={unreadCount} />
+                    <SidebarItemRow key={item.title} item={item} location={location} unreadCount={unreadCount} inboxCount={inboxCount} />
                   ))}
                 </SidebarMenu>
               </SidebarGroupContent>
@@ -587,7 +601,7 @@ export function AppSidebar() {
 
                   {/* Remaining flat util items (Calendar, Messages, Clinic Check-up) */}
                   {util.map((item) => (
-                    <SidebarItemRow key={item.title} item={item} location={location} unreadCount={unreadCount} />
+                    <SidebarItemRow key={item.title} item={item} location={location} unreadCount={unreadCount} inboxCount={inboxCount} />
                   ))}
                 </SidebarMenu>
               </SidebarGroupContent>
@@ -603,7 +617,7 @@ export function AppSidebar() {
               <SidebarGroupContent>
                 <SidebarMenu>
                   {admin.map((item) => (
-                    <SidebarItemRow key={item.title} item={item} location={location} unreadCount={unreadCount} />
+                    <SidebarItemRow key={item.title} item={item} location={location} unreadCount={unreadCount} inboxCount={inboxCount} />
                   ))}
                 </SidebarMenu>
               </SidebarGroupContent>
@@ -637,13 +651,20 @@ function SidebarItemRow({
   item,
   location,
   unreadCount,
+  inboxCount,
 }: {
   item: NavItem;
   location: string;
   unreadCount: number;
+  inboxCount: number;
 }) {
   const active = isActiveFor(item, location);
-  const badge = item.isBadged && unreadCount > 0 ? unreadCount : null;
+  // Resolve which counter feeds this row's badge based on its badgeSource.
+  // Default ("messages" or undefined) preserves the legacy behaviour for
+  // any row that opted in via isBadged before badgeSource existed.
+  const sourceCount =
+    item.badgeSource === "mgmt-inbox" ? inboxCount : unreadCount;
+  const badge = item.isBadged && sourceCount > 0 ? sourceCount : null;
   return (
     <SidebarMenuItem>
       <SidebarMenuButton

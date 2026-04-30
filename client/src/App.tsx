@@ -85,6 +85,7 @@ import WorkforceDetailPage from "@/pages/workforce-detail";
 import DiseaseSurveillancePage from "@/pages/disease-surveillance";
 import MortalityPage from "@/pages/mortality";
 import HouseholdWaterPage from "@/pages/household-water";
+import { InboxHeroBanner } from "@/components/inbox-hero-banner";
 
 const roleLabels: Record<string, string> = {
   SYSTEM_ADMIN: "Admin",
@@ -233,21 +234,24 @@ function NutritionHub({ children }: { children: React.ReactNode }) {
 
 function DashboardsHub({ children }: { children: React.ReactNode }) {
   return (
-    <ProgramHub
-      title="Dashboards"
-      icon={BarChart3}
-      tabs={[
-        { label: "Municipal", path: "/dashboards", testId: "hub-tab-dashboards-municipal" },
-        { label: "Maternal", path: "/dashboards/maternal", testId: "hub-tab-dashboards-maternal" },
-        { label: "Child", path: "/dashboards/child", testId: "hub-tab-dashboards-child" },
-        { label: "Senior", path: "/dashboards/senior", testId: "hub-tab-dashboards-senior" },
-        { label: "Nutrition", path: "/dashboards/nutrition", testId: "hub-tab-dashboards-nutrition" },
-        { label: "Hotspots", path: "/dashboards/hotspots", testId: "hub-tab-dashboards-hotspots", roles: ["SYSTEM_ADMIN", "MHO", "SHA"] },
-        { label: "Disease Map", path: "/dashboards/disease-map", testId: "hub-tab-dashboards-disease", roles: ["SYSTEM_ADMIN", "MHO", "SHA"] },
-      ]}
-    >
-      {children}
-    </ProgramHub>
+    <div className="space-y-4">
+      <InboxHeroBanner />
+      <ProgramHub
+        title="Dashboards"
+        icon={BarChart3}
+        tabs={[
+          { label: "Municipal", path: "/dashboards", testId: "hub-tab-dashboards-municipal" },
+          { label: "Maternal", path: "/dashboards/maternal", testId: "hub-tab-dashboards-maternal" },
+          { label: "Child", path: "/dashboards/child", testId: "hub-tab-dashboards-child" },
+          { label: "Senior", path: "/dashboards/senior", testId: "hub-tab-dashboards-senior" },
+          { label: "Nutrition", path: "/dashboards/nutrition", testId: "hub-tab-dashboards-nutrition" },
+          { label: "Hotspots", path: "/dashboards/hotspots", testId: "hub-tab-dashboards-hotspots", roles: ["SYSTEM_ADMIN", "MHO", "SHA"] },
+          { label: "Disease Map", path: "/dashboards/disease-map", testId: "hub-tab-dashboards-disease", roles: ["SYSTEM_ADMIN", "MHO", "SHA"] },
+        ]}
+      >
+        {children}
+      </ProgramHub>
+    </div>
   );
 }
 
