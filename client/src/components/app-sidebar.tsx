@@ -55,6 +55,7 @@ import {
   FileText,
   Megaphone,
   ShieldCheck,
+  Syringe,
 } from "lucide-react";
 import { useTheme } from "@/contexts/theme-context";
 import { useAuth, sidebarPermissions, ALL_ROLES } from "@/hooks/use-auth";
@@ -283,6 +284,27 @@ const NAV_ITEMS: NavItem[] = [
     activePrefixes: ["/konsulta"],
   },
   {
+    title: "AEFI",
+    url: "/aefi",
+    icon: Syringe,
+    roles: rolesFor("/aefi"),
+    activePrefixes: ["/aefi"],
+  },
+  {
+    title: "Death Reviews",
+    url: "/death-events",
+    icon: Skull,
+    roles: rolesFor("/death-events"),
+    activePrefixes: ["/death-events"],
+  },
+  {
+    title: "PIDSR",
+    url: "/pidsr",
+    icon: ShieldAlert,
+    roles: rolesFor("/pidsr"),
+    activePrefixes: ["/pidsr"],
+  },
+  {
     title: "Clinic Check-up",
     url: "/patient-checkup",
     icon: ClipboardPlus,
@@ -331,6 +353,8 @@ const TL_LAYOUT: SidebarLayout = [
     { kind: "group", key: "surveillance" },
     { kind: "item",  url: "/patient-checkup" },
     { kind: "item",  url: "/referrals" },
+    { kind: "item",  url: "/aefi" },
+    { kind: "item",  url: "/pidsr" },
     { kind: "item",  url: "/certificates" },
     { kind: "item",  url: "/campaigns" },
     { kind: "item",  url: "/konsulta" },
@@ -358,6 +382,8 @@ const MGMT_LAYOUT: SidebarLayout = [
     { kind: "item", url: "/mgmt-inbox" },
     { kind: "item", url: "/dashboards" },
     { kind: "item", url: "/outbreaks" },
+    { kind: "item", url: "/death-events" },
+    { kind: "item", url: "/aefi" },
     { kind: "item", url: "/referrals" },
     { kind: "item", url: "/restock-requests" },
     { kind: "item", url: "/reports" },
@@ -374,6 +400,7 @@ const MGMT_LAYOUT: SidebarLayout = [
     { kind: "group", key: "daily-ops" },
     { kind: "group", key: "surveillance" },
     { kind: "item",  url: "/patient-checkup" },
+    { kind: "item",  url: "/pidsr" },
     { kind: "item",  url: "/certificates" },
     { kind: "item",  url: "/campaigns" },
     { kind: "item",  url: "/konsulta" },

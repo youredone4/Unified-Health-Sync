@@ -86,6 +86,9 @@ import RestockRequestsPage from "@/pages/restock-requests";
 import CertificatesPage from "@/pages/certificates";
 import CampaignsPage from "@/pages/campaigns";
 import KonsultaPage from "@/pages/konsulta";
+import AefiPage from "@/pages/aefi";
+import DeathEventsPage from "@/pages/death-events";
+import PidsrPage from "@/pages/pidsr";
 import WorkforceDetailPage from "@/pages/workforce-detail";
 import DiseaseSurveillancePage from "@/pages/disease-surveillance";
 import MortalityPage from "@/pages/mortality";
@@ -396,6 +399,9 @@ function Router() {
       <Route path="/certificates"><RoleRoute component={CertificatesPage} /></Route>
       <Route path="/campaigns"><RoleRoute component={CampaignsPage} /></Route>
       <Route path="/konsulta"><RoleRoute component={KonsultaPage} /></Route>
+      <Route path="/aefi"><RoleRoute component={AefiPage} /></Route>
+      <Route path="/death-events"><RoleRoute component={DeathEventsPage} /></Route>
+      <Route path="/pidsr"><RoleRoute component={PidsrPage} /></Route>
 
       {/* NCD & lifestyle screenings (Sections G1, G2, G4, G6, G8) */}
       <Route path="/ncd-screenings"><NcdScreeningsPage /></Route>
