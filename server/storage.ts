@@ -3177,6 +3177,21 @@ export class DatabaseStorage implements IStorage {
         ON aefi_events (severity, reported_to_chd)
     `);
 
+    // Issue #137 Phase 3: AEFI ↔ vaccinations FK + VPD classification.
+    //
+    // vaccination_id makes a registered AEFI traceable to the exact dose
+    // (and via vaccinations.medicine_inventory_id to the lot). Existing
+    // AEFI rows leave the FK NULL; new rows can fill it when the
+    // recipient is a known child / school enrollee.
+    //
+    // vaccine_preventable_disease classifies post-vaccination VPD
+    // onsets (measles, polio, …) so Phase 5 cluster detection can fan
+    // out across both AEFI and disease_cases.
+    await db.execute(sql`ALTER TABLE aefi_events ADD COLUMN IF NOT EXISTS vaccination_id INTEGER REFERENCES vaccinations(id)`);
+    await db.execute(sql`ALTER TABLE aefi_events ADD COLUMN IF NOT EXISTS vaccine_preventable_disease TEXT`);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS aefi_events_vaccination_idx ON aefi_events (vaccination_id) WHERE vaccination_id IS NOT NULL`);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS aefi_events_vpd_idx ON aefi_events (vaccine_preventable_disease, barangay, event_date) WHERE vaccine_preventable_disease IS NOT NULL`);
+
     // Phase 9 — Outbreaks lifecycle. Auto-created from cluster detector;
     // MGMT advances status SUSPECTED → DECLARED → CONTAINED → CLOSED.
     await db.execute(sql`
