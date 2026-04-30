@@ -3545,6 +3545,18 @@ export class DatabaseStorage implements IStorage {
       console.log(`[migration] vaccinations backfill: ${childRowsInserted} child doses + ${schoolRowsInserted} school doses`);
     }
 
+    // Issue #137 Phase 2: lot tracking on medicine_inventory.
+    //
+    // Adds lot_number + source_supplier (expiration_date already exists).
+    // Both columns are nullable — non-vaccine inventory rows can leave
+    // them blank. The inventory form prompts for them when category is
+    // a vaccine; otherwise they stay null. Phase 3 will start populating
+    // vaccinations.medicine_inventory_id so an AEFI event can be traced
+    // back to the originating lot.
+    await db.execute(sql`ALTER TABLE medicine_inventory ADD COLUMN IF NOT EXISTS lot_number TEXT`);
+    await db.execute(sql`ALTER TABLE medicine_inventory ADD COLUMN IF NOT EXISTS source_supplier TEXT`);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS medicine_inventory_lot_idx ON medicine_inventory (lot_number) WHERE lot_number IS NOT NULL`);
+
     // Idempotent backfill: every health_stations row needs a facilityType now
     // that REFER_RHU records the referred facility. Runs on every startup but
     // becomes a no-op once every row has a type.

@@ -162,6 +162,11 @@ export type InventoryItem = typeof inventory.$inferSelect;
 export type InsertInventoryItem = z.infer<typeof insertInventorySchema>;
 
 // === MEDICINE INVENTORY (per-item medicine/other supply tracking) ===
+// Lot tracking columns (lot_number, source_supplier — added in
+// issue #137 Phase 2) are nullable so non-vaccine inventory rows can
+// continue to ignore them. The inventory form prompts for lot +
+// expiration when category === "vaccine"; other categories leave them
+// blank. expirationDate already existed prior to Phase 2.
 export const medicineInventory = pgTable("medicine_inventory", {
   id: serial("id").primaryKey(),
   barangay: text("barangay").notNull(),
@@ -170,6 +175,8 @@ export const medicineInventory = pgTable("medicine_inventory", {
   unit: text("unit"),
   qty: integer("qty").notNull().default(0),
   expirationDate: text("expiration_date"),
+  lotNumber: text("lot_number"),
+  sourceSupplier: text("source_supplier"),
   category: text("category"),
   notes: text("notes"),
   lowStockThreshold: integer("low_stock_threshold").default(10),
