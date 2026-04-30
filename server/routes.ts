@@ -2654,7 +2654,7 @@ export async function registerRoutes(
           subtitle: after?.message ? String(after.message).slice(0, 120) : log.entityType,
           barangay: log.barangayName ?? undefined,
           createdAt: (log.createdAt ?? new Date()).toISOString(),
-          link: "/admin/audit-logs",
+          link: "/admin/audit",
         });
       }
 
