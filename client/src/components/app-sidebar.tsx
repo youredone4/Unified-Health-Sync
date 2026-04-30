@@ -55,7 +55,6 @@ import {
 } from "lucide-react";
 import { useTheme } from "@/contexts/theme-context";
 import { useAuth, sidebarPermissions, ALL_ROLES } from "@/hooks/use-auth";
-import { DarkModeToggle } from "@/components/dark-mode-toggle";
 
 interface NavItem {
   title: string;
@@ -566,9 +565,6 @@ export function AppSidebar() {
 
       <SidebarFooter className="border-t border-sidebar-border p-2">
         <SidebarMenu>
-          <SidebarMenuItem>
-            <DarkModeToggle />
-          </SidebarMenuItem>
           <SidebarMenuItem>
             <SidebarMenuButton
               asChild
