@@ -33,6 +33,11 @@ const medicineFormSchema = z.object({
   unit: z.string().optional(),
   qty: z.coerce.number().min(0).default(0),
   expirationDate: z.string().optional(),
+  // Lot tracking — required only for vaccines (validated in submit
+  // handler, not here, so non-vaccine items can leave them blank). Per
+  // issue #137 Phase 2.
+  lotNumber: z.string().optional(),
+  sourceSupplier: z.string().optional(),
   category: z.string().optional(),
   notes: z.string().optional(),
   lowStockThreshold: z.coerce.number().min(0).default(10),
@@ -96,6 +101,8 @@ export default function InventoryForm() {
       unit: "",
       qty: 0,
       expirationDate: "",
+      lotNumber: "",
+      sourceSupplier: "",
       category: "",
       notes: "",
       lowStockThreshold: 10,
@@ -107,6 +114,8 @@ export default function InventoryForm() {
       unit: medicineItem.unit || "",
       qty: medicineItem.qty,
       expirationDate: medicineItem.expirationDate || "",
+      lotNumber: medicineItem.lotNumber || "",
+      sourceSupplier: medicineItem.sourceSupplier || "",
       category: medicineItem.category || "",
       notes: medicineItem.notes || "",
       lowStockThreshold: medicineItem.lowStockThreshold || 10,
@@ -395,6 +404,25 @@ export default function InventoryForm() {
                     <FormItem>
                       <FormLabel>Expiration Date</FormLabel>
                       <FormControl><Input type="date" {...field} data-testid="input-expiry" /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )} />
+
+                  {/* Lot tracking — primarily for vaccines (issue #137 Phase 2)
+                      so each dose can be traced back to its lot for AEFI
+                      cluster detection. Optional for non-vaccine items. */}
+                  <FormField control={medicineForm.control} name="lotNumber" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Lot / Batch Number</FormLabel>
+                      <FormControl><Input placeholder="e.g. ABC123" {...field} data-testid="input-lot" /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )} />
+
+                  <FormField control={medicineForm.control} name="sourceSupplier" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Source / Supplier</FormLabel>
+                      <FormControl><Input placeholder="e.g. DOH-CHD, manufacturer" {...field} data-testid="input-supplier" /></FormControl>
                       <FormMessage />
                     </FormItem>
                   )} />
