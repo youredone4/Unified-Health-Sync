@@ -3204,6 +3204,62 @@ export class DatabaseStorage implements IStorage {
         ON outbreaks (status, detected_at DESC)
     `);
 
+    // Phase 11 — walk-in OPD log columns on consults. ADD COLUMN IF NOT
+    // EXISTS so re-runs are no-ops on databases that already have them.
+    await db.execute(sql`ALTER TABLE consults ADD COLUMN IF NOT EXISTS is_walk_in BOOLEAN DEFAULT FALSE`);
+    await db.execute(sql`ALTER TABLE consults ADD COLUMN IF NOT EXISTS service_codes JSONB DEFAULT '[]'::jsonb`);
+
+    // Phase 11 — medication dispensing ledger. One row per dispense event,
+    // tied to a consult and (optionally) a medicine_inventory row so the
+    // BHS pharmacy log + inventory consumption reconcile end-to-end.
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS medication_dispensings (
+        id                       SERIAL PRIMARY KEY,
+        consult_id               INTEGER NOT NULL,
+        medicine_inventory_id    INTEGER,
+        medicine_name            TEXT NOT NULL,
+        strength                 TEXT,
+        unit                     TEXT,
+        quantity_dispensed       INTEGER NOT NULL,
+        barangay                 TEXT NOT NULL,
+        dispensed_by_user_id     VARCHAR,
+        dispensed_at             TIMESTAMP NOT NULL DEFAULT NOW(),
+        notes                    TEXT
+      )
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS medication_dispensings_consult_idx
+        ON medication_dispensings (consult_id)
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS medication_dispensings_barangay_date_idx
+        ON medication_dispensings (barangay, dispensed_at DESC)
+    `);
+
+    // Phase 11 — restock requests (TL → RHU MGMT). Pending rows surface in
+    // the MGMT inbox; MGMT marks fulfilled when supply is delivered.
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS inventory_requests (
+        id                       SERIAL PRIMARY KEY,
+        barangay                 TEXT NOT NULL,
+        item_type                TEXT NOT NULL,
+        item_name                TEXT NOT NULL,
+        quantity_requested       INTEGER NOT NULL,
+        urgency                  TEXT NOT NULL DEFAULT 'NORMAL',
+        status                   TEXT NOT NULL DEFAULT 'PENDING',
+        requested_by_user_id     VARCHAR,
+        requested_at             TIMESTAMP NOT NULL DEFAULT NOW(),
+        fulfilled_by_user_id     VARCHAR,
+        fulfilled_at             TIMESTAMP,
+        notes                    TEXT,
+        fulfillment_notes        TEXT
+      )
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS inventory_requests_status_urgency_idx
+        ON inventory_requests (status, urgency, requested_at DESC)
+    `);
+
     // Idempotent backfill: every health_stations row needs a facilityType now
     // that REFER_RHU records the referred facility. Runs on every startup but
     // becomes a no-op once every row has a type.
