@@ -66,7 +66,6 @@ import InventoryForm from "@/pages/inventory-form";
 import SettingsPage from "@/pages/settings";
 import UserManagement from "@/pages/admin/user-management";
 import AuditLogs from "@/pages/admin/audit-logs";
-import PatientCheckupPage from "@/pages/patient-checkup";
 import M1ReportPage from "@/pages/m1-report";
 import NotificationDrawer from "@/components/notification-drawer";
 import SmsOutbox from "@/components/sms-outbox";
@@ -332,7 +331,9 @@ function Router() {
       <Route path="/hotspots"><RoleRoute component={Hotspots} /></Route>
       <Route path="/calendar"><CalendarPage /></Route>
       <Route path="/messages"><MessagesPage /></Route>
-      <Route path="/patient-checkup"><RoleRoute component={PatientCheckupPage} /></Route>
+      {/* Clinic Check-up was merged into the Triage / Walk-in wizard.
+          Old bookmarks land on the unified queue. */}
+      <Route path="/patient-checkup"><Redirect to="/walk-in" /></Route>
 
       {/* Legacy program-dashboard URLs — preserved as sub-views of the
           Dashboards hub for old bookmarks. */}
