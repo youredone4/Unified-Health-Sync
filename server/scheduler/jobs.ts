@@ -27,6 +27,8 @@ import {
   ncdScreenings,
   children,
   outbreaks,
+  cervicalCancerScreenings,
+  mentalHealthScreenings,
 } from "@shared/schema";
 
 const SYSTEM_USER_ID = "system-scheduler";
@@ -554,6 +556,101 @@ async function checkNcdMissedFollowUps(): Promise<AlertFinding[]> {
   return findings;
 }
 
+// ─── Phase 10: cervical + mhGAP follow-up detectors ──────────────────────────
+// DOH/PHIC cervical guidance: VIA-positive (suspicious) → linked to colpo/cryo
+// within ~30 days; precancerous lesion → treated/referred within ~60 days;
+// VIA-negative → rescreen every 3 years (1095d). mhGAP guidance: positive
+// screen → first follow-up at 1 month, second at 3 months. We surface a
+// generic "mhGAP follow-up overdue" if no later screening lands within 90d.
+
+/** Cervical screening follow-up gaps. */
+async function checkCervicalFollowUps(): Promise<AlertFinding[]> {
+  const records = await db.select().from(cervicalCancerScreenings);
+  const todayMs = today().getTime();
+  const findings: AlertFinding[] = [];
+  // Track latest screening per patient for the rescreen rule.
+  const latestPerPatient = new Map<string, typeof records[number]>();
+  for (const r of records) {
+    const key = `${r.patientName}|${r.barangay}`;
+    const prev = latestPerPatient.get(key);
+    if (!prev || r.screenDate > prev.screenDate) latestPerPatient.set(key, r);
+
+    const screenMs = new Date(r.screenDate).getTime();
+    if (Number.isNaN(screenMs)) continue;
+    const ageDays = Math.floor((todayMs - screenMs) / (1000 * 60 * 60 * 24));
+
+    if (r.suspicious && !r.linkedToCare && ageDays > 30) {
+      findings.push({
+        entityType: "CERVICAL_FOLLOWUP",
+        entityId: String(r.id),
+        barangayName: r.barangay,
+        reason: `VIA-positive not linked to care (${ageDays}d since screen)`,
+        details: { patientName: r.patientName, screenDate: r.screenDate, ageDays },
+      });
+    }
+    if (r.precancerous && !r.precancerousOutcome && ageDays > 60) {
+      findings.push({
+        entityType: "CERVICAL_FOLLOWUP",
+        entityId: String(r.id),
+        barangayName: r.barangay,
+        reason: `Precancerous lesion not yet treated/referred (${ageDays}d since screen)`,
+        details: { patientName: r.patientName, screenDate: r.screenDate, ageDays },
+      });
+    }
+  }
+  // Rescreen due: latest record is VIA-negative (not suspicious) and >3 years old.
+  for (const r of Array.from(latestPerPatient.values())) {
+    if (r.suspicious || r.precancerous) continue;
+    const screenMs = new Date(r.screenDate).getTime();
+    if (Number.isNaN(screenMs)) continue;
+    const ageDays = Math.floor((todayMs - screenMs) / (1000 * 60 * 60 * 24));
+    if (ageDays > 1095) {
+      findings.push({
+        entityType: "CERVICAL_FOLLOWUP",
+        entityId: String(r.id),
+        barangayName: r.barangay,
+        reason: `Cervical rescreen due (last screen ${r.screenDate}, ${ageDays}d ago)`,
+        details: { patientName: r.patientName, lastScreenDate: r.screenDate, ageDays },
+      });
+    }
+  }
+  return findings;
+}
+
+/** mhGAP follow-up gap: positive screen with no later visit in >90 days. */
+async function checkMhgapFollowUps(): Promise<AlertFinding[]> {
+  const records = await db.select().from(mentalHealthScreenings);
+  // For each patient, find the most recent positive screen and the most
+  // recent screen overall. If positive is the latest and >90d old, alert.
+  const byPatient = new Map<string, typeof records>();
+  for (const r of records) {
+    const key = `${r.patientName}|${r.barangay}`;
+    const list = byPatient.get(key) ?? [];
+    list.push(r);
+    byPatient.set(key, list);
+  }
+  const todayMs = today().getTime();
+  const findings: AlertFinding[] = [];
+  for (const list of Array.from(byPatient.values())) {
+    list.sort((a, b) => b.screenDate.localeCompare(a.screenDate));
+    const latest = list[0];
+    if (!latest?.positive) continue;
+    const screenMs = new Date(latest.screenDate).getTime();
+    if (Number.isNaN(screenMs)) continue;
+    const ageDays = Math.floor((todayMs - screenMs) / (1000 * 60 * 60 * 24));
+    if (ageDays > 90) {
+      findings.push({
+        entityType: "MHGAP_FOLLOWUP",
+        entityId: String(latest.id),
+        barangayName: latest.barangay,
+        reason: `mhGAP follow-up overdue (positive screen ${latest.screenDate}, ${ageDays}d ago, no later visit)`,
+        details: { patientName: latest.patientName, lastScreenDate: latest.screenDate, ageDays, tool: latest.tool },
+      });
+    }
+  }
+  return findings;
+}
+
 /** Run all daily 6 AM alerts. */
 export async function runDailyAlerts(): Promise<{ jobName: string; count: number }[]> {
   const results: { jobName: string; count: number }[] = [];
@@ -569,6 +666,8 @@ export async function runDailyAlerts(): Promise<{ jobName: string; count: number
     ["fp-missed-visit", checkFpMissedVisits],
     ["immunization-missed-dose", checkImmunizationMissedDoses],
     ["ncd-missed-follow-up", checkNcdMissedFollowUps],
+    ["cervical-follow-up", checkCervicalFollowUps],
+    ["mhgap-follow-up", checkMhgapFollowUps],
   ] as const) {
     try {
       const findings = await fn();
