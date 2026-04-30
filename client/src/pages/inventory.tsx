@@ -75,7 +75,11 @@ function CustomTooltip({
   if (!active || !payload?.length) return null;
   const qty = typeof payload[0].value === "number" ? payload[0].value : 0;
   const status = qty === 0 ? "Stock-out" : qty < low ? "Critical Low" : qty < ok ? "Low" : "Adequate";
-  const statusColor = qty === 0 ? "text-red-400" : qty < low ? "text-orange-400" : qty < ok ? "text-yellow-400" : "text-green-400";
+  const statusColor =
+    qty === 0     ? "text-red-600 dark:text-red-400" :
+    qty < low     ? "text-orange-600 dark:text-orange-400" :
+    qty < ok      ? "text-amber-600 dark:text-amber-400" :
+                    "text-emerald-600 dark:text-emerald-400";
   return (
     <div className="bg-card border border-border rounded p-2 text-sm shadow">
       <p className="font-medium mb-1">{label}</p>
@@ -286,7 +290,7 @@ export default function InventoryPage() {
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2" data-testid="text-page-title">
-            <Package className="w-6 h-6 text-green-400" />
+            <Package className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
             Inventory - Availability & Surplus
           </h1>
           <p className="text-muted-foreground">Vaccine, HTN meds, and medicine stock by barangay</p>
@@ -309,7 +313,9 @@ export default function InventoryPage() {
       <Card data-testid="card-stock-trend-chart">
         <CardHeader className="flex flex-row items-center justify-between flex-wrap gap-3">
           <CardTitle className="text-base flex items-center gap-2">
-            {viewMode === "trend" ? <LineChartIcon className="w-4 h-4 text-purple-400" /> : <BarChart2 className="w-4 h-4 text-green-400" />}
+            {viewMode === "trend"
+              ? <LineChartIcon className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+              : <BarChart2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />}
             {viewMode === "trend" ? "Stock Trend Over Time" : "Stock Levels by Barangay"}
           </CardTitle>
           <div className="flex items-center gap-3 flex-wrap">
@@ -571,7 +577,7 @@ export default function InventoryPage() {
                 </p>
                 <ResponsiveContainer width="100%" height={300}>
                   <LineChart data={trendChartData} margin={{ top: 4, right: 24, left: 0, bottom: 16 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                     <XAxis dataKey="month" tick={{ fontSize: 10 }} />
                     <YAxis tick={{ fontSize: 11 }} width={36} />
                     <Tooltip
@@ -776,7 +782,7 @@ export default function InventoryPage() {
       <Card>
         <CardHeader>
           <CardTitle className="text-base flex items-center gap-2">
-            <Pill className="w-4 h-4 text-blue-400" />
+            <Pill className="w-4 h-4 text-sky-600 dark:text-sky-400" />
             Medicine & Other Supply
           </CardTitle>
         </CardHeader>
@@ -863,10 +869,10 @@ export default function InventoryPage() {
                       {med.expirationDate ? (
                         <Badge variant="outline" className={
                           isExpired(med.expirationDate)
-                            ? "bg-red-500/20 text-red-400 border-red-500/30"
+                            ? "bg-red-500/15 text-red-700 dark:text-red-300 border-red-500/30"
                             : isExpiringSoon(med.expirationDate)
-                            ? "bg-orange-500/20 text-orange-400 border-orange-500/30"
-                            : "bg-green-500/20 text-green-400 border-green-500/30"
+                            ? "bg-orange-500/15 text-orange-700 dark:text-orange-300 border-orange-500/30"
+                            : "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30"
                         }>
                           {isExpired(med.expirationDate) ? "EXPIRED" : isExpiringSoon(med.expirationDate) ? "Expiring Soon" : ""} {formatDate(med.expirationDate)}
                         </Badge>
