@@ -3,7 +3,7 @@ import type { Server } from "http";
 import { storage } from "./storage";
 import { db } from "./db";
 import { max, eq, and, desc, gte, or, inArray } from "drizzle-orm";
-import { prenatalVisits, childVisits, seniorVisits, insertFpServiceRecordSchema, insertNutritionFollowUpSchema, insertColdChainLogSchema, insertTbDoseLogSchema, insertPostpartumVisitSchema, insertPrenatalScreeningSchema, insertBirthAttendanceRecordSchema, insertSickChildVisitSchema, insertSchoolImmunizationSchema, insertOralHealthVisitSchema, insertPhilpenAssessmentSchema, insertNcdScreeningSchema, insertVisionScreeningSchema, insertCervicalCancerScreeningSchema, insertMentalHealthScreeningSchema, insertFilariasisRecordSchema, insertRabiesExposureSchema, insertSchistosomiasisRecordSchema, insertSthRecordSchema, insertLeprosyRecordSchema, insertDeathEventSchema, insertHouseholdWaterRecordSchema, insertPidsrSubmissionSchema, insertWorkforceMemberSchema, insertWorkforceCredentialSchema, referralRecords, insertReferralRecordSchema } from "@shared/schema";
+import { prenatalVisits, childVisits, seniorVisits, insertFpServiceRecordSchema, insertNutritionFollowUpSchema, insertColdChainLogSchema, insertTbDoseLogSchema, insertPostpartumVisitSchema, insertPrenatalScreeningSchema, insertBirthAttendanceRecordSchema, insertSickChildVisitSchema, insertSchoolImmunizationSchema, insertOralHealthVisitSchema, insertPhilpenAssessmentSchema, insertNcdScreeningSchema, insertVisionScreeningSchema, insertCervicalCancerScreeningSchema, insertMentalHealthScreeningSchema, insertFilariasisRecordSchema, insertRabiesExposureSchema, insertSchistosomiasisRecordSchema, insertSthRecordSchema, insertLeprosyRecordSchema, insertDeathEventSchema, insertHouseholdWaterRecordSchema, insertPidsrSubmissionSchema, insertWorkforceMemberSchema, insertWorkforceCredentialSchema, referralRecords, insertReferralRecordSchema, ncdScreenings } from "@shared/schema";
 import { api } from "@shared/routes";
 import { z } from "zod";
 import { setupAuth, registerAuthRoutes } from "./auth";
@@ -2344,16 +2344,25 @@ export async function registerRoutes(
   }));
 
   app.post("/api/walk-ins", loadUserInfo, requireAuth,
-    requireRole(UserRole.TL),
+    requireRole(UserRole.TL, UserRole.MHO, UserRole.SHA, UserRole.SYSTEM_ADMIN),
     ar(async (req, res) => {
       const body = req.body ?? {};
       const barangay = String(body.barangay ?? "");
-      if (!barangay || !req.userInfo!.assignedBarangays.includes(barangay)) {
-        return res.status(403).json({ message: "Access denied to this barangay" });
+      if (req.userInfo!.role === UserRole.TL) {
+        if (!barangay || !req.userInfo!.assignedBarangays.includes(barangay)) {
+          return res.status(403).json({ message: "Access denied to this barangay" });
+        }
+      } else if (!barangay) {
+        return res.status(400).json({ message: "Barangay is required" });
       }
       const serviceCodes: string[] = Array.isArray(body.serviceCodes) ? body.serviceCodes : [];
       const invalid = serviceCodes.find((c) => !(SERVICE_CODES as readonly string[]).includes(c));
       if (invalid) return res.status(400).json({ message: `Invalid service code: ${invalid}` });
+
+      const acuityLevel = body.acuityLevel ? String(body.acuityLevel) : null;
+      if (acuityLevel && !["EMERGENT", "URGENT", "NON_URGENT"].includes(acuityLevel)) {
+        return res.status(400).json({ message: "Invalid acuityLevel" });
+      }
 
       const now = new Date().toISOString();
       const [created] = await db.insert(consults).values({
@@ -2379,16 +2388,101 @@ export async function registerRoutes(
         createdAt:      now,
         isWalkIn:       true,
         serviceCodes,
+        // Triage fields — pass-through with explicit nulls for unset.
+        acuityLevel,
+        acuityOverrideReason: body.acuityOverrideReason ? String(body.acuityOverrideReason) : null,
+        triagedByUserId: acuityLevel ? req.userInfo!.id : null,
+        triagedAt:       acuityLevel ? new Date() : null,
+        respiratoryRate: body.respiratoryRate ? String(body.respiratoryRate) : null,
+        spo2:            body.spo2 ? String(body.spo2) : null,
+        rbsMmol:         body.rbsMmol ? String(body.rbsMmol) : null,
+        muacCm:          body.muacCm ? String(body.muacCm) : null,
+        painScore:       body.painScore != null ? Number(body.painScore) : null,
+        allergiesVerified: !!body.allergiesVerified,
+        knownAllergies:    body.knownAllergies ? String(body.knownAllergies) : null,
+        knownNcdPrograms:  Array.isArray(body.knownNcdPrograms) ? body.knownNcdPrograms : [],
+        imciDangerSigns:   Array.isArray(body.imciDangerSigns)   ? body.imciDangerSigns   : null,
+        imciMainSymptoms:  Array.isArray(body.imciMainSymptoms)  ? body.imciMainSymptoms  : null,
+        adultDangerSigns:  Array.isArray(body.adultDangerSigns)  ? body.adultDangerSigns  : null,
+        pregnancyStatus:   body.pregnancyStatus ? String(body.pregnancyStatus) : null,
+        lmpDate:           body.lmpDate ? String(body.lmpDate) : null,
       } as any).returning();
       await createAuditLog(
         req.userInfo!.id, req.userInfo!.role,
-        "CREATE", "WALK_IN", String(created.id),
+        acuityLevel === "EMERGENT" ? "TRIAGE_EMERGENT" : "CREATE",
+        "WALK_IN", String(created.id),
         created.barangay, undefined,
-        { id: created.id, services: serviceCodes, complaint: created.chiefComplaint }, req,
+        { id: created.id, services: serviceCodes, complaint: created.chiefComplaint, acuityLevel }, req,
       );
       res.status(201).json(created);
     }),
   );
+
+  // GET /api/walk-ins/:id/triage-context — pulls everything the nurse needs
+  // to see at triage but doesn't have to type: existing patient profile,
+  // PhilHealth Konsulta enrollment, and known NCD programs (HTN/DM/asthma).
+  // Driven by patientName + barangay match (best-effort) since walk-ins
+  // don't have a hard FK to a patient record.
+  app.get("/api/walk-ins/triage-context", loadUserInfo, requireAuth, ar(async (req, res) => {
+    const name = String(req.query.name ?? "").trim().toLowerCase();
+    const barangay = String(req.query.barangay ?? "").trim();
+    if (!name || !barangay) {
+      return res.status(400).json({ message: "name and barangay query params are required" });
+    }
+    // Konsulta enrollment lookup — match by name + barangay.
+    const enrollments = await db.select().from(konsultaEnrollments)
+      .where(and(eq(konsultaEnrollments.barangay, barangay)));
+    const matched = enrollments.find((e) => {
+      const full = `${e.firstName} ${e.middleName ?? ""} ${e.lastName}`.replace(/\s+/g, " ").trim().toLowerCase();
+      return full.includes(name) || name.includes(full);
+    }) ?? null;
+
+    // NCD pull-ins from existing registries — best-effort.
+    const ncdPrograms: string[] = [];
+    const sr = await db.select().from(ncdScreenings).where(and(
+      eq(ncdScreenings.barangay, barangay),
+      eq(ncdScreenings.diagnosed, true),
+    ));
+    for (const r of sr) {
+      const fullName = r.patientName.toLowerCase();
+      if (fullName.includes(name) || name.includes(fullName)) {
+        if (r.condition === "HTN" && !ncdPrograms.includes("HTN")) ncdPrograms.push("HTN");
+        if (r.condition === "DM"  && !ncdPrograms.includes("DM"))  ncdPrograms.push("DM");
+      }
+    }
+
+    // Last consult / walk-in for this patient at this barangay (vitals trend)
+    const recent = await db.select().from(consults)
+      .where(and(eq(consults.barangay, barangay)))
+      .orderBy(desc(consults.createdAt))
+      .limit(20);
+    const lastVisit = recent.find((c) => c.patientName.toLowerCase().includes(name) || name.includes(c.patientName.toLowerCase())) ?? null;
+
+    res.json({
+      konsulta: matched
+        ? {
+            id: matched.id,
+            pin: matched.pin,
+            memberType: matched.memberType,
+            status: matched.status,
+            syncStatus: matched.syncStatus,
+            contributorCategory: matched.contributorCategory,
+            validUntil: matched.validUntil,
+          }
+        : null,
+      ncdPrograms,
+      lastVisit: lastVisit
+        ? {
+            id: lastVisit.id,
+            consultDate: lastVisit.consultDate,
+            chiefComplaint: lastVisit.chiefComplaint,
+            bloodPressure: lastVisit.bloodPressure,
+            weightKg: lastVisit.weightKg,
+            knownAllergies: lastVisit.knownAllergies,
+          }
+        : null,
+    });
+  }));
 
   // POST /api/walk-ins/:id/dispense — log a medication dispense and decrement
   // medicine_inventory. Wrapped in a transaction so a stock decrement never
