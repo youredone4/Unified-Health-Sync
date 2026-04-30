@@ -548,11 +548,64 @@ export async function registerRoutes(
     res.status(201).json(created);
   }));
 
+  // Validates that `referredRhuId` (when supplied) points at a real RHU
+  // facility and that the flag is consistent. Mirrors validateTbRhuReferral
+  // but without the TB-DOTS filter — disease cases route to any RHU.
+  async function validateDiseaseRhuReferral(
+    referralToRHU: boolean,
+    referredRhuId: number | null,
+  ): Promise<string | null> {
+    if (referredRhuId) {
+      if (!referralToRHU) {
+        return "Referred RHU can only be set when the case is marked as referred.";
+      }
+      const rhus = await storage.getHealthStations({ facilityType: "RHU" });
+      if (!rhus.some(r => r.id === referredRhuId)) {
+        return "The selected facility is not a verified RHU.";
+      }
+    }
+    return null;
+  }
+
   app.put(api.diseaseCases.update.path, registryRBAC, ar(async (req, res) => {
     const id = parseId(req.params.id, res); if (id === null) return;
     const before = await storage.getDiseaseCase(id);
     const input = api.diseaseCases.update.input.parse(req.body);
+    if (input.referralToRHU !== undefined || input.referredRhuId !== undefined) {
+      if (!before) return res.status(404).json({ message: "Disease case not found" });
+      const mergedRefer = input.referralToRHU !== undefined ? input.referralToRHU : before.referralToRHU;
+      const mergedRhuId = input.referredRhuId !== undefined ? input.referredRhuId : before.referredRhuId;
+      const rhuError = await validateDiseaseRhuReferral(!!mergedRefer, mergedRhuId ?? null);
+      if (rhuError) return res.status(400).json({ message: rhuError });
+    }
     const updated = await storage.updateDiseaseCase(id, input);
+    // When the flag flips from false→true, create a PENDING referral_records
+    // row so the MGMT inbox surfaces the handoff. Idempotent: skip if a
+    // PENDING/RECEIVED entry already exists for this case (avoids duplicates
+    // when operators toggle the flag off and back on).
+    if (before && updated && !before.referralToRHU && updated.referralToRHU) {
+      const existing = await db.select().from(referralRecords).where(and(
+        eq(referralRecords.patientType, "DISEASE_CASE" as any),
+        eq(referralRecords.patientId, id),
+        inArray(referralRecords.status, ["PENDING", "RECEIVED"] as any),
+      ));
+      if (existing.length === 0) {
+        const targetFacility = updated.referredRhuId
+          ? (await storage.getHealthStations({ facilityType: "RHU" })).find(r => r.id === updated.referredRhuId)?.facilityName ?? "RHU"
+          : "RHU";
+        await db.insert(referralRecords).values({
+          sourceFacility: `${updated.barangay} BHS`,
+          sourceUserId: req.userInfo!.id,
+          sourceBarangay: updated.barangay,
+          targetFacility,
+          patientId: id,
+          patientType: "DISEASE_CASE",
+          patientName: updated.patientName,
+          reason: `${updated.condition} — referred from BHS to RHU`,
+          status: "PENDING",
+        });
+      }
+    }
     // Promote a status change to its own action so the audit timeline
     // shows "case marked Closed" cleanly, not buried in a UPDATE diff.
     const statusChanged = before && updated && before.status !== updated.status;

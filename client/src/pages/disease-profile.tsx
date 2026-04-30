@@ -93,6 +93,17 @@ export default function DiseaseProfile() {
     updateMutation.mutate({ status: newStatus });
   };
 
+  const handleReferToRhu = () => {
+    updateMutation.mutate(
+      { status: "Referred", referralToRHU: true },
+      {
+        onSuccess: () => {
+          toast({ title: "Referred to RHU", description: "Case has been flagged for RHU follow-up." });
+        },
+      },
+    );
+  };
+
   if (isLoading) {
     return <div className="flex items-center justify-center h-64"><p className="text-muted-foreground">Loading...</p></div>;
   }
@@ -222,6 +233,15 @@ export default function DiseaseProfile() {
             </div>
           </div>
         )}
+        {diseaseCase.referralToRHU && (
+          <div
+            className="mt-3 rounded-md border border-orange-500/30 bg-orange-500/10 px-3 py-2 text-sm text-orange-700 dark:text-orange-300 flex items-center gap-2"
+            data-testid="banner-referred-rhu"
+          >
+            <ShieldCheck className="w-4 h-4 shrink-0" />
+            <span>Referred to RHU</span>
+          </div>
+        )}
         <div className="pt-3 border-t border-border flex flex-wrap gap-2">
           {diseaseCase.status === "New" && (
             <Button onClick={() => handleStatusChange("Monitoring")} data-testid="button-start-monitoring">
@@ -230,9 +250,11 @@ export default function DiseaseProfile() {
           )}
           {diseaseCase.status === "Monitoring" && (
             <>
-              <Button variant="outline" onClick={() => handleStatusChange("Referred")} data-testid="button-refer">
-                Refer to RHU
-              </Button>
+              {!diseaseCase.referralToRHU && (
+                <Button variant="outline" onClick={handleReferToRhu} data-testid="button-refer">
+                  Refer to RHU
+                </Button>
+              )}
               <Button onClick={() => handleStatusChange("Closed")} data-testid="button-close">
                 Close Case
               </Button>

@@ -345,6 +345,13 @@ export const diseaseCases = pgTable("disease_cases", {
   notes: text("notes"),
   linkedPersonType: text("linked_person_type"), // Mother, Child, Senior, or null
   linkedPersonId: integer("linked_person_id"),
+  // RHU referral flag — mirrors the TB DOTS pattern. When true, the case is
+  // being elevated from BHS to the RHU/hospital tier. `referredRhuId` points
+  // at the receiving facility and is only meaningful when `referralToRHU` is
+  // true. The PATCH route auto-creates a `referral_records` row so the MGMT
+  // inbox sees the handoff with PENDING → RECEIVED → COMPLETED lifecycle.
+  referralToRHU: boolean("referral_to_rhu").default(false),
+  referredRhuId: integer("referred_rhu_id").references(() => healthStations.id),
   latitude: text("latitude"),
   longitude: text("longitude"),
 });
@@ -357,6 +364,7 @@ export const insertDiseaseCaseSchema = createInsertSchema(diseaseCases)
   .omit({ id: true })
   .extend({
     additionalConditions: z.array(z.string()).optional().default([]),
+    referredRhuId: z.number().int().positive().optional().nullable(),
   });
 export type DiseaseCase = typeof diseaseCases.$inferSelect;
 export type InsertDiseaseCase = z.infer<typeof insertDiseaseCaseSchema>;
