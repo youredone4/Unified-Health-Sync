@@ -73,6 +73,7 @@ export const sidebarPermissions: Record<string, readonly string[]> = {
   "/restock-requests": ALL_ROLES,
   "/certificates": ALL_ROLES,
   "/campaigns": ALL_ROLES,
+  "/konsulta": ALL_ROLES,
   "/cold-chain": ALL_ROLES,
   "/school-immunizations": ALL_ROLES,
   "/oral-health": ALL_ROLES,

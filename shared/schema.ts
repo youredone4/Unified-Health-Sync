@@ -645,6 +645,168 @@ export const insertCampaignTallySchema = createInsertSchema(campaignTallies)
 export type CampaignTally = typeof campaignTallies.$inferSelect;
 export type InsertCampaignTally = z.infer<typeof insertCampaignTallySchema>;
 
+// ─── Phase 13: PhilHealth Konsulta enrollment ───────────────────────────────
+// PhilHealth Konsulta (RA 11223 / PhilHealth Circular 2020-0022) requires
+// every member to be enrolled with the LGU's accredited Konsulta provider
+// before the system can claim capitation. Phase 13 builds the local data
+// model and a stubbed submission queue; the actual API call goes through
+// server/integrations/philhealth.ts which currently returns
+// API_KEYS_REQUIRED until env vars are populated.
+//
+// Member Data Record (MDR) fields below match the PhilHealth Konsulta
+// enrollment form. Two-tier model: PRINCIPAL members + their DEPENDENTs
+// share a family_id; principals carry the contributor_category and
+// sponsor info, dependents inherit billing through the principal.
+export const KONSULTA_MEMBER_TYPES = ["PRINCIPAL", "DEPENDENT"] as const;
+export type KonsultaMemberType = typeof KONSULTA_MEMBER_TYPES[number];
+
+export const KONSULTA_CONTRIBUTOR_CATEGORIES = [
+  "DIRECT_FORMAL",       // employed, formal sector
+  "DIRECT_INFORMAL",     // self-employed, OFW, etc.
+  "INDIRECT_INDIGENT",   // NHTS-PR / 4Ps
+  "INDIRECT_SPONSORED",  // LGU-sponsored, senior, PWD
+  "INDIRECT_LIFETIME",   // retired contributor
+  "OTHER",
+] as const;
+export type KonsultaContributorCategory = typeof KONSULTA_CONTRIBUTOR_CATEGORIES[number];
+
+export const KONSULTA_ENROLLMENT_STATUSES = [
+  "DRAFT",     // captured at BHS, not yet submitted upstream
+  "ACTIVE",    // confirmed by PhilHealth, billable
+  "EXPIRED",   // valid_until passed; renewal due
+  "REJECTED",  // PhilHealth bounced the MDR
+  "CANCELLED", // member opted out / transferred
+] as const;
+export type KonsultaEnrollmentStatus = typeof KONSULTA_ENROLLMENT_STATUSES[number];
+
+export const PHILHEALTH_SYNC_STATUSES = [
+  "UNSYNCED",            // never queued — local only
+  "PENDING_SUBMISSION",  // queued, waiting for next API run
+  "SUBMITTED",           // sent to PhilHealth, awaiting ACK
+  "CONFIRMED",           // PhilHealth ACK'd success
+  "FAILED",              // ACK'd failure or transport error; see error_message
+] as const;
+export type PhilHealthSyncStatus = typeof PHILHEALTH_SYNC_STATUSES[number];
+
+export const konsultaEnrollments = pgTable("konsulta_enrollments", {
+  id: serial("id").primaryKey(),
+  pin: text("pin"),                               // 12-digit PhilHealth ID; nullable for DRAFT
+  memberType: text("member_type").$type<KonsultaMemberType>().notNull().default("PRINCIPAL"),
+  principalPin: text("principal_pin"),            // for DEPENDENT rows
+  familyId: text("family_id"),                    // groups one family together
+  // Member identity
+  firstName: text("first_name").notNull(),
+  middleName: text("middle_name"),
+  lastName: text("last_name").notNull(),
+  suffix: text("suffix"),
+  dateOfBirth: text("date_of_birth").notNull(),   // YYYY-MM-DD
+  sex: text("sex").notNull(),                     // M | F
+  civilStatus: text("civil_status"),              // SINGLE | MARRIED | WIDOWED | SEPARATED
+  mothersMaidenName: text("mothers_maiden_name"),
+  // Address
+  addressLine: text("address_line"),
+  barangay: text("barangay").notNull(),
+  municipality: text("municipality").default("Placer"),
+  province: text("province").default("Surigao del Norte"),
+  // Membership
+  contributorCategory: text("contributor_category").$type<KonsultaContributorCategory>(),
+  sponsorName: text("sponsor_name"),
+  employer: text("employer"),
+  providerCode: text("provider_code"),            // LGU's accredited Konsulta provider code
+  // Lifecycle
+  enrollmentDate: text("enrollment_date").notNull(),
+  validFrom: text("valid_from"),
+  validUntil: text("valid_until"),
+  status: text("status").$type<KonsultaEnrollmentStatus>().notNull().default("DRAFT"),
+  // PhilHealth API sync state
+  syncStatus: text("sync_status").$type<PhilHealthSyncStatus>().notNull().default("UNSYNCED"),
+  syncedAt: timestamp("synced_at"),
+  philhealthAckRef: text("philhealth_ack_ref"),   // PhilHealth's reference number on ACK
+  errorMessage: text("error_message"),
+  // Provenance
+  recordedByUserId: varchar("recorded_by_user_id"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+export const insertKonsultaEnrollmentSchema = createInsertSchema(konsultaEnrollments)
+  .omit({ id: true, createdAt: true, syncedAt: true, philhealthAckRef: true, errorMessage: true, syncStatus: true, status: true })
+  .extend({
+    memberType: z.enum(KONSULTA_MEMBER_TYPES),
+    contributorCategory: z.enum(KONSULTA_CONTRIBUTOR_CATEGORIES).optional().nullable(),
+    sex: z.enum(["M", "F"]),
+  });
+export type KonsultaEnrollment = typeof konsultaEnrollments.$inferSelect;
+export type InsertKonsultaEnrollment = z.infer<typeof insertKonsultaEnrollmentSchema>;
+
+// ─── Phase 13: Konsulta encounters (billable visits) ────────────────────────
+// Each row links a consult / walk-in to a Konsulta enrollment so the system
+// can assemble the capitation / fee-for-service claim. Encounters start at
+// status=DRAFT until a TL marks them READY for submission.
+export const KONSULTA_ENCOUNTER_STATUSES = [
+  "DRAFT",      // recorded but not yet ready to claim
+  "READY",      // ready for the next batch submission
+  "SUBMITTED",  // sent to PhilHealth
+  "PAID",       // capitation / FFS payment confirmed
+  "REJECTED",   // claim bounced
+] as const;
+export type KonsultaEncounterStatus = typeof KONSULTA_ENCOUNTER_STATUSES[number];
+
+export const KONSULTA_CLAIM_TYPES = ["CAPITATION", "FEE_FOR_SERVICE", "PACKAGE"] as const;
+export type KonsultaClaimType = typeof KONSULTA_CLAIM_TYPES[number];
+
+export const konsultaEncounters = pgTable("konsulta_encounters", {
+  id: serial("id").primaryKey(),
+  enrollmentId: integer("enrollment_id").notNull(),  // FK → konsulta_enrollments.id
+  consultId: integer("consult_id"),                  // FK → consults.id (walk-in or check-up)
+  encounterDate: text("encounter_date").notNull(),
+  barangay: text("barangay").notNull(),
+  serviceCodes: jsonb("service_codes").$type<string[]>().default([]),
+  icd10Codes: jsonb("icd10_codes").$type<string[]>().default([]),
+  diagnosis: text("diagnosis"),
+  claimType: text("claim_type").$type<KonsultaClaimType>().notNull().default("CAPITATION"),
+  status: text("status").$type<KonsultaEncounterStatus>().notNull().default("DRAFT"),
+  syncStatus: text("sync_status").$type<PhilHealthSyncStatus>().notNull().default("UNSYNCED"),
+  syncedAt: timestamp("synced_at"),
+  philhealthClaimRef: text("philhealth_claim_ref"),
+  errorMessage: text("error_message"),
+  recordedByUserId: varchar("recorded_by_user_id"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+export const insertKonsultaEncounterSchema = createInsertSchema(konsultaEncounters)
+  .omit({ id: true, createdAt: true, syncedAt: true, philhealthClaimRef: true, errorMessage: true, syncStatus: true, status: true })
+  .extend({
+    claimType: z.enum(KONSULTA_CLAIM_TYPES).optional(),
+  });
+export type KonsultaEncounter = typeof konsultaEncounters.$inferSelect;
+export type InsertKonsultaEncounter = z.infer<typeof insertKonsultaEncounterSchema>;
+
+// ─── Phase 13: PhilHealth submission queue ──────────────────────────────────
+// A durable outbox of items that need to be sent to PhilHealth. The
+// integration module reads PENDING rows, attempts submission, then updates
+// status. Until API keys arrive, every row stays at PENDING — when keys
+// arrive a single backfill drains the queue.
+export const PHILHEALTH_ENTITY_TYPES = ["ENROLLMENT", "ENCOUNTER"] as const;
+export type PhilHealthEntityType = typeof PHILHEALTH_ENTITY_TYPES[number];
+
+export const philhealthSubmissions = pgTable("philhealth_submissions", {
+  id: serial("id").primaryKey(),
+  entityType: text("entity_type").$type<PhilHealthEntityType>().notNull(),
+  entityId: integer("entity_id").notNull(),
+  payload: jsonb("payload").notNull(),               // snapshot of what would be submitted
+  status: text("status").$type<PhilHealthSyncStatus>().notNull().default("PENDING_SUBMISSION"),
+  submittedAt: timestamp("submitted_at"),
+  responseJson: jsonb("response_json"),
+  errorMessage: text("error_message"),
+  retryCount: integer("retry_count").notNull().default(0),
+  nextRetryAt: timestamp("next_retry_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+export const insertPhilhealthSubmissionSchema = createInsertSchema(philhealthSubmissions)
+  .omit({ id: true, createdAt: true, submittedAt: true, responseJson: true, errorMessage: true, status: true });
+export type PhilhealthSubmission = typeof philhealthSubmissions.$inferSelect;
+export type InsertPhilhealthSubmission = z.infer<typeof insertPhilhealthSubmissionSchema>;
+
 // === M1 TEMPLATE VERSIONS (Template-driven reporting) ===
 export const m1TemplateVersions = pgTable("m1_template_versions", {
   id: serial("id").primaryKey(),

@@ -3317,6 +3317,111 @@ export class DatabaseStorage implements IStorage {
         ON campaign_tallies (barangay, campaign_date DESC)
     `);
 
+    // Phase 13 — PhilHealth Konsulta enrollments. PIN unique only when set
+    // (DRAFTs may not have a PIN yet); the partial unique index allows that.
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS konsulta_enrollments (
+        id                       SERIAL PRIMARY KEY,
+        pin                      TEXT,
+        member_type              TEXT NOT NULL DEFAULT 'PRINCIPAL',
+        principal_pin            TEXT,
+        family_id                TEXT,
+        first_name               TEXT NOT NULL,
+        middle_name              TEXT,
+        last_name                TEXT NOT NULL,
+        suffix                   TEXT,
+        date_of_birth            TEXT NOT NULL,
+        sex                      TEXT NOT NULL,
+        civil_status             TEXT,
+        mothers_maiden_name      TEXT,
+        address_line             TEXT,
+        barangay                 TEXT NOT NULL,
+        municipality             TEXT DEFAULT 'Placer',
+        province                 TEXT DEFAULT 'Surigao del Norte',
+        contributor_category     TEXT,
+        sponsor_name             TEXT,
+        employer                 TEXT,
+        provider_code            TEXT,
+        enrollment_date          TEXT NOT NULL,
+        valid_from               TEXT,
+        valid_until              TEXT,
+        status                   TEXT NOT NULL DEFAULT 'DRAFT',
+        sync_status              TEXT NOT NULL DEFAULT 'UNSYNCED',
+        synced_at                TIMESTAMP,
+        philhealth_ack_ref       TEXT,
+        error_message            TEXT,
+        recorded_by_user_id      VARCHAR,
+        notes                    TEXT,
+        created_at               TIMESTAMP NOT NULL DEFAULT NOW()
+      )
+    `);
+    await db.execute(sql`
+      CREATE UNIQUE INDEX IF NOT EXISTS konsulta_enrollments_pin_unique_idx
+        ON konsulta_enrollments (pin)
+        WHERE pin IS NOT NULL
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS konsulta_enrollments_barangay_status_idx
+        ON konsulta_enrollments (barangay, status)
+    `);
+
+    // Phase 13 — Konsulta encounters (billable visits).
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS konsulta_encounters (
+        id                       SERIAL PRIMARY KEY,
+        enrollment_id            INTEGER NOT NULL,
+        consult_id               INTEGER,
+        encounter_date           TEXT NOT NULL,
+        barangay                 TEXT NOT NULL,
+        service_codes            JSONB DEFAULT '[]'::jsonb,
+        icd10_codes              JSONB DEFAULT '[]'::jsonb,
+        diagnosis                TEXT,
+        claim_type               TEXT NOT NULL DEFAULT 'CAPITATION',
+        status                   TEXT NOT NULL DEFAULT 'DRAFT',
+        sync_status              TEXT NOT NULL DEFAULT 'UNSYNCED',
+        synced_at                TIMESTAMP,
+        philhealth_claim_ref     TEXT,
+        error_message            TEXT,
+        recorded_by_user_id      VARCHAR,
+        notes                    TEXT,
+        created_at               TIMESTAMP NOT NULL DEFAULT NOW()
+      )
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS konsulta_encounters_enrollment_idx
+        ON konsulta_encounters (enrollment_id, encounter_date DESC)
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS konsulta_encounters_status_sync_idx
+        ON konsulta_encounters (status, sync_status)
+    `);
+
+    // Phase 13 — PhilHealth submission queue (outbox). Drains once API keys
+    // are configured; until then every row stays PENDING_SUBMISSION.
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS philhealth_submissions (
+        id                       SERIAL PRIMARY KEY,
+        entity_type              TEXT NOT NULL,
+        entity_id                INTEGER NOT NULL,
+        payload                  JSONB NOT NULL,
+        status                   TEXT NOT NULL DEFAULT 'PENDING_SUBMISSION',
+        submitted_at             TIMESTAMP,
+        response_json            JSONB,
+        error_message            TEXT,
+        retry_count              INTEGER NOT NULL DEFAULT 0,
+        next_retry_at            TIMESTAMP,
+        created_at               TIMESTAMP NOT NULL DEFAULT NOW()
+      )
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS philhealth_submissions_status_idx
+        ON philhealth_submissions (status, created_at DESC)
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS philhealth_submissions_entity_idx
+        ON philhealth_submissions (entity_type, entity_id)
+    `);
+
     // Idempotent backfill: every health_stations row needs a facilityType now
     // that REFER_RHU records the referred facility. Runs on every startup but
     // becomes a no-op once every row has a type.

@@ -85,6 +85,7 @@ import WalkInPage from "@/pages/walk-in";
 import RestockRequestsPage from "@/pages/restock-requests";
 import CertificatesPage from "@/pages/certificates";
 import CampaignsPage from "@/pages/campaigns";
+import KonsultaPage from "@/pages/konsulta";
 import WorkforceDetailPage from "@/pages/workforce-detail";
 import DiseaseSurveillancePage from "@/pages/disease-surveillance";
 import MortalityPage from "@/pages/mortality";
@@ -394,6 +395,7 @@ function Router() {
       <Route path="/restock-requests"><RoleRoute component={RestockRequestsPage} /></Route>
       <Route path="/certificates"><RoleRoute component={CertificatesPage} /></Route>
       <Route path="/campaigns"><RoleRoute component={CampaignsPage} /></Route>
+      <Route path="/konsulta"><RoleRoute component={KonsultaPage} /></Route>
 
       {/* NCD & lifestyle screenings (Sections G1, G2, G4, G6, G8) */}
       <Route path="/ncd-screenings"><NcdScreeningsPage /></Route>

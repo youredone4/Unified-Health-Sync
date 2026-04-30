@@ -54,6 +54,7 @@ import {
   Boxes,
   FileText,
   Megaphone,
+  ShieldCheck,
 } from "lucide-react";
 import { useTheme } from "@/contexts/theme-context";
 import { useAuth, sidebarPermissions, ALL_ROLES } from "@/hooks/use-auth";
@@ -275,6 +276,13 @@ const NAV_ITEMS: NavItem[] = [
     activePrefixes: ["/campaigns"],
   },
   {
+    title: "Konsulta",
+    url: "/konsulta",
+    icon: ShieldCheck,
+    roles: rolesFor("/konsulta"),
+    activePrefixes: ["/konsulta"],
+  },
+  {
     title: "Clinic Check-up",
     url: "/patient-checkup",
     icon: ClipboardPlus,
@@ -325,6 +333,7 @@ const TL_LAYOUT: SidebarLayout = [
     { kind: "item",  url: "/referrals" },
     { kind: "item",  url: "/certificates" },
     { kind: "item",  url: "/campaigns" },
+    { kind: "item",  url: "/konsulta" },
   ],
   // Stock — TL view of inventory + restock requests they file
   [
@@ -367,6 +376,7 @@ const MGMT_LAYOUT: SidebarLayout = [
     { kind: "item",  url: "/patient-checkup" },
     { kind: "item",  url: "/certificates" },
     { kind: "item",  url: "/campaigns" },
+    { kind: "item",  url: "/konsulta" },
     { kind: "item",  url: "/calendar" },
     { kind: "item",  url: "/nutrition" },
     { kind: "item",  url: "/messages" },
