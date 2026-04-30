@@ -21,6 +21,9 @@ app.use("/api", (_req, res, next) => {
   next();
 });
 
+// Lightweight health-check endpoint (also used by the dev self-ping below).
+app.get("/api/health", (_req, res) => res.json({ ok: true }));
+
 declare module "http" {
   interface IncomingMessage {
     rawBody: unknown;
@@ -134,6 +137,21 @@ app.use((req, res, next) => {
     httpServer.listen({ port, host: "0.0.0.0", reusePort: true }, () => {
       log(`serving on port ${port}`);
       startScheduler();
+
+      // In development, ping ourselves every 25 s so Replit's idle-timeout
+      // never kills the process between active user sessions.
+      if (process.env.NODE_ENV !== "production") {
+        // Use dynamic import to avoid adding 'http' to the top-level imports
+        // (httpServer already imports it via createServer above, but the type
+        // augmentation for rawBody lives on IncomingMessage — keep it clean).
+        const http = require("http") as typeof import("http");
+        setInterval(() => {
+          http
+            .get(`http://localhost:${port}/api/health`, (res) => res.resume())
+            .on("error", () => {});
+        }, 25_000);
+        log("self-ping keepalive active (every 25 s)", "startup");
+      }
     });
     httpServer.once("error", async (err: NodeJS.ErrnoException) => {
       if (err.code === "EADDRINUSE" && attemptsLeft > 0) {
