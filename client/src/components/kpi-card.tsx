@@ -28,9 +28,9 @@ export default function KpiCard({ title, value, icon: Icon, variant = 'default',
 
   const iconClasses = {
     default: 'text-muted-foreground',
-    danger: 'text-red-400',
-    warning: 'text-orange-400',
-    success: 'text-green-400'
+    danger:  'text-red-600 dark:text-red-400',
+    warning: 'text-orange-600 dark:text-orange-400',
+    success: 'text-emerald-600 dark:text-emerald-400',
   };
 
   const isClickable = !!onClick;
