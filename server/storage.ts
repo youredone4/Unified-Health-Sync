@@ -3170,6 +3170,40 @@ export class DatabaseStorage implements IStorage {
         ON aefi_events (severity, reported_to_chd)
     `);
 
+    // Phase 9 — Outbreaks lifecycle. Auto-created from cluster detector;
+    // MGMT advances status SUSPECTED → DECLARED → CONTAINED → CLOSED.
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS outbreaks (
+        id                    SERIAL PRIMARY KEY,
+        disease               TEXT NOT NULL,
+        barangay              TEXT NOT NULL,
+        status                TEXT NOT NULL DEFAULT 'SUSPECTED',
+        case_count            INTEGER NOT NULL DEFAULT 1,
+        case_ids              JSONB,
+        window_days           INTEGER,
+        detected_at           TIMESTAMP NOT NULL DEFAULT NOW(),
+        declared_at           TIMESTAMP,
+        contained_at          TIMESTAMP,
+        closed_at             TIMESTAMP,
+        investigation_notes   TEXT,
+        containment_actions   TEXT,
+        closure_summary       TEXT,
+        created_at            TIMESTAMP NOT NULL DEFAULT NOW()
+      )
+    `);
+    // Partial unique index: at most one open (non-CLOSED) outbreak per
+    // (disease, barangay) so the detector's idempotent re-runs don't
+    // multi-create. CLOSED rows are historical and can repeat.
+    await db.execute(sql`
+      CREATE UNIQUE INDEX IF NOT EXISTS outbreaks_open_unique_idx
+        ON outbreaks (disease, barangay)
+        WHERE status != 'CLOSED'
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS outbreaks_status_detected_idx
+        ON outbreaks (status, detected_at DESC)
+    `);
+
     // Idempotent backfill: every health_stations row needs a facilityType now
     // that REFER_RHU records the referred facility. Runs on every startup but
     // becomes a no-op once every row has a type.

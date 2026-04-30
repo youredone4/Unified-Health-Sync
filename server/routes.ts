@@ -9,7 +9,7 @@ import { z } from "zod";
 import { setupAuth, registerAuthRoutes } from "./auth";
 import { registerAdminRoutes } from "./routes/admin";
 import { loadUserInfo, requireAuth, requireRole, createAuditLog } from "./middleware/rbac";
-import { UserRole, auditLogs, deathReviews, DEATH_REVIEW_STATUSES, aefiEvents, insertAefiEventSchema } from "@shared/schema";
+import { UserRole, auditLogs, deathReviews, DEATH_REVIEW_STATUSES, aefiEvents, insertAefiEventSchema, outbreaks, OUTBREAK_STATUSES } from "@shared/schema";
 import { ensureReportsRegistered, listReports, getReport } from "./reports";
 import { monthRange, quarterRange, annualRange, customRange } from "./reports/types";
 
@@ -2269,6 +2269,60 @@ export async function registerRoutes(
     }),
   );
 
+  // === OUTBREAKS LIFECYCLE (Phase 9 of operational-actions framework) ===
+  // Auto-created from the Phase 4 cluster detector; MGMT advances status
+  // SUSPECTED → DECLARED → CONTAINED → CLOSED. RBAC: any authenticated
+  // role can read; only MGMT can advance status.
+  app.get("/api/outbreaks", loadUserInfo, requireAuth, ar(async (req, res) => {
+    const status = req.query.status ? String(req.query.status) : undefined;
+    const conds: any[] = [];
+    if (status) conds.push(eq(outbreaks.status, status as any));
+    if (req.userInfo?.role === UserRole.TL) {
+      const assigned = req.userInfo.assignedBarangays;
+      if (assigned.length === 0) return res.json([]);
+      conds.push(eq(outbreaks.barangay, assigned[0]));
+    }
+    const rows = await db.select().from(outbreaks)
+      .where(conds.length ? and(...conds) : undefined)
+      .orderBy(desc(outbreaks.detectedAt))
+      .limit(500);
+    res.json(rows);
+  }));
+
+  // PATCH advances the lifecycle. Body: { status, notes? }. Status enum is
+  // enforced and the corresponding lifecycle timestamp is auto-stamped.
+  app.patch("/api/outbreaks/:id", loadUserInfo, requireAuth,
+    requireRole(UserRole.SYSTEM_ADMIN, UserRole.MHO, UserRole.SHA),
+    ar(async (req, res) => {
+      const id = parseId(req.params.id, res); if (id === null) return;
+      const before = (await db.select().from(outbreaks).where(eq(outbreaks.id, id)))[0];
+      if (!before) return res.status(404).json({ message: "Outbreak not found" });
+      const newStatus = req.body?.status as string | undefined;
+      if (newStatus && !OUTBREAK_STATUSES.includes(newStatus as any)) {
+        return res.status(400).json({ message: `Invalid status; allowed: ${OUTBREAK_STATUSES.join(", ")}` });
+      }
+      const set: Record<string, any> = {};
+      if (newStatus) {
+        set.status = newStatus;
+        if (newStatus === "DECLARED" && !before.declaredAt) set.declaredAt = new Date();
+        if (newStatus === "CONTAINED" && !before.containedAt) set.containedAt = new Date();
+        if (newStatus === "CLOSED" && !before.closedAt) set.closedAt = new Date();
+      }
+      if (req.body?.investigationNotes !== undefined) set.investigationNotes = String(req.body.investigationNotes);
+      if (req.body?.containmentActions !== undefined) set.containmentActions = String(req.body.containmentActions);
+      if (req.body?.closureSummary !== undefined) set.closureSummary = String(req.body.closureSummary);
+      const [updated] = await db.update(outbreaks).set(set).where(eq(outbreaks.id, id)).returning();
+      await createAuditLog(
+        req.userInfo!.id, req.userInfo!.role,
+        newStatus ? "OUTBREAK_STATUS_CHANGE" : "UPDATE",
+        "OUTBREAK", String(id),
+        before.barangay,
+        before, updated, req,
+      );
+      res.json(updated);
+    }),
+  );
+
   // === MGMT INBOX (Phase 7 of operational-actions framework) ===
   // Single dashboard for MHO / SHA / Admin that surfaces every actionable
   // signal from Phases 1–6 in one place: pending referrals, open death
@@ -2280,7 +2334,7 @@ export async function registerRoutes(
     ar(async (_req, res) => {
       const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
-      const [pendingReferrals, openReviews, unreportedAefi, recentAlerts] = await Promise.all([
+      const [pendingReferrals, openReviews, unreportedAefi, openOutbreaks, recentAlerts] = await Promise.all([
         db.select().from(referralRecords)
           .where(eq(referralRecords.status, "PENDING" as any))
           .orderBy(desc(referralRecords.createdAt)).limit(100),
@@ -2290,6 +2344,9 @@ export async function registerRoutes(
         db.select().from(aefiEvents)
           .where(eq(aefiEvents.reportedToChd, false))
           .orderBy(desc(aefiEvents.createdAt)).limit(100),
+        db.select().from(outbreaks)
+          .where(inArray(outbreaks.status, ["SUSPECTED", "DECLARED", "CONTAINED"] as any))
+          .orderBy(desc(outbreaks.detectedAt)).limit(100),
         db.select().from(auditLogs)
           .where(and(eq(auditLogs.action, "SYSTEM_ALERT"), gte(auditLogs.createdAt, sevenDaysAgo)))
           .orderBy(desc(auditLogs.createdAt)).limit(100),
@@ -2297,7 +2354,7 @@ export async function registerRoutes(
 
       type InboxItem = {
         id: string;
-        type: "referral" | "death-review" | "aefi" | "system-alert";
+        type: "referral" | "death-review" | "aefi" | "outbreak" | "system-alert";
         priority: "high" | "medium" | "low";
         title: string;
         subtitle: string;
@@ -2348,6 +2405,19 @@ export async function registerRoutes(
         });
       }
 
+      for (const o of openOutbreaks) {
+        items.push({
+          id: `outbreak:${o.id}`,
+          type: "outbreak",
+          priority: o.status === "SUSPECTED" || o.status === "DECLARED" ? "high" : "medium",
+          title: `${o.disease} outbreak — ${o.status.toLowerCase()}`,
+          subtitle: `${o.caseCount} case${o.caseCount === 1 ? "" : "s"} in ${o.barangay}`,
+          barangay: o.barangay,
+          createdAt: (o.detectedAt ?? new Date()).toISOString(),
+          link: "/outbreaks",
+        });
+      }
+
       for (const log of recentAlerts) {
         const after = log.afterJson as Record<string, any> | null;
         const rule = after?.rule ?? log.entityType;
@@ -2376,6 +2446,7 @@ export async function registerRoutes(
           referral: pendingReferrals.length,
           deathReview: openReviews.length,
           aefi: unreportedAefi.length,
+          outbreak: openOutbreaks.length,
           systemAlert: recentAlerts.length,
           total: items.length,
         },
