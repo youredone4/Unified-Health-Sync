@@ -114,6 +114,10 @@ export default function TodayPage() {
         </div>
       </div>
 
+      {/* Quick Add — primary record-creation entry points (TL only). Above the
+          priority list so encoding a new patient is one click from landing. */}
+      <QuickAddBar />
+
       {/* Program filter chips */}
       <div className="flex flex-wrap gap-2">
         <ProgramChip active={programFilter === "all"} onClick={() => setProgramFilter("all")} label="All" count={totalToDo} />
@@ -149,8 +153,6 @@ export default function TodayPage() {
           </AccordionContent>
         </AccordionItem>
       </Accordion>
-
-      <QuickAddBar />
     </div>
   );
 }
