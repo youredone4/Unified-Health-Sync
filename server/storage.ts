@@ -3042,6 +3042,13 @@ export class DatabaseStorage implements IStorage {
       ALTER TABLE nutrition_followups
         ADD COLUMN IF NOT EXISTS referred_rhu_id INTEGER REFERENCES health_stations(id)
     `);
+    // Disease cases: RHU referral flag mirrors the TB DOTS pattern. The PATCH
+    // route auto-creates a referral_records row when referral_to_rhu flips on.
+    await db.execute(sql`
+      ALTER TABLE disease_cases
+        ADD COLUMN IF NOT EXISTS referral_to_rhu BOOLEAN NOT NULL DEFAULT FALSE,
+        ADD COLUMN IF NOT EXISTS referred_rhu_id INTEGER REFERENCES health_stations(id)
+    `);
     await db.execute(sql`
       CREATE TABLE IF NOT EXISTS inventory_snapshots (
         id            SERIAL PRIMARY KEY,
