@@ -80,11 +80,14 @@ const MGMT = ["SYSTEM_ADMIN", "MHO", "SHA"] as const;
 // touches as part of routine BHS work (vaccine session, NCD clinic, etc).
 const DAILY_OPS_CHILDREN: NavItem[] = [
   {
-    title: "Cold-chain",
-    url: "/cold-chain",
-    icon: Snowflake,
-    roles: rolesFor("/cold-chain"),
-    activePrefixes: ["/cold-chain"],
+    // Group 3 hub: collapses Cold Chain + School Immunization + AEFI
+    // into one entry. activePrefixes cover all three legacy URLs so the
+    // sidebar entry stays highlighted when users land via old bookmarks.
+    title: "Immunization & Adverse Events",
+    url: "/immunization",
+    icon: Syringe,
+    roles: rolesFor("/immunization"),
+    activePrefixes: ["/immunization", "/cold-chain", "/school-immunizations", "/aefi"],
   },
   {
     title: "NCD Screenings",
@@ -99,13 +102,6 @@ const DAILY_OPS_CHILDREN: NavItem[] = [
     icon: Smile,
     roles: rolesFor("/oral-health"),
     activePrefixes: ["/oral-health"],
-  },
-  {
-    title: "School Immunization",
-    url: "/school-immunizations",
-    icon: GraduationCap,
-    roles: rolesFor("/school-immunizations"),
-    activePrefixes: ["/school-immunizations"],
   },
 ];
 
@@ -291,13 +287,6 @@ const NAV_ITEMS: NavItem[] = [
     activePrefixes: ["/konsulta"],
   },
   {
-    title: "AEFI",
-    url: "/aefi",
-    icon: Syringe,
-    roles: rolesFor("/aefi"),
-    activePrefixes: ["/aefi"],
-  },
-  {
     title: "Messages",
     url: "/messages",
     icon: MessageCircle,
@@ -338,7 +327,7 @@ const TL_LAYOUT: SidebarLayout = [
     { kind: "group", key: "daily-ops" },
     { kind: "group", key: "surveillance" },
     { kind: "item",  url: "/referrals" },
-    { kind: "item",  url: "/aefi" },
+    { kind: "item",  url: "/immunization" },
     { kind: "item",  url: "/certificates" },
     { kind: "item",  url: "/campaigns" },
     { kind: "item",  url: "/konsulta" },
@@ -367,7 +356,7 @@ const MGMT_LAYOUT: SidebarLayout = [
     { kind: "item", url: "/dashboards" },
     { kind: "item", url: "/outbreaks" },
     { kind: "item", url: "/mortality-hub" },
-    { kind: "item", url: "/aefi" },
+    { kind: "item", url: "/immunization" },
     { kind: "item", url: "/referrals" },
     // The MD's "Awaiting MD review" inbox lives on this page — surfaces
     // EMERGENT/URGENT and BHS-escalated encounters that still need the MD
