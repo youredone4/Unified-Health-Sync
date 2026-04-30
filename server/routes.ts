@@ -9,7 +9,7 @@ import { z } from "zod";
 import { setupAuth, registerAuthRoutes } from "./auth";
 import { registerAdminRoutes } from "./routes/admin";
 import { loadUserInfo, requireAuth, requireRole, createAuditLog } from "./middleware/rbac";
-import { UserRole, auditLogs, deathReviews, DEATH_REVIEW_STATUSES, aefiEvents, insertAefiEventSchema, outbreaks, OUTBREAK_STATUSES, consults, medicineInventory, medicationDispensings, insertMedicationDispensingSchema, inventoryRequests, insertInventoryRequestSchema, RESTOCK_STATUSES, SERVICE_CODES } from "@shared/schema";
+import { UserRole, auditLogs, deathReviews, DEATH_REVIEW_STATUSES, aefiEvents, insertAefiEventSchema, outbreaks, OUTBREAK_STATUSES, consults, medicineInventory, medicationDispensings, insertMedicationDispensingSchema, inventoryRequests, insertInventoryRequestSchema, RESTOCK_STATUSES, SERVICE_CODES, medicalCertificates, insertMedicalCertificateSchema, CERTIFICATE_TYPES, campaignTallies, insertCampaignTallySchema, CAMPAIGN_TYPES } from "@shared/schema";
 import { ensureReportsRegistered, listReports, getReport } from "./reports";
 import { monthRange, quarterRange, annualRange, customRange } from "./reports/types";
 
@@ -2532,6 +2532,201 @@ export async function registerRoutes(
     }),
   );
 
+  // === MEDICAL CERTIFICATES (Phase 12) ===
+  // Issuance log; PDF rendered on-demand via jspdf-autotable. Certificate
+  // numbers are auto-formatted "BHS-YYYY-MM-NNN", scoped per (barangay, year-
+  // month) so two BHSes don't collide.
+  app.get("/api/certificates", loadUserInfo, requireAuth, ar(async (req, res) => {
+    const conds: any[] = [];
+    if (req.userInfo?.role === UserRole.TL) {
+      const assigned = req.userInfo.assignedBarangays;
+      if (assigned.length === 0) return res.json([]);
+      conds.push(eq(medicalCertificates.barangay, assigned[0]));
+    } else if (req.query.barangay) {
+      conds.push(eq(medicalCertificates.barangay, String(req.query.barangay)));
+    }
+    if (req.query.certType) conds.push(eq(medicalCertificates.certType, String(req.query.certType) as any));
+    const rows = await db.select().from(medicalCertificates)
+      .where(conds.length ? and(...conds) : undefined)
+      .orderBy(desc(medicalCertificates.createdAt))
+      .limit(500);
+    res.json(rows);
+  }));
+
+  app.post("/api/certificates", loadUserInfo, requireAuth,
+    requireRole(UserRole.TL, UserRole.MHO, UserRole.SHA, UserRole.SYSTEM_ADMIN),
+    ar(async (req, res) => {
+      const parsed = insertMedicalCertificateSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: "Invalid certificate", issues: parsed.error.issues });
+      }
+      const input = parsed.data;
+      if (req.userInfo!.role === UserRole.TL && !req.userInfo!.assignedBarangays.includes(input.barangay)) {
+        return res.status(403).json({ message: "Access denied to this barangay" });
+      }
+      // Auto-number: BHS-YYYY-MM-NNN scoped by barangay + year-month.
+      const ym = input.issueDate.slice(0, 7);
+      const prefix = `BHS-${ym.replace("-", "-")}`;
+      const existing = await db.select().from(medicalCertificates)
+        .where(and(
+          eq(medicalCertificates.barangay, input.barangay),
+          // simple count via JS — small per-month volume keeps this cheap
+        ));
+      const sameMonth = existing.filter((c) => c.certificateNumber.startsWith(prefix));
+      const seq = String(sameMonth.length + 1).padStart(3, "0");
+      const certificateNumber = `${prefix}-${seq}`;
+
+      const [created] = await db.insert(medicalCertificates).values({
+        ...input,
+        certificateNumber,
+        signedByUserId: req.userInfo!.id,
+      } as any).returning();
+      await createAuditLog(
+        req.userInfo!.id, req.userInfo!.role,
+        "ISSUE", "MEDICAL_CERTIFICATE", String(created.id),
+        created.barangay, undefined,
+        { certNo: created.certificateNumber, type: created.certType, patient: created.patientName },
+        req,
+      );
+      res.status(201).json(created);
+    }),
+  );
+
+  // GET /api/certificates/:id/pdf — server-rendered printable PDF using
+  // the same jspdf+autotable pipeline as the system manual.
+  app.get("/api/certificates/:id/pdf", loadUserInfo, requireAuth, ar(async (req, res) => {
+    const id = parseId(req.params.id, res); if (id === null) return;
+    const cert = (await db.select().from(medicalCertificates).where(eq(medicalCertificates.id, id)))[0];
+    if (!cert) return res.status(404).json({ message: "Certificate not found" });
+    if (req.userInfo?.role === UserRole.TL && !req.userInfo.assignedBarangays.includes(cert.barangay)) {
+      return res.status(403).json({ message: "Access denied" });
+    }
+    const { jsPDF } = await import("jspdf");
+    const { default: autoTable } = await import("jspdf-autotable");
+    const doc = new jsPDF({ unit: "mm", format: "a4" });
+    const pageW = doc.internal.pageSize.getWidth();
+    // Header band
+    doc.setFillColor(13, 148, 136);
+    doc.rect(0, 0, pageW, 22, "F");
+    doc.setTextColor(255, 255, 255);
+    doc.setFont("helvetica", "bold").setFontSize(16).text("Municipality of Placer", 14, 11);
+    doc.setFont("helvetica", "normal").setFontSize(10).text("Province of Surigao del Norte", 14, 17);
+    doc.setFont("helvetica", "bold").setFontSize(11);
+    const certNoLabel = `Cert No. ${cert.certificateNumber}`;
+    const w = doc.getTextWidth(certNoLabel);
+    doc.text(certNoLabel, pageW - 14 - w, 11);
+    // Title
+    doc.setTextColor(0, 0, 0).setFontSize(18).setFont("helvetica", "bold");
+    doc.text(certificateTitleFor(cert.certType), pageW / 2, 38, { align: "center" });
+    // Body
+    doc.setFontSize(11).setFont("helvetica", "normal");
+    autoTable(doc, {
+      startY: 50,
+      theme: "plain",
+      styles: { fontSize: 11, cellPadding: { top: 1, bottom: 1, left: 0, right: 0 } },
+      body: [
+        ["Issued to:", cert.patientName],
+        ["Age / Sex:", `${cert.patientAge ?? "—"} / ${cert.patientSex ?? "—"}`],
+        ["Address:",   `${cert.addressLine ? cert.addressLine + ", " : ""}${cert.barangay}`],
+        ["Date issued:", cert.issueDate],
+        ...(cert.validUntil ? [["Valid until:", cert.validUntil]] as [string, string][] : []),
+        ["Purpose:",   cert.purpose ?? "—"],
+        ["Findings:",  cert.findings ?? "—"],
+      ],
+      columnStyles: { 0: { fontStyle: "bold", cellWidth: 45 }, 1: { cellWidth: pageW - 28 - 45 } },
+      margin: { left: 14, right: 14 },
+    });
+    const finalY = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY;
+    // Signature block
+    doc.setFontSize(11).setFont("helvetica", "normal");
+    doc.text("This certifies that the above named person was examined", 14, finalY + 18);
+    doc.text("and the findings stated are true and correct.", 14, finalY + 24);
+    const sigY = finalY + 50;
+    doc.line(pageW - 90, sigY, pageW - 14, sigY);
+    doc.setFont("helvetica", "bold").setFontSize(11);
+    doc.text(cert.signedByName ?? "—", pageW - 90, sigY + 6);
+    doc.setFont("helvetica", "normal").setFontSize(9);
+    doc.text(cert.signedByTitle ?? "RHU / BHS", pageW - 90, sigY + 11);
+    // Footer
+    doc.setFontSize(8).setTextColor(100, 116, 139);
+    doc.text(`Generated by HealthSync · ${new Date().toISOString().slice(0, 10)}`, 14, doc.internal.pageSize.getHeight() - 8);
+
+    const bytes = Buffer.from(doc.output("arraybuffer"));
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `inline; filename="${cert.certificateNumber}.pdf"`);
+    res.send(bytes);
+  }));
+
+  // === CAMPAIGN TALLY SHEETS (Phase 12) ===
+  // GP / Operation Timbang / SIA / mass deworming / adult vax days.
+  app.get("/api/campaigns", loadUserInfo, requireAuth, ar(async (req, res) => {
+    const conds: any[] = [];
+    if (req.userInfo?.role === UserRole.TL) {
+      const assigned = req.userInfo.assignedBarangays;
+      if (assigned.length === 0) return res.json([]);
+      conds.push(eq(campaignTallies.barangay, assigned[0]));
+    } else if (req.query.barangay) {
+      conds.push(eq(campaignTallies.barangay, String(req.query.barangay)));
+    }
+    if (req.query.campaignType) conds.push(eq(campaignTallies.campaignType, String(req.query.campaignType) as any));
+    const rows = await db.select().from(campaignTallies)
+      .where(conds.length ? and(...conds) : undefined)
+      .orderBy(desc(campaignTallies.campaignDate))
+      .limit(500);
+    res.json(rows);
+  }));
+
+  app.post("/api/campaigns", loadUserInfo, requireAuth,
+    requireRole(UserRole.TL),
+    ar(async (req, res) => {
+      const parsed = insertCampaignTallySchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: "Invalid campaign", issues: parsed.error.issues });
+      }
+      const input = parsed.data;
+      if (!req.userInfo!.assignedBarangays.includes(input.barangay)) {
+        return res.status(403).json({ message: "Access denied to this barangay" });
+      }
+      const [created] = await db.insert(campaignTallies).values({
+        ...input,
+        conductedByUserId: req.userInfo!.id,
+      } as any).returning();
+      await createAuditLog(
+        req.userInfo!.id, req.userInfo!.role,
+        "CREATE", "CAMPAIGN_TALLY", String(created.id),
+        created.barangay, undefined,
+        { type: created.campaignType, name: created.campaignName, total: created.totalServed },
+        req,
+      );
+      res.status(201).json(created);
+    }),
+  );
+
+  app.patch("/api/campaigns/:id", loadUserInfo, requireAuth,
+    requireRole(UserRole.TL),
+    ar(async (req, res) => {
+      const id = parseId(req.params.id, res); if (id === null) return;
+      const before = (await db.select().from(campaignTallies).where(eq(campaignTallies.id, id)))[0];
+      if (!before) return res.status(404).json({ message: "Campaign not found" });
+      if (!req.userInfo!.assignedBarangays.includes(before.barangay)) {
+        return res.status(403).json({ message: "Access denied to this barangay" });
+      }
+      const set: Record<string, any> = {};
+      if (req.body?.campaignName !== undefined) set.campaignName = String(req.body.campaignName);
+      if (req.body?.campaignDate !== undefined) set.campaignDate = String(req.body.campaignDate);
+      if (req.body?.tallies !== undefined && typeof req.body.tallies === "object") set.tallies = req.body.tallies;
+      if (req.body?.totalServed !== undefined) set.totalServed = Number(req.body.totalServed) || 0;
+      if (req.body?.notes !== undefined) set.notes = String(req.body.notes);
+      const [updated] = await db.update(campaignTallies).set(set).where(eq(campaignTallies.id, id)).returning();
+      await createAuditLog(
+        req.userInfo!.id, req.userInfo!.role,
+        "UPDATE", "CAMPAIGN_TALLY", String(id),
+        before.barangay, before, updated, req,
+      );
+      res.json(updated);
+    }),
+  );
+
   // === MGMT INBOX (Phase 7 of operational-actions framework) ===
   // Single dashboard for MHO / SHA / Admin that surfaces every actionable
   // signal from Phases 1–6 in one place: pending referrals, open death
@@ -3131,4 +3326,19 @@ export async function registerRoutes(
   }));
 
   return httpServer;
+}
+
+// Certificate title rendered as the PDF heading. Matches the language used
+// on the paper certificates so a printout can substitute for the booklet.
+function certificateTitleFor(t: string): string {
+  switch (t) {
+    case "SCHOOL":            return "MEDICAL CERTIFICATE — SCHOOL";
+    case "FITNESS_TO_WORK":   return "FIT-TO-WORK MEDICAL CERTIFICATE";
+    case "SANITARY_PERMIT":   return "FOOD HANDLER HEALTH CARD";
+    case "DRUG_TEST_RHU":     return "DRUG TEST RESULT — RHU";
+    case "MEDICAL_CLEARANCE": return "MEDICAL CLEARANCE";
+    case "DEATH_NOTICE":      return "MEDICAL CERTIFICATE OF DEATH";
+    case "BARANGAY_HEALTH":   return "BARANGAY HEALTH CLEARANCE";
+    default:                  return "MEDICAL CERTIFICATE";
+  }
 }

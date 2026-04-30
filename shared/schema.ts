@@ -556,6 +556,95 @@ export const insertInventoryRequestSchema = createInsertSchema(inventoryRequests
 export type InventoryRequest = typeof inventoryRequests.$inferSelect;
 export type InsertInventoryRequest = z.infer<typeof insertInventoryRequestSchema>;
 
+// ─── Phase 12: medical certificates ─────────────────────────────────────────
+// Issuance log + printable PDF source for the certificates that drive a
+// huge OPD volume at the RHU/BHS: school excuse, fitness-to-work, sanitary
+// permit, drug test, medical clearance. Each row is one issued certificate;
+// the certificate_number is auto-formatted (e.g. "BHS-2026-04-001") so the
+// physical paper file matches the digital record.
+export const CERTIFICATE_TYPES = [
+  "SCHOOL",            // school excuse / medical certificate
+  "FITNESS_TO_WORK",   // pre-employment / return-to-work
+  "SANITARY_PERMIT",   // food handler health card
+  "DRUG_TEST_RHU",     // RHU-issued drug test result (limited)
+  "MEDICAL_CLEARANCE", // pre-procedure / pre-travel
+  "DEATH_NOTICE",      // medical portion of death certificate
+  "BARANGAY_HEALTH",   // barangay clearance (health portion)
+  "OTHER",
+] as const;
+export type CertificateType = typeof CERTIFICATE_TYPES[number];
+
+export const medicalCertificates = pgTable("medical_certificates", {
+  id: serial("id").primaryKey(),
+  certificateNumber: text("certificate_number").notNull(), // e.g. "BHS-2026-04-001"
+  certType: text("cert_type").$type<CertificateType>().notNull(),
+  // Patient
+  patientName: text("patient_name").notNull(),
+  patientAge: integer("patient_age"),
+  patientSex: text("patient_sex"),
+  barangay: text("barangay").notNull(),
+  addressLine: text("address_line"),
+  // Document
+  issueDate: text("issue_date").notNull(),
+  validUntil: text("valid_until"),
+  purpose: text("purpose"),                                // free text
+  findings: text("findings"),                              // clinical findings
+  // Provenance
+  signedByUserId: varchar("signed_by_user_id"),
+  signedByName: text("signed_by_name"),                    // denormalized for PDF
+  signedByTitle: text("signed_by_title"),                  // e.g. "RHU Nurse / MHO"
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+export const insertMedicalCertificateSchema = createInsertSchema(medicalCertificates)
+  .omit({ id: true, createdAt: true, certificateNumber: true })
+  .extend({
+    certType: z.enum(CERTIFICATE_TYPES),
+  });
+export type MedicalCertificate = typeof medicalCertificates.$inferSelect;
+export type InsertMedicalCertificate = z.infer<typeof insertMedicalCertificateSchema>;
+
+// ─── Phase 12: campaign tally sheets ────────────────────────────────────────
+// Mass / event-based campaigns kept separate from the regular EPI / nutrition
+// flows so a Garantisadong Pambata round doesn't pollute the routine
+// children registry. Tallies live as a jsonb so each campaign type can carry
+// its own count fields without schema churn.
+export const CAMPAIGN_TYPES = [
+  "GARANTISADONG_PAMBATA",   // biannual: Vit A + deworming + immunization catch-up
+  "OPERATION_TIMBANG_PLUS",  // annual: weight + height of all 0–59 mo
+  "MASS_IMMUNIZATION_SIA",   // measles-rubella SIA, OPV mop-up, etc.
+  "MASS_DEWORMING",          // school-based mass deworming
+  "ADULT_VACCINATION_DAY",   // flu / pneumococcal / Td / COVID booster days
+  "OTHER",
+] as const;
+export type CampaignType = typeof CAMPAIGN_TYPES[number];
+
+export const campaignTallies = pgTable("campaign_tallies", {
+  id: serial("id").primaryKey(),
+  campaignType: text("campaign_type").$type<CampaignType>().notNull(),
+  campaignName: text("campaign_name").notNull(),  // e.g. "April 2026 Garantisadong Pambata"
+  campaignDate: text("campaign_date").notNull(),  // YYYY-MM-DD
+  barangay: text("barangay").notNull(),
+  // Per-type counts as jsonb. Common keys per type:
+  //   GARANTISADONG_PAMBATA: { vitA6_11mo, vitA12_59mo, dewormed12_59mo, mnp6_23mo }
+  //   OPERATION_TIMBANG_PLUS: { weighed0_59mo, samFound, mamFound, normal }
+  //   MASS_IMMUNIZATION_SIA: { vaccine, dosesGiven, target }
+  //   MASS_DEWORMING: { dewormed1_5y, dewormed6_12y }
+  //   ADULT_VACCINATION_DAY: { vaccine, dosesGiven, target }
+  tallies: jsonb("tallies").$type<Record<string, number | string>>().default({}),
+  totalServed: integer("total_served").notNull().default(0),
+  conductedByUserId: varchar("conducted_by_user_id"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+export const insertCampaignTallySchema = createInsertSchema(campaignTallies)
+  .omit({ id: true, createdAt: true })
+  .extend({
+    campaignType: z.enum(CAMPAIGN_TYPES),
+  });
+export type CampaignTally = typeof campaignTallies.$inferSelect;
+export type InsertCampaignTally = z.infer<typeof insertCampaignTallySchema>;
+
 // === M1 TEMPLATE VERSIONS (Template-driven reporting) ===
 export const m1TemplateVersions = pgTable("m1_template_versions", {
   id: serial("id").primaryKey(),

@@ -52,6 +52,8 @@ import {
   AlertOctagon,
   ClipboardCheck,
   Boxes,
+  FileText,
+  Megaphone,
 } from "lucide-react";
 import { useTheme } from "@/contexts/theme-context";
 import { useAuth, sidebarPermissions, ALL_ROLES } from "@/hooks/use-auth";
@@ -259,6 +261,20 @@ const NAV_ITEMS: NavItem[] = [
     activePrefixes: ["/restock-requests"],
   },
   {
+    title: "Certificates",
+    url: "/certificates",
+    icon: FileText,
+    roles: rolesFor("/certificates"),
+    activePrefixes: ["/certificates"],
+  },
+  {
+    title: "Campaigns",
+    url: "/campaigns",
+    icon: Megaphone,
+    roles: rolesFor("/campaigns"),
+    activePrefixes: ["/campaigns"],
+  },
+  {
     title: "Clinic Check-up",
     url: "/patient-checkup",
     icon: ClipboardPlus,
@@ -307,6 +323,8 @@ const TL_LAYOUT: SidebarLayout = [
     { kind: "group", key: "surveillance" },
     { kind: "item",  url: "/patient-checkup" },
     { kind: "item",  url: "/referrals" },
+    { kind: "item",  url: "/certificates" },
+    { kind: "item",  url: "/campaigns" },
   ],
   // Stock — TL view of inventory + restock requests they file
   [
@@ -347,6 +365,8 @@ const MGMT_LAYOUT: SidebarLayout = [
     { kind: "group", key: "daily-ops" },
     { kind: "group", key: "surveillance" },
     { kind: "item",  url: "/patient-checkup" },
+    { kind: "item",  url: "/certificates" },
+    { kind: "item",  url: "/campaigns" },
     { kind: "item",  url: "/calendar" },
     { kind: "item",  url: "/nutrition" },
     { kind: "item",  url: "/messages" },

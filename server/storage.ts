@@ -3260,6 +3260,63 @@ export class DatabaseStorage implements IStorage {
         ON inventory_requests (status, urgency, requested_at DESC)
     `);
 
+    // Phase 12 — medical certificates issuance log. The certificate_number
+    // column gets a unique index so duplicate prints can't reuse a number.
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS medical_certificates (
+        id                       SERIAL PRIMARY KEY,
+        certificate_number       TEXT NOT NULL,
+        cert_type                TEXT NOT NULL,
+        patient_name             TEXT NOT NULL,
+        patient_age              INTEGER,
+        patient_sex              TEXT,
+        barangay                 TEXT NOT NULL,
+        address_line             TEXT,
+        issue_date               TEXT NOT NULL,
+        valid_until              TEXT,
+        purpose                  TEXT,
+        findings                 TEXT,
+        signed_by_user_id        VARCHAR,
+        signed_by_name           TEXT,
+        signed_by_title          TEXT,
+        notes                    TEXT,
+        created_at               TIMESTAMP NOT NULL DEFAULT NOW()
+      )
+    `);
+    await db.execute(sql`
+      CREATE UNIQUE INDEX IF NOT EXISTS medical_certificates_number_idx
+        ON medical_certificates (certificate_number)
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS medical_certificates_barangay_date_idx
+        ON medical_certificates (barangay, issue_date DESC)
+    `);
+
+    // Phase 12 — campaign tally sheets. tallies jsonb varies per
+    // campaign_type so the schema stays stable across catalog changes.
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS campaign_tallies (
+        id                       SERIAL PRIMARY KEY,
+        campaign_type            TEXT NOT NULL,
+        campaign_name            TEXT NOT NULL,
+        campaign_date            TEXT NOT NULL,
+        barangay                 TEXT NOT NULL,
+        tallies                  JSONB DEFAULT '{}'::jsonb,
+        total_served             INTEGER NOT NULL DEFAULT 0,
+        conducted_by_user_id     VARCHAR,
+        notes                    TEXT,
+        created_at               TIMESTAMP NOT NULL DEFAULT NOW()
+      )
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS campaign_tallies_type_date_idx
+        ON campaign_tallies (campaign_type, campaign_date DESC)
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS campaign_tallies_barangay_date_idx
+        ON campaign_tallies (barangay, campaign_date DESC)
+    `);
+
     // Idempotent backfill: every health_stations row needs a facilityType now
     // that REFER_RHU records the referred facility. Runs on every startup but
     // becomes a no-op once every row has a type.
