@@ -1,7 +1,9 @@
+import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ChevronRight, AlertCircle, Clock, Calendar, CheckCircle2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { ChevronRight, ChevronLeft, AlertCircle, Clock, Calendar, CheckCircle2 } from "lucide-react";
 
 export interface WorklistItem {
   id: string;
@@ -32,14 +34,30 @@ const PROGRAM_LABEL: Record<ProgramKey, string> = {
   disease:      "Disease",
 };
 
+const PAGE_SIZE = 10;
+
 export function PriorityList({ items, programFilter }: PriorityListProps) {
   const filtered = programFilter === "all"
     ? items
     : items.filter((i) => i.program === programFilter);
 
-  const overdue  = filtered.filter((i) => i.severity === "danger");
-  const dueToday = filtered.filter((i) => i.severity === "warning");
-  const upcoming = filtered.filter((i) => i.severity === "info");
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const [page, setPage] = useState(1);
+
+  // Reset to page 1 when the filter changes or the page would exceed totalPages
+  // (e.g. items get marked done elsewhere and the list shrinks).
+  useEffect(() => { setPage(1); }, [programFilter]);
+  useEffect(() => { if (page > totalPages) setPage(totalPages); }, [page, totalPages]);
+
+  const startIdx = (page - 1) * PAGE_SIZE;
+  const visible  = filtered.slice(startIdx, startIdx + PAGE_SIZE);
+
+  // Sections are computed from the visible page so the urgency grouping
+  // still reads correctly when paginated. Page 1 will always lead with
+  // Overdue items because the input list is severity-sorted upstream.
+  const overdue  = visible.filter((i) => i.severity === "danger");
+  const dueToday = visible.filter((i) => i.severity === "warning");
+  const upcoming = visible.filter((i) => i.severity === "info");
 
   if (filtered.length === 0) {
     return (
@@ -92,6 +110,36 @@ export function PriorityList({ items, programFilter }: PriorityListProps) {
           items={upcoming}
           testId="section-upcoming"
         />
+      )}
+      {filtered.length > PAGE_SIZE && (
+        <div className="flex items-center justify-between gap-3 px-1" data-testid="priority-pagination">
+          <span className="text-sm text-muted-foreground">
+            Showing {startIdx + 1}–{Math.min(startIdx + PAGE_SIZE, filtered.length)} of {filtered.length}
+          </span>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page === 1}
+              data-testid="page-prev"
+            >
+              <ChevronLeft className="w-4 h-4 mr-1" /> Prev
+            </Button>
+            <span className="text-sm font-medium tabular-nums">
+              Page {page} of {totalPages}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={page === totalPages}
+              data-testid="page-next"
+            >
+              Next <ChevronRight className="w-4 h-4 ml-1" />
+            </Button>
+          </div>
+        </div>
       )}
     </div>
   );
