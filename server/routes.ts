@@ -9,7 +9,8 @@ import { z } from "zod";
 import { setupAuth, registerAuthRoutes } from "./auth";
 import { registerAdminRoutes } from "./routes/admin";
 import { loadUserInfo, requireAuth, requireRole, createAuditLog } from "./middleware/rbac";
-import { UserRole, auditLogs, deathReviews, DEATH_REVIEW_STATUSES, aefiEvents, insertAefiEventSchema, outbreaks, OUTBREAK_STATUSES, consults, medicineInventory, medicationDispensings, insertMedicationDispensingSchema, inventoryRequests, insertInventoryRequestSchema, RESTOCK_STATUSES, SERVICE_CODES, medicalCertificates, insertMedicalCertificateSchema, CERTIFICATE_TYPES, campaignTallies, insertCampaignTallySchema, CAMPAIGN_TYPES } from "@shared/schema";
+import { UserRole, auditLogs, deathReviews, DEATH_REVIEW_STATUSES, aefiEvents, insertAefiEventSchema, outbreaks, OUTBREAK_STATUSES, consults, medicineInventory, medicationDispensings, insertMedicationDispensingSchema, inventoryRequests, insertInventoryRequestSchema, RESTOCK_STATUSES, SERVICE_CODES, medicalCertificates, insertMedicalCertificateSchema, CERTIFICATE_TYPES, campaignTallies, insertCampaignTallySchema, CAMPAIGN_TYPES, konsultaEnrollments, insertKonsultaEnrollmentSchema, KONSULTA_ENROLLMENT_STATUSES, konsultaEncounters, insertKonsultaEncounterSchema, KONSULTA_ENCOUNTER_STATUSES, philhealthSubmissions } from "@shared/schema";
+import * as philhealth from "./integrations/philhealth";
 import { ensureReportsRegistered, listReports, getReport } from "./reports";
 import { monthRange, quarterRange, annualRange, customRange } from "./reports/types";
 
@@ -2724,6 +2725,306 @@ export async function registerRoutes(
         before.barangay, before, updated, req,
       );
       res.json(updated);
+    }),
+  );
+
+  // === PHILHEALTH KONSULTA (Phase 13) ===
+  // Enrollment + encounter capture + submission queue. The actual API call
+  // lives in server/integrations/philhealth.ts and is currently stubbed
+  // (returns API_KEYS_REQUIRED). Until creds arrive, enqueued rows stay
+  // in PENDING_SUBMISSION and the admin panel surfaces what's missing.
+
+  // GET /api/konsulta/status — diagnostics for the admin panel.
+  app.get("/api/konsulta/status", loadUserInfo, requireAuth,
+    requireRole(UserRole.SYSTEM_ADMIN, UserRole.MHO, UserRole.SHA),
+    ar(async (_req, res) => {
+      res.json({
+        configured: philhealth.isConfigured(),
+        missingEnvVars: philhealth.missingEnvVars(),
+        requiredEnvVars: philhealth.REQUIRED_ENV_VARS,
+      });
+    }),
+  );
+
+  // GET /api/konsulta/enrollments — TL scoped to own barangay; MGMT all.
+  app.get("/api/konsulta/enrollments", loadUserInfo, requireAuth, ar(async (req, res) => {
+    const conds: any[] = [];
+    if (req.userInfo?.role === UserRole.TL) {
+      const assigned = req.userInfo.assignedBarangays;
+      if (assigned.length === 0) return res.json([]);
+      conds.push(eq(konsultaEnrollments.barangay, assigned[0]));
+    } else if (req.query.barangay) {
+      conds.push(eq(konsultaEnrollments.barangay, String(req.query.barangay)));
+    }
+    if (req.query.status) conds.push(eq(konsultaEnrollments.status, String(req.query.status) as any));
+    const rows = await db.select().from(konsultaEnrollments)
+      .where(conds.length ? and(...conds) : undefined)
+      .orderBy(desc(konsultaEnrollments.createdAt))
+      .limit(500);
+    res.json(rows);
+  }));
+
+  // POST /api/konsulta/enrollments — TL captures the MDR locally; the row
+  // is enqueued in philhealth_submissions for upstream submission once
+  // API keys are in place.
+  app.post("/api/konsulta/enrollments", loadUserInfo, requireAuth,
+    requireRole(UserRole.TL),
+    ar(async (req, res) => {
+      const parsed = insertKonsultaEnrollmentSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: "Invalid enrollment", issues: parsed.error.issues });
+      }
+      const input = parsed.data;
+      if (!req.userInfo!.assignedBarangays.includes(input.barangay)) {
+        return res.status(403).json({ message: "Access denied to this barangay" });
+      }
+      const [created] = await db.insert(konsultaEnrollments).values({
+        ...input,
+        status: "DRAFT",
+        syncStatus: "UNSYNCED",
+        recordedByUserId: req.userInfo!.id,
+      } as any).returning();
+      // Snapshot what would be sent to PhilHealth and queue it.
+      await db.insert(philhealthSubmissions).values({
+        entityType: "ENROLLMENT",
+        entityId: created.id,
+        payload: philhealth.buildMDRPayload(created) as any,
+      } as any);
+      await db.update(konsultaEnrollments)
+        .set({ syncStatus: "PENDING_SUBMISSION" })
+        .where(eq(konsultaEnrollments.id, created.id));
+      await createAuditLog(
+        req.userInfo!.id, req.userInfo!.role,
+        "ENROLL", "KONSULTA_ENROLLMENT", String(created.id),
+        created.barangay, undefined,
+        { name: `${created.firstName} ${created.lastName}`, pin: created.pin ?? null },
+        req,
+      );
+      res.status(201).json(created);
+    }),
+  );
+
+  // PATCH /api/konsulta/enrollments/:id — update status (e.g. cancel) or
+  // back-fill PIN once PhilHealth issues one. MGMT can also mark ACTIVE
+  // when a paper ACK arrives ahead of the API integration.
+  app.patch("/api/konsulta/enrollments/:id", loadUserInfo, requireAuth,
+    ar(async (req, res) => {
+      const id = parseId(req.params.id, res); if (id === null) return;
+      const before = (await db.select().from(konsultaEnrollments).where(eq(konsultaEnrollments.id, id)))[0];
+      if (!before) return res.status(404).json({ message: "Enrollment not found" });
+      // RBAC: TL only on own barangay; MGMT anywhere.
+      if (req.userInfo?.role === UserRole.TL) {
+        if (!req.userInfo.assignedBarangays.includes(before.barangay)) {
+          return res.status(403).json({ message: "Access denied to this barangay" });
+        }
+      }
+      const set: Record<string, any> = {};
+      const newStatus = req.body?.status as string | undefined;
+      if (newStatus) {
+        if (!KONSULTA_ENROLLMENT_STATUSES.includes(newStatus as any)) {
+          return res.status(400).json({ message: `Invalid status; allowed: ${KONSULTA_ENROLLMENT_STATUSES.join(", ")}` });
+        }
+        set.status = newStatus;
+      }
+      if (req.body?.pin !== undefined) set.pin = String(req.body.pin || "") || null;
+      if (req.body?.philhealthAckRef !== undefined) set.philhealthAckRef = String(req.body.philhealthAckRef);
+      if (req.body?.validFrom !== undefined) set.validFrom = String(req.body.validFrom);
+      if (req.body?.validUntil !== undefined) set.validUntil = String(req.body.validUntil);
+      if (req.body?.notes !== undefined) set.notes = String(req.body.notes);
+      const [updated] = await db.update(konsultaEnrollments).set(set).where(eq(konsultaEnrollments.id, id)).returning();
+      await createAuditLog(
+        req.userInfo!.id, req.userInfo!.role,
+        newStatus ? "KONSULTA_STATUS_CHANGE" : "UPDATE",
+        "KONSULTA_ENROLLMENT", String(id),
+        before.barangay, before, updated, req,
+      );
+      res.json(updated);
+    }),
+  );
+
+  // GET /api/konsulta/encounters — billable visits.
+  app.get("/api/konsulta/encounters", loadUserInfo, requireAuth, ar(async (req, res) => {
+    const conds: any[] = [];
+    if (req.userInfo?.role === UserRole.TL) {
+      const assigned = req.userInfo.assignedBarangays;
+      if (assigned.length === 0) return res.json([]);
+      conds.push(eq(konsultaEncounters.barangay, assigned[0]));
+    }
+    if (req.query.enrollmentId) conds.push(eq(konsultaEncounters.enrollmentId, Number(req.query.enrollmentId)));
+    if (req.query.status) conds.push(eq(konsultaEncounters.status, String(req.query.status) as any));
+    const rows = await db.select().from(konsultaEncounters)
+      .where(conds.length ? and(...conds) : undefined)
+      .orderBy(desc(konsultaEncounters.encounterDate))
+      .limit(500);
+    res.json(rows);
+  }));
+
+  app.post("/api/konsulta/encounters", loadUserInfo, requireAuth,
+    requireRole(UserRole.TL),
+    ar(async (req, res) => {
+      const parsed = insertKonsultaEncounterSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: "Invalid encounter", issues: parsed.error.issues });
+      }
+      const input = parsed.data;
+      if (!req.userInfo!.assignedBarangays.includes(input.barangay)) {
+        return res.status(403).json({ message: "Access denied to this barangay" });
+      }
+      // Sanity: enrollment must exist + be in same barangay.
+      const enr = (await db.select().from(konsultaEnrollments).where(eq(konsultaEnrollments.id, input.enrollmentId)))[0];
+      if (!enr) return res.status(404).json({ message: "Enrollment not found" });
+      if (enr.barangay !== input.barangay) {
+        return res.status(400).json({ message: "Encounter barangay must match enrollment barangay" });
+      }
+      const [created] = await db.insert(konsultaEncounters).values({
+        ...input,
+        status: "DRAFT",
+        syncStatus: "UNSYNCED",
+        recordedByUserId: req.userInfo!.id,
+      } as any).returning();
+      await createAuditLog(
+        req.userInfo!.id, req.userInfo!.role,
+        "CREATE", "KONSULTA_ENCOUNTER", String(created.id),
+        created.barangay, undefined,
+        { enrollmentId: created.enrollmentId, services: created.serviceCodes }, req,
+      );
+      res.status(201).json(created);
+    }),
+  );
+
+  // PATCH advances encounter status (DRAFT → READY → SUBMITTED → PAID/REJECTED).
+  // READY enqueues the encounter into philhealth_submissions.
+  app.patch("/api/konsulta/encounters/:id", loadUserInfo, requireAuth,
+    ar(async (req, res) => {
+      const id = parseId(req.params.id, res); if (id === null) return;
+      const before = (await db.select().from(konsultaEncounters).where(eq(konsultaEncounters.id, id)))[0];
+      if (!before) return res.status(404).json({ message: "Encounter not found" });
+      const set: Record<string, any> = {};
+      const newStatus = req.body?.status as string | undefined;
+      if (newStatus) {
+        if (!KONSULTA_ENCOUNTER_STATUSES.includes(newStatus as any)) {
+          return res.status(400).json({ message: `Invalid status; allowed: ${KONSULTA_ENCOUNTER_STATUSES.join(", ")}` });
+        }
+        set.status = newStatus;
+      }
+      if (req.body?.notes !== undefined) set.notes = String(req.body.notes);
+      const [updated] = await db.update(konsultaEncounters).set(set).where(eq(konsultaEncounters.id, id)).returning();
+      // Enqueue when promoted to READY for the first time.
+      if (newStatus === "READY" && before.status !== "READY") {
+        await db.insert(philhealthSubmissions).values({
+          entityType: "ENCOUNTER",
+          entityId: updated.id,
+          payload: philhealth.buildEncounterPayload(updated) as any,
+        } as any);
+        await db.update(konsultaEncounters)
+          .set({ syncStatus: "PENDING_SUBMISSION" })
+          .where(eq(konsultaEncounters.id, id));
+      }
+      await createAuditLog(
+        req.userInfo!.id, req.userInfo!.role,
+        newStatus ? "KONSULTA_ENCOUNTER_STATUS_CHANGE" : "UPDATE",
+        "KONSULTA_ENCOUNTER", String(id),
+        before.barangay, before, updated, req,
+      );
+      res.json(updated);
+    }),
+  );
+
+  // GET /api/konsulta/submissions — outbox view (admin / MGMT).
+  app.get("/api/konsulta/submissions", loadUserInfo, requireAuth,
+    requireRole(UserRole.SYSTEM_ADMIN, UserRole.MHO, UserRole.SHA),
+    ar(async (req, res) => {
+      const status = req.query.status ? String(req.query.status) : undefined;
+      const conds: any[] = [];
+      if (status) conds.push(eq(philhealthSubmissions.status, status as any));
+      const rows = await db.select().from(philhealthSubmissions)
+        .where(conds.length ? and(...conds) : undefined)
+        .orderBy(desc(philhealthSubmissions.createdAt))
+        .limit(500);
+      res.json(rows);
+    }),
+  );
+
+  // POST /api/konsulta/submissions/drain — admin trigger that walks the
+  // queue and attempts to submit each PENDING row. Safe to call when the
+  // integration is still stubbed: every row will fail with API_KEYS_
+  // REQUIRED and stay PENDING; once keys are configured the same call
+  // drains the backlog.
+  app.post("/api/konsulta/submissions/drain", loadUserInfo, requireAuth,
+    requireRole(UserRole.SYSTEM_ADMIN),
+    ar(async (req, res) => {
+      const pending = await db.select().from(philhealthSubmissions)
+        .where(eq(philhealthSubmissions.status, "PENDING_SUBMISSION" as any));
+      let submitted = 0;
+      let failed = 0;
+      for (const row of pending) {
+        let result: philhealth.PhilHealthResult;
+        if (row.entityType === "ENROLLMENT") {
+          const ent = (await db.select().from(konsultaEnrollments).where(eq(konsultaEnrollments.id, row.entityId)))[0];
+          if (!ent) continue;
+          result = await philhealth.submitMDR(ent);
+        } else {
+          const ent = (await db.select().from(konsultaEncounters).where(eq(konsultaEncounters.id, row.entityId)))[0];
+          if (!ent) continue;
+          result = await philhealth.submitEncounter(ent);
+        }
+        if (result.ok) {
+          submitted += 1;
+          await db.update(philhealthSubmissions)
+            .set({
+              status: "CONFIRMED",
+              submittedAt: new Date(),
+              responseJson: result.data as any ?? null,
+            })
+            .where(eq(philhealthSubmissions.id, row.id));
+          // Mirror the ack onto the source row.
+          if (row.entityType === "ENROLLMENT") {
+            await db.update(konsultaEnrollments)
+              .set({ syncStatus: "CONFIRMED", syncedAt: new Date(), philhealthAckRef: result.ackRef, status: "ACTIVE" })
+              .where(eq(konsultaEnrollments.id, row.entityId));
+          } else {
+            await db.update(konsultaEncounters)
+              .set({ syncStatus: "CONFIRMED", syncedAt: new Date(), philhealthClaimRef: result.ackRef, status: "SUBMITTED" })
+              .where(eq(konsultaEncounters.id, row.entityId));
+          }
+        } else {
+          failed += 1;
+          // Retryable errors stay PENDING for the next drain; non-retryable
+          // become FAILED so admins can see what to fix.
+          await db.update(philhealthSubmissions)
+            .set({
+              status: result.retryable ? "PENDING_SUBMISSION" : "FAILED",
+              errorMessage: result.error,
+              retryCount: (row.retryCount ?? 0) + 1,
+            })
+            .where(eq(philhealthSubmissions.id, row.id));
+          if (!result.retryable) {
+            if (row.entityType === "ENROLLMENT") {
+              await db.update(konsultaEnrollments)
+                .set({ syncStatus: "FAILED", errorMessage: result.error })
+                .where(eq(konsultaEnrollments.id, row.entityId));
+            } else {
+              await db.update(konsultaEncounters)
+                .set({ syncStatus: "FAILED", errorMessage: result.error })
+                .where(eq(konsultaEncounters.id, row.entityId));
+            }
+          }
+        }
+      }
+      await createAuditLog(
+        req.userInfo!.id, req.userInfo!.role,
+        "KONSULTA_DRAIN", "PHILHEALTH_SUBMISSIONS", undefined,
+        undefined, undefined,
+        { processed: pending.length, submitted, failed, configured: philhealth.isConfigured() },
+        req,
+      );
+      res.json({
+        processed: pending.length,
+        submitted,
+        failed,
+        configured: philhealth.isConfigured(),
+        missingEnvVars: philhealth.missingEnvVars(),
+      });
     }),
   );
 
