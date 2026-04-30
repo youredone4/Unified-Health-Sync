@@ -23,6 +23,9 @@ import {
   deathReviews,
   aefiEvents,
   auditLogs,
+  fpServiceRecords,
+  ncdScreenings,
+  children,
 } from "@shared/schema";
 
 const SYSTEM_USER_ID = "system-scheduler";
@@ -404,6 +407,130 @@ async function checkAefiReportSlas(): Promise<AlertFinding[]> {
   return findings;
 }
 
+// ─── Phase 8: defaulter detectors ────────────────────────────────────────────
+// FP, immunization, and NCD follow-up gaps are surfaced as SYSTEM_ALERTs so
+// they appear in the MGMT inbox (Phase 7) alongside referrals and AEFI signals.
+// Resupply-cadence thresholds follow DOH/POPCOM guidance for FP and the EPI
+// schedule for childhood immunization. NCD follow-up assumes the standard
+// 3-month cycle for diagnosed + medicated patients.
+
+const FP_RESUPPLY_DAYS: Record<string, number> = {
+  DMPA:        90,   // injectable, every 12 weeks
+  PILLS_POP:   35,   // monthly
+  PILLS_COC:   35,
+  IMPLANT:     400,  // annual check
+  IUD_INTERVAL:400,
+  IUD_PP:      400,
+};
+
+/** FP missed visit: CURRENT_USER on a resupply method whose latest record is past the cadence. */
+async function checkFpMissedVisits(): Promise<AlertFinding[]> {
+  const records = await db
+    .select()
+    .from(fpServiceRecords)
+    .where(sql`fp_status = 'CURRENT_USER'`);
+  // Reduce to latest record per (patientName, barangay, fpMethod)
+  const latest = new Map<string, typeof records[number]>();
+  for (const r of records) {
+    const key = `${r.patientName}|${r.barangay}|${r.fpMethod}`;
+    const prev = latest.get(key);
+    if (!prev || r.dateStarted > prev.dateStarted) latest.set(key, r);
+  }
+  const todayMs = today().getTime();
+  const findings: AlertFinding[] = [];
+  for (const r of Array.from(latest.values())) {
+    const threshold = FP_RESUPPLY_DAYS[r.fpMethod];
+    if (!threshold) continue;
+    const last = new Date(r.dateStarted).getTime();
+    if (Number.isNaN(last)) continue;
+    const ageDays = Math.floor((todayMs - last) / (1000 * 60 * 60 * 24));
+    if (ageDays > threshold) {
+      findings.push({
+        entityType: "FP_DEFAULTER",
+        entityId: String(r.id),
+        barangayName: r.barangay,
+        reason: `FP resupply overdue — ${r.fpMethod} (last visit ${r.dateStarted}, ${ageDays}d ago)`,
+        details: { patientName: r.patientName, fpMethod: r.fpMethod, lastVisit: r.dateStarted, ageDays },
+      });
+    }
+  }
+  return findings;
+}
+
+/** Immunization missed dose: child past the EPI age for a dose with no record of it. */
+// Each milestone: vaccine key on the children.vaccines jsonb, age in months at
+// which the dose is due, with a 30-day grace period before we alert.
+const EPI_MILESTONES: { key: string; ageMonths: number; label: string }[] = [
+  { key: "bcg",    ageMonths: 1,  label: "BCG" },
+  { key: "penta1", ageMonths: 3,  label: "Penta-1" },
+  { key: "penta2", ageMonths: 4,  label: "Penta-2" },
+  { key: "penta3", ageMonths: 5,  label: "Penta-3" },
+  { key: "opv1",   ageMonths: 3,  label: "OPV-1" },
+  { key: "opv2",   ageMonths: 4,  label: "OPV-2" },
+  { key: "opv3",   ageMonths: 5,  label: "OPV-3" },
+  { key: "mr1",    ageMonths: 10, label: "MR-1" },
+  { key: "mr2",    ageMonths: 13, label: "MR-2" },
+];
+
+async function checkImmunizationMissedDoses(): Promise<AlertFinding[]> {
+  const kids = await db.select().from(children);
+  const now = today();
+  const findings: AlertFinding[] = [];
+  for (const c of kids) {
+    if (!c.dob) continue;
+    const dob = new Date(c.dob);
+    if (Number.isNaN(dob.getTime())) continue;
+    const ageMonths = (now.getFullYear() - dob.getFullYear()) * 12 + (now.getMonth() - dob.getMonth());
+    if (ageMonths > 24) continue; // EPI primary series done by 24m
+    const v = (c.vaccines ?? {}) as Record<string, string | undefined>;
+    const missing: string[] = [];
+    for (const m of EPI_MILESTONES) {
+      if (ageMonths >= m.ageMonths && !v[m.key]) missing.push(m.label);
+    }
+    if (missing.length > 0) {
+      findings.push({
+        entityType: "EPI_DEFAULTER",
+        entityId: String(c.id),
+        barangayName: c.barangay,
+        reason: `Immunization overdue — missing ${missing.join(", ")} (age ${ageMonths}m)`,
+        details: { childName: c.name, ageMonths, missing },
+      });
+    }
+  }
+  return findings;
+}
+
+/** NCD missed follow-up: diagnosed + medicated patient with no visit in >100d. */
+async function checkNcdMissedFollowUps(): Promise<AlertFinding[]> {
+  const records = await db
+    .select()
+    .from(ncdScreenings)
+    .where(sql`diagnosed = true AND meds_provided = true`);
+  const latest = new Map<string, typeof records[number]>();
+  for (const r of records) {
+    const key = `${r.patientName}|${r.barangay}|${r.condition}`;
+    const prev = latest.get(key);
+    if (!prev || r.screenDate > prev.screenDate) latest.set(key, r);
+  }
+  const todayMs = today().getTime();
+  const findings: AlertFinding[] = [];
+  for (const r of Array.from(latest.values())) {
+    const last = new Date(r.screenDate).getTime();
+    if (Number.isNaN(last)) continue;
+    const ageDays = Math.floor((todayMs - last) / (1000 * 60 * 60 * 24));
+    if (ageDays > 100) {
+      findings.push({
+        entityType: "NCD_DEFAULTER",
+        entityId: String(r.id),
+        barangayName: r.barangay,
+        reason: `NCD follow-up overdue — ${r.condition} (last visit ${r.screenDate}, ${ageDays}d ago)`,
+        details: { patientName: r.patientName, condition: r.condition, lastVisit: r.screenDate, ageDays },
+      });
+    }
+  }
+  return findings;
+}
+
 /** Run all daily 6 AM alerts. */
 export async function runDailyAlerts(): Promise<{ jobName: string; count: number }[]> {
   const results: { jobName: string; count: number }[] = [];
@@ -416,6 +543,9 @@ export async function runDailyAlerts(): Promise<{ jobName: string; count: number
     ["outbreak-cluster", checkClusterOutbreaks],
     ["death-review-deadlines", checkDeathReviewDeadlines],
     ["aefi-report-slas", checkAefiReportSlas],
+    ["fp-missed-visit", checkFpMissedVisits],
+    ["immunization-missed-dose", checkImmunizationMissedDoses],
+    ["ncd-missed-follow-up", checkNcdMissedFollowUps],
   ] as const) {
     try {
       const findings = await fn();
