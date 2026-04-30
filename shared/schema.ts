@@ -1245,6 +1245,59 @@ export const insertSchoolImmunizationSchema = createInsertSchema(schoolImmunizat
 export type SchoolImmunization = typeof schoolImmunizations.$inferSelect;
 export type InsertSchoolImmunization = z.infer<typeof insertSchoolImmunizationSchema>;
 
+// === VACCINATIONS — per-dose registry (issue #137 Phase 1) ===
+// Unified dose-level surface that future phases hang off of. Today this
+// table is a *mirror*: the migration backfills it from children.vaccines
+// (JSONB, ages 0-23 months) and from school_immunizations (HPV/Td). The
+// existing M1 D-section compute path keeps reading the original sources
+// until a later phase swaps it over, so M1 numbers stay numerically
+// identical at this phase boundary.
+//
+// Future phases (per issue #137):
+//   - Phase 2: medicine_inventory gains lot_number / expiration_date so
+//     lot_number / expiration_date / medicine_inventory_id here become
+//     populated on new inserts.
+//   - Phase 3: aefi_events.vaccination_id FK lands; AEFI events link to
+//     the exact dose (and through it: lot, fridge, administering user).
+//   - Phase 6: M1 D-section compute path prefers this table when present;
+//     falls back to JSONB only for ungroomed historical rows.
+export const VACCINE_KINDS = [
+  "BCG",   // Bacille Calmette-Guérin
+  "HEP_B", // Hepatitis B birth dose
+  "PENTA", // Pentavalent (DPT-HepB-Hib), doses 1-4
+  "OPV",   // Oral polio, doses 1-4
+  "IPV",   // Injectable polio, doses 1-2
+  "MR",    // Measles-Rubella, doses 1-2
+  "HPV",   // Human papillomavirus (school-based), doses 1-3
+  "TD",    // Tetanus-diphtheria booster (school-based)
+] as const;
+export type VaccineKind = typeof VACCINE_KINDS[number];
+
+export const vaccinations = pgTable("vaccinations", {
+  id: serial("id").primaryKey(),
+  // Exactly one of these two FKs is set. CHECK constraint enforced at
+  // the DB level (see migration in storage.ts). Cascade delete so a
+  // deleted child / school roster row doesn't leave orphan doses.
+  childId: integer("child_id").references(() => children.id, { onDelete: "cascade" }),
+  schoolImmunizationId: integer("school_immunization_id").references(() => schoolImmunizations.id, { onDelete: "cascade" }),
+  vaccine: text("vaccine").$type<VaccineKind>().notNull(),
+  doseNumber: integer("dose_number").notNull(),     // 1, 2, 3, 4 — vaccine-dependent maximum
+  vaccinationDate: text("vaccination_date").notNull(),
+  // Phase 2 targets — left null on backfilled rows; new inserts can set
+  // them once the inventory side gains lot tracking.
+  lotNumber: text("lot_number"),
+  expirationDate: text("expiration_date"),
+  medicineInventoryId: integer("medicine_inventory_id").references(() => medicineInventory.id),
+  administeredByUserId: varchar("administered_by_user_id"),
+  barangay: text("barangay").notNull(),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertVaccinationSchema = createInsertSchema(vaccinations).omit({ id: true, createdAt: true });
+export type Vaccination = typeof vaccinations.$inferSelect;
+export type InsertVaccination = z.infer<typeof insertVaccinationSchema>;
+
 // === ORAL HEALTH VISITS — feeds M1 Section ORAL ===
 // First-visit roster (per DOH Oral Health Program). Age bands:
 // 0-11m, 1-4y, 5-9y, 10-19y, 20-59y, 60+. Pregnant women tracked
