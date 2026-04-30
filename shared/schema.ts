@@ -1720,6 +1720,39 @@ export const VACCINE_PREVENTABLE_DISEASES = [
 ] as const;
 export type VaccinePreventableDisease = typeof VACCINE_PREVENTABLE_DISEASES[number];
 
+// Issue #137 Phase 4: investigation lifecycle.
+//
+// NOTIFIED        — TL just filed the report (default on insert).
+// INVESTIGATING   — MGMT picked it up; case officer assigned.
+// CLASSIFIED      — WHO causality decision recorded.
+// REPORTED_TO_FDA — DOH-FDA submission filed.
+// CLOSED          — final state; no further action.
+//
+// Mirrors the Death Reviews status pattern. The pre-existing
+// reportedToChd boolean is kept as a derived alias (true ⇔ status >=
+// REPORTED_TO_FDA) for backward compat with the SLA scheduler — it is
+// updated transactionally with status changes by the PATCH route.
+export const AEFI_STATUSES = [
+  "NOTIFIED",
+  "INVESTIGATING",
+  "CLASSIFIED",
+  "REPORTED_TO_FDA",
+  "CLOSED",
+] as const;
+export type AefiStatus = typeof AEFI_STATUSES[number];
+
+// WHO causality assessment (4-category framework). Captured at the
+// CLASSIFIED transition. Out-of-scope for this phase: the assistive UI
+// that walks the case officer through the algorithm — for now this is
+// a free pick by an MHO with the clinical context.
+export const WHO_CAUSALITY = [
+  "CONSISTENT_WITH_CAUSAL",      // A1: A causal association is consistent
+  "INDETERMINATE",               // A2: indeterminate
+  "INCONSISTENT_WITH_CAUSAL",    // A3: inconsistent
+  "UNCLASSIFIABLE",              // unclassifiable
+] as const;
+export type WhoCausality = typeof WHO_CAUSALITY[number];
+
 export const AEFI_OUTCOMES = [
   "RECOVERED",
   "RECOVERING",
@@ -1756,13 +1789,40 @@ export const aefiEvents = pgTable("aefi_events", {
   // SLA tracking
   reportedToChd: boolean("reported_to_chd").default(false),
   reportedToChdAt: timestamp("reported_to_chd_at"),
+  // Issue #137 Phase 4: investigation lifecycle. status defaults to
+  // NOTIFIED on insert; reportedToChd is kept in sync as a derived
+  // alias (true ⇔ status >= REPORTED_TO_FDA) by the PATCH route so the
+  // existing SLA scheduler keeps working. who_causality lands at the
+  // CLASSIFIED transition; fda_submission_id captures the manual FDA
+  // submission reference until a real API integration ships.
+  status: text("status").$type<AefiStatus>().notNull().default("NOTIFIED"),
+  whoCausality: text("who_causality").$type<WhoCausality>(),
+  investigatedByUserId: varchar("investigated_by_user_id"),
+  investigatedAt: timestamp("investigated_at"),
+  classifiedByUserId: varchar("classified_by_user_id"),
+  classifiedAt: timestamp("classified_at"),
+  fdaSubmissionId: text("fda_submission_id"),
+  fdaSubmittedAt: timestamp("fda_submitted_at"),
   // Provenance
   recordedByUserId: varchar("recorded_by_user_id"),
   notes: text("notes"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 export const insertAefiEventSchema = createInsertSchema(aefiEvents)
-  .omit({ id: true, createdAt: true, reportedToChdAt: true })
+  .omit({
+    id: true,
+    createdAt: true,
+    reportedToChdAt: true,
+    // Phase 4 lifecycle fields are MGMT-only via PATCH, never on insert.
+    status: true,
+    whoCausality: true,
+    investigatedByUserId: true,
+    investigatedAt: true,
+    classifiedByUserId: true,
+    classifiedAt: true,
+    fdaSubmissionId: true,
+    fdaSubmittedAt: true,
+  })
   .extend({
     sex: z.enum(["M", "F"]),
     severity: z.enum(AEFI_SEVERITIES),

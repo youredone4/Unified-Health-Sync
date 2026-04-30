@@ -3192,6 +3192,34 @@ export class DatabaseStorage implements IStorage {
     await db.execute(sql`CREATE INDEX IF NOT EXISTS aefi_events_vaccination_idx ON aefi_events (vaccination_id) WHERE vaccination_id IS NOT NULL`);
     await db.execute(sql`CREATE INDEX IF NOT EXISTS aefi_events_vpd_idx ON aefi_events (vaccine_preventable_disease, barangay, event_date) WHERE vaccine_preventable_disease IS NOT NULL`);
 
+    // Issue #137 Phase 4: AEFI investigation lifecycle.
+    //
+    // status drives a 5-state machine NOTIFIED → INVESTIGATING →
+    // CLASSIFIED → REPORTED_TO_FDA → CLOSED. The pre-existing
+    // reported_to_chd boolean is kept in sync transactionally with
+    // status changes (true ⇔ status >= REPORTED_TO_FDA) so the SLA
+    // scheduler keeps working without changes. Existing rows backfill
+    // from reported_to_chd: true → REPORTED_TO_FDA, false → NOTIFIED.
+    await db.execute(sql`ALTER TABLE aefi_events ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'NOTIFIED'`);
+    await db.execute(sql`ALTER TABLE aefi_events ADD COLUMN IF NOT EXISTS who_causality TEXT`);
+    await db.execute(sql`ALTER TABLE aefi_events ADD COLUMN IF NOT EXISTS investigated_by_user_id VARCHAR`);
+    await db.execute(sql`ALTER TABLE aefi_events ADD COLUMN IF NOT EXISTS investigated_at TIMESTAMP`);
+    await db.execute(sql`ALTER TABLE aefi_events ADD COLUMN IF NOT EXISTS classified_by_user_id VARCHAR`);
+    await db.execute(sql`ALTER TABLE aefi_events ADD COLUMN IF NOT EXISTS classified_at TIMESTAMP`);
+    await db.execute(sql`ALTER TABLE aefi_events ADD COLUMN IF NOT EXISTS fda_submission_id TEXT`);
+    await db.execute(sql`ALTER TABLE aefi_events ADD COLUMN IF NOT EXISTS fda_submitted_at TIMESTAMP`);
+    // One-time backfill: existing rows with reported_to_chd = true land
+    // on REPORTED_TO_FDA; the rest stay on the NOTIFIED default. Only
+    // touches rows where status is the default — safe to re-run.
+    await db.execute(sql`
+      UPDATE aefi_events
+         SET status = 'REPORTED_TO_FDA',
+             fda_submitted_at = COALESCE(fda_submitted_at, reported_to_chd_at)
+       WHERE reported_to_chd = TRUE
+         AND status = 'NOTIFIED'
+    `);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS aefi_events_status_idx ON aefi_events (status, created_at DESC)`);
+
     // Phase 9 — Outbreaks lifecycle. Auto-created from cluster detector;
     // MGMT advances status SUSPECTED → DECLARED → CONTAINED → CLOSED.
     await db.execute(sql`
