@@ -432,6 +432,170 @@ async function checkAefiReportSlas(): Promise<AlertFinding[]> {
   return findings;
 }
 
+/**
+ * AEFI cluster detection (issue #137 Phase 5).
+ *
+ * Two cluster shapes:
+ *   1. Lot cluster — ≥3 AEFI events sharing the same lot_number within
+ *      14 days. Resolved via vaccinations.medicine_inventory_id →
+ *      medicine_inventory.lot_number. LGU-wide (one outbreak row per
+ *      lot, with barangay = "(LGU-wide)") because a bad lot affects
+ *      every barangay it shipped to.
+ *   2. VPD cluster — ≥3 AEFI events with the same
+ *      vaccine_preventable_disease in one barangay within 30 days.
+ *      Bridges AEFI to the PIDSR Cat-I disease workflow.
+ *
+ * Closed cases (status = CLOSED) are excluded from the count so a
+ * fully-investigated cluster doesn't keep tripping the detector.
+ */
+const AEFI_LOT_WINDOW_DAYS = 14;
+const AEFI_LOT_THRESHOLD = 3;
+const AEFI_VPD_WINDOW_DAYS = 30;
+const AEFI_VPD_THRESHOLD = 3;
+
+async function checkAefiClusters(): Promise<AlertFinding[]> {
+  const findings: AlertFinding[] = [];
+  const longestWindow = Math.max(AEFI_LOT_WINDOW_DAYS, AEFI_VPD_WINDOW_DAYS);
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - longestWindow);
+  const cutoffIso = cutoff.toISOString().slice(0, 10);
+
+  // Lot cluster — join AEFI → vaccinations → medicine_inventory.
+  // status != 'CLOSED' so investigated/closed clusters don't re-fire.
+  const lotRows = (await db.execute(sql`
+    SELECT a.id, a.barangay, a.event_date, a.vaccine_given,
+           mi.lot_number AS lot_number
+      FROM aefi_events a
+      JOIN vaccinations v ON v.id = a.vaccination_id
+      JOIN medicine_inventory mi ON mi.id = v.medicine_inventory_id
+     WHERE a.event_date >= ${cutoffIso}
+       AND a.status <> 'CLOSED'
+       AND mi.lot_number IS NOT NULL
+  `)).rows as Array<{
+    id: number; barangay: string; event_date: string;
+    vaccine_given: string; lot_number: string;
+  }>;
+
+  const todayMs = Date.now();
+  const lotWindowMs = AEFI_LOT_WINDOW_DAYS * 86_400_000;
+  const byLot = new Map<string, Array<{ id: number; barangay: string }>>();
+  for (const r of lotRows) {
+    const eventMs = new Date(r.event_date).getTime();
+    if (todayMs - eventMs > lotWindowMs) continue;
+    const list = byLot.get(r.lot_number) ?? [];
+    list.push({ id: r.id, barangay: r.barangay });
+    byLot.set(r.lot_number, list);
+  }
+  for (const [lot, events] of Array.from(byLot.entries())) {
+    if (events.length < AEFI_LOT_THRESHOLD) continue;
+    const eventIds = events.map((e) => e.id);
+    const barangays = Array.from(new Set(events.map((e) => e.barangay)));
+    const labelBarangay = barangays.length === 1 ? barangays[0] : "(LGU-wide)";
+    const disease = `AEFI lot:${lot}`;
+    findings.push({
+      entityType: "OUTBREAK_SUSPECTED",
+      barangayName: labelBarangay,
+      reason: `AEFI cluster: ${events.length} events on lot ${lot} within ${AEFI_LOT_WINDOW_DAYS} days (threshold ${AEFI_LOT_THRESHOLD})`,
+      details: {
+        kind: "AEFI_LOT_CLUSTER",
+        lot,
+        eventCount: events.length,
+        windowDays: AEFI_LOT_WINDOW_DAYS,
+        threshold: AEFI_LOT_THRESHOLD,
+        barangays,
+        eventIds,
+      },
+    });
+    await upsertAefiClusterOutbreak({
+      kind: "AEFI_LOT_CLUSTER",
+      disease,
+      barangay: labelBarangay,
+      caseCount: events.length,
+      caseIds: eventIds,
+      windowDays: AEFI_LOT_WINDOW_DAYS,
+    });
+  }
+
+  // VPD cluster — same vaccine_preventable_disease in one barangay
+  // within 30 days. Doesn't need the join.
+  const vpdRows = (await db.execute(sql`
+    SELECT id, barangay, event_date, vaccine_preventable_disease
+      FROM aefi_events
+     WHERE event_date >= ${cutoffIso}
+       AND status <> 'CLOSED'
+       AND vaccine_preventable_disease IS NOT NULL
+  `)).rows as Array<{
+    id: number; barangay: string; event_date: string;
+    vaccine_preventable_disease: string;
+  }>;
+
+  const vpdWindowMs = AEFI_VPD_WINDOW_DAYS * 86_400_000;
+  // Group by (vpd, barangay) — different VPDs in the same barangay are
+  // different clusters; the same VPD across barangays are too.
+  const byVpdBarangay = new Map<string, Array<number>>();
+  const vpdMeta = new Map<string, { vpd: string; barangay: string }>();
+  for (const r of vpdRows) {
+    const eventMs = new Date(r.event_date).getTime();
+    if (todayMs - eventMs > vpdWindowMs) continue;
+    const key = `${r.vaccine_preventable_disease}|${r.barangay}`;
+    const list = byVpdBarangay.get(key) ?? [];
+    list.push(r.id);
+    byVpdBarangay.set(key, list);
+    if (!vpdMeta.has(key)) {
+      vpdMeta.set(key, { vpd: r.vaccine_preventable_disease, barangay: r.barangay });
+    }
+  }
+  for (const [key, eventIds] of Array.from(byVpdBarangay.entries())) {
+    if (eventIds.length < AEFI_VPD_THRESHOLD) continue;
+    const meta = vpdMeta.get(key)!;
+    const disease = `AEFI VPD:${meta.vpd}`;
+    findings.push({
+      entityType: "OUTBREAK_SUSPECTED",
+      barangayName: meta.barangay,
+      reason: `AEFI VPD cluster: ${eventIds.length} ${meta.vpd.toLowerCase()} cases in ${meta.barangay} within ${AEFI_VPD_WINDOW_DAYS} days (threshold ${AEFI_VPD_THRESHOLD})`,
+      details: {
+        kind: "AEFI_VPD_CLUSTER",
+        vpd: meta.vpd,
+        eventCount: eventIds.length,
+        windowDays: AEFI_VPD_WINDOW_DAYS,
+        threshold: AEFI_VPD_THRESHOLD,
+        eventIds,
+      },
+    });
+    await upsertAefiClusterOutbreak({
+      kind: "AEFI_VPD_CLUSTER",
+      disease,
+      barangay: meta.barangay,
+      caseCount: eventIds.length,
+      caseIds: eventIds,
+      windowDays: AEFI_VPD_WINDOW_DAYS,
+    });
+  }
+
+  return findings;
+}
+
+// Mirror of upsertOpenOutbreak with the kind column set so the inbox
+// can filter / colour these distinctly. Same partial unique index on
+// (disease, barangay) WHERE status != 'CLOSED' guarantees one open
+// outbreak per cluster key.
+async function upsertAefiClusterOutbreak(args: {
+  kind: "AEFI_LOT_CLUSTER" | "AEFI_VPD_CLUSTER";
+  disease: string; barangay: string;
+  caseCount: number; caseIds: number[];
+  windowDays: number;
+}) {
+  await db.execute(sql`
+    INSERT INTO outbreaks (kind, disease, barangay, case_count, case_ids, window_days)
+    VALUES (${args.kind}, ${args.disease}, ${args.barangay}, ${args.caseCount}, ${JSON.stringify(args.caseIds)}::jsonb, ${args.windowDays})
+    ON CONFLICT (disease, barangay) WHERE status != 'CLOSED'
+    DO UPDATE SET kind = EXCLUDED.kind,
+                  case_count = EXCLUDED.case_count,
+                  case_ids   = EXCLUDED.case_ids,
+                  window_days = EXCLUDED.window_days
+  `);
+}
+
 // ─── Phase 8: defaulter detectors ────────────────────────────────────────────
 // FP, immunization, and NCD follow-up gaps are surfaced as SYSTEM_ALERTs so
 // they appear in the MGMT inbox (Phase 7) alongside referrals and AEFI signals.
@@ -663,6 +827,7 @@ export async function runDailyAlerts(): Promise<{ jobName: string; count: number
     ["outbreak-cluster", checkClusterOutbreaks],
     ["death-review-deadlines", checkDeathReviewDeadlines],
     ["aefi-report-slas", checkAefiReportSlas],
+    ["aefi-cluster", checkAefiClusters],
     ["fp-missed-visit", checkFpMissedVisits],
     ["immunization-missed-dose", checkImmunizationMissedDoses],
     ["ncd-missed-follow-up", checkNcdMissedFollowUps],

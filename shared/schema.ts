@@ -1854,8 +1854,18 @@ export const OUTBREAK_STATUSES = [
 ] as const;
 export type OutbreakStatus = typeof OUTBREAK_STATUSES[number];
 
+// Outbreak kind discriminator (issue #137 Phase 5). Existing rows
+// (cluster detector against disease_cases) carry DISEASE_CASES. AEFI
+// Phase 5 cluster detector inserts AEFI_LOT_CLUSTER / AEFI_VPD_CLUSTER
+// rows. The disease column carries the natural cluster key (e.g.
+// "AEFI lot:ABC123" or "AEFI VPD:MEASLES") so the existing
+// (disease, barangay) partial unique index stays valid without joining.
+export const OUTBREAK_KINDS = ["DISEASE_CASES", "AEFI_LOT_CLUSTER", "AEFI_VPD_CLUSTER"] as const;
+export type OutbreakKind = typeof OUTBREAK_KINDS[number];
+
 export const outbreaks = pgTable("outbreaks", {
   id: serial("id").primaryKey(),
+  kind: text("kind").$type<OutbreakKind>().notNull().default("DISEASE_CASES"),
   disease: text("disease").notNull(),                    // matches CLUSTER_THRESHOLDS condition keys
   barangay: text("barangay").notNull(),
   status: text("status").$type<OutbreakStatus>().notNull().default("SUSPECTED"),

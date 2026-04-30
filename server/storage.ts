@@ -3220,6 +3220,13 @@ export class DatabaseStorage implements IStorage {
     `);
     await db.execute(sql`CREATE INDEX IF NOT EXISTS aefi_events_status_idx ON aefi_events (status, created_at DESC)`);
 
+    // Issue #137 Phase 5: outbreak kind discriminator. Existing rows
+    // backfill to DISEASE_CASES; AEFI cluster detector inserts new rows
+    // with AEFI_LOT_CLUSTER / AEFI_VPD_CLUSTER. Indexed for the inbox
+    // filter "show me only AEFI clusters".
+    await db.execute(sql`ALTER TABLE outbreaks ADD COLUMN IF NOT EXISTS kind TEXT NOT NULL DEFAULT 'DISEASE_CASES'`);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS outbreaks_kind_status_idx ON outbreaks (kind, status, detected_at DESC)`);
+
     // Phase 9 — Outbreaks lifecycle. Auto-created from cluster detector;
     // MGMT advances status SUSPECTED → DECLARED → CONTAINED → CLOSED.
     await db.execute(sql`
