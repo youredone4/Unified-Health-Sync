@@ -82,6 +82,7 @@ import MgmtInboxPage from "@/pages/mgmt-inbox";
 import OutbreaksPage from "@/pages/outbreaks";
 import WalkInPage from "@/pages/walk-in";
 import RestockRequestsPage from "@/pages/restock-requests";
+import DispensingsPage from "@/pages/dispensings";
 import CertificatesPage from "@/pages/certificates";
 import CampaignsPage from "@/pages/campaigns";
 import KonsultaPage from "@/pages/konsulta";
@@ -270,14 +271,22 @@ function DashboardsHub({ children }: { children: React.ReactNode }) {
   );
 }
 
+// Phase 2 of the architecture review: collapses Inventory + Restock
+// Requests + Medication Dispensings into a single "Pharmacy" hub. The
+// data model is unchanged — medicine_inventory, inventory_requests, and
+// medication_dispensings keep their own tables, routes, and audit
+// codes. This hub is pure UI shell (mirrors Group 1/2/3 hubs from
+// Phase 1).
 function InventoryHub({ children }: { children: React.ReactNode }) {
   return (
     <ProgramHub
-      title="Inventory"
+      title="Pharmacy"
       icon={Package}
       tabs={[
-        { label: "Availability", path: "/inventory", testId: "hub-tab-inventory-avail" },
-        { label: "Stock-outs", path: "/inventory/stockouts", testId: "hub-tab-inventory-stockouts" },
+        { label: "Stock",            path: "/inventory",             testId: "hub-tab-pharmacy-stock" },
+        { label: "Stock-outs",       path: "/inventory/stockouts",   testId: "hub-tab-pharmacy-stockouts" },
+        { label: "Restock Requests", path: "/restock-requests",      testId: "hub-tab-pharmacy-restock" },
+        { label: "Dispensings",      path: "/inventory/dispensings", testId: "hub-tab-pharmacy-dispensings" },
       ]}
     >
       {children}
@@ -382,8 +391,12 @@ function Router() {
       <Route path="/senior/:id" component={SeniorProfile} />
 
       {/* Inventory hub (MGMT_ROLES): Availability / Stock-outs */}
+      {/* Pharmacy hub (Phase 2 architecture review). The hub shell is
+          provided by InventoryHub above; each tab keeps its own URL so
+          old bookmarks resolve unchanged. */}
       <Route path="/inventory"><InventoryHub><RoleRoute component={InventoryPage} /></InventoryHub></Route>
       <Route path="/inventory/stockouts"><InventoryHub><RoleRoute component={StockoutsPage} /></InventoryHub></Route>
+      <Route path="/inventory/dispensings"><InventoryHub><RoleRoute component={DispensingsPage} /></InventoryHub></Route>
       <Route path="/inventory/new"><RoleRoute component={InventoryForm} /></Route>
       <Route path="/inventory/:id/edit"><RoleRoute component={InventoryForm} /></Route>
       <Route path="/inventory/medicine/:id/edit"><RoleRoute component={InventoryForm} /></Route>
@@ -404,7 +417,9 @@ function Router() {
       <Route path="/mgmt-inbox"><RoleRoute component={MgmtInboxPage} /></Route>
       <Route path="/outbreaks"><RoleRoute component={OutbreaksPage} /></Route>
       <Route path="/walk-in"><RoleRoute component={WalkInPage} /></Route>
-      <Route path="/restock-requests"><RoleRoute component={RestockRequestsPage} /></Route>
+      {/* Restock Requests now live as a tab inside the Pharmacy hub.
+          URL preserved so old bookmarks resolve. */}
+      <Route path="/restock-requests"><InventoryHub><RoleRoute component={RestockRequestsPage} /></InventoryHub></Route>
       <Route path="/certificates"><RoleRoute component={CertificatesPage} /></Route>
       <Route path="/campaigns"><RoleRoute component={CampaignsPage} /></Route>
       <Route path="/konsulta"><RoleRoute component={KonsultaPage} /></Route>

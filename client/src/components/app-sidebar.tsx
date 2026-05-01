@@ -215,11 +215,16 @@ const NAV_ITEMS: NavItem[] = [
     activePrefixes: ["/reports"],
   },
   {
-    title: "Inventory",
+    // Phase 2 hub: collapses Inventory + Restock Requests into a single
+    // Pharmacy entry with sub-tabs (Stock / Stock-outs / Restock /
+    // Dispensings). Old URLs (/restock-requests, /inventory/stockouts)
+    // resolve into the matching tab; activePrefixes covers all of them
+    // so the sidebar entry stays highlighted on every tab.
+    title: "Pharmacy",
     url: "/inventory",
     icon: Package,
     roles: rolesFor("/inventory"),
-    activePrefixes: ["/inventory"],
+    activePrefixes: ["/inventory", "/restock-requests"],
   },
   {
     title: "Workforce",
@@ -257,13 +262,6 @@ const NAV_ITEMS: NavItem[] = [
     icon: ClipboardCheck,
     roles: rolesFor("/walk-in"),
     activePrefixes: ["/walk-in", "/patient-checkup"],
-  },
-  {
-    title: "Restock Requests",
-    url: "/restock-requests",
-    icon: Boxes,
-    roles: rolesFor("/restock-requests"),
-    activePrefixes: ["/restock-requests"],
   },
   {
     title: "Certificates",
@@ -332,10 +330,10 @@ const TL_LAYOUT: SidebarLayout = [
     { kind: "item",  url: "/campaigns" },
     { kind: "item",  url: "/konsulta" },
   ],
-  // Stock — TL view of inventory + restock requests they file
+  // Pharmacy — single hub combining stock view, restock workflow, and
+  // dispensings ledger. (Phase 2 architecture review.)
   [
     { kind: "item", url: "/inventory" },
-    { kind: "item", url: "/restock-requests" },
   ],
   // Schedule + analytics + utilities
   [
@@ -363,7 +361,10 @@ const MGMT_LAYOUT: SidebarLayout = [
     // to sign off. Sits next to /referrals because both are BHS→RHU
     // handoff queues.
     { kind: "item", url: "/walk-in" },
-    { kind: "item", url: "/restock-requests" },
+    // Restock requests removed from this action group — they live as a
+    // tab inside the Pharmacy hub (under "Operational view" below) per
+    // the Phase 2 architecture review. The "X pending requests" inbox
+    // card already deep-links into the hub's Restock Requests tab.
     { kind: "item", url: "/reports" },
   ],
   // Operational view — consolidated data they monitor
