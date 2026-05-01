@@ -3,7 +3,7 @@ import { registerRoutes } from "./routes";
 import { startScheduler } from "./scheduler";
 import { freePort } from "./startup-port-cleanup";
 import { serveStatic } from "./static";
-import { createServer } from "http";
+import http, { createServer } from "http";
 
 const app = express();
 const httpServer = createServer(app);
@@ -139,12 +139,12 @@ app.use((req, res, next) => {
       startScheduler();
 
       // In development, ping ourselves every 25 s so Replit's idle-timeout
-      // never kills the process between active user sessions.
+      // never kills the process between active user sessions. The
+      // module is imported at the top of this file so we don't need a
+      // CJS require() here — `require` is undefined when tsx loads
+      // this file as ESM (package.json: "type": "module"), which used
+      // to crash the dev process inside this listen callback.
       if (process.env.NODE_ENV !== "production") {
-        // Use dynamic import to avoid adding 'http' to the top-level imports
-        // (httpServer already imports it via createServer above, but the type
-        // augmentation for rawBody lives on IncomingMessage — keep it clean).
-        const http = require("http") as typeof import("http");
         setInterval(() => {
           http
             .get(`http://localhost:${port}/api/health`, (res) => res.resume())
