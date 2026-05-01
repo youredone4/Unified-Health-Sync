@@ -10,6 +10,7 @@ import { severityBadge, severityDot, type Severity } from "@/lib/severity";
 import { EmptyState } from "@/components/states/empty-state";
 import { ListSkeleton } from "@/components/states/loading-skeleton";
 import { ErrorState } from "@/components/states/error-state";
+import { useAuth } from "@/hooks/use-auth";
 
 type InboxType = "referral" | "death-review" | "aefi" | "outbreak" | "restock" | "md-review" | "system-alert";
 type InboxPriority = "high" | "medium" | "low";
@@ -59,6 +60,10 @@ const PRIORITY_TO_SEVERITY: Record<InboxPriority, Severity> = {
 export default function MgmtInboxPage() {
   const [filter, setFilter] = useState<"all" | InboxType>("all");
   const [, navigate] = useLocation();
+  // System alerts are admin-only; backend already filters them out
+  // for MHO/SHA, so the filter chip is hidden too (no value showing
+  // a chip that always reads 0).
+  const { isAdmin } = useAuth();
 
   const { data, isLoading, error, refetch } = useQuery<InboxResponse>({
     queryKey: ["/api/mgmt/inbox"],
@@ -97,7 +102,9 @@ export default function MgmtInboxPage() {
         <FilterButton active={filter === "outbreak"}     onClick={() => setFilter("outbreak")}     label="Outbreaks"     count={counts?.outbreak} />
         <FilterButton active={filter === "md-review"}    onClick={() => setFilter("md-review")}    label="MD Reviews"    count={counts?.mdReview} />
         <FilterButton active={filter === "restock"}      onClick={() => setFilter("restock")}      label="Restock"       count={counts?.restock} />
-        <FilterButton active={filter === "system-alert"} onClick={() => setFilter("system-alert")} label="Alerts"        count={counts?.systemAlert} />
+        {isAdmin ? (
+          <FilterButton active={filter === "system-alert"} onClick={() => setFilter("system-alert")} label="Alerts"        count={counts?.systemAlert} />
+        ) : null}
       </div>
 
       {/* Three explicit states: error → loading → empty → list. */}
