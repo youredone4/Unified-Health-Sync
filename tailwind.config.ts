@@ -1,4 +1,9 @@
 import type { Config } from "tailwindcss";
+// ESM imports for the plugins. The previous `require(...)` form failed
+// when tsx loaded this file from setupVite under "type": "module" with
+// "require is not defined", restart-looping the dev process.
+import tailwindcssAnimate from "tailwindcss-animate";
+import typography from "@tailwindcss/typography";
 
 export default {
   darkMode: ["class"],
@@ -103,5 +108,5 @@ export default {
       },
     },
   },
-  plugins: [require("tailwindcss-animate"), require("@tailwindcss/typography")],
+  plugins: [tailwindcssAnimate, typography],
 } satisfies Config;
