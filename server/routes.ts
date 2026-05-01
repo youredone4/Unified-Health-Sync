@@ -2,7 +2,7 @@ import type { Express } from "express";
 import type { Server } from "http";
 import { storage } from "./storage";
 import { db } from "./db";
-import { max, eq, and, desc, gte, or, inArray } from "drizzle-orm";
+import { max, eq, and, desc, gte, or, inArray, isNull } from "drizzle-orm";
 import { prenatalVisits, childVisits, seniorVisits, insertFpServiceRecordSchema, insertNutritionFollowUpSchema, insertColdChainLogSchema, insertTbDoseLogSchema, insertPostpartumVisitSchema, insertPrenatalScreeningSchema, insertBirthAttendanceRecordSchema, insertSickChildVisitSchema, insertSchoolImmunizationSchema, insertOralHealthVisitSchema, insertPhilpenAssessmentSchema, insertNcdScreeningSchema, insertVisionScreeningSchema, insertCervicalCancerScreeningSchema, insertMentalHealthScreeningSchema, insertFilariasisRecordSchema, insertRabiesExposureSchema, insertSchistosomiasisRecordSchema, insertSthRecordSchema, insertLeprosyRecordSchema, insertDeathEventSchema, insertHouseholdWaterRecordSchema, insertPidsrSubmissionSchema, insertWorkforceMemberSchema, insertWorkforceCredentialSchema, referralRecords, insertReferralRecordSchema, ncdScreenings } from "@shared/schema";
 import { api } from "@shared/routes";
 import { z } from "zod";
@@ -3332,7 +3332,10 @@ export async function registerRoutes(
     ar(async (_req, res) => {
       const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
-      const [pendingReferrals, openReviews, unreportedAefi, openOutbreaks, openRestockRequests, recentAlerts] = await Promise.all([
+      const [
+        pendingReferrals, openReviews, unreportedAefi, openOutbreaks,
+        openRestockRequests, awaitingMdReviews, recentAlerts,
+      ] = await Promise.all([
         db.select().from(referralRecords)
           .where(eq(referralRecords.status, "PENDING" as any))
           .orderBy(desc(referralRecords.createdAt)).limit(100),
@@ -3348,6 +3351,21 @@ export async function registerRoutes(
         db.select().from(inventoryRequests)
           .where(eq(inventoryRequests.status, "PENDING" as any))
           .orderBy(desc(inventoryRequests.requestedAt)).limit(100),
+        // Group D / Phase 1 architecture review: MD Reviews are the
+        // one queue that wasn't surfaced in the inbox before. Match the
+        // same filter the /walk-in page uses for its "Awaiting MD review"
+        // tab — emergent/urgent acuity, OR BHS-escalated dispositions.
+        // Closed-out walk-ins (mdSignedAt set) drop off automatically.
+        db.select().from(consults)
+          .where(and(
+            eq(consults.isWalkIn, true),
+            isNull(consults.mdSignedAt),
+            or(
+              inArray(consults.acuityLevel, ["EMERGENT", "URGENT"] as any),
+              inArray(consults.disposition, ["Referred", "Admitted"] as any),
+            )!,
+          ))
+          .orderBy(desc(consults.createdAt)).limit(100),
         db.select().from(auditLogs)
           .where(and(eq(auditLogs.action, "SYSTEM_ALERT"), gte(auditLogs.createdAt, sevenDaysAgo)))
           .orderBy(desc(auditLogs.createdAt)).limit(100),
@@ -3355,7 +3373,7 @@ export async function registerRoutes(
 
       type InboxItem = {
         id: string;
-        type: "referral" | "death-review" | "aefi" | "outbreak" | "restock" | "system-alert";
+        type: "referral" | "death-review" | "aefi" | "outbreak" | "restock" | "md-review" | "system-alert";
         priority: "high" | "medium" | "low";
         title: string;
         subtitle: string;
@@ -3432,6 +3450,29 @@ export async function registerRoutes(
         });
       }
 
+      for (const c of awaitingMdReviews) {
+        // EMERGENT acuity always escalates to high; URGENT and BHS-
+        // escalated dispositions land at medium so they don't drown out
+        // life-threatening triage in the inbox.
+        const isEmergent = c.acuityLevel === "EMERGENT";
+        items.push({
+          id: `md-review:${c.id}`,
+          type: "md-review",
+          priority: isEmergent ? "high" : "medium",
+          title: `MD review — ${c.acuityLevel ? c.acuityLevel.toLowerCase() : "walk-in"}${
+            c.disposition && (c.disposition === "Referred" || c.disposition === "Admitted")
+              ? ` (${c.disposition.toLowerCase()})` : ""
+          }`,
+          subtitle: `${c.patientName} · ${c.chiefComplaint}`,
+          barangay: c.barangay,
+          // consults.createdAt is stored as a text ISO timestamp
+          // (unlike the other queues that use Date columns). Emit it
+          // verbatim — formatDistanceToNow handles ISO strings.
+          createdAt: c.createdAt ?? new Date().toISOString(),
+          link: "/walk-in",
+        });
+      }
+
       for (const log of recentAlerts) {
         const after = log.afterJson as Record<string, any> | null;
         const rule = after?.rule ?? log.entityType;
@@ -3462,6 +3503,7 @@ export async function registerRoutes(
           aefi: unreportedAefi.length,
           outbreak: openOutbreaks.length,
           restock: openRestockRequests.length,
+          mdReview: awaitingMdReviews.length,
           systemAlert: recentAlerts.length,
           total: items.length,
         },
