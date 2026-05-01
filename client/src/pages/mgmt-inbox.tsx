@@ -5,7 +5,8 @@ import { formatDistanceToNow } from "date-fns";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Inbox, ArrowRight, Clock, CheckCircle2 } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Inbox, ArrowRight, Clock, CheckCircle2, Search } from "lucide-react";
 import { severityBadge, severityDot, type Severity } from "@/lib/severity";
 import { EmptyState } from "@/components/states/empty-state";
 import { ListSkeleton } from "@/components/states/loading-skeleton";
@@ -61,6 +62,7 @@ const PRIORITY_TO_SEVERITY: Record<InboxPriority, Severity> = {
 
 export default function MgmtInboxPage() {
   const [filter, setFilter] = useState<"all" | InboxType>("all");
+  const [search, setSearch] = useState("");
   const [, navigate] = useLocation();
   // System alerts are admin-only; backend already filters them out
   // for MHO/SHA, so the filter chip is hidden too (no value showing
@@ -74,16 +76,24 @@ export default function MgmtInboxPage() {
 
   const items = data?.items ?? [];
   const counts = data?.counts;
-  const filtered = filter === "all" ? items : items.filter((i) => i.type === filter);
+  const byType = filter === "all" ? items : items.filter((i) => i.type === filter);
+  const q = search.trim().toLowerCase();
+  const filtered = q
+    ? byType.filter((i) =>
+        i.title.toLowerCase().includes(q) ||
+        i.subtitle.toLowerCase().includes(q) ||
+        (i.barangay?.toLowerCase().includes(q) ?? false)
+      )
+    : byType;
 
   const pagination = usePagination(filtered, 10);
   const { pagedItems, resetPage } = pagination;
 
-  // Reset to page 1 when the filter changes so users don't land on an
-  // empty page after narrowing the list.
+  // Reset to page 1 whenever the filter chip or search query changes so
+  // users don't land on an empty page after narrowing the list.
   useEffect(() => {
     resetPage();
-  }, [filter, resetPage]);
+  }, [filter, q, resetPage]);
 
   return (
     <div className="space-y-4">
@@ -98,6 +108,21 @@ export default function MgmtInboxPage() {
           Every actionable signal from across HealthSync — pending referrals, open death reviews,
           unreported AEFIs, outbreaks, and recent system alerts — in one prioritized list.
         </p>
+      </div>
+
+      <div className="relative max-w-sm">
+        <Search
+          className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground"
+          aria-hidden
+        />
+        <Input
+          placeholder="Search title, details, or barangay…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="pl-9"
+          aria-label="Search inbox"
+          data-testid="input-inbox-search"
+        />
       </div>
 
       {/* Filter chips. role="group" + aria-label tell screen readers this is a related set. */}
@@ -126,11 +151,13 @@ export default function MgmtInboxPage() {
       ) : filtered.length === 0 ? (
         <EmptyState
           icon={CheckCircle2}
-          title="Inbox zero"
+          title={q ? "No matches" : "Inbox zero"}
           description={
-            filter === "all"
-              ? "No pending referrals, reviews, AEFIs, or alerts. Good time for a record review."
-              : `No ${TYPE_LABEL[filter as InboxType].toLowerCase()} items pending.`
+            q
+              ? `No items match "${search.trim()}". Try a different keyword or clear the search.`
+              : filter === "all"
+                ? "No pending referrals, reviews, AEFIs, or alerts. Good time for a record review."
+                : `No ${TYPE_LABEL[filter as InboxType].toLowerCase()} items pending.`
           }
           testId="inbox-empty"
         />
