@@ -399,8 +399,31 @@ const MGMT_LAYOUT: SidebarLayout = [
   ],
 ];
 
+// VIEWER (Mayor / SB Committee on Health & Sanitation): oversight-only.
+// They see decision-making surfaces and surveillance summaries — not the
+// operational tooling the MHO/SHA needs every day. Stripped of: Patients,
+// Triage/Walk-in, Pharmacy, TB DOTS, Calendar, Nutrition, Workforce,
+// Daily Operations + Registries collapsibles, Services queue, Messages,
+// Settings. The result is a focused 7-entry sidebar.
+const VIEWER_LAYOUT: SidebarLayout = [
+  // Decision surfaces — what they need to make oversight calls.
+  [
+    { kind: "item", url: "/dashboards" },
+    { kind: "item", url: "/mgmt-inbox" },
+    { kind: "item", url: "/outbreaks" },
+    { kind: "item", url: "/reports" },
+  ],
+  // Surveillance summaries — high-impact public-health visibility.
+  [
+    { kind: "item", url: "/disease" },          // Disease Surveillance hub
+    { kind: "item", url: "/mortality-hub" },
+    { kind: "item", url: "/immunization" },
+  ],
+];
+
 function getLayoutForRole(role: string | undefined): SidebarLayout {
   if (role === "TL") return TL_LAYOUT;
+  if (role === "MAYOR" || role === "HEALTH_COMMITTEE") return VIEWER_LAYOUT;
   return MGMT_LAYOUT;
 }
 
