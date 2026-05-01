@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
 import { formatDistanceToNow } from "date-fns";
@@ -11,6 +11,8 @@ import { EmptyState } from "@/components/states/empty-state";
 import { ListSkeleton } from "@/components/states/loading-skeleton";
 import { ErrorState } from "@/components/states/error-state";
 import { useAuth } from "@/hooks/use-auth";
+import { usePagination } from "@/hooks/use-pagination";
+import TablePagination from "@/components/table-pagination";
 
 type InboxType = "referral" | "death-review" | "aefi" | "outbreak" | "restock" | "md-review" | "system-alert";
 type InboxPriority = "high" | "medium" | "low";
@@ -74,6 +76,15 @@ export default function MgmtInboxPage() {
   const counts = data?.counts;
   const filtered = filter === "all" ? items : items.filter((i) => i.type === filter);
 
+  const pagination = usePagination(filtered, 10);
+  const { pagedItems, resetPage } = pagination;
+
+  // Reset to page 1 when the filter changes so users don't land on an
+  // empty page after narrowing the list.
+  useEffect(() => {
+    resetPage();
+  }, [filter, resetPage]);
+
   return (
     <div className="space-y-4">
       <div>
@@ -125,7 +136,7 @@ export default function MgmtInboxPage() {
         />
       ) : (
         <ul className="space-y-2 list-none p-0" aria-label="Inbox items">
-          {filtered.map((item) => {
+          {pagedItems.map((item) => {
             const severity = PRIORITY_TO_SEVERITY[item.priority];
             return (
               <li key={item.id}>
@@ -172,6 +183,10 @@ export default function MgmtInboxPage() {
           })}
         </ul>
       )}
+
+      {filtered.length > 10 ? (
+        <TablePagination pagination={pagination} />
+      ) : null}
     </div>
   );
 }
