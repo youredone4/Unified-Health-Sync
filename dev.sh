@@ -20,22 +20,30 @@ pkill -9 -f 'tsx server/index' 2>/dev/null || true
 pkill -9 -f 'node dist/index.cjs' 2>/dev/null || true
 sleep 2
 
-# Build the compiled server if it doesn't exist yet.
-if [ ! -f "dist/index.cjs" ]; then
-  echo "[dev.sh] Building application for first run..."
-  export NODE_ENV=production
-  npm run build
-  if [ $? -ne 0 ]; then
-    echo "[dev.sh] Build failed."
-    exit 1
+# Build helper. Called inside the restart loop so that if dist/ is wiped
+# (e.g. the user deletes it to force a rebuild after a frontend PR
+# lands), the next restart cycle rebuilds automatically instead of
+# crash-looping with "Cannot find module dist/index.cjs".
+build_if_missing() {
+  if [ ! -f "dist/index.cjs" ]; then
+    echo "[dev.sh] dist/index.cjs missing — building..."
+    NODE_ENV=production npm run build
+    if [ $? -ne 0 ]; then
+      echo "[dev.sh] Build failed."
+      return 1
+    fi
   fi
-fi
+  return 0
+}
+
+build_if_missing || exit 1
 
 export NODE_ENV=production
 
 # Restart loop — automatically brings the server back after any crash or
 # platform idle-kill.  SIGTERM propagates to node; bash exits when node does.
 while true; do
+  build_if_missing || { sleep 5; continue; }
   echo "[dev.sh] Starting server..."
   node dist/index.cjs
   EXIT=$?
