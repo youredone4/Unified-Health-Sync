@@ -79,6 +79,8 @@ const roleLabels: Record<string, string> = {
   MHO: "Municipal Health Officer",
   SHA: "Senior Health Admin",
   TL: "Team Leader (Barangay Nurse)",
+  MAYOR: "Municipal Mayor (view-only)",
+  HEALTH_COMMITTEE: "SB Committee on Health & Sanitation (view-only)",
 };
 
 const roleColors: Record<string, string> = {
@@ -86,6 +88,8 @@ const roleColors: Record<string, string> = {
   MHO: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
   SHA: "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200",
   TL: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
+  MAYOR: "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200",
+  HEALTH_COMMITTEE: "bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-200",
 };
 
 function formatScore(score: number | null, meaningful = true): string {
