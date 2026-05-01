@@ -418,8 +418,10 @@ const SERVICES_OPEN_KEY = "sidebar.services.open";
 export function AppSidebar() {
   const [location] = useLocation();
   const { settings } = useTheme();
-  const { role, isAuthenticated, isMHO, isSHA, isAdmin } = useAuth();
-  const isMgmt = isMHO || isSHA || isAdmin;
+  const { role, isAuthenticated, isMHO, isSHA, isAdmin, isViewOnly } = useAuth();
+  // View-only roles (Mayor, Health Committee) see the MGMT inbox too,
+  // so they need the inbox-count query enabled.
+  const isMgmt = isMHO || isSHA || isAdmin || isViewOnly;
   const [logoError, setLogoError] = useState(false);
 
   // Persisted expand/collapse state for collapsible groups.

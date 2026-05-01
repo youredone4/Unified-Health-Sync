@@ -9,6 +9,11 @@ export const UserRole = {
   MHO: "MHO",
   SHA: "SHA",
   TL: "TL",
+  // View-only roles. They see the same surface as MGMT but every write
+  // endpoint rejects them via requireRole(). Their server-side scope is
+  // identical to admins — full LGU visibility, no per-barangay filter.
+  MAYOR: "MAYOR",                       // Municipal Mayor — political oversight
+  HEALTH_COMMITTEE: "HEALTH_COMMITTEE", // Sangguniang Bayan Committee on Health & Sanitation
 } as const;
 export type UserRoleType = typeof UserRole[keyof typeof UserRole];
 

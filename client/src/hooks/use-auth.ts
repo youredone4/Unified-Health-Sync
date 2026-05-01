@@ -49,13 +49,35 @@ export const UserRole = {
   MHO: "MHO",
   SHA: "SHA",
   TL: "TL",
+  // View-only roles (mirror of shared/models/auth.ts). They see the
+  // MGMT surface but every write/transition endpoint rejects them.
+  MAYOR: "MAYOR",
+  HEALTH_COMMITTEE: "HEALTH_COMMITTEE",
 } as const;
 
 export type UserRoleType = typeof UserRole[keyof typeof UserRole];
 
-// Reusable role arrays for use in sidebar config and route guard allowedRoles
-export const ALL_ROLES = [UserRole.SYSTEM_ADMIN, UserRole.MHO, UserRole.SHA, UserRole.TL] as const;
+// Reusable role arrays for use in sidebar config and route guard allowedRoles.
+//
+// View-only roles (MAYOR, HEALTH_COMMITTEE) are folded into ALL_ROLES and
+// MGMT_VIEW_ROLES so they pass route guards on read pages, but are
+// deliberately excluded from MGMT_ROLES / ADMIN_MHO_ROLES / ADMIN_ONLY_ROLES
+// so every write/transition endpoint rejects them.
+export const VIEW_ONLY_ROLES = [UserRole.MAYOR, UserRole.HEALTH_COMMITTEE] as const;
+export const ALL_ROLES = [
+  UserRole.SYSTEM_ADMIN, UserRole.MHO, UserRole.SHA, UserRole.TL,
+  ...VIEW_ONLY_ROLES,
+] as const;
+// Strict MGMT set — write endpoints (PATCH /api/death-reviews/:id, POST
+// /api/aefi-events status changes, etc.) keep this gate so view roles
+// can never trigger a state transition.
 export const MGMT_ROLES = [UserRole.SYSTEM_ADMIN, UserRole.MHO, UserRole.SHA] as const;
+// MGMT-class read pages (/mgmt-inbox, /dashboards, /hotspots, etc.).
+// View-only roles see the same surface as Admin.
+export const MGMT_VIEW_ROLES = [
+  UserRole.SYSTEM_ADMIN, UserRole.MHO, UserRole.SHA,
+  ...VIEW_ONLY_ROLES,
+] as const;
 export const ADMIN_MHO_ROLES = [UserRole.SYSTEM_ADMIN, UserRole.MHO] as const;
 export const ADMIN_ONLY_ROLES = [UserRole.SYSTEM_ADMIN] as const;
 
@@ -66,9 +88,9 @@ export const ADMIN_ONLY_ROLES = [UserRole.SYSTEM_ADMIN] as const;
 export const sidebarPermissions: Record<string, readonly string[]> = {
   "/today": ALL_ROLES,
   "/dashboards": ALL_ROLES,
-  "/hotspots": MGMT_ROLES,
+  "/hotspots": MGMT_VIEW_ROLES,
   "/inventory": ALL_ROLES,
-  "/inventory/stockouts": MGMT_ROLES,
+  "/inventory/stockouts": MGMT_VIEW_ROLES,
   "/inventory/dispensings": ALL_ROLES,    // Pharmacy hub Dispensings tab; TLs see only their barangay (server-enforced)
   "/walk-in": ALL_ROLES,
   "/restock-requests": ALL_ROLES,
@@ -77,26 +99,26 @@ export const sidebarPermissions: Record<string, readonly string[]> = {
   "/konsulta": ALL_ROLES,
   "/aefi": ALL_ROLES,                    // legacy URL — redirects into the hub
   "/immunization": ALL_ROLES,            // unified Group 3 hub
-  "/death-events": MGMT_ROLES,           // legacy URL — redirects into the hub
+  "/death-events": MGMT_VIEW_ROLES,           // legacy URL — redirects into the hub
   "/mortality-hub": ALL_ROLES,           // unified Group 2 hub; tab visibility is role-aware inside the page
   "/pidsr": ALL_ROLES,
   "/cold-chain": ALL_ROLES,
   "/school-immunizations": ALL_ROLES,
   "/oral-health": ALL_ROLES,
   "/ncd-screenings": ALL_ROLES,
-  "/workforce": MGMT_ROLES,
+  "/workforce": MGMT_VIEW_ROLES,
   "/referrals": ALL_ROLES,
-  "/mgmt-inbox": MGMT_ROLES,
+  "/mgmt-inbox": MGMT_VIEW_ROLES,
   "/outbreaks": ALL_ROLES,
   "/disease-surveillance": ALL_ROLES,
   "/mortality": ALL_ROLES,
   "/household-water": ALL_ROLES,
   "/reports": ALL_ROLES,
-  "/reports/ai": MGMT_ROLES,
+  "/reports/ai": MGMT_VIEW_ROLES,
   "/reports/m1": ALL_ROLES,
-  "/disease/map": MGMT_ROLES,
+  "/disease/map": MGMT_VIEW_ROLES,
   "/patient-checkup": ADMIN_MHO_ROLES,
-  "/settings": MGMT_ROLES,
+  "/settings": MGMT_VIEW_ROLES,
   "/admin/users": ADMIN_ONLY_ROLES,
   "/admin/audit": ADMIN_ONLY_ROLES,
 };
@@ -125,6 +147,13 @@ export const permissions = {
   isMHO: (role?: string) => role === UserRole.MHO,
   isSHA: (role?: string) => role === UserRole.SHA,
   isTL: (role?: string) => role === UserRole.TL,
+  isMayor: (role?: string) => role === UserRole.MAYOR,
+  isHealthCommittee: (role?: string) => role === UserRole.HEALTH_COMMITTEE,
+  // True for any role that's strictly view-only (no write/transition
+  // endpoints will accept them server-side). Use this to suppress
+  // "Add" / "Edit" / status-transition controls in the UI.
+  isViewOnly: (role?: string) =>
+    role === UserRole.MAYOR || role === UserRole.HEALTH_COMMITTEE,
 
   // Checks if a role can access a given URL path — used by RoleRoute for guard logic.
   // Derived from sidebarPermissions so sidebar visibility and route access always agree.
@@ -176,6 +205,9 @@ export function useAuth() {
     isMHO: permissions.isMHO(user?.role),
     isSHA: permissions.isSHA(user?.role),
     isTL: permissions.isTL(user?.role),
+    isMayor: permissions.isMayor(user?.role),
+    isHealthCommittee: permissions.isHealthCommittee(user?.role),
+    isViewOnly: permissions.isViewOnly(user?.role),
     assignedBarangays: user?.assignedBarangays || [],
     // Permission helpers
     canManageUsers: permissions.canManageUsers(user?.role),
