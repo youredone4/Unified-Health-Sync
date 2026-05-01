@@ -56,6 +56,7 @@ import {
   Megaphone,
   ShieldCheck,
   Syringe,
+  Briefcase,
 } from "lucide-react";
 import { useTheme } from "@/contexts/theme-context";
 import { useAuth, sidebarPermissions, ALL_ROLES } from "@/hooks/use-auth";
@@ -130,6 +131,42 @@ const SURVEILLANCE_CHILDREN: NavItem[] = [
     icon: Droplet,
     roles: rolesFor("/household-water"),
     activePrefixes: ["/household-water"],
+  },
+];
+
+// Children of the collapsible "Services" group — patient-touching service
+// workflows that don't belong to a specific clinical hub: BHS↔RHU
+// referrals, medical certificates, mass campaigns, and PhilHealth
+// Konsulta enrolment. Grouping them together cleans up four flat top-
+// level items into one expandable menu (per user request).
+const SERVICES_CHILDREN: NavItem[] = [
+  {
+    title: "Referrals",
+    url: "/referrals",
+    icon: ArrowRightCircle,
+    roles: rolesFor("/referrals"),
+    activePrefixes: ["/referrals"],
+  },
+  {
+    title: "Certificates",
+    url: "/certificates",
+    icon: FileText,
+    roles: rolesFor("/certificates"),
+    activePrefixes: ["/certificates"],
+  },
+  {
+    title: "Campaigns",
+    url: "/campaigns",
+    icon: Megaphone,
+    roles: rolesFor("/campaigns"),
+    activePrefixes: ["/campaigns"],
+  },
+  {
+    title: "Konsulta",
+    url: "/konsulta",
+    icon: ShieldCheck,
+    roles: rolesFor("/konsulta"),
+    activePrefixes: ["/konsulta"],
   },
 ];
 
@@ -234,13 +271,6 @@ const NAV_ITEMS: NavItem[] = [
     activePrefixes: ["/workforce"],
   },
   {
-    title: "Referrals",
-    url: "/referrals",
-    icon: ArrowRightCircle,
-    roles: rolesFor("/referrals"),
-    activePrefixes: ["/referrals"],
-  },
-  {
     title: "MGMT Inbox",
     url: "/mgmt-inbox",
     icon: Inbox,
@@ -262,27 +292,6 @@ const NAV_ITEMS: NavItem[] = [
     icon: ClipboardCheck,
     roles: rolesFor("/walk-in"),
     activePrefixes: ["/walk-in", "/patient-checkup"],
-  },
-  {
-    title: "Certificates",
-    url: "/certificates",
-    icon: FileText,
-    roles: rolesFor("/certificates"),
-    activePrefixes: ["/certificates"],
-  },
-  {
-    title: "Campaigns",
-    url: "/campaigns",
-    icon: Megaphone,
-    roles: rolesFor("/campaigns"),
-    activePrefixes: ["/campaigns"],
-  },
-  {
-    title: "Konsulta",
-    url: "/konsulta",
-    icon: ShieldCheck,
-    roles: rolesFor("/konsulta"),
-    activePrefixes: ["/konsulta"],
   },
   {
     title: "Messages",
@@ -307,38 +316,39 @@ const NAV_ITEMS: NavItem[] = [
 // (regular item or special collapsible group). Sections are separated by
 // SidebarSeparator. Items missing for the role (RBAC) are filtered out so a
 // section may collapse to fewer rows but never gains items not in NAV_ITEMS.
-type GroupKey = "patients" | "daily-ops" | "surveillance";
+type GroupKey = "patients" | "daily-ops" | "surveillance" | "services";
 type SidebarUnit = { kind: "item"; url: string } | { kind: "group"; key: GroupKey };
 type SidebarLayout = SidebarUnit[][];
 
 // TL: daily-work-first. Today + the capture screens bubble up; consolidated
 // views, registries, and reporting live below.
 const TL_LAYOUT: SidebarLayout = [
-  // Action — what they're working on right now
+  // Action — what they're working on right now. Calendar + Nutrition
+  // sit immediately below Patients (per user request) so the
+  // patient-adjacent operational tools cluster together.
   [
     { kind: "item",  url: "/today" },
     { kind: "item",  url: "/walk-in" },
     { kind: "group", key: "patients" },
+    { kind: "item",  url: "/calendar" },
+    { kind: "item",  url: "/nutrition" },
   ],
-  // Capture — registries and clinical entry
+  // Capture — registries and clinical entry. Referrals + Certificates
+  // + Campaigns + Konsulta now live behind the "Services" collapsible
+  // group instead of as four flat items.
   [
     { kind: "group", key: "daily-ops" },
     { kind: "group", key: "surveillance" },
-    { kind: "item",  url: "/referrals" },
+    { kind: "group", key: "services" },
     { kind: "item",  url: "/immunization" },
-    { kind: "item",  url: "/certificates" },
-    { kind: "item",  url: "/campaigns" },
-    { kind: "item",  url: "/konsulta" },
   ],
   // Pharmacy — single hub combining stock view, restock workflow, and
   // dispensings ledger. (Phase 2 architecture review.)
   [
     { kind: "item", url: "/inventory" },
   ],
-  // Schedule + analytics + utilities
+  // Analytics + utilities
   [
-    { kind: "item", url: "/calendar" },
-    { kind: "item", url: "/nutrition" },
     { kind: "item", url: "/reports" },
     { kind: "item", url: "/workforce" },
     { kind: "item", url: "/messages" },
@@ -348,41 +358,39 @@ const TL_LAYOUT: SidebarLayout = [
 // MGMT (MHO / SHA / Admin): decision-first. Inbox + Dashboards on top so the
 // first thing they see is what needs their attention.
 const MGMT_LAYOUT: SidebarLayout = [
-  // Action / decision — what needs their attention now
+  // Action / decision — what needs their attention now. Pending
+  // referrals still surface in MGMT Inbox cards (which deep-link into
+  // /referrals), so the standalone Referrals item moved into the
+  // Services collapsible group below alongside Certificates,
+  // Campaigns, and Konsulta — per user request to put those four
+  // into a single menu.
   [
     { kind: "item", url: "/mgmt-inbox" },
     { kind: "item", url: "/dashboards" },
     { kind: "item", url: "/outbreaks" },
     { kind: "item", url: "/mortality-hub" },
     { kind: "item", url: "/immunization" },
-    { kind: "item", url: "/referrals" },
-    // The MD's "Awaiting MD review" inbox lives on this page — surfaces
-    // EMERGENT/URGENT and BHS-escalated encounters that still need the MD
-    // to sign off. Sits next to /referrals because both are BHS→RHU
-    // handoff queues.
     { kind: "item", url: "/walk-in" },
-    // Restock requests removed from this action group — they live as a
-    // tab inside the Pharmacy hub (under "Operational view" below) per
-    // the Phase 2 architecture review. The "X pending requests" inbox
-    // card already deep-links into the hub's Restock Requests tab.
     { kind: "item", url: "/reports" },
   ],
-  // Operational view — consolidated data they monitor
+  // Operational view — consolidated data they monitor. Calendar +
+  // Nutrition sit immediately below Patients (per user request) so the
+  // patient-adjacent operational tools cluster together.
   [
     { kind: "item",  url: "/today" },
     { kind: "group", key: "patients" },
+    { kind: "item",  url: "/calendar" },
+    { kind: "item",  url: "/nutrition" },
     { kind: "item",  url: "/inventory" },
     { kind: "item",  url: "/workforce" },
   ],
-  // Capture screens (read-only for MGMT) + utilities
+  // Capture screens + service workflows (read-only for MGMT) +
+  // utilities. Referrals/Certificates/Campaigns/Konsulta now live
+  // behind the Services collapsible group.
   [
     { kind: "group", key: "daily-ops" },
     { kind: "group", key: "surveillance" },
-    { kind: "item",  url: "/certificates" },
-    { kind: "item",  url: "/campaigns" },
-    { kind: "item",  url: "/konsulta" },
-    { kind: "item",  url: "/calendar" },
-    { kind: "item",  url: "/nutrition" },
+    { kind: "group", key: "services" },
     { kind: "item",  url: "/messages" },
   ],
   // Admin — system administration
@@ -405,6 +413,7 @@ function isActiveFor(item: NavItem, location: string): boolean {
 const PATIENTS_OPEN_KEY = "sidebar.patients.open";
 const DAILY_OPS_OPEN_KEY = "sidebar.dailyOps.open";
 const SURVEILLANCE_OPEN_KEY = "sidebar.surveillance.open";
+const SERVICES_OPEN_KEY = "sidebar.services.open";
 
 export function AppSidebar() {
   const [location] = useLocation();
@@ -441,6 +450,15 @@ export function AppSidebar() {
     window.localStorage.setItem(SURVEILLANCE_OPEN_KEY, surveillanceOpen ? "1" : "0");
   }, [surveillanceOpen]);
 
+  const [servicesOpen, setServicesOpen] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    const raw = window.localStorage.getItem(SERVICES_OPEN_KEY);
+    return raw === null ? false : raw === "1";
+  });
+  useEffect(() => {
+    window.localStorage.setItem(SERVICES_OPEN_KEY, servicesOpen ? "1" : "0");
+  }, [servicesOpen]);
+
   const { data: unreadData } = useQuery<{ count: number }>({
     queryKey: ["/api/dm/unread-count"],
     refetchInterval: 5000,
@@ -471,11 +489,15 @@ export function AppSidebar() {
   const visibleSurveillance = SURVEILLANCE_CHILDREN.filter((item) =>
     role ? (item.roles as string[]).includes(role) : false,
   );
+  const visibleServices = SERVICES_CHILDREN.filter((item) =>
+    role ? (item.roles as string[]).includes(role) : false,
+  );
 
 
   const patientsGroupActive = PATIENT_CHILDREN.some((c) => isActiveFor(c, location));
   const dailyOpsActive = DAILY_OPS_CHILDREN.some((c) => isActiveFor(c, location));
   const surveillanceActive = SURVEILLANCE_CHILDREN.some((c) => isActiveFor(c, location));
+  const servicesActive = SERVICES_CHILDREN.some((c) => isActiveFor(c, location));
 
   // Role-driven sidebar order: TL gets daily-work-first, MGMT gets
   // decision-first. See {TL,MGMT}_LAYOUT for the canonical sequences.
@@ -577,6 +599,24 @@ export function AppSidebar() {
                   onOpenChange={setSurveillanceOpen}
                   active={surveillanceActive}
                   items={visibleSurveillance}
+                  location={location}
+                />,
+              );
+              continue;
+            }
+            if (unit.key === "services" && visibleServices.length > 0) {
+              rendered.push(
+                <CollapsibleGroup
+                  key="services"
+                  groupClassName="group/services"
+                  triggerClassName="group-data-[state=open]/services:rotate-90"
+                  testId="nav-services-toggle"
+                  icon={Briefcase}
+                  label="Services"
+                  open={servicesOpen}
+                  onOpenChange={setServicesOpen}
+                  active={servicesActive}
+                  items={visibleServices}
                   location={location}
                 />,
               );
