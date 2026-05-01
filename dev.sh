@@ -1,14 +1,27 @@
 #!/bin/bash
-export NODE_ENV=development
+# Kill any other dev.sh processes (stale loops from previous crash cycles),
+# but spare the current process ($$).
+pgrep -f 'bash dev.sh' | grep -v "^$$\$" | xargs -r kill -9 2>/dev/null || true
 
-while true; do
-  # Kill any leftover tsx process bound to the port before (re)starting.
-  pkill -9 -f 'tsx server/index.ts' 2>/dev/null || true
-  sleep 0.5
+# Kill any lingering server processes from previous runs.
+pkill -9 -f 'tsx server/index' 2>/dev/null || true
+pkill -9 -f 'node dist/index.cjs' 2>/dev/null || true
+sleep 2
 
-  echo "[dev.sh] Starting server..."
-  node_modules/.bin/tsx server/index.ts
-  EXIT=$?
-  echo "[dev.sh] Server exited (code $EXIT). Restarting in 3 s..."
-  sleep 3
-done
+# Build the compiled server if it doesn't exist yet.
+if [ ! -f "dist/index.cjs" ]; then
+  echo "[dev.sh] Building application for first run..."
+  export NODE_ENV=production
+  npm run build
+  if [ $? -ne 0 ]; then
+    echo "[dev.sh] Build failed."
+    exit 1
+  fi
+fi
+
+export NODE_ENV=production
+echo "[dev.sh] Starting server..."
+
+# exec replaces this shell with the node process so signals from Replit
+# go directly to Node — no intermediate shell to swallow them.
+exec node dist/index.cjs

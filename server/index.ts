@@ -144,14 +144,12 @@ app.use((req, res, next) => {
       // CJS require() here — `require` is undefined when tsx loads
       // this file as ESM (package.json: "type": "module"), which used
       // to crash the dev process inside this listen callback.
-      if (process.env.NODE_ENV !== "production") {
-        setInterval(() => {
-          http
-            .get(`http://localhost:${port}/api/health`, (res) => res.resume())
-            .on("error", () => {});
-        }, 25_000);
-        log("self-ping keepalive active (every 25 s)", "startup");
-      }
+      setInterval(() => {
+        http
+          .get(`http://localhost:${port}/api/health`, (res) => res.resume())
+          .on("error", () => {});
+      }, 25_000);
+      log("self-ping keepalive active (every 25 s)", "startup");
     });
     httpServer.once("error", async (err: NodeJS.ErrnoException) => {
       if (err.code === "EADDRINUSE" && attemptsLeft > 0) {
