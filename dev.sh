@@ -20,8 +20,14 @@ if [ ! -f "dist/index.cjs" ]; then
 fi
 
 export NODE_ENV=production
-echo "[dev.sh] Starting server..."
 
-# exec replaces this shell with the node process so signals from Replit
-# go directly to Node — no intermediate shell to swallow them.
-exec node dist/index.cjs
+# Restart loop — automatically brings the server back after any crash or
+# platform idle-kill.  SIGTERM to this bash process (from Replit Stop) will
+# propagate to the node child and then bash will exit normally.
+while true; do
+  echo "[dev.sh] Starting server..."
+  node dist/index.cjs
+  EXIT=$?
+  echo "[dev.sh] Server exited (code $EXIT). Restarting in 3 s..."
+  sleep 3
+done
