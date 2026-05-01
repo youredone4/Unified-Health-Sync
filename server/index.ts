@@ -148,8 +148,8 @@ app.use((req, res, next) => {
         http
           .get(`http://localhost:${port}/api/health`, (res) => res.resume())
           .on("error", () => {});
-      }, 25_000);
-      log("self-ping keepalive active (every 25 s)", "startup");
+      }, 10_000);
+      log("self-ping keepalive active (every 10 s)", "startup");
     });
     httpServer.once("error", async (err: NodeJS.ErrnoException) => {
       if (err.code === "EADDRINUSE" && attemptsLeft > 0) {
