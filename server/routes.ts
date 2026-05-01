@@ -3329,8 +3329,12 @@ export async function registerRoutes(
   // with a type chip and a click-through link to the detail page.
   app.get("/api/mgmt/inbox", loadUserInfo, requireAuth,
     requireRole(UserRole.SYSTEM_ADMIN, UserRole.MHO, UserRole.SHA),
-    ar(async (_req, res) => {
+    ar(async (req, res) => {
       const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+      // System-alert rows are scheduler-generated infra signals (license
+      // expiry, stockouts, cluster detections, etc.) — gated to admins
+      // only so MHO/SHA see a clean clinical/operational queue.
+      const showSystemAlerts = req.userInfo!.role === UserRole.SYSTEM_ADMIN;
 
       const [
         pendingReferrals, openReviews, unreportedAefi, openOutbreaks,
@@ -3366,9 +3370,13 @@ export async function registerRoutes(
             )!,
           ))
           .orderBy(desc(consults.createdAt)).limit(100),
-        db.select().from(auditLogs)
-          .where(and(eq(auditLogs.action, "SYSTEM_ALERT"), gte(auditLogs.createdAt, sevenDaysAgo)))
-          .orderBy(desc(auditLogs.createdAt)).limit(100),
+        // Skip the audit-logs scan entirely for non-admins so the
+        // system_alert items never even reach the response.
+        showSystemAlerts
+          ? db.select().from(auditLogs)
+              .where(and(eq(auditLogs.action, "SYSTEM_ALERT"), gte(auditLogs.createdAt, sevenDaysAgo)))
+              .orderBy(desc(auditLogs.createdAt)).limit(100)
+          : Promise.resolve([] as typeof auditLogs.$inferSelect[]),
       ]);
 
       type InboxItem = {
