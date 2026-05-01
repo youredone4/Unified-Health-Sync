@@ -3029,7 +3029,7 @@ export async function registerRoutes(
 
   // GET /api/konsulta/status — diagnostics for the admin panel.
   app.get("/api/konsulta/status", loadUserInfo, requireAuth,
-    requireRole(UserRole.SYSTEM_ADMIN, UserRole.MHO, UserRole.SHA),
+    requireRole(UserRole.SYSTEM_ADMIN, UserRole.MHO, UserRole.SHA, UserRole.MAYOR, UserRole.HEALTH_COMMITTEE),
     ar(async (_req, res) => {
       res.json({
         configured: philhealth.isConfigured(),
@@ -3225,7 +3225,7 @@ export async function registerRoutes(
 
   // GET /api/konsulta/submissions — outbox view (admin / MGMT).
   app.get("/api/konsulta/submissions", loadUserInfo, requireAuth,
-    requireRole(UserRole.SYSTEM_ADMIN, UserRole.MHO, UserRole.SHA),
+    requireRole(UserRole.SYSTEM_ADMIN, UserRole.MHO, UserRole.SHA, UserRole.MAYOR, UserRole.HEALTH_COMMITTEE),
     ar(async (req, res) => {
       const status = req.query.status ? String(req.query.status) : undefined;
       const conds: any[] = [];
@@ -3327,8 +3327,11 @@ export async function registerRoutes(
   // reviews, unreported AEFIs, and recent SYSTEM_ALERT audit entries.
   // Each item has a uniform shape so the client can render a single list
   // with a type chip and a click-through link to the detail page.
+  // View-only roles (MAYOR, HEALTH_COMMITTEE) see the same inbox feed
+  // as MGMT — they're observers of the same decision queues, even
+  // though they can't transition any of them.
   app.get("/api/mgmt/inbox", loadUserInfo, requireAuth,
-    requireRole(UserRole.SYSTEM_ADMIN, UserRole.MHO, UserRole.SHA),
+    requireRole(UserRole.SYSTEM_ADMIN, UserRole.MHO, UserRole.SHA, UserRole.MAYOR, UserRole.HEALTH_COMMITTEE),
     ar(async (req, res) => {
       const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
       // System-alert rows are scheduler-generated infra signals (license
