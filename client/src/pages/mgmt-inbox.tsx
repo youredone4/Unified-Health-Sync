@@ -11,7 +11,7 @@ import { EmptyState } from "@/components/states/empty-state";
 import { ListSkeleton } from "@/components/states/loading-skeleton";
 import { ErrorState } from "@/components/states/error-state";
 
-type InboxType = "referral" | "death-review" | "aefi" | "outbreak" | "restock" | "system-alert";
+type InboxType = "referral" | "death-review" | "aefi" | "outbreak" | "restock" | "md-review" | "system-alert";
 type InboxPriority = "high" | "medium" | "low";
 
 interface InboxItem {
@@ -33,6 +33,7 @@ interface InboxResponse {
     aefi: number;
     outbreak?: number;
     restock?: number;
+    mdReview?: number;
     systemAlert: number;
     total: number;
   };
@@ -44,6 +45,7 @@ const TYPE_LABEL: Record<InboxType, string> = {
   "aefi":         "AEFI",
   "outbreak":     "Outbreak",
   "restock":      "Restock",
+  "md-review":    "MD Review",
   "system-alert": "Alert",
 };
 
@@ -93,6 +95,7 @@ export default function MgmtInboxPage() {
         <FilterButton active={filter === "death-review"} onClick={() => setFilter("death-review")} label="Death Reviews" count={counts?.deathReview} />
         <FilterButton active={filter === "aefi"}         onClick={() => setFilter("aefi")}         label="AEFI"          count={counts?.aefi} />
         <FilterButton active={filter === "outbreak"}     onClick={() => setFilter("outbreak")}     label="Outbreaks"     count={counts?.outbreak} />
+        <FilterButton active={filter === "md-review"}    onClick={() => setFilter("md-review")}    label="MD Reviews"    count={counts?.mdReview} />
         <FilterButton active={filter === "restock"}      onClick={() => setFilter("restock")}      label="Restock"       count={counts?.restock} />
         <FilterButton active={filter === "system-alert"} onClick={() => setFilter("system-alert")} label="Alerts"        count={counts?.systemAlert} />
       </div>
