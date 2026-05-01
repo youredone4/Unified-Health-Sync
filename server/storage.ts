@@ -3177,6 +3177,100 @@ export class DatabaseStorage implements IStorage {
         ON aefi_events (severity, reported_to_chd)
     `);
 
+    // Issue #137 Phase 1: per-dose vaccinations table.
+    //
+    // MUST run before the Phase 3 ALTER below, which adds an FK from
+    // aefi_events.vaccination_id to vaccinations(id). Earlier this block
+    // sat after the rest of the migrations and the FK ALTER tripped on
+    // a missing relation; the ordering is now lexically correct (table
+    // is created before any other migration references it).
+    //
+    // Today this table is a *mirror* — it is backfilled from
+    // children.vaccines (JSONB blob keyed by vaccine slot, e.g. "bcg",
+    // "penta1") and from school_immunizations rows. The original sources
+    // remain authoritative for M1 D-section coverage indicators in this
+    // phase, so M1 numbers stay numerically identical at the boundary.
+    //
+    // Future phases (issue #137):
+    //   - Phase 2: medicine_inventory gains lot_number / expiration_date.
+    //   - Phase 3 (next block below): aefi_events.vaccination_id FK lands
+    //     so AEFI events can be traced to the exact dose, lot, fridge,
+    //     and administering officer.
+    //   - Phase 6: M1 compute path swaps to read from this table,
+    //     falling back to JSONB only for ungroomed historical rows.
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS vaccinations (
+        id                      SERIAL PRIMARY KEY,
+        child_id                INTEGER REFERENCES children(id) ON DELETE CASCADE,
+        school_immunization_id  INTEGER REFERENCES school_immunizations(id) ON DELETE CASCADE,
+        vaccine                 TEXT NOT NULL,
+        dose_number             INTEGER NOT NULL,
+        vaccination_date        TEXT NOT NULL,
+        lot_number              TEXT,
+        expiration_date         TEXT,
+        medicine_inventory_id   INTEGER REFERENCES medicine_inventory(id),
+        administered_by_user_id VARCHAR,
+        barangay                TEXT NOT NULL,
+        notes                   TEXT,
+        created_at              TIMESTAMP NOT NULL DEFAULT NOW(),
+        CONSTRAINT vaccinations_recipient_check CHECK (
+          child_id IS NOT NULL OR school_immunization_id IS NOT NULL
+        )
+      )
+    `);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS vaccinations_child_idx ON vaccinations (child_id, vaccine, dose_number)`);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS vaccinations_school_idx ON vaccinations (school_immunization_id)`);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS vaccinations_coverage_idx ON vaccinations (barangay, vaccination_date)`);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS vaccinations_lot_idx ON vaccinations (lot_number) WHERE lot_number IS NOT NULL`);
+
+    // Idempotent backfill — runs only when vaccinations is empty so it
+    // doesn't double-insert on every startup. The COUNT check is cheap
+    // (table only grows from this point) and re-runs would re-fire only
+    // if an admin truncates the table, in which case re-backfill is the
+    // right behavior anyway.
+    //
+    // The `(out as any).rows ?? out` pattern handles both result shapes
+    // returned by the Drizzle driver (neon-serverless returns
+    // `{ rows: [...] }`; node-postgres returns the array directly). The
+    // rest of this file already uses the same defensive read.
+    const vaccinationsCountResult = await db.execute(sql`SELECT COUNT(*)::int AS n FROM vaccinations`);
+    const vaccinationsCount = Number(
+      ((vaccinationsCountResult as any).rows ?? vaccinationsCountResult)[0]?.n ?? 0,
+    );
+    if (vaccinationsCount === 0) {
+      // Routine EPI from children.vaccines JSONB. Mapping ⟨jsonKey⟩ →
+      // ⟨vaccine, doseNumber⟩ matches what M1 D-section already reads.
+      const childVaccineSlots: Array<[string, string, number]> = [
+        ["bcg",    "BCG",   1],
+        ["hepB",   "HEP_B", 1],
+        ["penta1", "PENTA", 1], ["penta2", "PENTA", 2],
+        ["penta3", "PENTA", 3], ["penta4", "PENTA", 4],
+        ["opv1",   "OPV",   1], ["opv2",   "OPV",   2],
+        ["opv3",   "OPV",   3], ["opv4",   "OPV",   4],
+        ["ipv1",   "IPV",   1], ["ipv2",   "IPV",   2],
+        ["mr1",    "MR",    1], ["mr2",    "MR",    2],
+      ];
+      let childRowsInserted = 0;
+      for (const [jsonKey, vaccine, doseNumber] of childVaccineSlots) {
+        const r = await db.execute(sql`
+          INSERT INTO vaccinations (child_id, vaccine, dose_number, vaccination_date, barangay)
+          SELECT id, ${vaccine}, ${doseNumber}, vaccines->>${jsonKey}, barangay
+          FROM children
+          WHERE vaccines->>${jsonKey} IS NOT NULL AND vaccines->>${jsonKey} <> ''
+        `);
+        childRowsInserted += (r as unknown as { rowCount?: number }).rowCount ?? 0;
+      }
+      // School-based immunizations (HPV/Td) are already one row per dose
+      // in school_immunizations, so we just copy.
+      const schoolBackfill = await db.execute(sql`
+        INSERT INTO vaccinations (school_immunization_id, vaccine, dose_number, vaccination_date, barangay, notes, created_at)
+        SELECT id, vaccine, dose_number, vaccination_date, barangay, notes, COALESCE(created_at, NOW())
+        FROM school_immunizations
+      `);
+      const schoolRowsInserted = (schoolBackfill as unknown as { rowCount?: number }).rowCount ?? 0;
+      console.log(`[migration] vaccinations backfill: ${childRowsInserted} child doses + ${schoolRowsInserted} school doses`);
+    }
+
     // Issue #137 Phase 3: AEFI ↔ vaccinations FK + VPD classification.
     //
     // vaccination_id makes a registered AEFI traceable to the exact dose
@@ -3513,87 +3607,6 @@ export class DatabaseStorage implements IStorage {
       CREATE INDEX IF NOT EXISTS philhealth_submissions_entity_idx
         ON philhealth_submissions (entity_type, entity_id)
     `);
-
-    // Issue #137 Phase 1: per-dose vaccinations table.
-    //
-    // Today this table is a *mirror* — it is backfilled from
-    // children.vaccines (JSONB blob keyed by vaccine slot, e.g. "bcg",
-    // "penta1") and from school_immunizations rows. The original sources
-    // remain authoritative for M1 D-section coverage indicators in this
-    // phase, so M1 numbers stay numerically identical at the boundary.
-    //
-    // Future phases (issue #137):
-    //   - Phase 2: medicine_inventory gains lot_number / expiration_date.
-    //   - Phase 3: aefi_events.vaccination_id FK lands so AEFI events
-    //     can be traced to the exact dose, lot, fridge, and administering
-    //     officer.
-    //   - Phase 6: M1 compute path swaps to read from this table,
-    //     falling back to JSONB only for ungroomed historical rows.
-    await db.execute(sql`
-      CREATE TABLE IF NOT EXISTS vaccinations (
-        id                      SERIAL PRIMARY KEY,
-        child_id                INTEGER REFERENCES children(id) ON DELETE CASCADE,
-        school_immunization_id  INTEGER REFERENCES school_immunizations(id) ON DELETE CASCADE,
-        vaccine                 TEXT NOT NULL,
-        dose_number             INTEGER NOT NULL,
-        vaccination_date        TEXT NOT NULL,
-        lot_number              TEXT,
-        expiration_date         TEXT,
-        medicine_inventory_id   INTEGER REFERENCES medicine_inventory(id),
-        administered_by_user_id VARCHAR,
-        barangay                TEXT NOT NULL,
-        notes                   TEXT,
-        created_at              TIMESTAMP NOT NULL DEFAULT NOW(),
-        CONSTRAINT vaccinations_recipient_check CHECK (
-          child_id IS NOT NULL OR school_immunization_id IS NOT NULL
-        )
-      )
-    `);
-    await db.execute(sql`CREATE INDEX IF NOT EXISTS vaccinations_child_idx ON vaccinations (child_id, vaccine, dose_number)`);
-    await db.execute(sql`CREATE INDEX IF NOT EXISTS vaccinations_school_idx ON vaccinations (school_immunization_id)`);
-    await db.execute(sql`CREATE INDEX IF NOT EXISTS vaccinations_coverage_idx ON vaccinations (barangay, vaccination_date)`);
-    await db.execute(sql`CREATE INDEX IF NOT EXISTS vaccinations_lot_idx ON vaccinations (lot_number) WHERE lot_number IS NOT NULL`);
-
-    // Idempotent backfill — runs only when vaccinations is empty so it
-    // doesn't double-insert on every startup. The COUNT check is cheap
-    // (table only grows from this point) and re-runs would re-fire only
-    // if an admin truncates the table, in which case re-backfill is the
-    // right behavior anyway.
-    const vaccinationsCountResult = await db.execute(sql`SELECT COUNT(*)::int AS n FROM vaccinations`);
-    const vaccinationsCount = (vaccinationsCountResult.rows[0] as { n: number } | undefined)?.n ?? 0;
-    if (vaccinationsCount === 0) {
-      // Routine EPI from children.vaccines JSONB. Mapping ⟨jsonKey⟩ →
-      // ⟨vaccine, doseNumber⟩ matches what M1 D-section already reads.
-      const childVaccineSlots: Array<[string, string, number]> = [
-        ["bcg",    "BCG",   1],
-        ["hepB",   "HEP_B", 1],
-        ["penta1", "PENTA", 1], ["penta2", "PENTA", 2],
-        ["penta3", "PENTA", 3], ["penta4", "PENTA", 4],
-        ["opv1",   "OPV",   1], ["opv2",   "OPV",   2],
-        ["opv3",   "OPV",   3], ["opv4",   "OPV",   4],
-        ["ipv1",   "IPV",   1], ["ipv2",   "IPV",   2],
-        ["mr1",    "MR",    1], ["mr2",    "MR",    2],
-      ];
-      let childRowsInserted = 0;
-      for (const [jsonKey, vaccine, doseNumber] of childVaccineSlots) {
-        const r = await db.execute(sql`
-          INSERT INTO vaccinations (child_id, vaccine, dose_number, vaccination_date, barangay)
-          SELECT id, ${vaccine}, ${doseNumber}, vaccines->>${jsonKey}, barangay
-          FROM children
-          WHERE vaccines->>${jsonKey} IS NOT NULL AND vaccines->>${jsonKey} <> ''
-        `);
-        childRowsInserted += (r as unknown as { rowCount?: number }).rowCount ?? 0;
-      }
-      // School-based immunizations (HPV/Td) are already one row per dose
-      // in school_immunizations, so we just copy.
-      const schoolBackfill = await db.execute(sql`
-        INSERT INTO vaccinations (school_immunization_id, vaccine, dose_number, vaccination_date, barangay, notes, created_at)
-        SELECT id, vaccine, dose_number, vaccination_date, barangay, notes, COALESCE(created_at, NOW())
-        FROM school_immunizations
-      `);
-      const schoolRowsInserted = (schoolBackfill as unknown as { rowCount?: number }).rowCount ?? 0;
-      console.log(`[migration] vaccinations backfill: ${childRowsInserted} child doses + ${schoolRowsInserted} school doses`);
-    }
 
     // Issue #137 Phase 2: lot tracking on medicine_inventory.
     //
