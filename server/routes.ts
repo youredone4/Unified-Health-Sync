@@ -2674,6 +2674,30 @@ export async function registerRoutes(
     res.json(rows);
   }));
 
+  // GET /api/medication-dispensings — read-only ledger for the
+  // Pharmacy hub Dispensings tab (Phase 2 architecture review). Optional
+  // barangay filter; TLs always see only their assigned barangays. Capped
+  // at 500 rows so the ledger stays fast; the page paginates client-side.
+  app.get("/api/medication-dispensings", loadUserInfo, requireAuth, ar(async (req, res) => {
+    const conds: any[] = [];
+    const requestedBarangay = req.query.barangay ? String(req.query.barangay) : null;
+    if (req.userInfo?.role === UserRole.TL) {
+      const assigned = req.userInfo.assignedBarangays;
+      if (assigned.length === 0) return res.json([]);
+      const target = requestedBarangay && assigned.includes(requestedBarangay)
+        ? requestedBarangay
+        : assigned[0];
+      conds.push(eq(medicationDispensings.barangay, target));
+    } else if (requestedBarangay) {
+      conds.push(eq(medicationDispensings.barangay, requestedBarangay));
+    }
+    const rows = await db.select().from(medicationDispensings)
+      .where(conds.length ? and(...conds) : undefined)
+      .orderBy(desc(medicationDispensings.dispensedAt))
+      .limit(500);
+    res.json(rows);
+  }));
+
   // PATCH /api/walk-ins/:id/md-review — Municipal Doctor signs off on the
   // BHS triage with their own assessment + plan + final disposition. Gated
   // to MHO/SHA/SYSTEM_ADMIN. Once signed (md_signed_at IS NOT NULL) the

@@ -69,6 +69,7 @@ export const sidebarPermissions: Record<string, readonly string[]> = {
   "/hotspots": MGMT_ROLES,
   "/inventory": ALL_ROLES,
   "/inventory/stockouts": MGMT_ROLES,
+  "/inventory/dispensings": ALL_ROLES,    // Pharmacy hub Dispensings tab; TLs see only their barangay (server-enforced)
   "/walk-in": ALL_ROLES,
   "/restock-requests": ALL_ROLES,
   "/certificates": ALL_ROLES,
