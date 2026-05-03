@@ -20,6 +20,9 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { UserCircle, Lock, Save } from "lucide-react";
+import { useGlossaryPreference } from "@/hooks/use-glossary-preference";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 
 const roleLabels: Record<string, string> = {
   SYSTEM_ADMIN: "System Admin",
@@ -344,6 +347,65 @@ export default function AccountPage() {
           </Form>
         </CardContent>
       </Card>
+
+      <DisplayPreferencesCard />
     </div>
+  );
+}
+
+/**
+ * Display preferences — for now just the glossary inline-mode toggle.
+ * Lives at the bottom of /account so it's discoverable but never
+ * blocks the profile or password flows.
+ */
+function DisplayPreferencesCard() {
+  const { inlineMode, isExplicit, roleDefault, setPreference } = useGlossaryPreference();
+
+  return (
+    <Card data-testid="card-display-prefs">
+      <CardHeader>
+        <CardTitle className="text-base">Display preferences</CardTitle>
+        <CardDescription>
+          Personal settings that change how information is shown to you.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="flex items-start justify-between gap-4">
+          <div className="space-y-1">
+            <Label htmlFor="inline-glossary" className="text-sm font-medium">
+              Show definitions inline
+            </Label>
+            <p className="text-xs text-muted-foreground">
+              When on, medical and DOH terms are followed by a short
+              plain-language definition (e.g. "MAM (Moderate Acute
+              Malnutrition)"). When off, the same definitions are still
+              available — tap any <span className="font-mono">?</span> icon
+              next to a term.
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Default for your role: <span className="font-medium">{roleDefault === "on" ? "On" : "Off"}</span>
+              {!isExplicit && <> (currently using the default)</>}
+            </p>
+          </div>
+          <Switch
+            id="inline-glossary"
+            checked={inlineMode}
+            onCheckedChange={(v) => setPreference(v ? "on" : "off")}
+            data-testid="toggle-inline-glossary"
+          />
+        </div>
+        {isExplicit && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="px-0 h-auto text-primary underline-offset-4 hover:underline"
+            onClick={() => setPreference("default")}
+            data-testid="reset-inline-glossary"
+          >
+            Reset to role default
+          </Button>
+        )}
+      </CardContent>
+    </Card>
   );
 }
