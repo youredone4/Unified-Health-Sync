@@ -62,6 +62,34 @@ export default function PrenatalScreeningsWorklist() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search]);
 
+  // One batch fetch per visible page (≤10 mothers) — replaces the previous
+  // per-row N+1 pattern. Keyed on the comma-separated id list so React
+  // Query refetches when the user paginates.
+  const visibleIds = pagination.pagedItems.map((m) => m.id);
+  const idsKey = visibleIds.slice().sort((a, b) => a - b).join(",");
+  const { data: visibleScreenings = [] } = useQuery<PrenatalScreening[]>({
+    queryKey: ["/api/prenatal-screenings", "by-mothers", idsKey],
+    queryFn: async () => {
+      if (visibleIds.length === 0) return [];
+      const r = await fetch(
+        `/api/prenatal-screenings?motherIds=${idsKey}`,
+        { credentials: "include" },
+      );
+      if (!r.ok) throw new Error(`${r.status}: ${r.statusText}`);
+      return r.json();
+    },
+    enabled: visibleIds.length > 0,
+  });
+  const screeningsByMother = useMemo(() => {
+    const m = new Map<number, PrenatalScreening[]>();
+    for (const s of visibleScreenings) {
+      const arr = m.get(s.motherId);
+      if (arr) arr.push(s);
+      else m.set(s.motherId, [s]);
+    }
+    return m;
+  }, [visibleScreenings]);
+
   return (
     <div className="space-y-4">
       <div>
@@ -110,6 +138,7 @@ export default function PrenatalScreeningsWorklist() {
               <Row
                 key={m.id}
                 mother={m}
+                existing={screeningsByMother.get(m.id) ?? []}
                 canLog={canEnterRecords}
                 onLog={() => setLogTarget(m)}
               />
@@ -131,24 +160,13 @@ export default function PrenatalScreeningsWorklist() {
 }
 
 function Row({
-  mother, canLog, onLog,
+  mother, existing, canLog, onLog,
 }: {
   mother: Mother;
+  existing: PrenatalScreening[];
   canLog: boolean;
   onLog: () => void;
 }) {
-  const { data: existing = [] } = useQuery<PrenatalScreening[]>({
-    queryKey: ["/api/prenatal-screenings", mother.id],
-    queryFn: async () => {
-      const r = await fetch(
-        `/api/prenatal-screenings?motherId=${mother.id}`,
-        { credentials: "include" },
-      );
-      if (!r.ok) throw new Error(`${r.status}: ${r.statusText}`);
-      return r.json();
-    },
-  });
-
   const lastDate = existing[0]?.screeningDate;
 
   return (
@@ -246,8 +264,9 @@ function LogScreeningDialog({
     },
     onSuccess: () => {
       toast({ title: "Screening logged" });
+      // Prefix-match invalidation hits both per-mother and by-mothers keys.
       queryClient.invalidateQueries({
-        queryKey: ["/api/prenatal-screenings", mother.id],
+        queryKey: ["/api/prenatal-screenings"],
       });
       onOpenChange(false);
       form.reset();

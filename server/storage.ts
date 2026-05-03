@@ -113,10 +113,12 @@ export interface IStorage {
 
   // Prenatal screenings (M1 Section A page-19 extras)
   getPrenatalScreenings(motherId: number): Promise<PrenatalScreening[]>;
+  getPrenatalScreeningsByMotherIds(motherIds: number[]): Promise<PrenatalScreening[]>;
   createPrenatalScreening(screening: InsertPrenatalScreening): Promise<PrenatalScreening>;
 
   // Birth-attendance records (M1 B-04 delivery type breakdown)
   getBirthAttendanceRecords(motherId: number): Promise<BirthAttendanceRecord[]>;
+  getBirthAttendanceRecordsByMotherIds(motherIds: number[]): Promise<BirthAttendanceRecord[]>;
   createBirthAttendanceRecord(record: InsertBirthAttendanceRecord): Promise<BirthAttendanceRecord>;
 
   // Sick child visits (M1 Section F — IMCI)
@@ -601,6 +603,15 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(prenatalScreenings.screeningDate));
   }
 
+  async getPrenatalScreeningsByMotherIds(motherIds: number[]): Promise<PrenatalScreening[]> {
+    if (motherIds.length === 0) return [];
+    return await db
+      .select()
+      .from(prenatalScreenings)
+      .where(inArray(prenatalScreenings.motherId, motherIds))
+      .orderBy(desc(prenatalScreenings.screeningDate));
+  }
+
   async createPrenatalScreening(screening: InsertPrenatalScreening): Promise<PrenatalScreening> {
     const [created] = await db.insert(prenatalScreenings).values(screening).returning();
     return created;
@@ -611,6 +622,15 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(birthAttendanceRecords)
       .where(eq(birthAttendanceRecords.motherId, motherId))
+      .orderBy(desc(birthAttendanceRecords.deliveryDate));
+  }
+
+  async getBirthAttendanceRecordsByMotherIds(motherIds: number[]): Promise<BirthAttendanceRecord[]> {
+    if (motherIds.length === 0) return [];
+    return await db
+      .select()
+      .from(birthAttendanceRecords)
+      .where(inArray(birthAttendanceRecords.motherId, motherIds))
       .orderBy(desc(birthAttendanceRecords.deliveryDate));
   }
 

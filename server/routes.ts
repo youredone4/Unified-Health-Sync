@@ -74,6 +74,27 @@ export async function registerRoutes(
     return data;
   }
 
+  // Helper for batch fetches keyed on motherId. Looks up each requested
+  // mother and returns the subset whose barangay is accessible to the
+  // requester. TLs have inaccessible IDs silently filtered (matches the
+  // semantics of "you only see what you can see"); MGMT roles see all.
+  // Used by /api/prenatal-screenings and /api/birth-attendance-records
+  // when called with ?motherIds=1,2,3 instead of ?motherId=N.
+  async function filterMotherIdsByAccess(
+    motherIds: number[],
+    req: Express.Request,
+  ): Promise<number[]> {
+    if (motherIds.length === 0) return [];
+    const userInfo = req.userInfo;
+    if (!userInfo) return [];
+    if (userInfo.role !== UserRole.TL) return motherIds;
+    const mothers = await Promise.all(motherIds.map((id) => storage.getMother(id)));
+    return mothers
+      .filter((m): m is NonNullable<typeof m> => !!m)
+      .filter((m) => userInfo.assignedBarangays.includes(m.barangay))
+      .map((m) => m.id);
+  }
+
   // Safe integer ID parser — returns the parsed integer or sends 400 and returns null
   function parseId(raw: string | undefined, res: any): number | null {
     const n = parseInt(raw ?? "", 10);
@@ -844,10 +865,24 @@ export async function registerRoutes(
   );
 
   // === PRENATAL SCREENINGS — feeds M1 Section A page-19 extras ===
+  // Accepts either ?motherId=N (single, back-compat) or ?motherIds=1,2,3
+  // (batch). The batch form lets list pages avoid the N+1 fetch pattern.
+  // For TLs, requested motherIds outside their assigned barangays are
+  // silently filtered out — never leaks the existence of inaccessible rows.
   app.get("/api/prenatal-screenings", loadUserInfo, requireAuth, ar(async (req, res) => {
+    const idsParam = req.query.motherIds ? String(req.query.motherIds) : undefined;
+    if (idsParam !== undefined) {
+      const ids = idsParam.split(",")
+        .map((s) => Number(s.trim()))
+        .filter((n) => Number.isFinite(n));
+      if (ids.length === 0) return res.json([]);
+      const accessibleIds = await filterMotherIdsByAccess(ids, req);
+      const data = await storage.getPrenatalScreeningsByMotherIds(accessibleIds);
+      return res.json(data);
+    }
     const motherIdRaw = req.query.motherId ? Number(req.query.motherId) : undefined;
     if (motherIdRaw === undefined || !Number.isFinite(motherIdRaw)) {
-      return res.status(400).json({ message: "motherId query param is required" });
+      return res.status(400).json({ message: "motherId or motherIds query param is required" });
     }
     const mother = await storage.getMother(motherIdRaw);
     if (!mother) return res.status(404).json({ message: "Mother not found" });
@@ -1161,10 +1196,23 @@ export async function registerRoutes(
   );
 
   // === BIRTH ATTENDANCE RECORDS — feeds M1 B-04 delivery type breakdown ===
+  // Accepts either ?motherId=N (single, back-compat) or ?motherIds=1,2,3
+  // (batch). See the prenatal-screenings handler for the access-control
+  // semantics — same shape.
   app.get("/api/birth-attendance-records", loadUserInfo, requireAuth, ar(async (req, res) => {
+    const idsParam = req.query.motherIds ? String(req.query.motherIds) : undefined;
+    if (idsParam !== undefined) {
+      const ids = idsParam.split(",")
+        .map((s) => Number(s.trim()))
+        .filter((n) => Number.isFinite(n));
+      if (ids.length === 0) return res.json([]);
+      const accessibleIds = await filterMotherIdsByAccess(ids, req);
+      const data = await storage.getBirthAttendanceRecordsByMotherIds(accessibleIds);
+      return res.json(data);
+    }
     const motherIdRaw = req.query.motherId ? Number(req.query.motherId) : undefined;
     if (motherIdRaw === undefined || !Number.isFinite(motherIdRaw)) {
-      return res.status(400).json({ message: "motherId query param is required" });
+      return res.status(400).json({ message: "motherId or motherIds query param is required" });
     }
     const mother = await storage.getMother(motherIdRaw);
     if (!mother) return res.status(404).json({ message: "Mother not found" });
