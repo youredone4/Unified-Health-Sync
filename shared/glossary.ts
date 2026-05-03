@@ -242,6 +242,135 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
     short: "Local Government Unit",
     long: "Province / city / municipality / barangay. Each level has health-program responsibility.",
   },
+
+  // ─── Maternal additions (B2 surface) ──────────────────────────────────
+  BEmONC: {
+    short: "Basic Emergency Obstetric and Newborn Care",
+    long: "Facility level certified to handle obstetric emergencies (antibiotics, oxytocics, anticonvulsants, manual placenta removal, basic newborn resuscitation).",
+  },
+  CEmONC: {
+    short: "Comprehensive Emergency Obstetric and Newborn Care",
+    long: "Facility level above BEmONC — adds cesarean delivery + blood transfusion capability.",
+  },
+  KMC: {
+    short: "Kangaroo Mother Care",
+    long: "Skin-to-skin contact between mother and low-birth-weight infant. Reduces neonatal mortality; recommended for stable LBW babies.",
+  },
+  EBF: {
+    short: "Exclusive Breastfeeding",
+    long: "Infant receives only breast milk for first 6 months — no water, formula, or other foods. Drives M1 row E-01.",
+  },
+  TT: {
+    short: "Tetanus Toxoid (older name for Td)",
+    long: "Vaccine schedule given to pregnant women (and women of reproductive age) to prevent neonatal tetanus.",
+  },
+
+  // ─── Child / IMCI additions ───────────────────────────────────────────
+  ORS: {
+    short: "Oral Rehydration Solution",
+    long: "Sugar-salt solution for diarrhea management. Combined with zinc per IMCI protocol.",
+  },
+  MUAC: {
+    short: "Mid-Upper-Arm Circumference",
+    long: "Tape measurement of upper arm; <11.5 cm = SAM, 11.5–12.4 cm = MAM in children 6–59 mo.",
+  },
+
+  // ─── NCD / Senior additions ───────────────────────────────────────────
+  HTN: {
+    short: "Hypertension",
+    long: "Sustained BP ≥140/90 mmHg in adults. Drives PhilPEN identification + medication management (G2-01..04).",
+  },
+  DM: {
+    short: "Diabetes Mellitus",
+    long: "Chronic condition where blood glucose is poorly regulated. Type 2 most common in adult NCD screening.",
+  },
+  VIA: {
+    short: "Visual Inspection with Acetic Acid",
+    long: "Cervical cancer screening method — vinegar applied to cervix; abnormal areas turn white. Used as primary screen in resource-limited settings.",
+  },
+  Pap: {
+    short: "Papanicolaou (Pap) smear",
+    long: "Cytology-based cervical cancer screening. Cells scraped from cervix examined under microscope.",
+  },
+
+  // ─── Disease / TB additions ───────────────────────────────────────────
+  DOT: {
+    short: "Directly Observed Therapy",
+    long: "TB treatment supervised by a health worker who watches the patient swallow each dose. Prevents resistance from missed doses.",
+  },
+  "MDR-TB": {
+    short: "Multi-Drug-Resistant Tuberculosis",
+    long: "TB resistant to at least isoniazid + rifampicin. Requires longer regimen at a specialized treatment center.",
+  },
+  "XDR-TB": {
+    short: "Extensively Drug-Resistant Tuberculosis",
+    long: "MDR-TB plus resistance to fluoroquinolones AND at least one injectable second-line drug. Very limited treatment options.",
+  },
+  "Cat I": {
+    short: "PIDSR Category I — weekly-reportable diseases",
+    long: "Notifiable diseases requiring immediate / weekly reporting (e.g., AFP, measles, neonatal tetanus, rabies).",
+    source: "DOH AO 2007-0036",
+  },
+  "Cat II": {
+    short: "PIDSR Category II — monthly-reportable diseases",
+    long: "Endemic / chronic diseases reported monthly (e.g., dengue, leptospirosis, typhoid).",
+    source: "DOH AO 2007-0036",
+  },
+
+  // ─── Outbreak / surveillance status ───────────────────────────────────
+  SUSPECTED: {
+    short: "Outbreak under investigation — not yet confirmed",
+    long: "Cluster threshold met; lab confirmation or epidemiologic link still pending.",
+  },
+  DECLARED: {
+    short: "Outbreak confirmed — response active",
+    long: "Outbreak meets case definition; Rapid Response Team mobilized.",
+  },
+  CONTAINED: {
+    short: "Outbreak controlled — monitoring continues",
+    long: "Transmission interrupted; surveillance maintained for 2× incubation period before closure.",
+  },
+
+  // ─── Mortality / death-review additions ───────────────────────────────
+  MDR: {
+    short: "Maternal Death Review",
+    long: "Mandatory facility-based or community-based audit of every maternal death within 90 days. Identifies system gaps to prevent recurrence.",
+    source: "DOH AO 2008-0029",
+  },
+  CDR: {
+    short: "Child Death Review",
+    long: "Audit of under-5 deaths to identify clinical or system contributors and corrective actions.",
+  },
+  PDR: {
+    short: "Perinatal Death Review",
+    long: "Audit of fetal deaths + early-neonatal deaths (≤6 days). Captures intrapartum and obstetric system issues.",
+  },
+
+  // ─── Triage / walk-in ─────────────────────────────────────────────────
+  EMERGENT: {
+    short: "Triage tier 1 — life-threatening, see immediately",
+    long: "Patient requires resuscitation or immediate physician evaluation. RHU triggers escalation if not seen within 1 hour.",
+  },
+  URGENT: {
+    short: "Triage tier 2 — needs prompt evaluation",
+    long: "Stable but with concerning symptoms; should be seen within the same shift.",
+  },
+  NON_URGENT: {
+    short: "Triage tier 3 — routine consultation",
+  },
+
+  // ─── Operational ──────────────────────────────────────────────────────
+  FEFO: {
+    short: "First-Expiry-First-Out",
+    long: "Inventory rule for expirable stock — issue items closest to expiry before newer stock.",
+  },
+  Konsulta: {
+    short: "PhilHealth Konsulta primary-care benefit package",
+    long: "PhilHealth-financed outpatient package: consultations, basic labs, medicines for hypertension/diabetes/asthma.",
+  },
+  TRIM: {
+    short: "Treatment Information Management (FHSIS)",
+  },
 };
 
 /** Look up a term — returns null if not in glossary. */

@@ -1,227 +1,143 @@
-# Design proposal — AI-assisted recommended course of action
+# Design proposal — system-wide plain-language layer + AI-assisted recommended actions
 
-**Status:** draft for review (no code yet).
+**Status:** draft for review (no code yet beyond the foundation already shipped in #178/#179).
 **Author:** Claude.
-**Audience:** the 3 surveillance / clinical surfaces that already have a row-action drawer (disease-surveillance, mortality, mgmt-inbox).
-**Goal:** when an operator opens a row, surface a **DOH-grounded recommended next step** so a non-clinical decision-maker can act without translating jargon, and a clinical user gets a checklist they don't have to memorize.
+**Scope (revised after user feedback):** **the entire system** — every page, every flag, every label that carries DOH / clinical / operational jargon, and every clinical state where DOH guidance dictates a next step.
+**Goal:** any literate Filipino LGU staffer (mayor, committee member, treasurer, finance officer) can navigate the system as confidently as a clinician. And any reviewer — clinical or not — gets a DOH-cited next step rather than translating jargon themselves.
 
 ---
 
-## Why this is not "AI-first"
+## What's already in place (foundation — done)
 
-The user's framing was "AI-driven recommendation." The honest answer for a clinical-surveillance system in a rural LGU:
+- `shared/glossary.ts` (PR #178) — single source of truth for plain-language definitions.
+- `<Term>` component with popup tip + role-aware inline gloss + per-user toggle (PR #178).
+- First sprinkle pass on surveillance + MGMT inbox (PR #179).
 
-- **Rule-based first.** DOH protocols are deterministic checklists (e.g., Rabies Cat III → vaccine + RIG + ABTC referral, dose schedule Days 0/3/7/14/28). A rule engine that maps row criteria → DOH guideline is **safer, auditable, citable, and offline-capable**. An LLM is the wrong tool for "if patient was bitten and category=III, recommend X" — a `match` statement is.
-- **LLM-augmented second.** Once the rule engine is solid, an LLM layer can summarize the recommendation in plain language for a mayor, generate a draft referral letter, or pull in a follow-up question — but **always alongside** the rule-based citation, never replacing it.
-- **Disclaimer always.** Every recommendation card carries "DOH guidance — not a clinical order. Reviewer judgment required." This is non-negotiable.
-
----
-
-## What the recommendation card looks like
-
-When a user opens an action drawer (or visits a row detail), if any rule fires, a card slots above the existing form:
-
-```
-┌─────────────────────────────────────────────────┐
-│  💡  Recommended action — DOH 2018 Rabies Manual│
-│                                                 │
-│  Category III exposure: medical emergency.      │
-│  • Wash wound 15 min                            │
-│  • Anti-rabies vaccine (Days 0,3,7,14,28)       │
-│  • Rabies Immune Globulin (RIG) infiltration    │
-│  • Refer to ABTC                                │
-│                                                 │
-│  [Mark Reviewed]  [Escalate to MHO]  [Source ↗] │
-│                                                 │
-│  ⓘ Guidance only — reviewer judgment required.  │
-└─────────────────────────────────────────────────┘
-```
-
-Buttons map to the existing surveillance workflow (status transitions). The recommendation **doesn't add new actions** — it tells the reviewer which existing action is most aligned with DOH guidance.
+The infrastructure scales. **The work ahead is applying it consistently** across every surface and adding DOH-cited recommendation rules for every clinical state.
 
 ---
 
-## Phase 1 — rule engine (this proposal's scope)
+## Part A — system-wide glossary rollout
 
-A new `shared/recommendations.ts` defines rules as plain TypeScript:
+The user feedback was clear: don't stop at surveillance. Apply `<Term>` to every page that carries jargon. Concrete phased plan, each phase ≈ 1 small PR:
 
-```ts
-interface Recommendation {
-  id: string;                // e.g. "rabies-cat-iii-pep"
-  module: "rabies" | "filariasis" | "schisto" | "sth" | "leprosy" | "mortality";
-  // Pure predicate over the row — must not throw, must be deterministic.
-  applies: (row: any) => boolean;
-  title: string;
-  bullets: string[];
-  source: string;            // DOH AO / Manual citation
-  sourceUrl?: string;
-  severity: "info" | "advisory" | "urgent";
-}
+| Phase | Surface | Jargon density | High-value terms |
+|---|---|---|---|
+| **A1** | M1 Report (`/reports/m1`) | Very high | Section codes (A, B, C, D1, D2…W), every row label, every column header (FP_DUAL, AGE_GROUP) |
+| **A2** | Maternal stack (Mothers, PNC, Birth Attendance, Prenatal Screenings) | High | ANC, PNC, TT/Td, fundal height, gestational age, BMI categories, GDM, MMS, MNCHN, BEmONC |
+| **A3** | Child stack (Children, Sick Child, Vaccines, Nutrition) | High | Penta 1/2/3, OPV, IPV, MR, BCG, Vit A schedule, MAM/SAM, SFP, OTC, IMCI, KMC, EBF |
+| **A4** | Senior + NCD (Seniors, NCD Screenings, PhilPEN, Vision, Cervical, Mental Health) | Medium | HTN, DM, BMI categories, mhGAP, VIA, Pap, HPV test, BP categories |
+| **A5** | Disease cases + TB (Disease Worklist, TB DOTS, PIDSR, Outbreaks) | High | Cat I / Cat II diseases, DOT, smear-positive, MDR-TB, XDR-TB, treatment outcomes, OUTBREAK statuses |
+| **A6** | Mortality + Death Reviews | High | Maternal-cause classifications, perinatal/neonatal/early-neonatal, MDR / CDR / PDR review types, residency, fetal death |
+| **A7** | Inventory + Pharmacy + Restock | Medium | FEFO, batch/lot, stockout thresholds, urgency tiers |
+| **A8** | Walk-in / Triage / Referrals / Konsulta | Medium | Acuity tiers (EMERGENT / URGENT / NON_URGENT), MD review, BHS-escalated, Konsulta enrolment statuses |
+| **A9** | Dashboards + Reports + Calendar | Low (mostly chart titles) | Indicator codes appearing in summaries |
+| **A10** | Sidebar + page subtitles + empty states + status badges everywhere | Cross-cutting | Plain-language page subtitles ("This page tracks…"); friendlier empty-state copy; every status enum gets `<Term>` |
 
-export const RECOMMENDATIONS: Recommendation[] = [
-  {
-    id: "rabies-cat-iii-pep",
-    module: "rabies",
-    applies: (r) => r.category === "III",
-    title: "Category III exposure — medical emergency",
-    bullets: [
-      "Wash wound for 15 minutes with soap and running water.",
-      "Administer anti-rabies vaccine, schedule Days 0, 3, 7, 14, 28.",
-      "Infiltrate Rabies Immune Globulin (RIG) at the wound site.",
-      "Refer to ABTC immediately. Tetanus prophylaxis as needed.",
-    ],
-    source: "DOH 2018 Rabies Manual",
-    severity: "urgent",
-  },
-  {
-    id: "rabies-cat-ii-non-abtc",
-    module: "rabies",
-    applies: (r) => r.category === "II" && r.treatmentCenter === "NON_ABTC",
-    title: "Quality flag: Category II treated outside ABTC",
-    bullets: [
-      "Anti-rabies regimens given outside ABTCs are sub-standard.",
-      "Confirm the patient completed the full Days 0/3/7/14/28 schedule.",
-      "Refer for review and dose-completion follow-up.",
-    ],
-    source: "DOH 2018 Rabies Manual",
-    severity: "advisory",
-  },
-  {
-    id: "filariasis-positive",
-    module: "filariasis",
-    applies: (r) => r.result === "POSITIVE",
-    title: "Filariasis-positive — flag barangay for next MDA",
-    bullets: [
-      "Mass Drug Administration (DEC + albendazole) targets endemic barangays.",
-      "Record the case in PIDSR and add the barangay to the next MDA roster.",
-      "If lymphedema or hydrocele, refer for MMDP / surgical evaluation.",
-    ],
-    source: "DOH AO 2018-0030 (Filariasis Elimination)",
-    severity: "advisory",
-  },
-  {
-    id: "filariasis-hydrocele",
-    module: "filariasis",
-    applies: (r) => r.manifestation === "HYDROCELE",
-    title: "Hydrocele — surgical referral indicated",
-    bullets: [
-      "Hydrocele requires surgical management at a referral facility.",
-      "Document MMDP morbidity-management plan.",
-      "Coordinate with provincial-level surgical service.",
-    ],
-    source: "DOH AO 2018-0030",
-    severity: "advisory",
-  },
-  {
-    id: "schisto-confirmed",
-    module: "schisto",
-    applies: (r) => r.confirmed === true,
-    title: "Schistosomiasis confirmed — water-source investigation",
-    bullets: [
-      "Initiate praziquantel treatment per protocol.",
-      "Trigger water-source survey for the patient's barangay.",
-      "Add barangay to next snail-control activity.",
-    ],
-    source: "DOH AO 2017-0028 (Schistosomiasis Elimination)",
-    severity: "advisory",
-  },
-  {
-    id: "sth-confirmed",
-    module: "sth",
-    applies: (r) => r.confirmed === true,
-    title: "STH confirmed — schedule school deworming",
-    bullets: [
-      "Add the patient's barangay to the next deworming round (Jul / Jan).",
-      "Coordinate with the school health team for school-aged contacts.",
-      "If non-resident, route a copy to the home-LGU.",
-    ],
-    source: "DOH AO 2015-0030 (STH Control)",
-    severity: "advisory",
-  },
-  {
-    id: "leprosy-new-case",
-    module: "leprosy",
-    applies: (r) => r.newCase === true,
-    title: "New leprosy case — start contact tracing + MDT",
-    bullets: [
-      "Begin Multi-Drug Therapy (MDT) per WHO/DOH protocol.",
-      "Trace household contacts; screen for early signs.",
-      "Schedule disability assessment at registration.",
-    ],
-    source: "DOH AO 2017-0020 (Leprosy Control)",
-    severity: "advisory",
-  },
-];
+Each phase: identify terms → add to `shared/glossary.ts` → wrap usages with `<Term>` → ship as a single PR. Auto-merge after QA, like the rest of the roadmap.
 
-/** Run every applicable rule against a row; return ordered by severity. */
-export function recommendationsFor(module: Recommendation["module"], row: unknown): Recommendation[] {
-  return RECOMMENDATIONS
-    .filter((r) => r.module === module && r.applies(row))
-    .sort((a, b) => severityRank(b.severity) - severityRank(a.severity));
-}
-```
-
-A `<RecommendationCard recommendation={r} />` component slots into the action drawer above the status form.
+**`/glossary` page + first-login banner** ships as **A0** (cross-cutting) — gives users a canonical reference and an onboarding nudge.
 
 ---
 
-## Phase 2 — LLM augmentation (separate proposal)
+## Part B — system-wide recommendation engine
 
-Once Phase 1 is solid in production, optional Phase 2:
+Same architectural pattern as the original Phase 1, but covering **every clinical / operational state** where DOH guidance applies. Still rule-based first, LLM second. Still mandatory disclaimer. Still no autonomous actions.
 
-- **Plain-language summary** for viewers: take the rule-based recommendation, ask Claude to rewrite the bullets in 5th-grade Filipino-English. Cache per (rule_id, locale). Cited source remains visible.
-- **Draft referral letter generator**: when the reviewer clicks "Refer to ABTC", an LLM generates a draft letter using the row data + DOH template. Reviewer edits before sending.
-- **Anomaly hint**: scan recent surveillance rows for the barangay; if 3+ Cat III rabies in 7 days, append "⚠ Possible cluster — consider outbreak alert."
+### Module-by-module rule starter set
 
-Phase 2 always carries the same disclaimer + always renders alongside the rule-based citation. **Never the only signal.**
+Every rule cites a DOH source. (✓ = already in original proposal, **+** = new from this expansion.)
+
+**B1 — Disease surveillance** (existing scope)
+- ✓ Rabies Cat III → vaccine + RIG + ABTC
+- ✓ Rabies Cat II Non-ABTC → quality flag + dose-completion outreach
+- ✓ Filariasis POSITIVE → MDA roster
+- ✓ Hydrocele → surgical referral
+- ✓ Schisto confirmed → water-source survey + praziquantel
+- ✓ STH confirmed → school deworming
+- ✓ Leprosy new case → MDT + contact tracing
+
+**B2 — Maternal**
+- **+** GDM-positive at A-09 → diabetic-diet counseling + facility delivery flag (DOH MNCHN AO 2008-0029)
+- **+** Hgb <11 (A-08) → iron supplementation + recheck at next ANC
+- **+** ≥4 risk factors at registration → BEmONC referral
+- **+** No ANC visit in last 4 weeks at term → urgent home visit
+- **+** Missed PNC checkpoint within window → outreach task
+- **+** Postpartum BP ≥140/90 → preeclampsia protocol + RHU referral
+
+**B3 — Child**
+- **+** SAM with complications → inpatient referral (DOH AO 2015-0055)
+- **+** MAM identified → SFP enrollment + 4-week recheck
+- **+** LBW (<2.5kg) → complete iron supp + KMC if available
+- **+** Penta dose missed within 2 weeks of due date → catch-up schedule
+- **+** Acute diarrhea (F-03) → ORS + zinc + danger-sign screening per IMCI
+- **+** Sick infant 6-11mo not given Vit A in 6 mo → administer + counsel
+
+**B4 — Senior / NCD**
+- **+** HTN identified (G2-01 +) → first-line meds + lifestyle counseling per PhilPEN
+- **+** HTN uncontrolled (BP ≥160/100 across 2 visits) → review meds + cardiology referral
+- **+** First-trimester HTN → preeclampsia screening + close monitoring
+- **+** PhilPEN: ≥3 risk factors → high-risk lifestyle program
+- **+** Cervical VIA suspicious → linkage to care + 6-week recheck
+- **+** Cervical precancerous → colposcopy referral
+
+**B5 — AEFI / Outbreaks**
+- **+** AEFI severity SERIOUS → 24h CHD report + causality assessment within 7 days
+- **+** ≥2 measles in same barangay in 30 days → Rapid Response Team trigger
+- **+** Outbreak SUSPECTED for >5 days without DECLARED → escalation
+- **+** Vaccine-related death (any age) → mandatory NEC review
+
+**B6 — Mortality**
+- **+** Maternal death → MDR review within 90 days (DOH AO 2008-0029)
+- **+** Perinatal death (fetal + early-neonatal) → PDR review queued
+- **+** Under-5 death → CDR review queued
+- **+** Maternal death + Direct cause → required RHU + CHD reporting
+- **+** Death in pregnancy/postpartum but `maternalDeathCause` not set → reviewer prompt
+
+**B7 — TB / DOTS**
+- **+** Smear-positive → DOT enrollment + contact screening
+- **+** MDR-TB suspected → treatment center referral + drug-resistance lab
+- **+** Treatment default ≥4 weeks → adherence intervention task
+
+**B8 — Workflow / operational**
+- **+** Restock URGENT > 3 days unfulfilled → escalate to Pharmacy admin
+- **+** Walk-in EMERGENT not seen by MD within 1h → escalate
+- **+** Referral PENDING > 7 days → reviewer prompt
+- **+** Death review status PENDING_NOTIFY past due date → escalate
+
+That's ~35 rules across 8 modules. Each is ~5 lines of TypeScript. The shared `RECOMMENDATIONS[]` array stays flat; modules are a tag.
+
+### Phasing for Part B
+
+| Phase | Modules | Rule count | Rationale |
+|---|---|---|---|
+| **B1** | Disease surveillance + Maternal | ~13 rules | Highest clinical-impact; rules already drafted; smallest blast radius. |
+| **B2** | Child + AEFI | ~10 rules | Sensitive (pediatric) — ship after B1 has 1-2 weeks of operator feedback. |
+| **B3** | Senior/NCD + Cervical Cancer | ~6 rules | Lower urgency; depends on PhilPEN scoring being clear. |
+| **B4** | Mortality + TB | ~6 rules | Mortality especially needs MHO sign-off on rule wording. |
+| **B5** | Workflow / operational | ~4 rules | Cross-cutting; can ride on the same engine. |
+| **B6** | LLM augmentation (Phase 2 from original proposal) | — | Plain-language rewrites + draft referral letters + cluster-detection hints. Always alongside rule-based citation. |
 
 ---
 
-## What this proposal is NOT
+## Cross-cutting guarantees (apply to every rule + every glossary entry)
 
-- ❌ A diagnostic AI. The recommendation is "if you have THIS row, here's the protocol checklist for THAT row" — not "is this rabies?"
-- ❌ An autonomous actor. Every recommended action requires a human click. Status transitions still go through the existing PATCH endpoints.
-- ❌ Replacement for clinical judgment. The disclaimer is mandatory and always visible.
-- ❌ Customizable by operators. Rules live in code, change via PR, audit-logged. LGUs cannot soften DOH guidance via the UI.
-
----
-
-## Audit trail
-
-Every time a recommendation is **shown** (impression), and every time the user takes a status-transition action **after** seeing one, we log:
-
-```
-audit_logs:
-  action      = "RECOMMENDATION_SHOWN" | "RECOMMENDATION_ACTED"
-  entityType  = "RABIES_EXPOSURE" (etc.)
-  entityId    = row id
-  afterJson   = { rule_id, severity, source }
-```
-
-This gives you:
-- "How often is the system right?" (compare shown vs acted-on rates)
-- "Which DOH guidance is being followed?" (rule-id frequency)
-- "Are we citing the right manual?" (provincial-level QA)
+1. **Source citation visible.** Every recommendation card shows the DOH AO / Manual reference.
+2. **Disclaimer non-negotiable.** "DOH guidance — reviewer judgment required." Visible in every card, not a tooltip.
+3. **Audit trail.** Every rule impression and every action-after-impression is logged.
+4. **No autonomous actions.** The card maps to existing workflow buttons only.
+5. **Version retiring.** Rules are never edited in place — they get a new id and the old one is deprecated. Audit log integrity preserved.
+6. **Bilingual-ready.** Glossary entries can have `short_fil` field added later for Filipino. Recommendation card can render in Filipino once translations are in.
 
 ---
 
-## Risks + mitigations
+## What I need from you (re-stated)
 
-| Risk | Mitigation |
-|---|---|
-| A rule's `applies()` predicate is wrong → false guidance | Predicates are pure functions; reviewable in PR; unit-testable. |
-| DOH updates the protocol → stale guidance | Each rule has a `source` citation. Annual review cadence. New rule via PR; old rule retired (not edited) so audit trail stays intact. |
-| Operators ignore the disclaimer | Disclaimer is rendered as a visible footer on every card, not a tooltip. |
-| LLM hallucinates a recommendation | Phase 1 has no LLM. Phase 2 always renders alongside the rule-based source. LLM never authors a new bullet without the rule-based version present. |
-| Showing recommendations to TLs implies "do exactly this" | Severity colors: `info` (gray), `advisory` (amber), `urgent` (red). Buttons map to existing workflow only — no new write endpoints. |
+1. **Glossary phasing OK?** Or ship Phase A in fewer / more PRs?
+2. **Recommendation rule wording OK?** Anything you'd cut / add / soften? Particularly mortality + AEFI rules — you'll want MHO sign-off before those go live.
+3. **Disclaimer language strong enough?** Or do you want explicit "Not a clinical order. Reviewer must verify."?
+4. **Surface for recommendations** — drawer-only, separate `/recommendations` queue, or both?
+5. **Phasing order for Part B** — start with disease surveillance + maternal, then child, then NCD, then mortality, then workflow? Or different order?
+6. **Bilingual support** — start with English-only and add Filipino later, or design bilingual from day one?
 
----
-
-## What I need from you
-
-1. **Approve the rule list above** — anything missing? Any wording you'd revise? Any additional disease-program rules you want covered (e.g., GDM-positive maternal cases, SAM-with-complications)?
-2. **Approve the disclaimer language** — "DOH guidance — reviewer judgment required" or stronger?
-3. **Approve the surface** — recommendation card slotted into the existing action drawer, OR a dedicated `/recommendations` review queue, OR both?
-4. **Approve Phase 1 scope** — ship the rule engine + 3 disease modules first (rabies, filariasis, schisto) and add the others later, OR all 5 modules in one go?
-
-Once those four answers are in, I can scope Phase 1 as a single PR or split it across the modules. No code until you sign off.
+Once I have those answers I'll scope the first 2-3 implementation PRs and we can ship them when you're back.
