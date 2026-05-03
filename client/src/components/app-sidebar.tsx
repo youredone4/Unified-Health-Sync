@@ -177,7 +177,7 @@ const PATIENT_CHILDREN: NavItem[] = [
     url: "/prenatal",
     icon: HeartHandshake,
     roles: rolesFor("/prenatal"),
-    activePrefixes: ["/prenatal", "/mother", "/fp", "/pnc", "/birth-attendance"],
+    activePrefixes: ["/prenatal", "/mother", "/fp", "/pnc", "/birth-attendance", "/prenatal-screenings"],
   },
   {
     title: "Children",
