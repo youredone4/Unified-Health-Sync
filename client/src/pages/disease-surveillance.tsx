@@ -26,6 +26,7 @@ import {
   StatusBadge,
   type SurveillanceTarget,
 } from "@/components/surveillance-action-drawer";
+import { Term } from "@/components/term";
 
 // Hook helper — manages action drawer state for a given module's cards.
 // Returns the open prop, the onOpenChange handler, the current target,
@@ -216,7 +217,7 @@ function FilariasisCard({ barangay, canEnter }: { barangay: string | null; canEn
                     <TableCell>{r.patientName}</TableCell>
                     <TableCell>{r.sex}</TableCell>
                     <TableCell>{r.result || "—"}</TableCell>
-                    <TableCell>{r.manifestation}</TableCell>
+                    <TableCell>{r.manifestation === "NONE" ? "—" : <Term name={r.manifestation as string} />}</TableCell>
                     <TableCell><StatusBadge status={r.status} /></TableCell>
                   </TableRow>
                 ))}
@@ -326,8 +327,16 @@ function RabiesCard({ barangay, canEnter }: { barangay: string | null; canEnter:
                     {!barangay && <TableCell className="text-xs">{r.barangay}</TableCell>}
                     <TableCell>{r.patientName}</TableCell>
                     <TableCell>{r.sex}</TableCell>
-                    <TableCell><Badge variant="outline" className="text-xs">{r.category}</Badge></TableCell>
-                    <TableCell className="text-xs">{r.treatmentCenter || "—"}</TableCell>
+                    <TableCell>
+                      <Badge variant={r.category === "III" ? "destructive" : "outline"} className="text-xs">
+                        <Term name={`Rabies Category ${r.category}`}>Cat {r.category}</Term>
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-xs">
+                      {r.treatmentCenter === "ABTC" ? <Term name="ABTC" />
+                        : r.treatmentCenter === "NON_ABTC" ? "Non-ABTC"
+                        : "—"}
+                    </TableCell>
                     <TableCell>{r.completeDoses ? "Yes" : "—"}</TableCell>
                     <TableCell><StatusBadge status={r.status} /></TableCell>
                   </TableRow>
