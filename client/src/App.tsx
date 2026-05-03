@@ -46,6 +46,7 @@ import PrenatalScreeningsWorklist from "@/pages/prenatal-screenings-worklist";
 import MotherProfile from "@/pages/mother-profile";
 import MotherForm from "@/pages/mother-form";
 import ChildWorklist from "@/pages/child-worklist";
+import SickChildWorklist from "@/pages/sick-child-worklist";
 import ChildProfile from "@/pages/child-profile";
 import ChildForm from "@/pages/child-form";
 import NutritionWorklist from "@/pages/nutrition-worklist";
@@ -178,6 +179,7 @@ function ChildrenHub({ children }: { children: React.ReactNode }) {
       primaryAction={{ label: "New Child", icon: Plus, path: "/child/new" }}
       tabs={[
         { label: "Patients", path: "/child", testId: "hub-tab-children-patients" },
+        { label: "Sick Child", path: "/sick-child", testId: "hub-tab-children-sick" },
       ]}
     >
       {children}
@@ -385,6 +387,7 @@ function Router() {
 
       {/* Children hub: Patients */}
       <Route path="/child"><ChildrenHub><ChildWorklist /></ChildrenHub></Route>
+      <Route path="/sick-child"><ChildrenHub><SickChildWorklist /></ChildrenHub></Route>
       <Route path="/child/new" component={ChildForm} />
       <Route path="/child/:id/edit" component={ChildForm} />
       <Route path="/child/:id" component={ChildProfile} />

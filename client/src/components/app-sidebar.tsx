@@ -184,7 +184,7 @@ const PATIENT_CHILDREN: NavItem[] = [
     url: "/child",
     icon: Baby,
     roles: rolesFor("/child"),
-    activePrefixes: ["/child"],
+    activePrefixes: ["/child", "/sick-child"],
   },
   {
     title: "TB DOTS",

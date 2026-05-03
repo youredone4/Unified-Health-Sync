@@ -95,6 +95,23 @@ export async function registerRoutes(
       .map((m) => m.id);
   }
 
+  // Same shape as filterMotherIdsByAccess but for child-keyed batch
+  // fetches (sick-child-visits for now).
+  async function filterChildIdsByAccess(
+    childIds: number[],
+    req: Express.Request,
+  ): Promise<number[]> {
+    if (childIds.length === 0) return [];
+    const userInfo = req.userInfo;
+    if (!userInfo) return [];
+    if (userInfo.role !== UserRole.TL) return childIds;
+    const children = await Promise.all(childIds.map((id) => storage.getChild(id)));
+    return children
+      .filter((c): c is NonNullable<typeof c> => !!c)
+      .filter((c) => userInfo.assignedBarangays.includes(c.barangay))
+      .map((c) => c.id);
+  }
+
   // Safe integer ID parser — returns the parsed integer or sends 400 and returns null
   function parseId(raw: string | undefined, res: any): number | null {
     const n = parseInt(raw ?? "", 10);
@@ -922,10 +939,23 @@ export async function registerRoutes(
   );
 
   // === SICK CHILD VISITS — feeds M1 Section F (IMCI) ===
+  // Accepts either ?childId=N (single, back-compat) or ?childIds=1,2,3
+  // (batch). Same access-control semantics as the maternal batch
+  // endpoints — TL gets a silent filter, MGMT sees all.
   app.get("/api/sick-child-visits", loadUserInfo, requireAuth, ar(async (req, res) => {
+    const idsParam = req.query.childIds ? String(req.query.childIds) : undefined;
+    if (idsParam !== undefined) {
+      const ids = idsParam.split(",")
+        .map((s) => Number(s.trim()))
+        .filter((n) => Number.isFinite(n));
+      if (ids.length === 0) return res.json([]);
+      const accessibleIds = await filterChildIdsByAccess(ids, req);
+      const data = await storage.getSickChildVisitsByChildIds(accessibleIds);
+      return res.json(data);
+    }
     const childIdRaw = req.query.childId ? Number(req.query.childId) : undefined;
     if (childIdRaw === undefined || !Number.isFinite(childIdRaw)) {
-      return res.status(400).json({ message: "childId query param is required" });
+      return res.status(400).json({ message: "childId or childIds query param is required" });
     }
     const child = await storage.getChild(childIdRaw);
     if (!child) return res.status(404).json({ message: "Child not found" });
