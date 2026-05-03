@@ -2956,6 +2956,150 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
+  /**
+   * Phase 0.5 — backfill catalog entries for "ghost" rowKeys: indicators
+   * that computeM1Values has been writing values for but that never had a
+   * matching m1_indicator_catalog row. Without a catalog row the renderer
+   * (server/reports/m1-date-range.ts and client/src/pages/m1-report.tsx)
+   * skips the value entirely, so the data is silently dropped. Each entry
+   * is idempotent — only inserted if (templateVersionId, rowKey) is
+   * absent. Labels and column-group types come from
+   * docs/m1-data-source-audit.md.
+   */
+  private async seedM1GhostRows(): Promise<void> {
+    const [activeTpl] = await db
+      .select()
+      .from(m1TemplateVersions)
+      .where(eq(m1TemplateVersions.isActive, true))
+      .limit(1);
+    if (!activeTpl) return;
+
+    const ageGroupSpec = { columns: ["10-14", "15-19", "20-49", "TOTAL"], hasTotal: true };
+    const sexRateSpec = { columns: ["M", "F", "TOTAL"], hasTotal: true };
+    const singleSpec = { columns: ["VALUE"] };
+    const tplId = activeTpl.id;
+
+    const rows: InsertM1IndicatorCatalog[] = [
+      // === SECTION B — Deliveries (page 2) ===
+      // computeM1Values writes B-01 (VALUE), B-02 (10-14/15-19/20-49/TOTAL),
+      // and B-02a/B-02b (VALUE) for every report. Sit before B-03=130.
+      { templateVersionId: tplId, pageNumber: 2, sectionCode: "B",
+        rowKey: "B-01", officialLabel: "Total Deliveries",
+        dataType: "INT", rowOrder: 100, indentLevel: 0,
+        columnGroupType: "SINGLE", columnSpec: singleSpec,
+        isComputed: true, isRequired: true },
+      { templateVersionId: tplId, pageNumber: 2, sectionCode: "B",
+        rowKey: "B-02", officialLabel: "No. of Livebirths",
+        dataType: "INT", rowOrder: 110, indentLevel: 0,
+        columnGroupType: "AGE_GROUP", columnSpec: ageGroupSpec,
+        isComputed: true, isRequired: true },
+      { templateVersionId: tplId, pageNumber: 2, sectionCode: "B",
+        rowKey: "B-02a", officialLabel: "Live Births with Normal Birth Weight",
+        dataType: "INT", rowOrder: 111, indentLevel: 1,
+        columnGroupType: "SINGLE", columnSpec: singleSpec,
+        isComputed: true, isRequired: true },
+      { templateVersionId: tplId, pageNumber: 2, sectionCode: "B",
+        rowKey: "B-02b", officialLabel: "Live Births with Low Birth Weight",
+        dataType: "INT", rowOrder: 112, indentLevel: 1,
+        columnGroupType: "SINGLE", columnSpec: singleSpec,
+        isComputed: true, isRequired: true },
+
+      // === SECTION E — Breastfeeding (page 2) ===
+      // E-01 sits before E-02=302. Compute writes only TOTAL today; the
+      // SEX_RATE columnSpec leaves M/F open for future per-sex compute.
+      { templateVersionId: tplId, pageNumber: 2, sectionCode: "E",
+        rowKey: "E-01", officialLabel: "Newborns initiated on breastfeeding within 1 hour after birth",
+        dataType: "INT", rowOrder: 301, indentLevel: 0,
+        columnGroupType: "SEX_RATE", columnSpec: sexRateSpec,
+        isComputed: true, isRequired: true },
+
+      // === SECTION G2 — Cardiovascular (page 3) ===
+      // Slot G2-03 / G2-04 between G2-02b=623 and G2-04a=625. Both
+      // share rowOrder 624; the rowKey alphabetical order keeps G2-03
+      // ahead of G2-04 in the rendered grid.
+      { templateVersionId: tplId, pageNumber: 3, sectionCode: "G2",
+        rowKey: "G2-03",
+        officialLabel: "Senior Citizens 60+ identified as hypertensive using PhilPEN",
+        dataType: "INT", rowOrder: 624, indentLevel: 0,
+        columnGroupType: "SEX_RATE", columnSpec: sexRateSpec,
+        isComputed: true, isRequired: true },
+      { templateVersionId: tplId, pageNumber: 3, sectionCode: "G2",
+        rowKey: "G2-04",
+        officialLabel: "Hypertensives 60+ provided with antihypertensive medications",
+        dataType: "INT", rowOrder: 624, indentLevel: 0,
+        columnGroupType: "SEX_RATE", columnSpec: sexRateSpec,
+        isComputed: true, isRequired: true },
+
+      // === SECTION H — Natality (page 3) ===
+      // H-01/H-02 sit before H-03=800. Compute writes TOTAL today; the
+      // SEX_RATE columnSpec leaves M/F open for future per-sex compute.
+      { templateVersionId: tplId, pageNumber: 3, sectionCode: "H",
+        rowKey: "H-01", officialLabel: "Live births",
+        dataType: "INT", rowOrder: 790, indentLevel: 0,
+        columnGroupType: "SEX_RATE", columnSpec: sexRateSpec,
+        isComputed: true, isRequired: true },
+      { templateVersionId: tplId, pageNumber: 3, sectionCode: "H",
+        rowKey: "H-02", officialLabel: "Stillbirths",
+        dataType: "INT", rowOrder: 791, indentLevel: 0,
+        columnGroupType: "SEX_RATE", columnSpec: sexRateSpec,
+        isComputed: true, isRequired: true },
+
+      // === SECTION I — Disease Surveillance (generic, page 3) ===
+      // Slot before DIS-FIL-01=700. The disease-mapping loop in
+      // computeM1Values populates I-01..I-08 (minus I-02 which has no
+      // ILIKE pattern wired); each is a SEX_RATE row.
+      { templateVersionId: tplId, pageNumber: 3, sectionCode: "I",
+        rowKey: "I-01", officialLabel: "Dengue cases",
+        dataType: "INT", rowOrder: 690, indentLevel: 0,
+        columnGroupType: "SEX_RATE", columnSpec: sexRateSpec,
+        isComputed: true, isRequired: true },
+      { templateVersionId: tplId, pageNumber: 3, sectionCode: "I",
+        rowKey: "I-03", officialLabel: "Measles cases (suspected)",
+        dataType: "INT", rowOrder: 691, indentLevel: 0,
+        columnGroupType: "SEX_RATE", columnSpec: sexRateSpec,
+        isComputed: true, isRequired: true },
+      { templateVersionId: tplId, pageNumber: 3, sectionCode: "I",
+        rowKey: "I-04", officialLabel: "Acute Flaccid Paralysis (AFP)",
+        dataType: "INT", rowOrder: 692, indentLevel: 0,
+        columnGroupType: "SEX_RATE", columnSpec: sexRateSpec,
+        isComputed: true, isRequired: true },
+      { templateVersionId: tplId, pageNumber: 3, sectionCode: "I",
+        rowKey: "I-05", officialLabel: "Neonatal Tetanus (NNT)",
+        dataType: "INT", rowOrder: 693, indentLevel: 0,
+        columnGroupType: "SEX_RATE", columnSpec: sexRateSpec,
+        isComputed: true, isRequired: true },
+      { templateVersionId: tplId, pageNumber: 3, sectionCode: "I",
+        rowKey: "I-06", officialLabel: "Rabies cases",
+        dataType: "INT", rowOrder: 694, indentLevel: 0,
+        columnGroupType: "SEX_RATE", columnSpec: sexRateSpec,
+        isComputed: true, isRequired: true },
+      { templateVersionId: tplId, pageNumber: 3, sectionCode: "I",
+        rowKey: "I-07", officialLabel: "TB cases (treatment started this month)",
+        dataType: "INT", rowOrder: 695, indentLevel: 0,
+        columnGroupType: "SEX_RATE", columnSpec: sexRateSpec,
+        isComputed: true, isRequired: true },
+      { templateVersionId: tplId, pageNumber: 3, sectionCode: "I",
+        rowKey: "I-08", officialLabel: "Leprosy cases",
+        dataType: "INT", rowOrder: 696, indentLevel: 0,
+        columnGroupType: "SEX_RATE", columnSpec: sexRateSpec,
+        isComputed: true, isRequired: true },
+    ];
+
+    for (const row of rows) {
+      const existing = await db
+        .select({ id: m1IndicatorCatalog.id })
+        .from(m1IndicatorCatalog)
+        .where(and(
+          eq(m1IndicatorCatalog.templateVersionId, row.templateVersionId),
+          eq(m1IndicatorCatalog.rowKey, row.rowKey),
+        ))
+        .limit(1);
+      if (existing.length === 0) {
+        await db.insert(m1IndicatorCatalog).values(row);
+      }
+    }
+  }
+
   async seedData(): Promise<void> {
     // Auto-migrate: add columns introduced after the initial deployment.
     // Every statement is fully idempotent (IF NOT EXISTS / IF EXISTS) so it is
@@ -3703,6 +3847,7 @@ export class DatabaseStorage implements IStorage {
     await this.seedM1DiseaseRows();
     await this.seedM1MortalityRows();
     await this.seedM1WaterRows();
+    await this.seedM1GhostRows();
 
     // Demo data for the MGMT-consolidated operational pages. Runs every
     // boot — each table inside is itself idempotent (skips when non-empty),
