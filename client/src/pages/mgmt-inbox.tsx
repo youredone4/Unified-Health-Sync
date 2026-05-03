@@ -11,6 +11,7 @@ import { EmptyState } from "@/components/states/empty-state";
 import { ListSkeleton } from "@/components/states/loading-skeleton";
 import { ErrorState } from "@/components/states/error-state";
 import { useAuth } from "@/hooks/use-auth";
+import { Term } from "@/components/term";
 import { usePagination } from "@/hooks/use-pagination";
 import TablePagination from "@/components/table-pagination";
 
@@ -162,7 +163,9 @@ export default function MgmtInboxPage() {
                     <div className="flex-1 min-w-0">
                       <div className="flex flex-wrap items-center gap-2 mb-1">
                         <Badge variant="outline" className="text-xs">
-                          {TYPE_LABEL[item.type]}
+                          {item.type === "aefi"
+                            ? <Term name="AEFI">AEFI</Term>
+                            : TYPE_LABEL[item.type]}
                         </Badge>
                         <span className={severityBadge({ severity })}>{item.priority}</span>
                         {item.barangay ? (

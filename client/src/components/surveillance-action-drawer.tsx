@@ -11,6 +11,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Term } from "@/components/term";
 
 export type SurveillanceStatus = "REPORTED" | "REVIEWED" | "ESCALATED" | "CLOSED";
 const STATUS_VALUES: SurveillanceStatus[] = ["REPORTED", "REVIEWED", "ESCALATED", "CLOSED"];
@@ -24,7 +25,11 @@ const STATUS_TONE: Record<SurveillanceStatus, "default" | "secondary" | "destruc
 
 export function StatusBadge({ status }: { status: SurveillanceStatus | string | null | undefined }) {
   const s = (status as SurveillanceStatus) || "REPORTED";
-  return <Badge variant={STATUS_TONE[s] ?? "secondary"} className="text-xs">{s}</Badge>;
+  return (
+    <Badge variant={STATUS_TONE[s] ?? "secondary"} className="text-xs">
+      <Term name={s} />
+    </Badge>
+  );
 }
 
 export interface SurveillanceTarget {
