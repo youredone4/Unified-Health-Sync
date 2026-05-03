@@ -41,6 +41,7 @@ import Hotspots from "@/pages/hotspots";
 import CalendarPage from "@/pages/calendar";
 import PrenatalWorklist from "@/pages/prenatal-worklist";
 import PostpartumWorklist from "@/pages/postpartum-worklist";
+import BirthAttendanceWorklist from "@/pages/birth-attendance-worklist";
 import MotherProfile from "@/pages/mother-profile";
 import MotherForm from "@/pages/mother-form";
 import ChildWorklist from "@/pages/child-worklist";
@@ -158,6 +159,7 @@ function MothersHub({ children }: { children: React.ReactNode }) {
       tabs={[
         { label: "Patients", path: "/prenatal", testId: "hub-tab-mothers-patients" },
         { label: "PNC", path: "/pnc", testId: "hub-tab-mothers-pnc" },
+        { label: "Birth Attendance", path: "/birth-attendance", testId: "hub-tab-mothers-bar" },
         { label: "Family Planning", path: "/fp", testId: "hub-tab-mothers-fp" },
       ]}
     >
@@ -372,6 +374,7 @@ function Router() {
       {/* Mothers hub: Patients / Family Planning */}
       <Route path="/prenatal"><MothersHub><PrenatalWorklist /></MothersHub></Route>
       <Route path="/pnc"><MothersHub><PostpartumWorklist /></MothersHub></Route>
+      <Route path="/birth-attendance"><MothersHub><BirthAttendanceWorklist /></MothersHub></Route>
       <Route path="/fp"><MothersHub><FpRegistry /></MothersHub></Route>
       <Route path="/mother/new" component={MotherForm} />
       <Route path="/mother/:id/edit" component={MotherForm} />
