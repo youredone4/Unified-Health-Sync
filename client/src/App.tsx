@@ -652,7 +652,9 @@ function AppContent() {
   if (!isAuthenticated) {
     return (
       <>
-        <LandingPage />
+        <Suspense fallback={<RouteFallback />}>
+          <LandingPage />
+        </Suspense>
         <Toaster />
       </>
     );
