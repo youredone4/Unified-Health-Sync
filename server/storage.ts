@@ -35,6 +35,7 @@ import {
   type RabiesExposure, type InsertRabiesExposure,
   type SchistosomiasisRecord, type InsertSchistosomiasisRecord,
   type SthRecord, type InsertSthRecord,
+  type SurveillanceStatus,
   type LeprosyRecord, type InsertLeprosyRecord,
   type DeathEvent, type InsertDeathEvent,
   type PidsrSubmission, type InsertPidsrSubmission,
@@ -166,6 +167,13 @@ export interface IStorage {
   createSthRecord(r: InsertSthRecord): Promise<SthRecord>;
   getLeprosyRecords(params: { barangay?: string }): Promise<LeprosyRecord[]>;
   createLeprosyRecord(r: InsertLeprosyRecord): Promise<LeprosyRecord>;
+  // Surveillance workflow update — sets status / reviewerNotes /
+  // reviewedAt / reviewedByUserId. Module is identified by `kind`.
+  updateSurveillanceStatus(
+    kind: "filariasis" | "rabies" | "schistosomiasis" | "sth" | "leprosy",
+    id: number,
+    patch: { status?: SurveillanceStatus; reviewerNotes?: string | null; reviewedByUserId?: string | null },
+  ): Promise<{ id: number; barangay: string; status: SurveillanceStatus | null } | null>;
 
   // Phase 4 — NCD & Lifestyle screenings
   getPhilpenAssessments(params: { barangay?: string }): Promise<PhilpenAssessment[]>;
@@ -862,6 +870,37 @@ export class DatabaseStorage implements IStorage {
   async createLeprosyRecord(r: InsertLeprosyRecord): Promise<LeprosyRecord> {
     const [c] = await db.insert(leprosyRecords).values(r).returning();
     return c;
+  }
+
+  async updateSurveillanceStatus(
+    kind: "filariasis" | "rabies" | "schistosomiasis" | "sth" | "leprosy",
+    id: number,
+    patch: { status?: SurveillanceStatus; reviewerNotes?: string | null; reviewedByUserId?: string | null },
+  ): Promise<{ id: number; barangay: string; status: SurveillanceStatus | null } | null> {
+    const tableMap = {
+      filariasis:     filariasisRecords,
+      rabies:         rabiesExposures,
+      schistosomiasis: schistosomiasisRecords,
+      sth:            sthRecords,
+      leprosy:        leprosyRecords,
+    } as const;
+    const table = tableMap[kind];
+    const set: Record<string, unknown> = {};
+    if (patch.status !== undefined) {
+      set.status = patch.status;
+      // Stamp reviewer + timestamp on every transition out of REPORTED.
+      set.reviewedAt = new Date();
+      if (patch.reviewedByUserId !== undefined) set.reviewedByUserId = patch.reviewedByUserId;
+    }
+    if (patch.reviewerNotes !== undefined) set.reviewerNotes = patch.reviewerNotes;
+    if (Object.keys(set).length === 0) {
+      // No-op patch — fetch and return current state.
+      const [row] = await (db.select({ id: table.id, barangay: table.barangay, status: table.status }).from(table).where(eq(table.id, id)) as any);
+      return row ?? null;
+    }
+    const [row] = await (db.update(table).set(set).where(eq(table.id, id))
+      .returning({ id: table.id, barangay: table.barangay, status: table.status }) as any);
+    return row ?? null;
   }
 
   async getHealthStations(filter?: { facilityType?: string; hasTbDots?: boolean }): Promise<HealthStation[]> {
@@ -3459,6 +3498,25 @@ export class DatabaseStorage implements IStorage {
         ADD COLUMN IF NOT EXISTS facility_type TEXT,
         ADD COLUMN IF NOT EXISTS has_tb_dots   BOOLEAN NOT NULL DEFAULT FALSE
     `);
+
+    // Surveillance workflow columns shared across all 5 disease-program
+    // tables. Drives the row-click action drawer and the MGMT inbox feed
+    // for ESCALATED items.
+    for (const t of [
+      "filariasis_records",
+      "rabies_exposures",
+      "schistosomiasis_records",
+      "sth_records",
+      "leprosy_records",
+    ]) {
+      await db.execute(sql.raw(`
+        ALTER TABLE ${t}
+          ADD COLUMN IF NOT EXISTS status            TEXT DEFAULT 'REPORTED',
+          ADD COLUMN IF NOT EXISTS reviewer_notes    TEXT,
+          ADD COLUMN IF NOT EXISTS reviewed_at       TIMESTAMP,
+          ADD COLUMN IF NOT EXISTS reviewed_by_user_id VARCHAR
+      `));
+    }
     // Co-conditions on a disease case (e.g. HIV + TB co-infection
     // recorded on the same case row). Aggregators unfold per condition.
     await db.execute(sql`
