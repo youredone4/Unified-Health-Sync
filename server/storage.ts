@@ -123,6 +123,7 @@ export interface IStorage {
 
   // Sick child visits (M1 Section F — IMCI)
   getSickChildVisits(childId: number): Promise<SickChildVisit[]>;
+  getSickChildVisitsByChildIds(childIds: number[]): Promise<SickChildVisit[]>;
   createSickChildVisit(visit: InsertSickChildVisit): Promise<SickChildVisit>;
 
   // School immunizations (M1 Section D4 — HPV / Td)
@@ -644,6 +645,15 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(sickChildVisits)
       .where(eq(sickChildVisits.childId, childId))
+      .orderBy(desc(sickChildVisits.visitDate));
+  }
+
+  async getSickChildVisitsByChildIds(childIds: number[]): Promise<SickChildVisit[]> {
+    if (childIds.length === 0) return [];
+    return await db
+      .select()
+      .from(sickChildVisits)
+      .where(inArray(sickChildVisits.childId, childIds))
       .orderBy(desc(sickChildVisits.visitDate));
   }
 
