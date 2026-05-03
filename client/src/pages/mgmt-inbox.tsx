@@ -14,7 +14,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { usePagination } from "@/hooks/use-pagination";
 import TablePagination from "@/components/table-pagination";
 
-type InboxType = "referral" | "death-review" | "aefi" | "outbreak" | "restock" | "md-review" | "system-alert";
+type InboxType = "referral" | "death-review" | "aefi" | "outbreak" | "restock" | "md-review" | "system-alert" | "surveillance";
 type InboxPriority = "high" | "medium" | "low";
 
 interface InboxItem {
@@ -38,6 +38,7 @@ interface InboxResponse {
     restock?: number;
     mdReview?: number;
     systemAlert: number;
+    surveillance?: number;
     total: number;
   };
 }
@@ -50,6 +51,7 @@ const TYPE_LABEL: Record<InboxType, string> = {
   "restock":      "Restock",
   "md-review":    "MD Review",
   "system-alert": "Alert",
+  "surveillance": "Surveillance",
 };
 
 // Type → severity for the priority dot. Severity tokens carry the colours.
@@ -112,6 +114,7 @@ export default function MgmtInboxPage() {
         <FilterButton active={filter === "aefi"}         onClick={() => setFilter("aefi")}         label="AEFI"          count={counts?.aefi} />
         <FilterButton active={filter === "outbreak"}     onClick={() => setFilter("outbreak")}     label="Outbreaks"     count={counts?.outbreak} />
         <FilterButton active={filter === "md-review"}    onClick={() => setFilter("md-review")}    label="MD Reviews"    count={counts?.mdReview} />
+        <FilterButton active={filter === "surveillance"} onClick={() => setFilter("surveillance")} label="Surveillance"  count={counts?.surveillance} />
         <FilterButton active={filter === "restock"}      onClick={() => setFilter("restock")}      label="Restock"       count={counts?.restock} />
         {isAdmin ? (
           <FilterButton active={filter === "system-alert"} onClick={() => setFilter("system-alert")} label="Alerts"        count={counts?.systemAlert} />

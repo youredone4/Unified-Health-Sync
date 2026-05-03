@@ -1467,6 +1467,12 @@ export type InsertMentalHealthScreening = z.infer<typeof insertMentalHealthScree
 // PHASE 5 — Disease surveillance (filariasis, rabies, schisto, STH, leprosy)
 // ===========================================================================
 
+// Surveillance workflow status — shared across all 5 disease modules
+// (filariasis, rabies, schisto, sth, leprosy). Drives the row-click
+// action drawer and the MGMT inbox feed for ESCALATED items.
+export const SURVEILLANCE_STATUSES = ["REPORTED", "REVIEWED", "ESCALATED", "CLOSED"] as const;
+export type SurveillanceStatus = typeof SURVEILLANCE_STATUSES[number];
+
 export const FIL_RESULTS = ["POSITIVE", "NEGATIVE"] as const;
 export const FIL_MANIFESTATIONS = ["LYMPHEDEMA", "HYDROCELE", "NONE"] as const;
 export const filariasisRecords = pgTable("filariasis_records", {
@@ -1481,6 +1487,11 @@ export const filariasisRecords = pgTable("filariasis_records", {
   notes: text("notes"),
   recordedByUserId: varchar("recorded_by_user_id"),
   createdAt: timestamp("created_at").defaultNow(),
+  // Surveillance workflow
+  status: text("status").default("REPORTED"),
+  reviewerNotes: text("reviewer_notes"),
+  reviewedAt: timestamp("reviewed_at"),
+  reviewedByUserId: varchar("reviewed_by_user_id"),
 });
 export const insertFilariasisRecordSchema = createInsertSchema(filariasisRecords)
   .omit({ id: true, createdAt: true })
@@ -1507,6 +1518,10 @@ export const rabiesExposures = pgTable("rabies_exposures", {
   notes: text("notes"),
   recordedByUserId: varchar("recorded_by_user_id"),
   createdAt: timestamp("created_at").defaultNow(),
+  status: text("status").default("REPORTED"),
+  reviewerNotes: text("reviewer_notes"),
+  reviewedAt: timestamp("reviewed_at"),
+  reviewedByUserId: varchar("reviewed_by_user_id"),
 });
 export const insertRabiesExposureSchema = createInsertSchema(rabiesExposures)
   .omit({ id: true, createdAt: true })
@@ -1532,6 +1547,10 @@ export const schistosomiasisRecords = pgTable("schistosomiasis_records", {
   notes: text("notes"),
   recordedByUserId: varchar("recorded_by_user_id"),
   createdAt: timestamp("created_at").defaultNow(),
+  status: text("status").default("REPORTED"),
+  reviewerNotes: text("reviewer_notes"),
+  reviewedAt: timestamp("reviewed_at"),
+  reviewedByUserId: varchar("reviewed_by_user_id"),
 });
 export const insertSchistosomiasisRecordSchema = createInsertSchema(schistosomiasisRecords)
   .omit({ id: true, createdAt: true })
@@ -1552,6 +1571,10 @@ export const sthRecords = pgTable("sth_records", {
   notes: text("notes"),
   recordedByUserId: varchar("recorded_by_user_id"),
   createdAt: timestamp("created_at").defaultNow(),
+  status: text("status").default("REPORTED"),
+  reviewerNotes: text("reviewer_notes"),
+  reviewedAt: timestamp("reviewed_at"),
+  reviewedByUserId: varchar("reviewed_by_user_id"),
 });
 export const insertSthRecordSchema = createInsertSchema(sthRecords)
   .omit({ id: true, createdAt: true })
@@ -1571,6 +1594,10 @@ export const leprosyRecords = pgTable("leprosy_records", {
   notes: text("notes"),
   recordedByUserId: varchar("recorded_by_user_id"),
   createdAt: timestamp("created_at").defaultNow(),
+  status: text("status").default("REPORTED"),
+  reviewerNotes: text("reviewer_notes"),
+  reviewedAt: timestamp("reviewed_at"),
+  reviewedByUserId: varchar("reviewed_by_user_id"),
 });
 export const insertLeprosyRecordSchema = createInsertSchema(leprosyRecords)
   .omit({ id: true, createdAt: true })

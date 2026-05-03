@@ -3,7 +3,7 @@ import type { Server } from "http";
 import { storage } from "./storage";
 import { db } from "./db";
 import { max, eq, and, desc, gte, or, inArray, isNull } from "drizzle-orm";
-import { prenatalVisits, childVisits, seniorVisits, insertFpServiceRecordSchema, insertNutritionFollowUpSchema, insertColdChainLogSchema, insertTbDoseLogSchema, insertPostpartumVisitSchema, insertPrenatalScreeningSchema, insertBirthAttendanceRecordSchema, insertSickChildVisitSchema, insertSchoolImmunizationSchema, insertOralHealthVisitSchema, insertPhilpenAssessmentSchema, insertNcdScreeningSchema, insertVisionScreeningSchema, insertCervicalCancerScreeningSchema, insertMentalHealthScreeningSchema, insertFilariasisRecordSchema, insertRabiesExposureSchema, insertSchistosomiasisRecordSchema, insertSthRecordSchema, insertLeprosyRecordSchema, insertDeathEventSchema, insertHouseholdWaterRecordSchema, insertPidsrSubmissionSchema, insertWorkforceMemberSchema, insertWorkforceCredentialSchema, referralRecords, insertReferralRecordSchema, ncdScreenings } from "@shared/schema";
+import { prenatalVisits, childVisits, seniorVisits, insertFpServiceRecordSchema, insertNutritionFollowUpSchema, insertColdChainLogSchema, insertTbDoseLogSchema, insertPostpartumVisitSchema, insertPrenatalScreeningSchema, insertBirthAttendanceRecordSchema, insertSickChildVisitSchema, insertSchoolImmunizationSchema, insertOralHealthVisitSchema, insertPhilpenAssessmentSchema, insertNcdScreeningSchema, insertVisionScreeningSchema, insertCervicalCancerScreeningSchema, insertMentalHealthScreeningSchema, insertFilariasisRecordSchema, insertRabiesExposureSchema, insertSchistosomiasisRecordSchema, insertSthRecordSchema, insertLeprosyRecordSchema, insertDeathEventSchema, insertHouseholdWaterRecordSchema, insertPidsrSubmissionSchema, insertWorkforceMemberSchema, insertWorkforceCredentialSchema, referralRecords, insertReferralRecordSchema, ncdScreenings, filariasisRecords, rabiesExposures, schistosomiasisRecords, sthRecords, leprosyRecords } from "@shared/schema";
 import { api } from "@shared/routes";
 import { z } from "zod";
 import { setupAuth, registerAuthRoutes } from "./auth";
@@ -1111,6 +1111,53 @@ export async function registerRoutes(
     (p) => storage.getSthRecords(p), (r) => storage.createSthRecord(r));
   ncdRoute("/api/leprosy-records", "LEPROSY_RECORD", insertLeprosyRecordSchema,
     (p) => storage.getLeprosyRecords(p), (r) => storage.createLeprosyRecord(r));
+
+  // Decision-maker workflow — PATCH /api/<module>/:id/status. Allows
+  // any registry-read role (Admin/MHO/SHA/TL) to change the surveillance
+  // status (REPORTED → REVIEWED → ESCALATED → CLOSED) and add reviewer
+  // notes. The MGMT inbox surfaces ESCALATED rows so MHO sees them.
+  const SURVEILLANCE_STATUS_VALUES = ["REPORTED", "REVIEWED", "ESCALATED", "CLOSED"] as const;
+  const surveillancePatchSchema = z.object({
+    status: z.enum(SURVEILLANCE_STATUS_VALUES).optional(),
+    reviewerNotes: z.string().max(2000).optional().nullable(),
+  });
+  const surveillancePatchRoute = (
+    pathBase: string,
+    auditEntity: string,
+    kind: "filariasis" | "rabies" | "schistosomiasis" | "sth" | "leprosy",
+  ) => {
+    app.patch(`${pathBase}/:id/status`, registryRBAC, ar(async (req, res) => {
+      const id = parseId(req.params.id, res); if (id === null) return;
+      const parsed = surveillancePatchSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: "Invalid status patch", issues: parsed.error.issues });
+      }
+      const updated = await storage.updateSurveillanceStatus(kind, id, {
+        status: parsed.data.status,
+        reviewerNotes: parsed.data.reviewerNotes ?? undefined,
+        reviewedByUserId: req.userInfo?.id ?? null,
+      });
+      if (!updated) return res.status(404).json({ message: "Record not found" });
+      // TL barangay scope check is post-hoc here — fetched row tells us
+      // the barangay; reject if a TL touched another barangay's row.
+      if (req.userInfo?.role === UserRole.TL && !req.userInfo.assignedBarangays.includes(updated.barangay)) {
+        return res.status(403).json({ message: "Access denied to this barangay" });
+      }
+      await createAuditLog(
+        req.userInfo!.id, req.userInfo!.role,
+        "UPDATE", auditEntity, String(id),
+        updated.barangay, undefined,
+        { status: updated.status, ...(parsed.data.reviewerNotes !== undefined && { reviewerNotes: parsed.data.reviewerNotes }) },
+        req,
+      );
+      res.json(updated);
+    }));
+  };
+  surveillancePatchRoute("/api/filariasis-records", "FILARIASIS_RECORD", "filariasis");
+  surveillancePatchRoute("/api/rabies-exposures", "RABIES_EXPOSURE", "rabies");
+  surveillancePatchRoute("/api/schistosomiasis-records", "SCHISTOSOMIASIS_RECORD", "schistosomiasis");
+  surveillancePatchRoute("/api/sth-records", "STH_RECORD", "sth");
+  surveillancePatchRoute("/api/leprosy-records", "LEPROSY_RECORD", "leprosy");
 
   // ===== PHASE 7 — Water & Sanitation =====
   ncdRoute("/api/household-water-records", "HOUSEHOLD_WATER_RECORD", insertHouseholdWaterRecordSchema,
@@ -3420,6 +3467,7 @@ export async function registerRoutes(
       const [
         pendingReferrals, openReviews, unreportedAefi, openOutbreaks,
         openRestockRequests, awaitingMdReviews, recentAlerts,
+        escalatedFil, escalatedRab, escalatedSch, escalatedSth, escalatedLep,
       ] = await Promise.all([
         db.select().from(referralRecords)
           .where(eq(referralRecords.status, "PENDING" as any))
@@ -3458,11 +3506,28 @@ export async function registerRoutes(
               .where(and(eq(auditLogs.action, "SYSTEM_ALERT"), gte(auditLogs.createdAt, sevenDaysAgo)))
               .orderBy(desc(auditLogs.createdAt)).limit(100)
           : Promise.resolve([] as typeof auditLogs.$inferSelect[]),
+        // Surveillance escalations — operator-flagged ESCALATED rows from
+        // the 5 disease-program tables. Decision-maker surface for MHO.
+        db.select().from(filariasisRecords)
+          .where(eq(filariasisRecords.status, "ESCALATED"))
+          .orderBy(desc(filariasisRecords.examDate)).limit(50),
+        db.select().from(rabiesExposures)
+          .where(eq(rabiesExposures.status, "ESCALATED"))
+          .orderBy(desc(rabiesExposures.exposureDate)).limit(50),
+        db.select().from(schistosomiasisRecords)
+          .where(eq(schistosomiasisRecords.status, "ESCALATED"))
+          .orderBy(desc(schistosomiasisRecords.seenDate)).limit(50),
+        db.select().from(sthRecords)
+          .where(eq(sthRecords.status, "ESCALATED"))
+          .orderBy(desc(sthRecords.screenDate)).limit(50),
+        db.select().from(leprosyRecords)
+          .where(eq(leprosyRecords.status, "ESCALATED"))
+          .orderBy(desc(leprosyRecords.registeredDate)).limit(50),
       ]);
 
       type InboxItem = {
         id: string;
-        type: "referral" | "death-review" | "aefi" | "outbreak" | "restock" | "md-review" | "system-alert";
+        type: "referral" | "death-review" | "aefi" | "outbreak" | "restock" | "md-review" | "system-alert" | "surveillance";
         priority: "high" | "medium" | "low";
         title: string;
         subtitle: string;
@@ -3562,6 +3627,30 @@ export async function registerRoutes(
         });
       }
 
+      const surveillancePush = (
+        rows: any[],
+        kindLabel: string,
+        dateField: string,
+      ) => {
+        for (const r of rows) {
+          items.push({
+            id: `surveillance:${kindLabel.toLowerCase().replace(/\s+/g, "-")}:${r.id}`,
+            type: "surveillance",
+            priority: "high",
+            title: `Escalated — ${kindLabel}`,
+            subtitle: `${r.patientName}${r.reviewerNotes ? ` · ${String(r.reviewerNotes).slice(0, 80)}` : ""}`,
+            barangay: r.barangay,
+            createdAt: ((r as any)[dateField] ? new Date((r as any)[dateField]).toISOString() : new Date().toISOString()),
+            link: "/disease-surveillance",
+          });
+        }
+      };
+      surveillancePush(escalatedFil, "Filariasis", "examDate");
+      surveillancePush(escalatedRab, "Rabies exposure", "exposureDate");
+      surveillancePush(escalatedSch, "Schistosomiasis", "seenDate");
+      surveillancePush(escalatedSth, "STH", "screenDate");
+      surveillancePush(escalatedLep, "Leprosy", "registeredDate");
+
       for (const log of recentAlerts) {
         const after = log.afterJson as Record<string, any> | null;
         const rule = after?.rule ?? log.entityType;
@@ -3584,6 +3673,10 @@ export async function registerRoutes(
         return b.createdAt.localeCompare(a.createdAt);
       });
 
+      const surveillanceCount =
+        escalatedFil.length + escalatedRab.length + escalatedSch.length +
+        escalatedSth.length + escalatedLep.length;
+
       res.json({
         items,
         counts: {
@@ -3594,6 +3687,7 @@ export async function registerRoutes(
           restock: openRestockRequests.length,
           mdReview: awaitingMdReviews.length,
           systemAlert: recentAlerts.length,
+          surveillance: surveillanceCount,
           total: items.length,
         },
       });

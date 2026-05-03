@@ -21,6 +21,40 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ShieldAlert, Save } from "lucide-react";
 import { format } from "date-fns";
+import {
+  SurveillanceActionDrawer,
+  StatusBadge,
+  type SurveillanceTarget,
+} from "@/components/surveillance-action-drawer";
+
+// Hook helper — manages action drawer state for a given module's cards.
+// Returns the open prop, the onOpenChange handler, the current target,
+// and an opener that takes a row + the queryKey to invalidate after save.
+function useSurveillanceAction(apiBase: string, kindLabel: string, queryKey: unknown[]) {
+  const [target, setTarget] = useState<SurveillanceTarget | null>(null);
+  const open = (row: { id: number; patientName: string; status: string | null; reviewerNotes: string | null }) => {
+    setTarget({
+      id: row.id,
+      patientName: row.patientName,
+      status: row.status,
+      reviewerNotes: row.reviewerNotes,
+      apiBase,
+      kindLabel,
+      queryKey,
+    });
+  };
+  return {
+    target,
+    open,
+    drawer: (
+      <SurveillanceActionDrawer
+        target={target}
+        open={!!target}
+        onOpenChange={(o) => !o && setTarget(null)}
+      />
+    ),
+  };
+}
 
 const today = () => format(new Date(), "yyyy-MM-dd");
 
@@ -100,6 +134,7 @@ function FilariasisCard({ barangay, canEnter }: { barangay: string | null; canEn
     [barangay],
   );
   const { data: rows = [] } = useQuery<FilariasisRecord[]>({ queryKey });
+  const action = useSurveillanceAction("/api/filariasis-records", "Filariasis exam", queryKey);
   const [pt, setPt] = useState<PtCommon>({ patientName: "", dob: "", sex: "M" });
   const [date, setDate] = useState(today());
   const [result, setResult] = useState<"POSITIVE" | "NEGATIVE" | "">("NEGATIVE");
@@ -160,17 +195,29 @@ function FilariasisCard({ barangay, canEnter }: { barangay: string | null; canEn
                   <TableHead>Sex</TableHead>
                   <TableHead>Result</TableHead>
                   <TableHead>Manifestation</TableHead>
+                  <TableHead>Status</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {rows.map((r) => (
-                  <TableRow key={r.id} data-testid={`fil-row-${r.id}`}>
+                  <TableRow
+                    key={r.id}
+                    data-testid={`fil-row-${r.id}`}
+                    className="cursor-pointer hover:bg-muted/50"
+                    onClick={() => action.open({
+                      id: r.id,
+                      patientName: r.patientName,
+                      status: r.status ?? "REPORTED",
+                      reviewerNotes: r.reviewerNotes ?? null,
+                    })}
+                  >
                     <TableCell className="font-mono text-xs">{r.examDate}</TableCell>
                     {!barangay && <TableCell className="text-xs">{r.barangay}</TableCell>}
                     <TableCell>{r.patientName}</TableCell>
                     <TableCell>{r.sex}</TableCell>
                     <TableCell>{r.result || "—"}</TableCell>
                     <TableCell>{r.manifestation}</TableCell>
+                    <TableCell><StatusBadge status={r.status} /></TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -178,6 +225,7 @@ function FilariasisCard({ barangay, canEnter }: { barangay: string | null; canEn
           )}
         </CardContent>
       </Card>
+      {action.drawer}
     </div>
   );
 }
@@ -189,6 +237,7 @@ function RabiesCard({ barangay, canEnter }: { barangay: string | null; canEnter:
     [barangay],
   );
   const { data: rows = [] } = useQuery<RabiesExposure[]>({ queryKey });
+  const action = useSurveillanceAction("/api/rabies-exposures", "Rabies exposure", queryKey);
   const [pt, setPt] = useState<PtCommon>({ patientName: "", dob: "", sex: "M" });
   const [date, setDate] = useState(today());
   const [cat, setCat] = useState<"I" | "II" | "III">("I");
@@ -257,11 +306,22 @@ function RabiesCard({ barangay, canEnter }: { barangay: string | null; canEnter:
                   <TableHead>Category</TableHead>
                   <TableHead>Center</TableHead>
                   <TableHead>Complete</TableHead>
+                  <TableHead>Status</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {rows.map((r) => (
-                  <TableRow key={r.id} data-testid={`rab-row-${r.id}`}>
+                  <TableRow
+                    key={r.id}
+                    data-testid={`rab-row-${r.id}`}
+                    className="cursor-pointer hover:bg-muted/50"
+                    onClick={() => action.open({
+                      id: r.id,
+                      patientName: r.patientName,
+                      status: r.status ?? "REPORTED",
+                      reviewerNotes: r.reviewerNotes ?? null,
+                    })}
+                  >
                     <TableCell className="font-mono text-xs">{r.exposureDate}</TableCell>
                     {!barangay && <TableCell className="text-xs">{r.barangay}</TableCell>}
                     <TableCell>{r.patientName}</TableCell>
@@ -269,6 +329,7 @@ function RabiesCard({ barangay, canEnter }: { barangay: string | null; canEnter:
                     <TableCell><Badge variant="outline" className="text-xs">{r.category}</Badge></TableCell>
                     <TableCell className="text-xs">{r.treatmentCenter || "—"}</TableCell>
                     <TableCell>{r.completeDoses ? "Yes" : "—"}</TableCell>
+                    <TableCell><StatusBadge status={r.status} /></TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -276,6 +337,7 @@ function RabiesCard({ barangay, canEnter }: { barangay: string | null; canEnter:
           )}
         </CardContent>
       </Card>
+      {action.drawer}
     </div>
   );
 }
@@ -287,6 +349,7 @@ function SchistoCard({ barangay, canEnter }: { barangay: string | null; canEnter
     [barangay],
   );
   const { data: rows = [] } = useQuery<SchistosomiasisRecord[]>({ queryKey });
+  const action = useSurveillanceAction("/api/schistosomiasis-records", "Schisto record", queryKey);
   const [pt, setPt] = useState<PtCommon>({ patientName: "", dob: "", sex: "M" });
   const [date, setDate] = useState(today());
   const [suspected, setSuspected] = useState(false);
@@ -344,11 +407,22 @@ function SchistoCard({ barangay, canEnter }: { barangay: string | null; canEnter
                   <TableHead>Patient</TableHead>
                   <TableHead>Sex</TableHead>
                   <TableHead>Tags</TableHead>
+                  <TableHead>Status</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {rows.map((r) => (
-                  <TableRow key={r.id} data-testid={`sch-row-${r.id}`}>
+                  <TableRow
+                    key={r.id}
+                    data-testid={`sch-row-${r.id}`}
+                    className="cursor-pointer hover:bg-muted/50"
+                    onClick={() => action.open({
+                      id: r.id,
+                      patientName: r.patientName,
+                      status: r.status ?? "REPORTED",
+                      reviewerNotes: r.reviewerNotes ?? null,
+                    })}
+                  >
                     <TableCell className="font-mono text-xs">{r.seenDate}</TableCell>
                     {!barangay && <TableCell className="text-xs">{r.barangay}</TableCell>}
                     <TableCell>{r.patientName}</TableCell>
@@ -359,6 +433,7 @@ function SchistoCard({ barangay, canEnter }: { barangay: string | null; canEnter
                       {r.confirmed && <Badge variant="outline" className="text-[10px]">Confirmed</Badge>}
                       {r.complicated && <Badge variant="destructive" className="text-[10px]">Complicated</Badge>}
                     </TableCell>
+                    <TableCell><StatusBadge status={r.status} /></TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -366,6 +441,7 @@ function SchistoCard({ barangay, canEnter }: { barangay: string | null; canEnter
           )}
         </CardContent>
       </Card>
+      {action.drawer}
     </div>
   );
 }
@@ -377,6 +453,7 @@ function SthCard({ barangay, canEnter }: { barangay: string | null; canEnter: bo
     [barangay],
   );
   const { data: rows = [] } = useQuery<SthRecord[]>({ queryKey });
+  const action = useSurveillanceAction("/api/sth-records", "STH record", queryKey);
   const [pt, setPt] = useState<PtCommon>({ patientName: "", dob: "", sex: "M" });
   const [date, setDate] = useState(today());
   const [confirmed, setConfirmed] = useState(false);
@@ -434,17 +511,29 @@ function SthCard({ barangay, canEnter }: { barangay: string | null; canEnter: bo
                   <TableHead>Sex</TableHead>
                   <TableHead>Confirmed</TableHead>
                   <TableHead>Residency</TableHead>
+                  <TableHead>Status</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {rows.map((r) => (
-                  <TableRow key={r.id} data-testid={`sth-row-${r.id}`}>
+                  <TableRow
+                    key={r.id}
+                    data-testid={`sth-row-${r.id}`}
+                    className="cursor-pointer hover:bg-muted/50"
+                    onClick={() => action.open({
+                      id: r.id,
+                      patientName: r.patientName,
+                      status: r.status ?? "REPORTED",
+                      reviewerNotes: r.reviewerNotes ?? null,
+                    })}
+                  >
                     <TableCell className="font-mono text-xs">{r.screenDate}</TableCell>
                     {!barangay && <TableCell className="text-xs">{r.barangay}</TableCell>}
                     <TableCell>{r.patientName}</TableCell>
                     <TableCell>{r.sex}</TableCell>
                     <TableCell>{r.confirmed ? "Yes" : "—"}</TableCell>
                     <TableCell className="text-xs">{r.residency}</TableCell>
+                    <TableCell><StatusBadge status={r.status} /></TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -452,6 +541,7 @@ function SthCard({ barangay, canEnter }: { barangay: string | null; canEnter: bo
           )}
         </CardContent>
       </Card>
+      {action.drawer}
     </div>
   );
 }
@@ -463,6 +553,7 @@ function LeprosyCard({ barangay, canEnter }: { barangay: string | null; canEnter
     [barangay],
   );
   const { data: rows = [] } = useQuery<LeprosyRecord[]>({ queryKey });
+  const action = useSurveillanceAction("/api/leprosy-records", "Leprosy record", queryKey);
   const [pt, setPt] = useState<PtCommon>({ patientName: "", dob: "", sex: "M" });
   const [date, setDate] = useState(today());
   const [newCase, setNewCase] = useState(false);
@@ -516,11 +607,22 @@ function LeprosyCard({ barangay, canEnter }: { barangay: string | null; canEnter
                   <TableHead>Patient</TableHead>
                   <TableHead>Sex</TableHead>
                   <TableHead>Tags</TableHead>
+                  <TableHead>Status</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {rows.map((r) => (
-                  <TableRow key={r.id} data-testid={`lep-row-${r.id}`}>
+                  <TableRow
+                    key={r.id}
+                    data-testid={`lep-row-${r.id}`}
+                    className="cursor-pointer hover:bg-muted/50"
+                    onClick={() => action.open({
+                      id: r.id,
+                      patientName: r.patientName,
+                      status: r.status ?? "REPORTED",
+                      reviewerNotes: r.reviewerNotes ?? null,
+                    })}
+                  >
                     <TableCell className="font-mono text-xs">{r.registeredDate}</TableCell>
                     {!barangay && <TableCell className="text-xs">{r.barangay}</TableCell>}
                     <TableCell>{r.patientName}</TableCell>
@@ -529,6 +631,7 @@ function LeprosyCard({ barangay, canEnter }: { barangay: string | null; canEnter
                       {r.newCase && <Badge variant="outline" className="text-[10px]">New</Badge>}
                       {r.confirmed && <Badge variant="outline" className="text-[10px]">Confirmed</Badge>}
                     </TableCell>
+                    <TableCell><StatusBadge status={r.status} /></TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -536,6 +639,7 @@ function LeprosyCard({ barangay, canEnter }: { barangay: string | null; canEnter
           )}
         </CardContent>
       </Card>
+      {action.drawer}
     </div>
   );
 }
