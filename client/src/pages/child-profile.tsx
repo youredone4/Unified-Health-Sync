@@ -41,6 +41,7 @@ import ConsultationHistoryCard from "@/components/consultation-history-card";
 import { SickChildVisitsCard } from "@/components/sick-child-visits-card";
 import VisitHistoryCard from "@/components/visit-history-card";
 import NutritionFollowUpHistoryCard from "@/components/nutrition-followup-history-card";
+import ChildNutritionCard from "@/components/child-nutrition-card";
 import { useState, useMemo } from "react";
 import { apiRequest, invalidateScopedQueries } from "@/lib/queryClient";
 import { useBarangay } from "@/contexts/barangay-context";
@@ -283,6 +284,7 @@ export default function ChildProfile() {
   // ── Transactions tab ─────────────────────────────────────────────────────
   const transactionsTab = (
     <div className="space-y-4">
+      <ChildNutritionCard child={child} />
       <VisitHistoryCard profileType="Child" profileId={child.id} />
       <ConsultationHistoryCard profileType="Child" profileId={child.id} />
       <NutritionFollowUpHistoryCard childId={child.id} />
