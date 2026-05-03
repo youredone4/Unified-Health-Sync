@@ -46,6 +46,7 @@ import {
   Eye,
   Ribbon,
   Brain,
+  Newspaper,
   ShieldAlert,
   Skull,
   Droplet,
@@ -253,6 +254,13 @@ const NAV_ITEMS: NavItem[] = [
     icon: Sparkles,
     roles: rolesFor("/today"),
     activePrefixes: ["/today"],
+  },
+  {
+    title: "DOH Updates",
+    url: "/updates",
+    icon: Newspaper,
+    roles: rolesFor("/updates"),
+    activePrefixes: ["/updates"],
   },
   {
     title: "Calendar",

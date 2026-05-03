@@ -2237,6 +2237,48 @@ export const insertGlobalChatMessageSchema = createInsertSchema(globalChatMessag
 export type GlobalChatMessage = typeof globalChatMessages.$inferSelect;
 export type InsertGlobalChatMessage = z.infer<typeof insertGlobalChatMessageSchema>;
 
+// === DOH UPDATES & MEMORANDUMS ===
+// Curated feed of recent significant DOH circulars / AOs / memos. Surfaces
+// on the TL home page (/today) and a standalone /updates page so every
+// authenticated user sees DOH guidance changes that affect their work.
+//
+// For now the table is populated by manual seeds — admins curate via the
+// seed file. Phase 2 (per docs/ai-recommendations-design.md) adds an
+// optional weekly scraper. Primary scrape target for this Caraga (Region
+// 13) deployment is https://caraga.doh.gov.ph/issuances; secondary
+// targets are the national HFDB Google Sites + DPCB / HHRDB pages.
+export const DOH_UPDATE_BUREAUS = ["HFDB", "DPCB", "CHD", "HHRDB", "OTHER"] as const;
+export type DohUpdateBureau = typeof DOH_UPDATE_BUREAUS[number];
+
+export const DOH_UPDATE_SIGNIFICANCE = ["LOW", "MEDIUM", "HIGH"] as const;
+export type DohUpdateSignificance = typeof DOH_UPDATE_SIGNIFICANCE[number];
+
+export const dohUpdates = pgTable("doh_updates", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  summary: text("summary").notNull(),
+  bureau: text("bureau").$type<DohUpdateBureau>().notNull().default("HFDB"),
+  significance: text("significance").$type<DohUpdateSignificance>().notNull().default("MEDIUM"),
+  sourceUrl: text("source_url").notNull(),
+  publishedDate: text("published_date").notNull(), // YYYY-MM-DD
+  // Tags lets us link updates to relevant program areas (e.g.
+  // ["MNCHN", "AEFI"]) so the future recommendation engine can flag which
+  // rules might need revisiting when a new memo lands. Plain string array
+  // for now; structured taxonomy comes later.
+  tags: jsonb("tags").$type<string[]>().notNull().default([]),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertDohUpdateSchema = createInsertSchema(dohUpdates)
+  .omit({ id: true, createdAt: true })
+  .extend({
+    bureau: z.enum(DOH_UPDATE_BUREAUS),
+    significance: z.enum(DOH_UPDATE_SIGNIFICANCE),
+    tags: z.array(z.string()).optional(),
+  });
+export type DohUpdate = typeof dohUpdates.$inferSelect;
+export type InsertDohUpdate = z.infer<typeof insertDohUpdateSchema>;
+
 // === AUTH & RBAC (from Replit Auth integration + extensions) ===
 // Note: barangays, userBarangays, auditLogs, users, sessions are defined in ./models/auth.ts
 export * from "./models/auth";

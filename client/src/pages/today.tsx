@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/accordion";
 import { DayBannerStrip } from "@/components/today/DayBannerStrip";
 import { M1ProgressStrip } from "@/components/today/M1ProgressStrip";
+import { DohUpdatesCard } from "@/components/doh-updates-card";
 import {
   PriorityList,
   type PriorityItem,
@@ -137,6 +138,9 @@ export default function TodayPage() {
       {/* Day-of-week DOH cadence + M1 strip — secondary, but still visible */}
       <DayBannerStrip context={dayContext} epiExpectedCount={counts.immunization} />
       <M1ProgressStrip daysRemaining={dayContext.m1DaysRemaining} />
+
+      {/* Recent DOH updates / memorandums — at-a-glance feed for every role */}
+      <DohUpdatesCard limit={4} />
 
       {/* Daily DOH-cadence checks — collapsed by default */}
       <Accordion type="single" collapsible>

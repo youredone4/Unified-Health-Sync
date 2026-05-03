@@ -1163,6 +1163,18 @@ export async function registerRoutes(
   ncdRoute("/api/household-water-records", "HOUSEHOLD_WATER_RECORD", insertHouseholdWaterRecordSchema,
     (p) => storage.getHouseholdWaterRecords(p), (r) => storage.createHouseholdWaterRecord(r));
 
+  // ===== DOH UPDATES — read-only feed for the TL home page + /updates =====
+  // All authenticated roles can read. Curation is via the seed file in
+  // storage.seedDohUpdates() (admin-only POST/PATCH endpoints can be
+  // added later if operators want a CRUD UI).
+  app.get("/api/doh-updates", loadUserInfo, requireAuth, ar(async (req, res) => {
+    const limitRaw = req.query.limit ? Number(req.query.limit) : undefined;
+    const limit = Number.isFinite(limitRaw) && (limitRaw as number) > 0 ? Math.min(limitRaw as number, 50) : undefined;
+    const bureau = req.query.bureau ? String(req.query.bureau) : undefined;
+    const data = await storage.getDohUpdates({ limit, bureau });
+    res.json(data);
+  }));
+
   // ===== PHASE 6 — Mortality registry =====
   app.get("/api/death-events", loadUserInfo, requireAuth, ar(async (req, res) => {
     const requestedBarangay = req.query.barangay ? String(req.query.barangay) : undefined;
