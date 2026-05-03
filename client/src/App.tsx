@@ -101,6 +101,7 @@ const WorkforceDetailPage = lazy(() => import("@/pages/workforce-detail"));
 const DiseaseSurveillancePage = lazy(() => import("@/pages/disease-surveillance"));
 const MortalityHubPage = lazy(() => import("@/pages/mortality-hub"));
 const HouseholdWaterPage = lazy(() => import("@/pages/household-water"));
+const UpdatesPage = lazy(() => import("@/pages/updates"));
 import { InboxHeroBanner } from "@/components/inbox-hero-banner";
 
 const roleLabels: Record<string, string> = {
@@ -354,6 +355,7 @@ function Router() {
     <Switch>
       {/* Today (TL landing) & the Dashboards hub */}
       <Route path="/today"><TodayPage /></Route>
+      <Route path="/updates"><UpdatesPage /></Route>
       <Route path="/dashboards"><DashboardsHub><DashboardsPage /></DashboardsHub></Route>
       <Route path="/dashboards/maternal"><DashboardsHub><DashboardsPage /></DashboardsHub></Route>
       <Route path="/dashboards/child"><DashboardsHub><DashboardsPage /></DashboardsHub></Route>

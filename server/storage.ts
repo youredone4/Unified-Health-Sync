@@ -8,6 +8,7 @@ import {
   sickChildVisits, schoolImmunizations, oralHealthVisits,
   philpenAssessments, ncdScreenings, visionScreenings, cervicalCancerScreenings, mentalHealthScreenings,
   filariasisRecords, rabiesExposures, schistosomiasisRecords, sthRecords, leprosyRecords,
+  dohUpdates, type DohUpdate, type InsertDohUpdate,
   deathEvents, pidsrSubmissions, workforceMembers, workforceCredentials, householdWaterRecords,
   nutritionFollowUps,
   fpServiceRecords, FP_METHOD_ROW_KEY,
@@ -283,6 +284,7 @@ export interface IStorage {
   sendGlobalChatMessage(senderId: string, senderName: string, senderRole: string, content: string): Promise<GlobalChatMessage>;
 
   seedData(): Promise<void>;
+  getDohUpdates(opts?: { limit?: number; bureau?: string }): Promise<DohUpdate[]>;
 }
 
 /**
@@ -3108,6 +3110,130 @@ export class DatabaseStorage implements IStorage {
   }
 
   /**
+   * Curated DOH updates feed. Surfaces on the TL home page (/today) and
+   * the standalone /updates page so every authenticated user sees DOH
+   * memos that affect their work. Idempotent — only inserts an entry if
+   * sourceUrl is not already present.
+   *
+   * Today the seed list lives in code; the design proposal in
+   * docs/ai-recommendations-design.md sketches a future scraper of the
+   * HFDB / DPCB / CHD / HHRDB pages that would write into the same
+   * table. Either way the read path stays the same.
+   */
+  private async seedDohUpdates(): Promise<void> {
+    const seed: InsertDohUpdate[] = [
+      {
+        title: "AO 2024-0024: Updated Rabies PEP Schedule",
+        summary: "Revised post-exposure prophylaxis schedule for Category III rabies exposures. Reaffirms Days 0/3/7/14/28 + RIG infiltration + ABTC referral.",
+        bureau: "DPCB",
+        significance: "HIGH",
+        sourceUrl: "https://caraga.doh.gov.ph/issuances/administrative-orders",
+        publishedDate: "2024-08-15",
+        tags: ["Rabies", "PEP", "ABTC"],
+      },
+      {
+        title: "DM 2024-0312: Measles-Rubella SIA Phase 3",
+        summary: "Supplemental Immunization Activity for measles-rubella targeting children 9 months to <5 years. RHU rosters required by end-month.",
+        bureau: "DPCB",
+        significance: "HIGH",
+        sourceUrl: "https://caraga.doh.gov.ph/issuances/department-memoranda",
+        publishedDate: "2024-09-02",
+        tags: ["Immunization", "Measles", "MR"],
+      },
+      {
+        title: "DC 2024-0188: Konsulta Provider Network Expansion",
+        summary: "PhilHealth Konsulta now reimburses additional first-line antihypertensives. Konsulta-enrolled clinics must update their formulary.",
+        bureau: "HFDB",
+        significance: "MEDIUM",
+        sourceUrl: "https://caraga.doh.gov.ph/issuances/department-circulars",
+        publishedDate: "2024-07-22",
+        tags: ["Konsulta", "NCD", "Hypertension"],
+      },
+      {
+        title: "AO 2024-0019: Maternal Death Review (MDR) Cadence",
+        summary: "Reaffirms MDR within 90 days of every maternal death. Highlights mandatory CHD reporting + community-based audit when facility-based unavailable.",
+        bureau: "DPCB",
+        significance: "HIGH",
+        sourceUrl: "https://caraga.doh.gov.ph/issuances/administrative-orders",
+        publishedDate: "2024-06-10",
+        tags: ["Mortality", "MDR", "MNCHN"],
+      },
+      {
+        title: "DM 2024-0276: STH Deworming Round Q4 2024",
+        summary: "Targets school-aged + preschool children. RHUs to coordinate with DepEd school health units; report drug-administration coverage.",
+        bureau: "DPCB",
+        significance: "MEDIUM",
+        sourceUrl: "https://caraga.doh.gov.ph/issuances/department-memoranda",
+        publishedDate: "2024-09-18",
+        tags: ["STH", "Deworming", "School Health"],
+      },
+      {
+        title: "DC 2024-0210: BHS Facility Standards Update",
+        summary: "Minimum equipment + staffing standards for Barangay Health Stations. Compliance audit window opens Q1 2025.",
+        bureau: "HFDB",
+        significance: "MEDIUM",
+        sourceUrl: "https://sites.google.com/view/doh-hfdb/updates",
+        publishedDate: "2024-10-05",
+        tags: ["BHS", "Facility Standards", "Licensing"],
+      },
+      {
+        title: "AO 2024-0027: PhilPEN Risk-Assessment Tool v2",
+        summary: "Updated PhilPEN form for adult NCD screening. New mental-health screen + tobacco-cessation referral pathway.",
+        bureau: "DPCB",
+        significance: "HIGH",
+        sourceUrl: "https://caraga.doh.gov.ph/issuances/administrative-orders",
+        publishedDate: "2024-11-01",
+        tags: ["PhilPEN", "NCD", "Mental Health"],
+      },
+      {
+        title: "DM 2024-0345: AEFI Reporting Window Reminder",
+        summary: "Serious AEFIs must be reported to CHD within 24 hours; causality assessment within 7 days. Re-emphasizes the digital reporting form.",
+        bureau: "DPCB",
+        significance: "HIGH",
+        sourceUrl: "https://caraga.doh.gov.ph/issuances/department-memoranda",
+        publishedDate: "2024-10-22",
+        tags: ["AEFI", "Immunization", "Surveillance"],
+      },
+      {
+        title: "DC 2024-0231: Cervical Cancer Screening — VIA Coverage Push",
+        summary: "Targets women 30-65; reiterates linkage-to-care follow-up for VIA-suspicious cases. Reporting via M1 Section G6.",
+        bureau: "DPCB",
+        significance: "MEDIUM",
+        sourceUrl: "https://caraga.doh.gov.ph/issuances/department-circulars",
+        publishedDate: "2024-08-30",
+        tags: ["Cervical Cancer", "VIA", "Cancer Control"],
+      },
+      {
+        title: "AO 2024-0021: Health Workforce Distribution Reporting",
+        summary: "HHRDB requires quarterly workforce census from RHUs (clinical + non-clinical). Driver behind the /workforce module.",
+        bureau: "HHRDB",
+        significance: "MEDIUM",
+        sourceUrl: "https://caraga.doh.gov.ph/issuances/administrative-orders",
+        publishedDate: "2024-07-08",
+        tags: ["Workforce", "HHRDB", "Reporting"],
+      },
+    ];
+    for (const row of seed) {
+      const existing = await db.select({ id: dohUpdates.id })
+        .from(dohUpdates)
+        .where(eq(dohUpdates.sourceUrl, row.sourceUrl))
+        .limit(1);
+      if (existing.length === 0) {
+        await db.insert(dohUpdates).values(row);
+      }
+    }
+  }
+
+  async getDohUpdates(opts: { limit?: number; bureau?: string } = {}): Promise<DohUpdate[]> {
+    const conditions = [];
+    if (opts.bureau) conditions.push(eq(dohUpdates.bureau, opts.bureau as any));
+    let q = db.select().from(dohUpdates);
+    if (conditions.length) q = (q as any).where(and(...conditions));
+    const rows = await (q as any).orderBy(desc(dohUpdates.publishedDate));
+    return opts.limit ? rows.slice(0, opts.limit) : rows;
+  }
+
+  /**
    * Phase 0.5 — backfill catalog entries for "ghost" rowKeys: indicators
    * that computeM1Values has been writing values for but that never had a
    * matching m1_indicator_catalog row. Without a catalog row the renderer
@@ -4256,6 +4382,7 @@ export class DatabaseStorage implements IStorage {
     await this.seedM1MortalityRows();
     await this.seedM1WaterRows();
     await this.seedM1GhostRows();
+    await this.seedDohUpdates();
 
     // Demo data for the MGMT-consolidated operational pages. Runs every
     // boot — each table inside is itself idempotent (skips when non-empty),
