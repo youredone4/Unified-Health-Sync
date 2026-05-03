@@ -81,6 +81,34 @@ export default function BirthAttendanceWorklist() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search]);
 
+  // One batch fetch per visible page (≤10 mothers) — replaces the previous
+  // per-row N+1 pattern. Keyed on the comma-separated id list so React
+  // Query refetches when the user paginates.
+  const visibleIds = pagination.pagedItems.map((m) => m.id);
+  const idsKey = visibleIds.slice().sort((a, b) => a - b).join(",");
+  const { data: visibleRecords = [] } = useQuery<BirthAttendanceRecord[]>({
+    queryKey: ["/api/birth-attendance-records", "by-mothers", idsKey],
+    queryFn: async () => {
+      if (visibleIds.length === 0) return [];
+      const r = await fetch(
+        `/api/birth-attendance-records?motherIds=${idsKey}`,
+        { credentials: "include" },
+      );
+      if (!r.ok) throw new Error(`${r.status}: ${r.statusText}`);
+      return r.json();
+    },
+    enabled: visibleIds.length > 0,
+  });
+  const recordsByMother = useMemo(() => {
+    const m = new Map<number, BirthAttendanceRecord[]>();
+    for (const r of visibleRecords) {
+      const arr = m.get(r.motherId);
+      if (arr) arr.push(r);
+      else m.set(r.motherId, [r]);
+    }
+    return m;
+  }, [visibleRecords]);
+
   return (
     <div className="space-y-4">
       <div>
@@ -130,6 +158,7 @@ export default function BirthAttendanceWorklist() {
               <Row
                 key={m.id}
                 mother={m}
+                existing={recordsByMother.get(m.id) ?? []}
                 canLog={canEnterRecords}
                 onLog={() => setLogTarget(m)}
               />
@@ -151,27 +180,13 @@ export default function BirthAttendanceWorklist() {
 }
 
 function Row({
-  mother, canLog, onLog,
+  mother, existing, canLog, onLog,
 }: {
   mother: Mother;
+  existing: BirthAttendanceRecord[];
   canLog: boolean;
   onLog: () => void;
 }) {
-  // Per-row indicator: "has at least one record on file?". This is a small
-  // extra fetch but only fires for visible (paginated) rows, so the cost is
-  // bounded to ~10 calls per page.
-  const { data: existing = [] } = useQuery<BirthAttendanceRecord[]>({
-    queryKey: ["/api/birth-attendance-records", mother.id],
-    queryFn: async () => {
-      const r = await fetch(
-        `/api/birth-attendance-records?motherId=${mother.id}`,
-        { credentials: "include" },
-      );
-      if (!r.ok) throw new Error(`${r.status}: ${r.statusText}`);
-      return r.json();
-    },
-  });
-
   return (
     <div
       className="flex items-start gap-3 p-3 rounded-md bg-muted/50"
@@ -251,8 +266,9 @@ function LogDeliveryDialog({
     },
     onSuccess: () => {
       toast({ title: "Delivery logged" });
+      // Prefix-match invalidation hits both per-mother and by-mothers keys.
       queryClient.invalidateQueries({
-        queryKey: ["/api/birth-attendance-records", mother.id],
+        queryKey: ["/api/birth-attendance-records"],
       });
       onOpenChange(false);
       form.reset();
