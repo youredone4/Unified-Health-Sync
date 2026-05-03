@@ -47,6 +47,7 @@ import {
   Ribbon,
   Brain,
   Newspaper,
+  BookOpen,
   ShieldAlert,
   Skull,
   Droplet,
@@ -261,6 +262,13 @@ const NAV_ITEMS: NavItem[] = [
     icon: Newspaper,
     roles: rolesFor("/updates"),
     activePrefixes: ["/updates"],
+  },
+  {
+    title: "Glossary",
+    url: "/glossary",
+    icon: BookOpen,
+    roles: rolesFor("/glossary"),
+    activePrefixes: ["/glossary"],
   },
   {
     title: "Calendar",
