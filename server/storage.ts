@@ -3625,6 +3625,28 @@ export class DatabaseStorage implements IStorage {
         ADD COLUMN IF NOT EXISTS has_tb_dots   BOOLEAN NOT NULL DEFAULT FALSE
     `);
 
+    // Auto-create new tables that were added after the initial deployment.
+    // Drizzle's pgTable definitions don't auto-CREATE on existing databases;
+    // only `drizzle-kit push` does. This block lets fresh deployments start
+    // up cleanly without a manual migration step.
+    //
+    // Each statement is `CREATE TABLE IF NOT EXISTS` so re-runs are no-ops.
+    // Keep these column lists in sync with shared/schema.ts; if the schema
+    // changes later, prefer ALTER ... ADD COLUMN IF NOT EXISTS above.
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS doh_updates (
+        id              SERIAL PRIMARY KEY,
+        title           TEXT      NOT NULL,
+        summary         TEXT      NOT NULL,
+        bureau          TEXT      NOT NULL DEFAULT 'HFDB',
+        significance    TEXT      NOT NULL DEFAULT 'MEDIUM',
+        source_url      TEXT      NOT NULL,
+        published_date  TEXT      NOT NULL,
+        tags            JSONB     NOT NULL DEFAULT '[]'::jsonb,
+        created_at      TIMESTAMP DEFAULT NOW()
+      )
+    `);
+
     // Surveillance workflow columns shared across all 5 disease-program
     // tables. Drives the row-click action drawer and the MGMT inbox feed
     // for ESCALATED items.
