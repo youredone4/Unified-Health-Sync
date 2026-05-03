@@ -1279,13 +1279,39 @@ export class DatabaseStorage implements IStorage {
     await addVax("D2-06", "opv3");
     // Phase 2 — additional fields already present on children.vaccines
     // jsonb. Same monthly-count semantic as D2-01..06 (no age-at-
-    // vaccination filter yet — that's a follow-up for D1-02 split,
-    // D3-04 catch-up overlap, etc.).
+    // vaccination filter yet — that's a follow-up for D3-04 catch-up
+    // overlap).
     await addVax("D2-07", "ipv1");
     await addVax("D2-09", "mr1");
     await addVax("D3-01", "penta4");
     await addVax("D3-02", "opv4");
     await addVax("D3-03", "mr2");
+
+    // D1-02a / D1-02b — BCG split by age-at-vaccination. D1-02 (any BCG
+    // this month) stays as the unfiltered aggregate; a/b are subsets
+    // discriminated by (vaccine_date - dob) day-difference.
+    const bcgThisMonth = [...cBase, sql`vaccines->>'bcg' LIKE ${monthLike}`];
+    const bcgEarly = [...bcgThisMonth, sql`((vaccines->>'bcg')::date - dob::date) <= 28`];
+    const bcgLate  = [
+      ...bcgThisMonth,
+      sql`((vaccines->>'bcg')::date - dob::date) BETWEEN 29 AND 365`,
+    ];
+    add("D1-02a", "M",     await countQ(children, [...bcgEarly, sql`sex = 'male'`]));
+    add("D1-02a", "F",     await countQ(children, [...bcgEarly, sql`sex = 'female'`]));
+    add("D1-02a", "TOTAL", await countQ(children, bcgEarly));
+    add("D1-02b", "M",     await countQ(children, [...bcgLate, sql`sex = 'male'`]));
+    add("D1-02b", "F",     await countQ(children, [...bcgLate, sql`sex = 'female'`]));
+    add("D1-02b", "TOTAL", await countQ(children, bcgLate));
+
+    // D1-03 — Hep-B birth dose (within 24h of birth).
+    const hepBBirth = [
+      ...cBase,
+      sql`vaccines->>'hepB' LIKE ${monthLike}`,
+      sql`((vaccines->>'hepB')::date - dob::date) <= 1`,
+    ];
+    add("D1-03", "M",     await countQ(children, [...hepBBirth, sql`sex = 'male'`]));
+    add("D1-03", "F",     await countQ(children, [...hepBBirth, sql`sex = 'female'`]));
+    add("D1-03", "TOTAL", await countQ(children, hepBBirth));
 
     // === SENIORS ===
     const sBase = barangayName ? [eq(seniors.barangay, barangayName)] : [];
@@ -3185,6 +3211,25 @@ export class DatabaseStorage implements IStorage {
       { templateVersionId: tplId, pageNumber: 2, sectionCode: "D1",
         rowKey: "D1-02", officialLabel: "BCG (any dose)",
         dataType: "INT", rowOrder: 200, indentLevel: 0,
+        columnGroupType: "SEX_RATE", columnSpec: sexRateSpec,
+        isComputed: true, isRequired: true },
+      // Phase 2 — BCG split by age-at-vaccination. Indented as
+      // sub-rows of D1-02. Note D1-02a + D1-02b ≤ D1-02: doses given
+      // after 1y of age count toward the parent only.
+      { templateVersionId: tplId, pageNumber: 2, sectionCode: "D1",
+        rowKey: "D1-02a", officialLabel: "BCG (within 0–28 days)",
+        dataType: "INT", rowOrder: 201, indentLevel: 1,
+        columnGroupType: "SEX_RATE", columnSpec: sexRateSpec,
+        isComputed: true, isRequired: true },
+      { templateVersionId: tplId, pageNumber: 2, sectionCode: "D1",
+        rowKey: "D1-02b", officialLabel: "BCG (29 days to 1 year)",
+        dataType: "INT", rowOrder: 202, indentLevel: 1,
+        columnGroupType: "SEX_RATE", columnSpec: sexRateSpec,
+        isComputed: true, isRequired: true },
+      // Hep-B birth dose: dose given within 24h of birth.
+      { templateVersionId: tplId, pageNumber: 2, sectionCode: "D1",
+        rowKey: "D1-03", officialLabel: "Hep-B birth dose (within 24 hrs)",
+        dataType: "INT", rowOrder: 210, indentLevel: 0,
         columnGroupType: "SEX_RATE", columnSpec: sexRateSpec,
         isComputed: true, isRequired: true },
 
