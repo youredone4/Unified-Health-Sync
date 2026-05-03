@@ -88,6 +88,7 @@ export const ADMIN_ONLY_ROLES = [UserRole.SYSTEM_ADMIN] as const;
 export const sidebarPermissions: Record<string, readonly string[]> = {
   "/today": ALL_ROLES,
   "/dashboards": ALL_ROLES,
+  "/pnc": ALL_ROLES,
   "/hotspots": MGMT_VIEW_ROLES,
   "/inventory": ALL_ROLES,
   "/inventory/stockouts": MGMT_VIEW_ROLES,
