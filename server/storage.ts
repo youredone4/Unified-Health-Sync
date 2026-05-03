@@ -1277,6 +1277,15 @@ export class DatabaseStorage implements IStorage {
     await addVax("D2-04", "opv1");
     await addVax("D2-05", "opv2");
     await addVax("D2-06", "opv3");
+    // Phase 2 — additional fields already present on children.vaccines
+    // jsonb. Same monthly-count semantic as D2-01..06 (no age-at-
+    // vaccination filter yet — that's a follow-up for D1-02 split,
+    // D3-04 catch-up overlap, etc.).
+    await addVax("D2-07", "ipv1");
+    await addVax("D2-09", "mr1");
+    await addVax("D3-01", "penta4");
+    await addVax("D3-02", "opv4");
+    await addVax("D3-03", "mr2");
 
     // === SENIORS ===
     const sBase = barangayName ? [eq(seniors.barangay, barangayName)] : [];
@@ -3208,6 +3217,35 @@ export class DatabaseStorage implements IStorage {
       { templateVersionId: tplId, pageNumber: 2, sectionCode: "D2",
         rowKey: "D2-06", officialLabel: "OPV 3",
         dataType: "INT", rowOrder: 255, indentLevel: 0,
+        columnGroupType: "SEX_RATE", columnSpec: sexRateSpec,
+        isComputed: true, isRequired: true },
+      // Phase 2 vaccine extensions — fields already on
+      // children.vaccines, compute now wires them.
+      { templateVersionId: tplId, pageNumber: 2, sectionCode: "D2",
+        rowKey: "D2-07", officialLabel: "IPV 1",
+        dataType: "INT", rowOrder: 256, indentLevel: 0,
+        columnGroupType: "SEX_RATE", columnSpec: sexRateSpec,
+        isComputed: true, isRequired: true },
+      { templateVersionId: tplId, pageNumber: 2, sectionCode: "D2",
+        rowKey: "D2-09", officialLabel: "MR 1 (Measles-Rubella)",
+        dataType: "INT", rowOrder: 258, indentLevel: 0,
+        columnGroupType: "SEX_RATE", columnSpec: sexRateSpec,
+        isComputed: true, isRequired: true },
+
+      // === SECTION D3 — Boosters (13-23 months, page 2) ===
+      { templateVersionId: tplId, pageNumber: 2, sectionCode: "D3",
+        rowKey: "D3-01", officialLabel: "DPT-HiB-HepB booster (Penta 4)",
+        dataType: "INT", rowOrder: 270, indentLevel: 0,
+        columnGroupType: "SEX_RATE", columnSpec: sexRateSpec,
+        isComputed: true, isRequired: true },
+      { templateVersionId: tplId, pageNumber: 2, sectionCode: "D3",
+        rowKey: "D3-02", officialLabel: "OPV booster (OPV 4)",
+        dataType: "INT", rowOrder: 271, indentLevel: 0,
+        columnGroupType: "SEX_RATE", columnSpec: sexRateSpec,
+        isComputed: true, isRequired: true },
+      { templateVersionId: tplId, pageNumber: 2, sectionCode: "D3",
+        rowKey: "D3-03", officialLabel: "MR 2",
+        dataType: "INT", rowOrder: 272, indentLevel: 0,
         columnGroupType: "SEX_RATE", columnSpec: sexRateSpec,
         isComputed: true, isRequired: true },
 
