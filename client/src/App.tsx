@@ -80,6 +80,10 @@ import ColdChainPage from "@/pages/cold-chain";
 import SchoolImmunizationsPage from "@/pages/school-immunizations";
 import OralHealthPage from "@/pages/oral-health";
 import NcdScreeningsPage from "@/pages/ncd-screenings";
+import PhilpenAssessmentsPage from "@/pages/philpen-assessments";
+import VisionScreeningsPage from "@/pages/vision-screenings";
+import CervicalCancerScreeningsPage from "@/pages/cervical-cancer-screenings";
+import MentalHealthScreeningsPage from "@/pages/mental-health-screenings";
 import WorkforcePage from "@/pages/workforce";
 import ReferralsPage from "@/pages/referrals";
 import MgmtInboxPage from "@/pages/mgmt-inbox";
@@ -449,6 +453,10 @@ function Router() {
 
       {/* NCD & lifestyle screenings (Sections G1, G2, G4, G6, G8) */}
       <Route path="/ncd-screenings"><NcdScreeningsPage /></Route>
+      <Route path="/philpen-assessments"><PhilpenAssessmentsPage /></Route>
+      <Route path="/vision-screenings"><VisionScreeningsPage /></Route>
+      <Route path="/cervical-cancer-screenings"><CervicalCancerScreeningsPage /></Route>
+      <Route path="/mental-health-screenings"><MentalHealthScreeningsPage /></Route>
 
       {/* Disease surveillance (Sections DIS-FIL, DIS-RAB, DIS-SCH, DIS-STH, DIS-LEP) */}
       {/* Vertical disease programs (filariasis/rabies/schisto/STH/leprosy)
