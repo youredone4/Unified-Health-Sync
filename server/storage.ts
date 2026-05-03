@@ -1313,6 +1313,25 @@ export class DatabaseStorage implements IStorage {
     add("D1-03", "F",     await countQ(children, [...hepBBirth, sql`sex = 'female'`]));
     add("D1-03", "TOTAL", await countQ(children, hepBBirth));
 
+    // D2-08 / D3-04 — IPV 2 split by age-at-vaccination. Both source
+    // vaccines.ipv2; the disambiguation is purely on the day-difference
+    // between vaccination date and dob.
+    //   D2-08 — routine, given within 1 year of birth   (≤ 365 days)
+    //   D3-04 — catch-up at 13–23 months                (366–730 days)
+    // Doses given outside both windows count toward neither.
+    const ipv2ThisMonth = [...cBase, sql`vaccines->>'ipv2' LIKE ${monthLike}`];
+    const ipv2Routine = [...ipv2ThisMonth, sql`((vaccines->>'ipv2')::date - dob::date) <= 365`];
+    const ipv2CatchUp = [
+      ...ipv2ThisMonth,
+      sql`((vaccines->>'ipv2')::date - dob::date) BETWEEN 366 AND 730`,
+    ];
+    add("D2-08", "M",     await countQ(children, [...ipv2Routine, sql`sex = 'male'`]));
+    add("D2-08", "F",     await countQ(children, [...ipv2Routine, sql`sex = 'female'`]));
+    add("D2-08", "TOTAL", await countQ(children, ipv2Routine));
+    add("D3-04", "M",     await countQ(children, [...ipv2CatchUp, sql`sex = 'male'`]));
+    add("D3-04", "F",     await countQ(children, [...ipv2CatchUp, sql`sex = 'female'`]));
+    add("D3-04", "TOTAL", await countQ(children, ipv2CatchUp));
+
     // === SENIORS ===
     const sBase = barangayName ? [eq(seniors.barangay, barangayName)] : [];
 
@@ -3272,6 +3291,11 @@ export class DatabaseStorage implements IStorage {
         columnGroupType: "SEX_RATE", columnSpec: sexRateSpec,
         isComputed: true, isRequired: true },
       { templateVersionId: tplId, pageNumber: 2, sectionCode: "D2",
+        rowKey: "D2-08", officialLabel: "IPV 2 (within 1 year of birth)",
+        dataType: "INT", rowOrder: 257, indentLevel: 0,
+        columnGroupType: "SEX_RATE", columnSpec: sexRateSpec,
+        isComputed: true, isRequired: true },
+      { templateVersionId: tplId, pageNumber: 2, sectionCode: "D2",
         rowKey: "D2-09", officialLabel: "MR 1 (Measles-Rubella)",
         dataType: "INT", rowOrder: 258, indentLevel: 0,
         columnGroupType: "SEX_RATE", columnSpec: sexRateSpec,
@@ -3291,6 +3315,11 @@ export class DatabaseStorage implements IStorage {
       { templateVersionId: tplId, pageNumber: 2, sectionCode: "D3",
         rowKey: "D3-03", officialLabel: "MR 2",
         dataType: "INT", rowOrder: 272, indentLevel: 0,
+        columnGroupType: "SEX_RATE", columnSpec: sexRateSpec,
+        isComputed: true, isRequired: true },
+      { templateVersionId: tplId, pageNumber: 2, sectionCode: "D3",
+        rowKey: "D3-04", officialLabel: "IPV 2 catch-up (13–23 months)",
+        dataType: "INT", rowOrder: 273, indentLevel: 0,
         columnGroupType: "SEX_RATE", columnSpec: sexRateSpec,
         isComputed: true, isRequired: true },
 
