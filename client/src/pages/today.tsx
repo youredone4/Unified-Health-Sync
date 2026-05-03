@@ -26,6 +26,7 @@ import {
 import { DayBannerStrip } from "@/components/today/DayBannerStrip";
 import { M1ProgressStrip } from "@/components/today/M1ProgressStrip";
 import { DohUpdatesCard } from "@/components/doh-updates-card";
+import { GlossaryTipBanner } from "@/components/glossary-tip-banner";
 import {
   PriorityList,
   type PriorityItem,
@@ -134,6 +135,10 @@ export default function TodayPage() {
 
       {/* Hero: prioritized list grouped by severity */}
       <PriorityList items={allItems} programFilter={programFilter} />
+
+      {/* One-shot onboarding tip for the popup-tip system. Hides forever
+          after dismissal (localStorage). */}
+      <GlossaryTipBanner />
 
       {/* Day-of-week DOH cadence + M1 strip — secondary, but still visible */}
       <DayBannerStrip context={dayContext} epiExpectedCount={counts.immunization} />

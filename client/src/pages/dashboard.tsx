@@ -21,6 +21,7 @@ import { Progress } from "@/components/ui/progress";
 import { Heart, Baby, Pill, Package, Siren, AlertTriangle, Users, Activity, Shield } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { DashboardShell, FilterBar, type KpiSpec, type AlertSpec } from "@/components/dashboard-shell";
+import { DohUpdatesCard } from "@/components/doh-updates-card";
 
 const PLACER_BARANGAYS = [
   "Amoslog", "Anislagan", "Bad-as", "Boyongan", "Bugas-bugas",
@@ -347,7 +348,11 @@ export default function Dashboard() {
     : "Placer Municipality · 20 barangays";
 
   return (
-    <DashboardShell
+    <div className="space-y-4">
+      {/* DOH updates — visible at top so MGMT roles see fresh guidance
+          on their landing surface, not just TLs on /today. */}
+      <DohUpdatesCard limit={3} />
+      <DashboardShell
       title={isTL ? "Barangay Overview" : "Municipal Overview"}
       subtitle={scope}
       filterBar={<FilterBar dataAsOf={TODAY_STR} />}
@@ -357,6 +362,7 @@ export default function Dashboard() {
       detail={detail}
       detailToggleLabel="Show barangay risk summary"
     />
+    </div>
   );
 }
 
