@@ -1313,6 +1313,34 @@ export class DatabaseStorage implements IStorage {
     add("D1-03", "F",     await countQ(children, [...hepBBirth, sql`sex = 'female'`]));
     add("D1-03", "TOTAL", await countQ(children, hepBBirth));
 
+    // D1-01 — Children Protected At Birth (CPAB). A child counts when
+    // they're born this month AND the linked mother has ≥2 TT/Td doses
+    // on record. Children with no motherId link can't be evaluated and
+    // are excluded. Same TT2+ definition as A-03 above.
+    const cpabRows = await db
+      .select({ sex: children.sex })
+      .from(children)
+      .innerJoin(mothers, eq(children.motherId, mothers.id))
+      .where(and(
+        barangayName ? eq(children.barangay, barangayName) : undefined,
+        sql`${children.dob} LIKE ${monthLike}`,
+        sql`(
+          (CASE WHEN ${mothers.tt1Date} IS NOT NULL THEN 1 ELSE 0 END) +
+          (CASE WHEN ${mothers.tt2Date} IS NOT NULL THEN 1 ELSE 0 END) +
+          (CASE WHEN ${mothers.tt3Date} IS NOT NULL THEN 1 ELSE 0 END) +
+          (CASE WHEN ${mothers.tt4Date} IS NOT NULL THEN 1 ELSE 0 END) +
+          (CASE WHEN ${mothers.tt5Date} IS NOT NULL THEN 1 ELSE 0 END)
+        ) >= 2`,
+      ));
+    let d101M = 0, d101F = 0;
+    for (const r of cpabRows) {
+      if ((r.sex || "").toLowerCase() === "female") d101F++;
+      else d101M++;
+    }
+    add("D1-01", "M",     d101M);
+    add("D1-01", "F",     d101F);
+    add("D1-01", "TOTAL", d101M + d101F);
+
     // D2-08 / D3-04 — IPV 2 split by age-at-vaccination. Both source
     // vaccines.ipv2; the disambiguation is purely on the day-difference
     // between vaccination date and dob.
@@ -3222,7 +3250,12 @@ export class DatabaseStorage implements IStorage {
         columnGroupType: "AGE_GROUP", columnSpec: ageGroupSpec,
         isComputed: true, isRequired: true },
 
-      // === SECTION D1 — BCG (page 2) ===
+      // === SECTION D1 — BCG, CPAB, Hep-B birth dose (page 2) ===
+      { templateVersionId: tplId, pageNumber: 2, sectionCode: "D1",
+        rowKey: "D1-01", officialLabel: "Children Protected At Birth (CPAB)",
+        dataType: "INT", rowOrder: 190, indentLevel: 0,
+        columnGroupType: "SEX_RATE", columnSpec: sexRateSpec,
+        isComputed: true, isRequired: true },
       // computeM1Values writes D1-02 via addVax(); the audit notes today's
       // compute lumps all BCG doses into D1-02 (no age-at-vaccination
       // split). Phase 2 will refine into D1-02a/b — for now we just give
