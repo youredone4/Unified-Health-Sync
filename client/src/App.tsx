@@ -27,80 +27,80 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { useState } from "react";
+import { useState, lazy, Suspense } from "react";
 import { ThemeProvider } from "@/contexts/theme-context";
 import { BarangayProvider } from "@/contexts/barangay-context";
 import { useAuth, permissions } from "@/hooks/use-auth";
 import { getDefaultLandingForRole } from "@/lib/role-landing";
 import BarangaySwitcher from "@/components/barangay-switcher";
 
-import LandingPage from "@/pages/landing";
-import TodayPage from "@/pages/today";
-import DashboardsPage from "@/pages/dashboards";
-import Hotspots from "@/pages/hotspots";
-import CalendarPage from "@/pages/calendar";
-import PrenatalWorklist from "@/pages/prenatal-worklist";
-import PostpartumWorklist from "@/pages/postpartum-worklist";
-import BirthAttendanceWorklist from "@/pages/birth-attendance-worklist";
-import PrenatalScreeningsWorklist from "@/pages/prenatal-screenings-worklist";
-import MotherProfile from "@/pages/mother-profile";
-import MotherForm from "@/pages/mother-form";
-import ChildWorklist from "@/pages/child-worklist";
-import SickChildWorklist from "@/pages/sick-child-worklist";
-import ChildProfile from "@/pages/child-profile";
-import ChildForm from "@/pages/child-form";
-import NutritionWorklist from "@/pages/nutrition-worklist";
-import GrowthMonitoring from "@/pages/growth-monitoring";
-import SeniorWorklist from "@/pages/senior-worklist";
-import SeniorProfile from "@/pages/senior-profile";
-import SeniorForm from "@/pages/senior-form";
-import InventoryPage from "@/pages/inventory";
-import StockoutsPage from "@/pages/stockouts";
-import ReportsPage from "@/pages/reports";
-import ReportDetailPage from "@/pages/report-detail";
-import AIReporting from "@/pages/ai-reporting";
-import DiseaseWorklist from "@/pages/disease-worklist";
-import DiseaseProfile from "@/pages/disease-profile";
-import DiseaseMap from "@/pages/disease-map";
-import TBWorklist from "@/pages/tb-worklist";
-import TBProfile from "@/pages/tb-profile";
-import TBForm from "@/pages/tb-form";
-import DiseaseForm from "@/pages/disease-form";
-import InventoryForm from "@/pages/inventory-form";
-import SettingsPage from "@/pages/settings";
-import UserManagement from "@/pages/admin/user-management";
-import AuditLogs from "@/pages/admin/audit-logs";
-import M1ReportPage from "@/pages/m1-report";
+const LandingPage = lazy(() => import("@/pages/landing"));
+const TodayPage = lazy(() => import("@/pages/today"));
+const DashboardsPage = lazy(() => import("@/pages/dashboards"));
+const Hotspots = lazy(() => import("@/pages/hotspots"));
+const CalendarPage = lazy(() => import("@/pages/calendar"));
+const PrenatalWorklist = lazy(() => import("@/pages/prenatal-worklist"));
+const PostpartumWorklist = lazy(() => import("@/pages/postpartum-worklist"));
+const BirthAttendanceWorklist = lazy(() => import("@/pages/birth-attendance-worklist"));
+const PrenatalScreeningsWorklist = lazy(() => import("@/pages/prenatal-screenings-worklist"));
+const MotherProfile = lazy(() => import("@/pages/mother-profile"));
+const MotherForm = lazy(() => import("@/pages/mother-form"));
+const ChildWorklist = lazy(() => import("@/pages/child-worklist"));
+const SickChildWorklist = lazy(() => import("@/pages/sick-child-worklist"));
+const ChildProfile = lazy(() => import("@/pages/child-profile"));
+const ChildForm = lazy(() => import("@/pages/child-form"));
+const NutritionWorklist = lazy(() => import("@/pages/nutrition-worklist"));
+const GrowthMonitoring = lazy(() => import("@/pages/growth-monitoring"));
+const SeniorWorklist = lazy(() => import("@/pages/senior-worklist"));
+const SeniorProfile = lazy(() => import("@/pages/senior-profile"));
+const SeniorForm = lazy(() => import("@/pages/senior-form"));
+const InventoryPage = lazy(() => import("@/pages/inventory"));
+const StockoutsPage = lazy(() => import("@/pages/stockouts"));
+const ReportsPage = lazy(() => import("@/pages/reports"));
+const ReportDetailPage = lazy(() => import("@/pages/report-detail"));
+const AIReporting = lazy(() => import("@/pages/ai-reporting"));
+const DiseaseWorklist = lazy(() => import("@/pages/disease-worklist"));
+const DiseaseProfile = lazy(() => import("@/pages/disease-profile"));
+const DiseaseMap = lazy(() => import("@/pages/disease-map"));
+const TBWorklist = lazy(() => import("@/pages/tb-worklist"));
+const TBProfile = lazy(() => import("@/pages/tb-profile"));
+const TBForm = lazy(() => import("@/pages/tb-form"));
+const DiseaseForm = lazy(() => import("@/pages/disease-form"));
+const InventoryForm = lazy(() => import("@/pages/inventory-form"));
+const SettingsPage = lazy(() => import("@/pages/settings"));
+const UserManagement = lazy(() => import("@/pages/admin/user-management"));
+const AuditLogs = lazy(() => import("@/pages/admin/audit-logs"));
+const M1ReportPage = lazy(() => import("@/pages/m1-report"));
 import NotificationDrawer from "@/components/notification-drawer";
 import SmsOutbox from "@/components/sms-outbox";
-import MessagesPage from "@/pages/messages";
-import AccountPage from "@/pages/account";
-import FpRegistry from "@/pages/fp-registry";
-import ColdChainPage from "@/pages/cold-chain";
-import SchoolImmunizationsPage from "@/pages/school-immunizations";
-import OralHealthPage from "@/pages/oral-health";
-import NcdScreeningsPage from "@/pages/ncd-screenings";
-import PhilpenAssessmentsPage from "@/pages/philpen-assessments";
-import VisionScreeningsPage from "@/pages/vision-screenings";
-import CervicalCancerScreeningsPage from "@/pages/cervical-cancer-screenings";
-import MentalHealthScreeningsPage from "@/pages/mental-health-screenings";
-import WorkforcePage from "@/pages/workforce";
-import ReferralsPage from "@/pages/referrals";
-import MgmtInboxPage from "@/pages/mgmt-inbox";
-import OutbreaksPage from "@/pages/outbreaks";
-import WalkInPage from "@/pages/walk-in";
-import RestockRequestsPage from "@/pages/restock-requests";
-import DispensingsPage from "@/pages/dispensings";
-import CertificatesPage from "@/pages/certificates";
-import CampaignsPage from "@/pages/campaigns";
-import KonsultaPage from "@/pages/konsulta";
-import AefiPage from "@/pages/aefi";
-import ImmunizationHubPage from "@/pages/immunization-hub";
-import PidsrPage from "@/pages/pidsr";
-import WorkforceDetailPage from "@/pages/workforce-detail";
-import DiseaseSurveillancePage from "@/pages/disease-surveillance";
-import MortalityHubPage from "@/pages/mortality-hub";
-import HouseholdWaterPage from "@/pages/household-water";
+const MessagesPage = lazy(() => import("@/pages/messages"));
+const AccountPage = lazy(() => import("@/pages/account"));
+const FpRegistry = lazy(() => import("@/pages/fp-registry"));
+const ColdChainPage = lazy(() => import("@/pages/cold-chain"));
+const SchoolImmunizationsPage = lazy(() => import("@/pages/school-immunizations"));
+const OralHealthPage = lazy(() => import("@/pages/oral-health"));
+const NcdScreeningsPage = lazy(() => import("@/pages/ncd-screenings"));
+const PhilpenAssessmentsPage = lazy(() => import("@/pages/philpen-assessments"));
+const VisionScreeningsPage = lazy(() => import("@/pages/vision-screenings"));
+const CervicalCancerScreeningsPage = lazy(() => import("@/pages/cervical-cancer-screenings"));
+const MentalHealthScreeningsPage = lazy(() => import("@/pages/mental-health-screenings"));
+const WorkforcePage = lazy(() => import("@/pages/workforce"));
+const ReferralsPage = lazy(() => import("@/pages/referrals"));
+const MgmtInboxPage = lazy(() => import("@/pages/mgmt-inbox"));
+const OutbreaksPage = lazy(() => import("@/pages/outbreaks"));
+const WalkInPage = lazy(() => import("@/pages/walk-in"));
+const RestockRequestsPage = lazy(() => import("@/pages/restock-requests"));
+const DispensingsPage = lazy(() => import("@/pages/dispensings"));
+const CertificatesPage = lazy(() => import("@/pages/certificates"));
+const CampaignsPage = lazy(() => import("@/pages/campaigns"));
+const KonsultaPage = lazy(() => import("@/pages/konsulta"));
+const AefiPage = lazy(() => import("@/pages/aefi"));
+const ImmunizationHubPage = lazy(() => import("@/pages/immunization-hub"));
+const PidsrPage = lazy(() => import("@/pages/pidsr"));
+const WorkforceDetailPage = lazy(() => import("@/pages/workforce-detail"));
+const DiseaseSurveillancePage = lazy(() => import("@/pages/disease-surveillance"));
+const MortalityHubPage = lazy(() => import("@/pages/mortality-hub"));
+const HouseholdWaterPage = lazy(() => import("@/pages/household-water"));
 import { InboxHeroBanner } from "@/components/inbox-hero-banner";
 
 const roleLabels: Record<string, string> = {
@@ -338,8 +338,19 @@ function AdminHub({ children }: { children: React.ReactNode }) {
   );
 }
 
+// Lightweight skeleton shown while a route chunk is being downloaded.
+// Lazy chunks are typically <100 KB so this rarely appears beyond a flash.
+function RouteFallback() {
+  return (
+    <div className="flex items-center justify-center h-full p-8">
+      <div className="text-sm text-muted-foreground animate-pulse">Loading…</div>
+    </div>
+  );
+}
+
 function Router() {
   return (
+    <Suspense fallback={<RouteFallback />}>
     <Switch>
       {/* Today (TL landing) & the Dashboards hub */}
       <Route path="/today"><TodayPage /></Route>
@@ -505,6 +516,7 @@ function Router() {
         </div>
       </Route>
     </Switch>
+    </Suspense>
   );
 }
 
