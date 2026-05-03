@@ -218,5 +218,6 @@ export function useAuth() {
     canViewAuditLogs: permissions.canViewAuditLogs(user?.role),
     canAccessSettings: permissions.canAccessSettings(user?.role),
     canAccessManagement: permissions.canAccessManagement(user?.role),
+    canEnterRecords: permissions.canEnterRecords(user?.role),
   };
 }

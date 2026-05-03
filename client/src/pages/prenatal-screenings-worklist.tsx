@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -27,9 +27,9 @@ import TablePagination from "@/components/table-pagination";
 import type { Mother, PrenatalScreening } from "@shared/schema";
 
 export default function PrenatalScreeningsWorklist() {
-  const { isTL } = useAuth();
-  // POST is TL-only on the server; mirror in the UI.
-  const canEnterRecords = isTL;
+  // POST /api/prenatal-screenings is gated to TL on the server; the
+  // canEnterRecords helper mirrors that gate for the Log button.
+  const { isTL, canEnterRecords } = useAuth();
   const { selectedBarangay, scopedPath } = useBarangay();
   const [search, setSearch] = useState("");
   const [logTarget, setLogTarget] = useState<Mother | null>(null);
@@ -54,6 +54,13 @@ export default function PrenatalScreeningsWorklist() {
   }, [mothers, search]);
 
   const pagination = usePagination(pregnant);
+
+  // Snap back to page 1 when the user narrows the list — otherwise the
+  // hook's auto-clamp leaves them on a high page that's now empty.
+  useEffect(() => {
+    pagination.resetPage();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search]);
 
   return (
     <div className="space-y-4">

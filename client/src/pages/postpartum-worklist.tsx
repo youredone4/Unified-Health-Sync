@@ -45,7 +45,10 @@ const CHECKPOINT_LABELS: Record<PostpartumCheckpoint, string> = {
 };
 
 export default function PostpartumWorklist() {
-  const { isTL } = useAuth();
+  // POST /api/postpartum-visits is TL-gated server-side; canEnterRecords
+  // mirrors that for the Log button. isTL still drives the barangay picker
+  // (TLs auto-resolve via context, MGMT picks one explicitly).
+  const { isTL, canEnterRecords } = useAuth();
   const { selectedBarangay } = useBarangay();
 
   // For MGMT roles, barangay context is null. Let admins pick one explicitly
@@ -123,7 +126,7 @@ export default function PostpartumWorklist() {
         <Card>
           <CardContent className="pt-4 space-y-2">
             {todayQuery.data!.map((row) => (
-              <DueRowCard key={row.mother.id} row={row} onLog={() => setLogTarget(row)} canLog={isTL} />
+              <DueRowCard key={row.mother.id} row={row} onLog={() => setLogTarget(row)} canLog={canEnterRecords} />
             ))}
           </CardContent>
         </Card>
