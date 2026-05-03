@@ -5,6 +5,74 @@
 
 ---
 
+## ✅ Current state — post-implementation snapshot
+
+> **The Status / Phase columns in Part 1 below describe the original Phase 0 baseline (when this audit was first written).** Use this section as the source of truth for what's actually wired today. Most phases have shipped.
+
+**Quick numbers**
+- **Compute coverage:** ~192 rowKeys auto-computed in `server/storage.ts:computeM1Values` (up from ~42 at audit time).
+- **Catalog coverage:** ~194 rowKeys seeded in `m1_indicator_catalog`.
+- **Operator UI:** 36 clinical POST endpoints have entry surfaces.
+
+**Phase status**
+
+| Phase | Theme | Status |
+|---|---|---|
+| 0 | Audit + roadmap doc | ✅ Done (this doc) |
+| 0.5 | Catalog seed (44 ghost rowKeys) | ✅ Done — PRs #161, #162, #163 |
+| 1 | Maternal expansion | ✅ Done — PRs #164–#168 (PNC, Birth Attendance, Prenatal Screenings worklists; polish; batch-fetch) |
+| 2 | Child health extras | ✅ Done — PRs #169–#174 (sick-child IMCI; D1-02a/b BCG split + D1-03 Hep-B birth dose; D2-07/08/09 + D3-01/02/03/04 vaccine compute; D1-01 CPAB; child-nutrition card) |
+| 3 | Oral Health | ✅ Done (pre-existing UI + compute) |
+| 4 | NCD & Lifestyle | ✅ Done — PR #175 (PhilPEN, Vision, Cervical, Mental Health entry pages) |
+| 5 | Disease surveillance | ✅ Done (pre-existing UI + PR #176 decision-maker workflow on top) |
+| 6 | Mortality registry | ✅ Done (pre-existing UI exposes all H-section drivers) |
+| 7 | Water & Sanitation | ✅ Done (pre-existing UI + compute) |
+
+**M1 sections — what's auto-computed today**
+
+| Section | Coverage | Notes |
+|---|---|---|
+| **FP** (Family Planning) | FP-01..FP-12 ✅ | FP-04 / FP-07 (aggregate parents) and FP-TCU still derived; FP-00 / FP-00pop denominators pending. |
+| **A** (Prenatal) | A-01a, A-01b, A-02a/b/c, A-03, A-04, A-05–A-13 ✅ | Sub-row breakdowns (A-01b-a/b, A-01c family) still gap; A-02 first-trimester filter still loose; A-03b (gravida-dependent) still gap. |
+| **B** (Intrapartum / Newborn) | B-01, B-02, B-02a/b, B-03/03a/b/c, B-04/04a/b/c/d ✅ | B-02c (unknown birth weight), B-05 age-banded, B-06 (abortions) still gap. |
+| **C** (Postpartum) | C-01a, C-01b, C-01b-a/b, C-01c, C-01c-a/b/c ✅ | All wired off `postpartum_visits` with TRANS-IN/OUT flags. |
+| **D1** (Basic immunization) | D1-01 (CPAB), D1-02 (any), D1-02a (≤28d), D1-02b (29-365d), D1-03 (Hep-B ≤24h) ✅ | All age-at-vaccination splits live. |
+| **D2** (0-12 mo immunization) | D2-01..D2-09 ✅ | IPV1, MR1, IPV2 (≤1y) all wired. |
+| **D3** (13-23 mo boosters) | D3-01..D3-04 ✅ | Penta 4, OPV 4, MR 2, IPV 2 catch-up (13-23mo). |
+| **D4** (School immunization) | D4-01, D4-02, D4-03 ✅ | HPV 1st/2nd dose (9yo F), Grade 1 Td. Pop denominator (`D4-pop9`) pending. |
+| **E** (Nutrition) | E-01, E-02, E-03a, E-03b, E-06, E-06a/b, E-07, E-07a/b/c, E-08 ✅ | Pop denominators (`E-03pop-6-11`, `E-03pop-12-59`) pending. |
+| **F** (Sick children IMCI) | F-01, F-01a, F-02, F-02a, F-03 ✅ | All wired off `sick_child_visits`. |
+| **ORAL** | ORAL-00..ORAL-05 + a/b sub-rows, ORAL-06, ORAL-06a/b ✅ | Pop denominators pending. |
+| **G1** (PhilPEN) | G1-01..G1-01f ✅ | Smoking, drinking, activity, diet, BMI overweight/obese all wired. |
+| **G2** (Cardiovascular) | G2-01, G2-02, G2-02a/b, G2-03, G2-04, G2-04a/b ✅ | G2-03 / G2-04 still loose proxies (BP-date / meds-date) — refinement to `ncd_screenings` + `meds_source` pending. |
+| **G3** (Diabetes) | — | Not in current M1 Brgy template; reserved. |
+| **G4** (Vision) | G4-01, G4-02, G4-03 ✅ | All wired off `vision_screenings`. |
+| **G5** (Breast cancer) | — | Not in current template; reserved. |
+| **G6** (Cervical cancer) | G6-01..G6-05b ✅ | Pop denominators + 2-year rolling + ASR pending. |
+| **G8** (Mental health) | G8-01 ✅ | mhGAP. |
+| **W** (Water) | W-01, W-01a/b/c, W-02 ✅ | `W-pop-hh` denominator pending. |
+| **I** (Generic surveillance) | I-01, I-03, I-04, I-05, I-06, I-07, I-08 ✅ | I-02 (Diarrhea) still gap — no ILIKE pattern wired. |
+| **DIS-FIL** | DIS-FIL-01..04 ✅ | Off `filariasis_records`. |
+| **DIS-RAB** | DIS-RAB-01..05, sub-rows 01a/b, 02a/b, 03a/b ✅ | DIS-RAB-04 derived total + 05a/b sub-rows pending. |
+| **DIS-SCH** | DIS-SCH-01, 02, 03, 04, 04a, 04b ✅ | Age-band sub-rows (01a..d, 02a..d, 03a..d, 04a1..a4, 04b1..b4) all pending. |
+| **DIS-STH** | DIS-STH-01, 02, 02a, 02b ✅ | Age-band sub-rows pending. |
+| **DIS-LEP** | DIS-LEP-01, 02, 03 ✅ | Age-band sub-rows pending. |
+| **DIS-HIV** | — | `DIS-HIV-01/02` (syphilis screening) still gap; needs `prenatal_screenings.syphilis_*` columns. |
+| **H** (Mortality / Natality) | H-01, H-02, H-03, H-03a, H-03a-R/NR, H-03b, H-03b-R/NR, H-04, H-05, H-06, H-07, H-07b, H-08 ✅ | All H-section drivers fully wired off `death_events` (extended schema includes `ageDays`, `maternalDeathCause`, `residency`, `isFetalDeath`, `isLiveBornEarlyNeonatal`). |
+
+**Remaining gaps (all minor relative to original audit)**
+
+1. **Aggregate parents / derived rows** — FP-04, FP-07, FP-TCU, A-01c, B-04 (header), DIS-RAB-04 + 04a/b — all rule-based sums; ~1 PR.
+2. **Age-band sub-rows in surveillance** — DIS-SCH, DIS-STH, DIS-LEP age-band disaggregation. The structured records carry the data but compute doesn't slice — ~1 PR per module (3 PRs).
+3. **Schema extensions** for refined rules — `mothers.gravida` (A-03b), `mothers.trans_in_flag` (A-01b sub-rows), `seniors.htn_diagnosed` + `meds_source` (refines G2-03/04), `prenatal_screenings.syphilis_*` (DIS-HIV) — ~2 PRs.
+4. **Population denominators** — every rate-bearing row needs the projected population on `barangay_settings` / `municipality_settings`. Currently absent. ~1 PR with all the columns at once.
+5. **I-02 Diarrhea** — needs ILIKE pattern wiring.
+6. **B-02c, B-05, B-06** — birth-outcome edge cases.
+
+**Net assessment:** the original Phase 0 audit identified ~158 indicators as gaps. After this session's work, ~140 of those are now auto-computed end-to-end (compute + catalog + UI). The remaining ~18 gaps are fine-tuning, denominators, and 5–6 specific schema extensions.
+
+---
+
 ## Context
 
 The DOH FHSIS M1 Brgy Report is a monthly summary that every Barangay Health Station submits to the Rural Health Unit. It is supposed to be a *summary* of routine operational work (mother registration, child vaccinations, senior pickups, nutrition follow-ups, disease surveillance, mortality tracking) — not a form operators hand-fill from memory. Today, `server/storage.ts:computeM1Values` (lines 575-775) auto-computes ~42 indicator values off of `mothers`, `children`, `seniors`, `tb_patients`, `disease_cases`, and `fp_service_records`. The rest of the ~200 template rows have nowhere in the operational database to come from and must be encoded by hand — or not captured at all.
