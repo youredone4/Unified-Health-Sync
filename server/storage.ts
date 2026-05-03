@@ -2977,6 +2977,13 @@ export class DatabaseStorage implements IStorage {
     const ageGroupSpec = { columns: ["10-14", "15-19", "20-49", "TOTAL"], hasTotal: true };
     const sexRateSpec = { columns: ["M", "F", "TOTAL"], hasTotal: true };
     const singleSpec = { columns: ["VALUE"] };
+    const fpDualSpec = {
+      columns: [
+        "CU_10-14", "CU_15-19", "CU_20-49", "CU_TOTAL",
+        "NA_10-14", "NA_15-19", "NA_20-49", "NA_TOTAL",
+      ],
+      hasTotal: true,
+    };
     const tplId = activeTpl.id;
 
     const rows: InsertM1IndicatorCatalog[] = [
@@ -3172,6 +3179,84 @@ export class DatabaseStorage implements IStorage {
         rowKey: "D2-06", officialLabel: "OPV 3",
         dataType: "INT", rowOrder: 255, indentLevel: 0,
         columnGroupType: "SEX_RATE", columnSpec: sexRateSpec,
+        isComputed: true, isRequired: true },
+
+      // === SECTION FP — Modern FP methods (page 1) ===
+      // computeM1Values walks fp_service_records and tallies via the
+      // FP_METHOD_ROW_KEY map, emitting FP-01..FP-12 with FP_DUAL columns
+      // (CU_* = Current Users, NA_* = New Acceptors, by age group).
+      // FP-04 and FP-07 are derived parents — currently no compute writes
+      // them, so they're intentionally left out until a follow-up PR
+      // adds the (a + b) roll-up logic.
+      { templateVersionId: tplId, pageNumber: 1, sectionCode: "FP",
+        rowKey: "FP-01", officialLabel: "BTL",
+        dataType: "INT", rowOrder: 1, indentLevel: 0,
+        columnGroupType: "FP_DUAL", columnSpec: fpDualSpec,
+        isComputed: true, isRequired: true },
+      { templateVersionId: tplId, pageNumber: 1, sectionCode: "FP",
+        rowKey: "FP-02", officialLabel: "NSV",
+        dataType: "INT", rowOrder: 2, indentLevel: 0,
+        columnGroupType: "FP_DUAL", columnSpec: fpDualSpec,
+        isComputed: true, isRequired: true },
+      { templateVersionId: tplId, pageNumber: 1, sectionCode: "FP",
+        rowKey: "FP-03", officialLabel: "Condom",
+        dataType: "INT", rowOrder: 3, indentLevel: 0,
+        columnGroupType: "FP_DUAL", columnSpec: fpDualSpec,
+        isComputed: true, isRequired: true },
+      { templateVersionId: tplId, pageNumber: 1, sectionCode: "FP",
+        rowKey: "FP-04a", officialLabel: "Pills-POP",
+        dataType: "INT", rowOrder: 4, indentLevel: 1,
+        columnGroupType: "FP_DUAL", columnSpec: fpDualSpec,
+        isComputed: true, isRequired: true },
+      { templateVersionId: tplId, pageNumber: 1, sectionCode: "FP",
+        rowKey: "FP-04b", officialLabel: "Pills-COC",
+        dataType: "INT", rowOrder: 5, indentLevel: 1,
+        columnGroupType: "FP_DUAL", columnSpec: fpDualSpec,
+        isComputed: true, isRequired: true },
+      { templateVersionId: tplId, pageNumber: 1, sectionCode: "FP",
+        rowKey: "FP-05", officialLabel: "Injectables (DMPA / POI)",
+        dataType: "INT", rowOrder: 6, indentLevel: 0,
+        columnGroupType: "FP_DUAL", columnSpec: fpDualSpec,
+        isComputed: true, isRequired: true },
+      { templateVersionId: tplId, pageNumber: 1, sectionCode: "FP",
+        rowKey: "FP-06", officialLabel: "Implant",
+        dataType: "INT", rowOrder: 7, indentLevel: 0,
+        columnGroupType: "FP_DUAL", columnSpec: fpDualSpec,
+        isComputed: true, isRequired: true },
+      { templateVersionId: tplId, pageNumber: 1, sectionCode: "FP",
+        rowKey: "FP-07a", officialLabel: "IUD-Interval",
+        dataType: "INT", rowOrder: 8, indentLevel: 1,
+        columnGroupType: "FP_DUAL", columnSpec: fpDualSpec,
+        isComputed: true, isRequired: true },
+      { templateVersionId: tplId, pageNumber: 1, sectionCode: "FP",
+        rowKey: "FP-07b", officialLabel: "IUD-PP",
+        dataType: "INT", rowOrder: 9, indentLevel: 1,
+        columnGroupType: "FP_DUAL", columnSpec: fpDualSpec,
+        isComputed: true, isRequired: true },
+      { templateVersionId: tplId, pageNumber: 1, sectionCode: "FP",
+        rowKey: "FP-08", officialLabel: "NFP-LAM",
+        dataType: "INT", rowOrder: 10, indentLevel: 0,
+        columnGroupType: "FP_DUAL", columnSpec: fpDualSpec,
+        isComputed: true, isRequired: true },
+      { templateVersionId: tplId, pageNumber: 1, sectionCode: "FP",
+        rowKey: "FP-09", officialLabel: "NFP-BBT",
+        dataType: "INT", rowOrder: 11, indentLevel: 0,
+        columnGroupType: "FP_DUAL", columnSpec: fpDualSpec,
+        isComputed: true, isRequired: true },
+      { templateVersionId: tplId, pageNumber: 1, sectionCode: "FP",
+        rowKey: "FP-10", officialLabel: "NFP-CMM",
+        dataType: "INT", rowOrder: 12, indentLevel: 0,
+        columnGroupType: "FP_DUAL", columnSpec: fpDualSpec,
+        isComputed: true, isRequired: true },
+      { templateVersionId: tplId, pageNumber: 1, sectionCode: "FP",
+        rowKey: "FP-11", officialLabel: "NFP-STM",
+        dataType: "INT", rowOrder: 13, indentLevel: 0,
+        columnGroupType: "FP_DUAL", columnSpec: fpDualSpec,
+        isComputed: true, isRequired: true },
+      { templateVersionId: tplId, pageNumber: 1, sectionCode: "FP",
+        rowKey: "FP-12", officialLabel: "NFP-SDM",
+        dataType: "INT", rowOrder: 14, indentLevel: 0,
+        columnGroupType: "FP_DUAL", columnSpec: fpDualSpec,
         isComputed: true, isRequired: true },
     ];
 
