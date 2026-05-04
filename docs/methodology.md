@@ -15,6 +15,117 @@ This doc covers the engineering side: **how the codebase is meant to grow.**
 
 ---
 
+## Figure 1 — The methodology at a glance
+
+The picture below is the most important thing in this doc. The *whole*
+methodology compresses into "data flows in once at the BHS, the M1 report
+emerges as a pure derivation, and four cross-cutting concerns govern every
+write." Everything else is implementation detail.
+
+```mermaid
+flowchart TB
+    %% ── Capture (BHS layer) ─────────────────────────────────────────────
+    subgraph CAPTURE["① Capture — at the BHS"]
+        direction LR
+        TL((TL nurse))
+        TL --> WL[Worklist UI<br/>/today, /pnc, /sick-child, etc.]
+        WL --> POST[POST endpoints<br/>requireRole TL]
+    end
+
+    %% ── Operational tables (source of truth) ────────────────────────────
+    subgraph OPS["② Operational tables — source of truth<br/>(per-domain, never widened)"]
+        OPS_TABLES["mothers · children · seniors · disease_cases<br/>postpartum_visits · prenatal_screenings · birth_attendance_records<br/>sick_child_visits · school_immunizations · oral_health_visits<br/>philpen_assessments · ncd_screenings · vision_screenings<br/>cervical_cancer_screenings · mental_health_screenings<br/>filariasis_records · rabies_exposures · schistosomiasis_records<br/>sth_records · leprosy_records · death_events<br/>household_water_records · fp_service_records · nutrition_followups"]
+    end
+
+    %% ── Derivation ──────────────────────────────────────────────────────
+    subgraph DERIVE["③ Pure derivation"]
+        COMPUTE["computeM1Values()<br/>~192 rowKeys · no side effects · re-runnable"]
+    end
+
+    %% ── M1 model (catalog × values) ─────────────────────────────────────
+    subgraph M1["④ M1 model — catalog × values"]
+        CAT["m1_indicator_catalog<br/>(the schema of the form)"]
+        VAL["m1_indicator_values<br/>(per-report numbers · COMPUTED or ENCODED)"]
+        CAT -.joins.- VAL
+    end
+
+    %% ── Read surfaces (RHU + decision-makers) ──────────────────────────
+    subgraph READ["⑤ Read surfaces"]
+        direction LR
+        DASH[/dashboards/]
+        REPORT[/reports/m1/]
+        INBOX[/mgmt-inbox/]
+    end
+
+    %% ── Consumers ───────────────────────────────────────────────────────
+    subgraph CONSUME["⑥ Decision-makers"]
+        direction LR
+        MHO((MHO))
+        MAYOR((MAYOR))
+        HC((Health<br/>Committee))
+    end
+
+    %% ── Linear flow ─────────────────────────────────────────────────────
+    POST ==>|"audit-logged write<br/>idempotent · scoped to barangay"| OPS_TABLES
+    OPS_TABLES ==>|"read"| COMPUTE
+    COMPUTE ==>|"upsert numbers<br/>valueSource: COMPUTED"| VAL
+    M1 ==>|"render"| READ
+    READ ==>|"viewed by"| CONSUME
+
+    %% ── Cross-cutting concerns (governance) ─────────────────────────────
+    subgraph CROSS["⑦ Cross-cutting (every write, every read)"]
+        direction TB
+        RBAC["RBAC<br/>server-enforced · TL/MHO/SHA/MAYOR/HC/ADMIN"]
+        AUDIT["Audit log<br/>before/after JSON · user · role · IP · ts"]
+        GLOSS["Glossary &lt;Term&gt;<br/>plain-language layer · role-aware"]
+        REC["Recommendation rules<br/>(design only, sign-off pending)"]
+    end
+
+    CROSS -.governs.- POST
+    CROSS -.governs.- OPS_TABLES
+    CROSS -.governs.- COMPUTE
+    CROSS -.governs.- READ
+
+    %% ── Styling ──────────────────────────────────────────────────────────
+    classDef actor fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d47a1
+    classDef capture fill:#fff8e1,stroke:#f57c00
+    classDef ops fill:#e0f2f1,stroke:#00695c
+    classDef derive fill:#f3e5f5,stroke:#7b1fa2
+    classDef m1cls fill:#ede7f6,stroke:#5e35b1
+    classDef read fill:#fce4ec,stroke:#c2185b
+    classDef cross fill:#fff3e0,stroke:#e65100,stroke-dasharray:4 2
+
+    class TL,MHO,MAYOR,HC actor
+    class WL,POST capture
+    class OPS_TABLES ops
+    class COMPUTE derive
+    class CAT,VAL m1cls
+    class DASH,REPORT,INBOX read
+    class RBAC,AUDIT,GLOSS,REC cross
+```
+
+**Reading the figure:**
+
+- **Solid arrows (`==>`)** are the one-way data flow: capture → operational
+  tables → compute → M1 model → read surfaces → decision-makers. Data flows
+  *in* at the BHS and *up* to the LGU.
+- **Dotted lines** mark the cross-cutting layer — RBAC, audit, glossary, and
+  the (proposed) recommendation rules govern every step on the linear path.
+- **Numbered subgraphs** map to the principles in the prose below: ① + ② =
+  §1.2 (operational hierarchy) + §1.3 (one-way flow); ③ + ④ = §2.1
+  (catalog-driven) + §2.2 (compute as derivation); ⑤ + ⑥ = §1.2 (read
+  surfaces); ⑦ = §1.4 (audit-first), §1.5 (RBAC), §2.7 (plain-language),
+  §6 (safety guardrails).
+- **Per-domain tables** in ② are listed in full to make a point: when a new
+  domain shows up, it gets a *new* table on this list, not new columns on an
+  existing one (§2.3).
+
+If you remember nothing else from this doc, remember this: **every line of
+clinical code in HealthSync sits on one of these arrows or inside one of
+these boxes.**
+
+---
+
 ## 1. Foundational principles
 
 ### 1.1 DOH-first, not engineering-first
