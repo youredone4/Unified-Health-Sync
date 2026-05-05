@@ -24,6 +24,7 @@ import type { M1TemplateVersion, M1IndicatorCatalog, Barangay, M1ReportInstance,
 import { FP_METHOD_ROW_KEY } from "@shared/schema";
 import { differenceInMonths, differenceInYears, parseISO } from "date-fns";
 import { TODAY } from "@/lib/healthLogic";
+import { Term } from "@/components/term";
 
 const MONTHS = [
   { value: 1, label: "January" },
@@ -1235,7 +1236,7 @@ export default function M1ReportPage({ initialMode }: { initialMode?: "view" | "
           <div>
             <h1 className="text-2xl font-bold flex items-center gap-2">
               <FileText className="h-6 w-6" />
-              FHSIS M1 Brgy Report
+              <Term name="FHSIS">FHSIS</Term> <Term name="M1">M1</Term> Brgy Report
             </h1>
           </div>
         </div>
@@ -1330,7 +1331,7 @@ export default function M1ReportPage({ initialMode }: { initialMode?: "view" | "
           {switcherOpen && (
             <CardContent className="pt-0 pb-3">
               {allBarangayReports.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-4">No reports submitted for this period yet. Reports appear after a TL clicks Submit on their barangay's M1.</p>
+                <p className="text-sm text-muted-foreground text-center py-4">No reports submitted for this period yet. Reports appear after a <Term name="TL">TL</Term> clicks Submit on their barangay's <Term name="M1">M1</Term>.</p>
               ) : (
                 <div className="flex flex-wrap gap-2">
                   {allBarangayReports.map(r => (
@@ -1662,7 +1663,7 @@ export default function M1ReportPage({ initialMode }: { initialMode?: "view" | "
                   <FileText className="h-12 w-12 opacity-30" />
                   <div className="text-center">
                     <p className="text-lg font-medium">No report for this period</p>
-                    <p className="text-sm mt-1">There is no M1 report for {MONTHS.find(m => m.value === selectedMonth)?.label} {selectedYear} in {selectedBarangay?.name}.</p>
+                    <p className="text-sm mt-1">There is no <Term name="M1">M1</Term> report for {MONTHS.find(m => m.value === selectedMonth)?.label} {selectedYear} in {selectedBarangay?.name}.</p>
                   </div>
                   <Button onClick={handleCreateReport} data-testid="button-create-report-empty">
                     <Plus className="h-4 w-4 mr-1" />
