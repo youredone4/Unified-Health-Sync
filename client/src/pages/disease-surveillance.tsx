@@ -40,6 +40,7 @@ function useSurveillanceAction(
   kindLabel: string,
   queryKey: unknown[],
   module?: RecommendationModule,
+  entityType?: string,
 ) {
   const [target, setTarget] = useState<SurveillanceTarget | null>(null);
   const open = (
@@ -48,6 +49,7 @@ function useSurveillanceAction(
       patientName: string;
       status: string | null;
       reviewerNotes: string | null;
+      barangay?: string | null;
     } & Record<string, unknown>,
   ) => {
     setTarget({
@@ -60,6 +62,8 @@ function useSurveillanceAction(
       queryKey,
       module,
       row: module ? row : undefined,
+      entityType,
+      barangayName: typeof row.barangay === "string" ? row.barangay : undefined,
     });
   };
   return {
@@ -153,7 +157,7 @@ function FilariasisCard({ barangay, canEnter }: { barangay: string | null; canEn
     [barangay],
   );
   const { data: rows = [] } = useQuery<FilariasisRecord[]>({ queryKey });
-  const action = useSurveillanceAction("/api/filariasis-records", "Filariasis exam", queryKey, "filariasis");
+  const action = useSurveillanceAction("/api/filariasis-records", "Filariasis exam", queryKey, "filariasis", "FILARIASIS_RECORD");
   const [pt, setPt] = useState<PtCommon>({ patientName: "", dob: "", sex: "M" });
   const [date, setDate] = useState(today());
   const [result, setResult] = useState<"POSITIVE" | "NEGATIVE" | "">("NEGATIVE");
@@ -257,7 +261,7 @@ function RabiesCard({ barangay, canEnter }: { barangay: string | null; canEnter:
     [barangay],
   );
   const { data: rows = [] } = useQuery<RabiesExposure[]>({ queryKey });
-  const action = useSurveillanceAction("/api/rabies-exposures", "Rabies exposure", queryKey, "rabies");
+  const action = useSurveillanceAction("/api/rabies-exposures", "Rabies exposure", queryKey, "rabies", "RABIES_EXPOSURE");
   const [pt, setPt] = useState<PtCommon>({ patientName: "", dob: "", sex: "M" });
   const [date, setDate] = useState(today());
   const [cat, setCat] = useState<"I" | "II" | "III">("I");
@@ -378,7 +382,7 @@ function SchistoCard({ barangay, canEnter }: { barangay: string | null; canEnter
     [barangay],
   );
   const { data: rows = [] } = useQuery<SchistosomiasisRecord[]>({ queryKey });
-  const action = useSurveillanceAction("/api/schistosomiasis-records", "Schisto record", queryKey, "schisto");
+  const action = useSurveillanceAction("/api/schistosomiasis-records", "Schisto record", queryKey, "schisto", "SCHISTOSOMIASIS_RECORD");
   const [pt, setPt] = useState<PtCommon>({ patientName: "", dob: "", sex: "M" });
   const [date, setDate] = useState(today());
   const [suspected, setSuspected] = useState(false);
@@ -483,7 +487,7 @@ function SthCard({ barangay, canEnter }: { barangay: string | null; canEnter: bo
     [barangay],
   );
   const { data: rows = [] } = useQuery<SthRecord[]>({ queryKey });
-  const action = useSurveillanceAction("/api/sth-records", "STH record", queryKey, "sth");
+  const action = useSurveillanceAction("/api/sth-records", "STH record", queryKey, "sth", "STH_RECORD");
   const [pt, setPt] = useState<PtCommon>({ patientName: "", dob: "", sex: "M" });
   const [date, setDate] = useState(today());
   const [confirmed, setConfirmed] = useState(false);
@@ -584,7 +588,7 @@ function LeprosyCard({ barangay, canEnter }: { barangay: string | null; canEnter
     [barangay],
   );
   const { data: rows = [] } = useQuery<LeprosyRecord[]>({ queryKey });
-  const action = useSurveillanceAction("/api/leprosy-records", "Leprosy record", queryKey, "leprosy");
+  const action = useSurveillanceAction("/api/leprosy-records", "Leprosy record", queryKey, "leprosy", "LEPROSY_RECORD");
   const [pt, setPt] = useState<PtCommon>({ patientName: "", dob: "", sex: "M" });
   const [date, setDate] = useState(today());
   const [newCase, setNewCase] = useState(false);

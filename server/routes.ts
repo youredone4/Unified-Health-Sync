@@ -1159,6 +1159,42 @@ export async function registerRoutes(
   surveillancePatchRoute("/api/sth-records", "STH_RECORD", "sth");
   surveillancePatchRoute("/api/leprosy-records", "LEPROSY_RECORD", "leprosy");
 
+  // Recommendation engine instrumentation. Logs each impression (SHOWN)
+  // and each follow-on action (ACTED) so we can later answer:
+  //   - How often is a rule shown vs acted on? → calibration signal
+  //   - Which DOH guidance is being followed? → rule_id frequency
+  //   - Are we citing the right manual? → provincial QA
+  //
+  // Best-effort: failures here never break the UI flow. The drawer fires
+  // SHOWN on open and ACTED on save success.
+  const REC_KINDS = ["SHOWN", "ACTED"] as const;
+  const recommendationLogSchema = z.object({
+    kind: z.enum(REC_KINDS),
+    entityType: z.string().min(1).max(100),
+    entityId: z.union([z.number(), z.string()]).optional(),
+    ruleIds: z.array(z.string().min(1).max(120)).max(20),
+    barangayName: z.string().max(120).optional(),
+  });
+  app.post("/api/recommendations/log", loadUserInfo, requireAuth, ar(async (req, res) => {
+    const parsed = recommendationLogSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: "Invalid payload", issues: parsed.error.issues });
+    }
+    const { kind, entityType, entityId, ruleIds, barangayName } = parsed.data;
+    if (ruleIds.length === 0) return res.json({ logged: 0 });
+    const action = kind === "SHOWN" ? "RECOMMENDATION_SHOWN" : "RECOMMENDATION_ACTED";
+    for (const ruleId of ruleIds) {
+      await createAuditLog(
+        req.userInfo!.id, req.userInfo!.role,
+        action, entityType, entityId !== undefined ? String(entityId) : undefined,
+        barangayName, undefined,
+        { ruleId },
+        req,
+      );
+    }
+    res.json({ logged: ruleIds.length });
+  }));
+
   // ===== PHASE 7 — Water & Sanitation =====
   ncdRoute("/api/household-water-records", "HOUSEHOLD_WATER_RECORD", insertHouseholdWaterRecordSchema,
     (p) => storage.getHouseholdWaterRecords(p), (r) => storage.createHouseholdWaterRecord(r));

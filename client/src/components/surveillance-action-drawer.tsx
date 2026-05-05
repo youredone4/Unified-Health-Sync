@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -52,6 +52,10 @@ export interface SurveillanceTarget {
   module?: RecommendationModule;
   /** Full row passed to recommendation predicates. */
   row?: unknown;
+  /** Audit-log entity type, e.g. "RABIES_EXPOSURE". Required to log. */
+  entityType?: string;
+  /** Optional barangay for the audit row. */
+  barangayName?: string;
 }
 
 /**
@@ -84,6 +88,37 @@ export function SurveillanceActionDrawer({
     setNotes(target?.reviewerNotes ?? "");
   }
 
+  // Phase 1 recommendation engine: every fired rule renders as an
+  // informational card above the status form. Cards never add new write
+  // actions — the existing Status select + Save button still drive the
+  // workflow. Empty list means no rules matched and the card area is
+  // suppressed. Computed before any early return so the audit-logging
+  // effect below has stable inputs.
+  const recs =
+    target?.module && target?.row
+      ? recommendationsFor(target.module, target.row)
+      : [];
+  const recIds = recs.map((r) => r.id);
+  const recIdsKey = recIds.join(",");
+
+  // Fire RECOMMENDATION_SHOWN once per (target.id × open=true) transition
+  // when at least one rule matched. Best-effort — failures are swallowed
+  // so the audit log being down can't block the drawer flow.
+  const loggedShownKey = useRef<string>("");
+  useEffect(() => {
+    if (!open || !target || recIds.length === 0 || !target.entityType) return;
+    const key = `${target.entityType}:${target.id}:${recIdsKey}`;
+    if (loggedShownKey.current === key) return;
+    loggedShownKey.current = key;
+    apiRequest("POST", "/api/recommendations/log", {
+      kind: "SHOWN",
+      entityType: target.entityType,
+      entityId: target.id,
+      ruleIds: recIds,
+      barangayName: target.barangayName,
+    }).catch(() => {});
+  }, [open, target, recIdsKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const save = useMutation({
     mutationFn: async () => {
       if (!target) return null;
@@ -97,6 +132,17 @@ export function SurveillanceActionDrawer({
       if (target) queryClient.invalidateQueries({ queryKey: target.queryKey });
       // Inbox refetches separately; bump it too so ESCALATED items appear.
       queryClient.invalidateQueries({ queryKey: ["/api/mgmt/inbox"] });
+      // Best-effort RECOMMENDATION_ACTED — fire only if the user saw
+      // recommendations on this open. Doesn't block the save flow.
+      if (target?.entityType && recIds.length > 0) {
+        apiRequest("POST", "/api/recommendations/log", {
+          kind: "ACTED",
+          entityType: target.entityType,
+          entityId: target.id,
+          ruleIds: recIds,
+          barangayName: target.barangayName,
+        }).catch(() => {});
+      }
       onOpenChange(false);
     },
     onError: (e: Error) =>
@@ -104,16 +150,6 @@ export function SurveillanceActionDrawer({
   });
 
   if (!target) return null;
-
-  // Phase 1 recommendation engine: every fired rule renders as an
-  // informational card above the status form. Cards never add new write
-  // actions — the existing Status select + Save button still drive the
-  // workflow. Empty list means no rules matched and the card area is
-  // suppressed.
-  const recs =
-    target.module && target.row
-      ? recommendationsFor(target.module, target.row)
-      : [];
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
