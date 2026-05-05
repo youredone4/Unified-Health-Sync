@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Apple, Save } from "lucide-react";
 import type { Child } from "@shared/schema";
+import { Term } from "@/components/term";
 
 interface Props {
   child: Child;
@@ -107,7 +108,7 @@ export default function ChildNutritionCard({ child }: Props) {
             data-testid="cn-iron"
           />
           <Label htmlFor="cn-iron" className="font-normal text-sm">
-            Complete iron supplementation (LBW infants) — feeds E-02
+            Complete iron supplementation (<Term name="LBW" /> infants) — feeds E-02
           </Label>
         </div>
 

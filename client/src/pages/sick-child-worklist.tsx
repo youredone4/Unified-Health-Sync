@@ -25,6 +25,7 @@ import { ListSkeleton } from "@/components/states/loading-skeleton";
 import { usePagination } from "@/hooks/use-pagination";
 import TablePagination from "@/components/table-pagination";
 import type { Child, SickChildVisit } from "@shared/schema";
+import { Term } from "@/components/term";
 
 // Returns whole months between two YYYY-MM-DD date strings. Used to bucket
 // children into the F-01 (6-11mo), F-02 (12-59mo) and F-03 (0-59mo) age
@@ -103,7 +104,7 @@ export default function SickChildWorklist() {
     <div className="space-y-4">
       <div>
         <h2 className="text-xl font-semibold flex items-center gap-2">
-          <Stethoscope className="w-5 h-5 text-primary" aria-hidden /> Sick Child (IMCI)
+          <Stethoscope className="w-5 h-5 text-primary" aria-hidden /> Sick Child (<Term name="IMCI" />)
         </h2>
         <p className="text-sm text-muted-foreground">
           Log sick-child consults for children aged 0–59 months — feeds M1
