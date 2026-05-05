@@ -25,6 +25,7 @@ import { ListSkeleton } from "@/components/states/loading-skeleton";
 import { usePagination } from "@/hooks/use-pagination";
 import TablePagination from "@/components/table-pagination";
 import type { Mother, PrenatalScreening } from "@shared/schema";
+import { Term } from "@/components/term";
 
 export default function PrenatalScreeningsWorklist() {
   // POST /api/prenatal-screenings is gated to TL on the server; the
@@ -97,7 +98,7 @@ export default function PrenatalScreeningsWorklist() {
           <Stethoscope className="w-5 h-5 text-primary" aria-hidden /> Prenatal Screenings
         </h2>
         <p className="text-sm text-muted-foreground">
-          Log Hep-B, anemia, GDM, supplementation, and deworming for currently
+          Log Hep-B, anemia, <Term name="GDM" />, supplementation, and deworming for currently
           pregnant mothers — feeds M1 Section A-05..A-13.
           {!isTL && selectedBarangay === null && " Showing every barangay you have access to."}
         </p>
@@ -338,7 +339,7 @@ function LogScreeningDialog({
 
             {/* GDM (A-09) */}
             <fieldset className="border rounded-md p-3 space-y-2">
-              <legend className="text-xs px-1 text-muted-foreground">Gestational Diabetes (GDM)</legend>
+              <legend className="text-xs px-1 text-muted-foreground">Gestational Diabetes (<Term name="GDM" />)</legend>
               <BoolField control={form.control} name="gdmScreened" label="Screened for GDM" testId="ps-gdm-screened" />
               {gdmScreened && (
                 <BoolField control={form.control} name="gdmPositive" label="Tested positive" testId="ps-gdm-positive" />
@@ -349,7 +350,7 @@ function LogScreeningDialog({
             <fieldset className="border rounded-md p-3 space-y-2">
               <legend className="text-xs px-1 text-muted-foreground">Supplementation &amp; deworming</legend>
               <BoolField control={form.control} name="ironFolicComplete" label="Complete iron / folic acid supplementation" testId="ps-iron-folic" />
-              <BoolField control={form.control} name="mmsGiven" label="Multiple Micronutrient Supplementation (MMS) given" testId="ps-mms" />
+              <BoolField control={form.control} name="mmsGiven" label={<>Multiple Micronutrient Supplementation (<Term name="MMS" />) given</>} testId="ps-mms" />
               <BoolField control={form.control} name="calciumGiven" label="Calcium supplementation given" testId="ps-calcium" />
               <BoolField control={form.control} name="dewormingGiven" label="Deworming given" testId="ps-deworming" />
             </fieldset>
@@ -380,7 +381,7 @@ function BoolField({
 }: {
   control: any;
   name: keyof FormValues;
-  label: string;
+  label: React.ReactNode;
   testId: string;
 }) {
   return (

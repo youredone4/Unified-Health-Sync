@@ -27,6 +27,7 @@ import { EmptyState } from "@/components/states/empty-state";
 import { ListSkeleton } from "@/components/states/loading-skeleton";
 import { ErrorState } from "@/components/states/error-state";
 import type { Mother, PostpartumVisit, PostpartumCheckpoint } from "@shared/schema";
+import { Term } from "@/components/term";
 
 interface Barangay { id: number; name: string }
 
@@ -80,10 +81,10 @@ export default function PostpartumWorklist() {
     <div className="space-y-4">
       <div>
         <h2 className="text-xl font-semibold flex items-center gap-2">
-          <Heart className="w-5 h-5 text-primary" aria-hidden /> PNC Worklist
+          <Heart className="w-5 h-5 text-primary" aria-hidden /> <Term name="PNC" /> Worklist
         </h2>
         <p className="text-sm text-muted-foreground">
-          Mothers due for a postpartum (PNC) checkpoint today, scoped to the
+          Mothers due for a postpartum (<Term name="PNC" />) checkpoint today, scoped to the
           active barangay. Log a visit when you complete a checkpoint to feed
           the M1 Section C indicators.
         </p>
@@ -329,8 +330,8 @@ function LogVisitDialog({
               <BoolField control={form.control} name="breastfeedingExclusive" label="Exclusive breastfeeding observed" testId="pnc-bf" />
               <BoolField control={form.control} name="ironSuppGiven" label="Iron supplementation given" testId="pnc-iron" />
               <BoolField control={form.control} name="fpCounselingGiven" label="FP counseling given" testId="pnc-fp" />
-              <BoolField control={form.control} name="transInFromLgu" label="TRANS-IN from another LGU" testId="pnc-trans-in" />
-              <BoolField control={form.control} name="transOutWithMov" label="TRANS-OUT (with MOV) before completing 4 PNC" testId="pnc-trans-out" />
+              <BoolField control={form.control} name="transInFromLgu" label={<><Term name="TRANS-IN" /> from another LGU</>} testId="pnc-trans-in" />
+              <BoolField control={form.control} name="transOutWithMov" label={<><Term name="TRANS-OUT" /> (with MOV) before completing 4 PNC</>} testId="pnc-trans-out" />
             </div>
 
             {form.watch("transOutWithMov") && (
@@ -369,7 +370,7 @@ function BoolField({
 }: {
   control: any;
   name: keyof VisitFormValues;
-  label: string;
+  label: React.ReactNode;
   testId: string;
 }) {
   return (
