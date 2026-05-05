@@ -26,14 +26,30 @@ import {
   StatusBadge,
   type SurveillanceTarget,
 } from "@/components/surveillance-action-drawer";
+import type { RecommendationModule } from "@shared/recommendations";
 import { Term } from "@/components/term";
 
 // Hook helper — manages action drawer state for a given module's cards.
 // Returns the open prop, the onOpenChange handler, the current target,
 // and an opener that takes a row + the queryKey to invalidate after save.
-function useSurveillanceAction(apiBase: string, kindLabel: string, queryKey: unknown[]) {
+//
+// `module` is optional: pass it (with the corresponding row in `open()`) to
+// surface DOH-grounded recommendation cards in the drawer.
+function useSurveillanceAction(
+  apiBase: string,
+  kindLabel: string,
+  queryKey: unknown[],
+  module?: RecommendationModule,
+) {
   const [target, setTarget] = useState<SurveillanceTarget | null>(null);
-  const open = (row: { id: number; patientName: string; status: string | null; reviewerNotes: string | null }) => {
+  const open = (
+    row: {
+      id: number;
+      patientName: string;
+      status: string | null;
+      reviewerNotes: string | null;
+    } & Record<string, unknown>,
+  ) => {
     setTarget({
       id: row.id,
       patientName: row.patientName,
@@ -42,6 +58,8 @@ function useSurveillanceAction(apiBase: string, kindLabel: string, queryKey: unk
       apiBase,
       kindLabel,
       queryKey,
+      module,
+      row: module ? row : undefined,
     });
   };
   return {
@@ -135,7 +153,7 @@ function FilariasisCard({ barangay, canEnter }: { barangay: string | null; canEn
     [barangay],
   );
   const { data: rows = [] } = useQuery<FilariasisRecord[]>({ queryKey });
-  const action = useSurveillanceAction("/api/filariasis-records", "Filariasis exam", queryKey);
+  const action = useSurveillanceAction("/api/filariasis-records", "Filariasis exam", queryKey, "filariasis");
   const [pt, setPt] = useState<PtCommon>({ patientName: "", dob: "", sex: "M" });
   const [date, setDate] = useState(today());
   const [result, setResult] = useState<"POSITIVE" | "NEGATIVE" | "">("NEGATIVE");
@@ -206,6 +224,7 @@ function FilariasisCard({ barangay, canEnter }: { barangay: string | null; canEn
                     data-testid={`fil-row-${r.id}`}
                     className="cursor-pointer hover:bg-muted/50"
                     onClick={() => action.open({
+                      ...r,
                       id: r.id,
                       patientName: r.patientName,
                       status: r.status ?? "REPORTED",
@@ -238,7 +257,7 @@ function RabiesCard({ barangay, canEnter }: { barangay: string | null; canEnter:
     [barangay],
   );
   const { data: rows = [] } = useQuery<RabiesExposure[]>({ queryKey });
-  const action = useSurveillanceAction("/api/rabies-exposures", "Rabies exposure", queryKey);
+  const action = useSurveillanceAction("/api/rabies-exposures", "Rabies exposure", queryKey, "rabies");
   const [pt, setPt] = useState<PtCommon>({ patientName: "", dob: "", sex: "M" });
   const [date, setDate] = useState(today());
   const [cat, setCat] = useState<"I" | "II" | "III">("I");
@@ -317,6 +336,7 @@ function RabiesCard({ barangay, canEnter }: { barangay: string | null; canEnter:
                     data-testid={`rab-row-${r.id}`}
                     className="cursor-pointer hover:bg-muted/50"
                     onClick={() => action.open({
+                      ...r,
                       id: r.id,
                       patientName: r.patientName,
                       status: r.status ?? "REPORTED",
@@ -358,7 +378,7 @@ function SchistoCard({ barangay, canEnter }: { barangay: string | null; canEnter
     [barangay],
   );
   const { data: rows = [] } = useQuery<SchistosomiasisRecord[]>({ queryKey });
-  const action = useSurveillanceAction("/api/schistosomiasis-records", "Schisto record", queryKey);
+  const action = useSurveillanceAction("/api/schistosomiasis-records", "Schisto record", queryKey, "schisto");
   const [pt, setPt] = useState<PtCommon>({ patientName: "", dob: "", sex: "M" });
   const [date, setDate] = useState(today());
   const [suspected, setSuspected] = useState(false);
@@ -426,6 +446,7 @@ function SchistoCard({ barangay, canEnter }: { barangay: string | null; canEnter
                     data-testid={`sch-row-${r.id}`}
                     className="cursor-pointer hover:bg-muted/50"
                     onClick={() => action.open({
+                      ...r,
                       id: r.id,
                       patientName: r.patientName,
                       status: r.status ?? "REPORTED",
@@ -462,7 +483,7 @@ function SthCard({ barangay, canEnter }: { barangay: string | null; canEnter: bo
     [barangay],
   );
   const { data: rows = [] } = useQuery<SthRecord[]>({ queryKey });
-  const action = useSurveillanceAction("/api/sth-records", "STH record", queryKey);
+  const action = useSurveillanceAction("/api/sth-records", "STH record", queryKey, "sth");
   const [pt, setPt] = useState<PtCommon>({ patientName: "", dob: "", sex: "M" });
   const [date, setDate] = useState(today());
   const [confirmed, setConfirmed] = useState(false);
@@ -530,6 +551,7 @@ function SthCard({ barangay, canEnter }: { barangay: string | null; canEnter: bo
                     data-testid={`sth-row-${r.id}`}
                     className="cursor-pointer hover:bg-muted/50"
                     onClick={() => action.open({
+                      ...r,
                       id: r.id,
                       patientName: r.patientName,
                       status: r.status ?? "REPORTED",
@@ -562,7 +584,7 @@ function LeprosyCard({ barangay, canEnter }: { barangay: string | null; canEnter
     [barangay],
   );
   const { data: rows = [] } = useQuery<LeprosyRecord[]>({ queryKey });
-  const action = useSurveillanceAction("/api/leprosy-records", "Leprosy record", queryKey);
+  const action = useSurveillanceAction("/api/leprosy-records", "Leprosy record", queryKey, "leprosy");
   const [pt, setPt] = useState<PtCommon>({ patientName: "", dob: "", sex: "M" });
   const [date, setDate] = useState(today());
   const [newCase, setNewCase] = useState(false);
@@ -626,6 +648,7 @@ function LeprosyCard({ barangay, canEnter }: { barangay: string | null; canEnter
                     data-testid={`lep-row-${r.id}`}
                     className="cursor-pointer hover:bg-muted/50"
                     onClick={() => action.open({
+                      ...r,
                       id: r.id,
                       patientName: r.patientName,
                       status: r.status ?? "REPORTED",
