@@ -25,6 +25,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { HeartPulse, Save } from "lucide-react";
 import { format } from "date-fns";
+import { Term } from "@/components/term";
 
 const today = () => format(new Date(), "yyyy-MM-dd");
 
@@ -73,8 +74,8 @@ export default function NcdScreeningsPage() {
       <PageHeader />
       <Tabs defaultValue="philpen" className="space-y-4">
         <TabsList className="grid grid-cols-2 md:grid-cols-5 gap-1">
-          <TabsTrigger value="philpen" data-testid="tab-philpen">PhilPEN (G1)</TabsTrigger>
-          <TabsTrigger value="ncd" data-testid="tab-ncd">CV / HTN (G2)</TabsTrigger>
+          <TabsTrigger value="philpen" data-testid="tab-philpen"><Term name="PhilPEN" /> (G1)</TabsTrigger>
+          <TabsTrigger value="ncd" data-testid="tab-ncd">CV / <Term name="HTN" /> (G2)</TabsTrigger>
           <TabsTrigger value="vision" data-testid="tab-vision">Vision (G4)</TabsTrigger>
           <TabsTrigger value="cervical" data-testid="tab-cervical">Cervical (G6)</TabsTrigger>
           <TabsTrigger value="mental" data-testid="tab-mental">Mental (G8)</TabsTrigger>

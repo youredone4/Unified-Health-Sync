@@ -19,6 +19,7 @@ import {
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Ribbon, Save } from "lucide-react";
 import { format } from "date-fns";
+import { Term } from "@/components/term";
 
 /**
  * Cervical cancer screening for women 30-65. Drives M1 G6-01..G6-05b.
@@ -79,7 +80,7 @@ export default function CervicalCancerScreeningsPage() {
           <Ribbon className="w-5 h-5 text-primary" /> Cervical cancer screenings
         </h1>
         <p className="text-sm text-muted-foreground">
-          Women 30-65: VIA / Pap / HPV screening, with linkage-to-care follow-up. Feeds M1 Section G6-01..G6-05b.
+          Women 30-65: <Term name="VIA" /> / <Term name="Pap" /> / HPV screening, with linkage-to-care follow-up. Feeds M1 Section G6-01..G6-05b.
         </p>
       </div>
 

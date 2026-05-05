@@ -15,6 +15,7 @@ import {
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Eye, Save } from "lucide-react";
 import { format } from "date-fns";
+import { Term } from "@/components/term";
 
 /**
  * Vision screening for senior citizens (60+). Drives M1 G4-01..G4-03.
