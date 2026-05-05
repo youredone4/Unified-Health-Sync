@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, lazy, Suspense } from "react";
 import { useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,14 +15,15 @@ import { useToast } from "@/hooks/use-toast";
 import { useTheme } from "@/contexts/theme-context";
 import { useAuth, permissions, UserRole } from "@/hooks/use-auth";
 import { useBarangay } from "@/contexts/barangay-context";
-import DiseaseImportDialog from "@/components/disease-import-dialog";
+// DiseaseImportDialog and jsPDF are heavy and only used on user-initiated
+// actions (Import button click, Export PDF click). Lazy-loading them keeps
+// them out of the m1-report initial chunk.
+const DiseaseImportDialog = lazy(() => import("@/components/disease-import-dialog"));
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { M1TemplateVersion, M1IndicatorCatalog, Barangay, M1ReportInstance, M1IndicatorValue, Mother, Child, Senior, MunicipalitySettings, BarangaySettings, FpServiceRecord, DiseaseCase } from "@shared/schema";
 import { FP_METHOD_ROW_KEY } from "@shared/schema";
 import { differenceInMonths, differenceInYears, parseISO } from "date-fns";
 import { TODAY } from "@/lib/healthLogic";
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
 
 const MONTHS = [
   { value: 1, label: "January" },
@@ -735,6 +736,13 @@ export default function M1ReportPage({ initialMode }: { initialMode?: "view" | "
   };
 
   const handleExportPDF = async () => {
+    // Lazy-load jsPDF + autoTable on demand. These two libraries weigh
+    // ~200 KB combined and were previously eagerly imported, bloating the
+    // m1-report chunk. Now they only land when the user clicks Export.
+    const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
+      import("jspdf"),
+      import("jspdf-autotable"),
+    ]);
     const doc = new jsPDF();
     const barangayName = selectedBarangay?.name || "All Barangays (Consolidated)";
     const monthName = MONTHS.find(m => m.value === selectedMonth)?.label || "";
@@ -1692,7 +1700,11 @@ export default function M1ReportPage({ initialMode }: { initialMode?: "view" | "
           </CardContent>
         </Card>
 
-        <DiseaseImportDialog open={diseaseImportOpen} onOpenChange={setDiseaseImportOpen} />
+        <Suspense fallback={null}>
+          {diseaseImportOpen && (
+            <DiseaseImportDialog open={diseaseImportOpen} onOpenChange={setDiseaseImportOpen} />
+          )}
+        </Suspense>
     </div>
   );
 }
