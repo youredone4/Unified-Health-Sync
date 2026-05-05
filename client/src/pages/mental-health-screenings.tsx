@@ -15,6 +15,7 @@ import {
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Brain, Save } from "lucide-react";
 import { format } from "date-fns";
+import { Term } from "@/components/term";
 
 /**
  * mhGAP mental health screening — drives M1 Section G8-01.
@@ -65,7 +66,7 @@ export default function MentalHealthScreeningsPage() {
           <Brain className="w-5 h-5 text-primary" /> Mental health screenings
         </h1>
         <p className="text-sm text-muted-foreground">
-          mhGAP-based mental health screening. Feeds M1 Section G8-01.
+          <Term name="mhGAP" />-based mental health screening. Feeds M1 Section G8-01.
         </p>
       </div>
 

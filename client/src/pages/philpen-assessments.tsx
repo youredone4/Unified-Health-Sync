@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { HeartPulse, Save } from "lucide-react";
+import { Term } from "@/components/term";
 import { format } from "date-fns";
 
 /**
@@ -72,7 +73,7 @@ export default function PhilpenAssessmentsPage() {
     <div className="space-y-4">
       <div>
         <h1 className="text-2xl font-semibold flex items-center gap-2" data-testid="philpen-title">
-          <HeartPulse className="w-5 h-5 text-primary" /> PhilPEN risk assessments
+          <HeartPulse className="w-5 h-5 text-primary" /> <Term name="PhilPEN" /> risk assessments
         </h1>
         <p className="text-sm text-muted-foreground">
           Adult risk-factor assessment (smoking, alcohol, activity, diet, BMI). Feeds M1 Section G1-01..G1-01f.
