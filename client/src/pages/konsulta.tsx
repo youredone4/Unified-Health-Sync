@@ -26,6 +26,7 @@ import { EmptyState } from "@/components/states/empty-state";
 import { ListSkeleton } from "@/components/states/loading-skeleton";
 import { ErrorState } from "@/components/states/error-state";
 import { severityBadge } from "@/lib/severity";
+import { Term } from "@/components/term";
 
 type Status = "DRAFT" | "ACTIVE" | "EXPIRED" | "REJECTED" | "CANCELLED";
 type SyncStatus = "UNSYNCED" | "PENDING_SUBMISSION" | "SUBMITTED" | "CONFIRMED" | "FAILED";
@@ -121,10 +122,10 @@ export default function KonsultaPage() {
       <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-semibold flex items-center gap-2" data-testid="konsulta-title">
-            <ShieldCheck className="w-5 h-5 text-primary" aria-hidden /> PhilHealth Konsulta
+            <ShieldCheck className="w-5 h-5 text-primary" aria-hidden /> <Term name="PhilHealth">PhilHealth</Term> <Term name="Konsulta">Konsulta</Term>
           </h1>
           <p className="text-sm text-muted-foreground">
-            Member enrollment + encounter capture. Once API keys arrive, the queue drains to PhilHealth.
+            Member enrollment + encounter capture. Once API keys arrive, the queue drains to <Term name="PhilHealth">PhilHealth</Term>.
           </p>
         </div>
         <div className="flex items-center gap-2">

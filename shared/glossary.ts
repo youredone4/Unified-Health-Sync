@@ -182,6 +182,31 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
     long: "Vaccine ± RIG given after a potential rabies exposure to prevent the disease.",
   },
 
+  // ─── PhilHealth / Konsulta ────────────────────────────────────────────
+  Konsulta: {
+    short: "PhilHealth Konsulta — primary-care benefit package",
+    long: "Outpatient benefit package: enrolled members get free check-ups, lab tests, and meds at accredited PCB facilities. RHU/BHS submit encounters for capitation reimbursement.",
+    source: "PhilHealth Circular 2020-0021",
+  },
+  PhilHealth: {
+    short: "Philippine Health Insurance Corporation",
+    long: "National social health insurance program. Funds the Konsulta primary-care package and inpatient benefits.",
+  },
+
+  // ─── Triage acuity (ESI-style) ────────────────────────────────────────
+  EMERGENT: {
+    short: "Life-threatening — see immediately",
+    long: "Top acuity. Airway/breathing/circulation compromise, severe trauma, active seizure, anaphylaxis. Bypass queue and start resuscitation; refer to hospital ED.",
+  },
+  URGENT: {
+    short: "Time-critical — see within 30 min",
+    long: "Significant illness/injury that won't kill the patient in minutes but will worsen if delayed. Examples: high fever in infant, moderate dehydration, fracture.",
+  },
+  NON_URGENT: {
+    short: "Routine — see in queue order",
+    long: "Stable patient, no danger signs. Routine consult, follow-up, prescription refill.",
+  },
+
   // ─── NCD shorthand ────────────────────────────────────────────────────
   HTN: {
     short: "Hypertension (high blood pressure)",
