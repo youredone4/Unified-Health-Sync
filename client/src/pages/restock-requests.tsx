@@ -27,6 +27,7 @@ import { EmptyState } from "@/components/states/empty-state";
 import { ListSkeleton } from "@/components/states/loading-skeleton";
 import { ErrorState } from "@/components/states/error-state";
 import { severityBadge } from "@/lib/severity";
+import { Term } from "@/components/term";
 
 type Status = "PENDING" | "FULFILLED" | "REJECTED";
 
@@ -73,7 +74,7 @@ export default function RestockRequestsPage() {
             <Package className="w-5 h-5 text-primary" aria-hidden /> Restock Requests
           </h1>
           <p className="text-sm text-muted-foreground">
-            BHS-side requests for vaccine and medicine restocking. RHU MGMT fulfills.
+            <Term name="BHS">BHS</Term>-side requests for vaccine and medicine restocking. <Term name="RHU">RHU</Term> MGMT fulfills.
           </p>
         </div>
         <div className="flex items-center gap-2">

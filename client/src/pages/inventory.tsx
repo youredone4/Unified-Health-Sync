@@ -19,6 +19,7 @@ import {
   type TooltipProps,
 } from "recharts";
 import type { ValueType, NameType } from "recharts/types/component/DefaultTooltipContent";
+import { Term } from "@/components/term";
 
 type VaccineShape = {
   bcgQty: number;
@@ -293,7 +294,7 @@ export default function InventoryPage() {
             <Package className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
             Inventory - Availability & Surplus
           </h1>
-          <p className="text-muted-foreground">Vaccine, HTN meds, and medicine stock by barangay</p>
+          <p className="text-muted-foreground">Vaccine, <Term name="HTN">HTN</Term> meds, and medicine stock by barangay</p>
         </div>
         <Link href="/inventory/new">
           <Button data-testid="button-add-inventory">

@@ -182,6 +182,12 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
     long: "Vaccine ± RIG given after a potential rabies exposure to prevent the disease.",
   },
 
+  // ─── NCD shorthand ────────────────────────────────────────────────────
+  HTN: {
+    short: "Hypertension (high blood pressure)",
+    long: "Persistent BP ≥140/90 mmHg. Tracked under PhilPEN; uncontrolled HTN drives risk of stroke and heart attack.",
+  },
+
   // ─── Tuberculosis (TB DOTS) ───────────────────────────────────────────
   DOTS: {
     short: "Directly Observed Treatment, Short-course",
