@@ -70,6 +70,7 @@ const InventoryForm = lazy(() => import("@/pages/inventory-form"));
 const SettingsPage = lazy(() => import("@/pages/settings"));
 const UserManagement = lazy(() => import("@/pages/admin/user-management"));
 const AuditLogs = lazy(() => import("@/pages/admin/audit-logs"));
+const RecommendationsStats = lazy(() => import("@/pages/admin/recommendations-stats"));
 const M1ReportPage = lazy(() => import("@/pages/m1-report"));
 import NotificationDrawer from "@/components/notification-drawer";
 import SmsOutbox from "@/components/sms-outbox";
@@ -332,6 +333,7 @@ function AdminHub({ children }: { children: React.ReactNode }) {
       tabs={[
         { label: "Users", path: "/admin/users", testId: "hub-tab-admin-users", roles: ["SYSTEM_ADMIN"] },
         { label: "Audit Logs", path: "/admin/audit", testId: "hub-tab-admin-audit", roles: ["SYSTEM_ADMIN"] },
+        { label: "Rec. Calibration", path: "/admin/recommendations", testId: "hub-tab-admin-recs", roles: ["SYSTEM_ADMIN", "MHO"] },
         { label: "Settings", path: "/settings", testId: "hub-tab-admin-settings", roles: ["SYSTEM_ADMIN", "MHO", "SHA"] },
       ]}
     >
@@ -509,6 +511,7 @@ function Router() {
       {/* Admin hub */}
       <Route path="/admin/users"><AdminHub><RoleRoute component={UserManagement} /></AdminHub></Route>
       <Route path="/admin/audit"><AdminHub><RoleRoute component={AuditLogs} /></AdminHub></Route>
+      <Route path="/admin/recommendations"><AdminHub><RoleRoute component={RecommendationsStats} /></AdminHub></Route>
       <Route path="/settings"><AdminHub><RoleRoute component={SettingsPage} /></AdminHub></Route>
 
       {/* Account lives outside hubs (footer item) */}

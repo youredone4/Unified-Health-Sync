@@ -131,6 +131,7 @@ export const sidebarPermissions: Record<string, readonly string[]> = {
   "/settings": MGMT_VIEW_ROLES,
   "/admin/users": ADMIN_ONLY_ROLES,
   "/admin/audit": ADMIN_ONLY_ROLES,
+  "/admin/recommendations": ADMIN_MHO_ROLES,
 };
 
 // Permission helpers — all role logic lives here
