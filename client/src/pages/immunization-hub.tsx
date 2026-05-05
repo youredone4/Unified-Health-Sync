@@ -5,6 +5,7 @@ import { useAuth } from "@/hooks/use-auth";
 import ColdChainPage from "@/pages/cold-chain";
 import SchoolImmunizationsPage from "@/pages/school-immunizations";
 import AefiPage from "@/pages/aefi";
+import { Term } from "@/components/term";
 
 // Group 3 of the Phase 1 architecture review (issue #137 Phase 6).
 // Collapses Cold Chain + School Immunization + AEFI into one
@@ -51,7 +52,7 @@ export default function ImmunizationHubPage() {
           <Syringe className="w-5 h-5 text-primary" aria-hidden /> Immunization &amp; Adverse Events
         </h1>
         <p className="text-sm text-muted-foreground">
-          Cold-chain compliance, school-based vaccinations, and AEFI surveillance — including the WHO causality
+          Cold-chain compliance, school-based vaccinations, and <Term name="AEFI">AEFI</Term> surveillance — including the WHO causality
           lifecycle and lot-cluster detection added in issue #137.
         </p>
       </div>

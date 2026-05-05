@@ -26,6 +26,7 @@ import { EmptyState } from "@/components/states/empty-state";
 import { ListSkeleton } from "@/components/states/loading-skeleton";
 import { ErrorState } from "@/components/states/error-state";
 import { severityBadge } from "@/lib/severity";
+import { Term } from "@/components/term";
 
 type Severity = "SERIOUS" | "NON_SERIOUS";
 type Outcome = "RECOVERED" | "RECOVERING" | "NOT_RECOVERED" | "DEATH" | "UNKNOWN";
@@ -104,7 +105,7 @@ export default function AefiPage() {
       <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-semibold flex items-center gap-2" data-testid="aefi-title">
-            <Syringe className="w-5 h-5 text-primary" aria-hidden /> AEFI — Adverse Events
+            <Syringe className="w-5 h-5 text-primary" aria-hidden /> <Term name="AEFI">AEFI</Term> — Adverse Events
           </h1>
           <p className="text-sm text-muted-foreground">
             Adverse events following immunization. SERIOUS events have a 24-hour CHD reporting SLA; NON_SERIOUS events have 7 days.
