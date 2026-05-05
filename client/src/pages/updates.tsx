@@ -4,9 +4,10 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Newspaper, ExternalLink, Search } from "lucide-react";
+import { Newspaper, ExternalLink, Search, CheckCheck } from "lucide-react";
 import { format } from "date-fns";
 import type { DohUpdate, DohUpdateSignificance, DohUpdateBureau } from "@shared/schema";
+import { useReadUpdates } from "@/hooks/use-read-updates";
 
 const SIG_TONE: Record<DohUpdateSignificance, "default" | "destructive" | "secondary"> = {
   HIGH: "destructive",
@@ -34,6 +35,7 @@ export default function UpdatesPage() {
   const { data: updates = [], isLoading } = useQuery<DohUpdate[]>({
     queryKey: ["/api/doh-updates"],
   });
+  const { isRead, markRead, markAllRead, unreadCount } = useReadUpdates();
 
   const [sig, setSig] = useState<SigFilter>("all");
   const [bureau, setBureau] = useState<BureauFilter>("all");
@@ -50,17 +52,37 @@ export default function UpdatesPage() {
     });
   }, [updates, sig, bureau, search]);
 
+  const totalUnread = unreadCount(updates.map((u) => u.id));
+
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-2xl font-semibold flex items-center gap-2" data-testid="updates-title">
-          <Newspaper className="w-5 h-5 text-primary" aria-hidden /> DOH Updates &amp; Memorandums
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          Curated feed of recent significant DOH circulars, administrative orders, and
-          department memoranda that affect HealthSync workflows. Each entry links to
-          the official source on doh.gov.ph.
-        </p>
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-semibold flex items-center gap-2" data-testid="updates-title">
+            <Newspaper className="w-5 h-5 text-primary" aria-hidden /> DOH Updates &amp; Memorandums
+            {totalUnread > 0 && (
+              <Badge variant="default" className="text-xs ml-1" data-testid="updates-unread-count">
+                {totalUnread} new
+              </Badge>
+            )}
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            Curated feed of recent significant DOH circulars, administrative orders, and
+            department memoranda that affect HealthSync workflows. Each entry links to
+            the official source on doh.gov.ph.
+          </p>
+        </div>
+        {totalUnread > 0 && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => markAllRead(updates.map((u) => u.id))}
+            className="gap-1.5"
+            data-testid="updates-mark-all-read"
+          >
+            <CheckCheck className="w-4 h-4" /> Mark all as read
+          </Button>
+        )}
       </div>
 
       {/* Filters */}
@@ -95,15 +117,17 @@ export default function UpdatesPage() {
         <Card><CardContent className="py-6 text-center text-muted-foreground">Loading…</CardContent></Card>
       ) : filtered.length === 0 ? (
         <Card><CardContent className="py-6 text-center text-muted-foreground" data-testid="updates-empty">
-          No DOH updates match the current filters.
+          No DOH updates match the current filters. Try a different significance, bureau, or search term above.
         </CardContent></Card>
       ) : (
         <Card>
           <CardContent className="pt-4 space-y-3">
-            {filtered.map((u) => (
+            {filtered.map((u) => {
+              const read = isRead(u.id);
+              return (
               <div
                 key={u.id}
-                className="flex items-start gap-3 p-3 rounded-md bg-muted/40"
+                className={`flex items-start gap-3 p-3 rounded-md ${read ? "bg-muted/40" : "bg-primary/5 border-l-2 border-primary"}`}
                 data-testid={`update-row-${u.id}`}
               >
                 <Badge variant={SIG_TONE[u.significance]} className="text-[10px] mt-0.5 shrink-0">
@@ -114,11 +138,17 @@ export default function UpdatesPage() {
                     href={u.sourceUrl}
                     target="_blank"
                     rel="noopener noreferrer"
+                    onClick={() => markRead(u.id)}
                     className="font-medium hover:underline inline-flex items-center gap-1"
                     data-testid={`update-link-${u.id}`}
                   >
                     {u.title}
                     <ExternalLink className="w-3 h-3 opacity-60" />
+                    {!read && (
+                      <Badge variant="secondary" className="text-[10px] ml-1 px-1.5 py-0">
+                        new
+                      </Badge>
+                    )}
                   </a>
                   <p className="text-sm text-muted-foreground mt-0.5">{u.summary}</p>
                   <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
@@ -136,7 +166,8 @@ export default function UpdatesPage() {
                   </div>
                 </div>
               </div>
-            ))}
+              );
+            })}
           </CardContent>
         </Card>
       )}
