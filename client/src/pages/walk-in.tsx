@@ -40,6 +40,7 @@ import {
   SERVICE_CODES,
 } from "@shared/schema";
 import { MDReviewDialog, type TriageEncounter } from "@/components/md-review-dialog";
+import { Term } from "@/components/term";
 
 // Service code → human label. Source of truth for codes is `shared/schema.ts`;
 // this just maps each enum value to the BHS-logbook column name a TL would
@@ -239,8 +240,8 @@ export default function WalkInPage() {
             <Stethoscope className="w-5 h-5 text-primary" aria-hidden /> Triage / Walk-in
           </h1>
           <p className="text-sm text-muted-foreground">
-            BHS triage queue. Capture vitals + danger signs, auto-suggest acuity, log the encounter,
-            dispense from stock, and escalate to the RHU when needed.
+            <Term name="BHS">BHS</Term> triage queue. Capture vitals + danger signs, auto-suggest acuity, log the encounter,
+            dispense from stock, and escalate to the <Term name="RHU">RHU</Term> when needed.
           </p>
         </div>
         {isTL ? (

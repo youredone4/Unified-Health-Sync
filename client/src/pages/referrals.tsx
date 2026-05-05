@@ -12,6 +12,7 @@ import {
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ArrowRightCircle, CheckCircle, Clock } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { Term } from "@/components/term";
 
 type ReferralStatus = "PENDING" | "RECEIVED" | "COMPLETED" | "CANCELLED";
 
@@ -80,8 +81,8 @@ export default function ReferralsPage() {
         </h1>
         <p className="text-sm text-muted-foreground">
           {isTL
-            ? "Patients you've referred from your barangay to RHU / hospital."
-            : "Incoming referrals from BHS-level TLs. Acknowledge → record outcome."}
+            ? <>Patients you've referred from your barangay to <Term name="RHU">RHU</Term> / hospital.</>
+            : <>Incoming referrals from <Term name="BHS">BHS</Term>-level <Term name="TL">TLs</Term>. Acknowledge → record outcome.</>}
         </p>
       </div>
 
