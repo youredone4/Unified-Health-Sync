@@ -12,6 +12,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Term } from "@/components/term";
+import {
+  type RecommendationModule,
+  recommendationsFor,
+} from "@shared/recommendations";
+import { RecommendationCard } from "@/components/recommendation-card";
 
 export type SurveillanceStatus = "REPORTED" | "REVIEWED" | "ESCALATED" | "CLOSED";
 const STATUS_VALUES: SurveillanceStatus[] = ["REPORTED", "REVIEWED", "ESCALATED", "CLOSED"];
@@ -43,6 +48,10 @@ export interface SurveillanceTarget {
   queryKey: unknown[];
   /** Friendly label for the dialog title (e.g. "Filariasis exam"). */
   kindLabel: string;
+  /** Discriminator for the recommendation engine; omit to suppress cards. */
+  module?: RecommendationModule;
+  /** Full row passed to recommendation predicates. */
+  row?: unknown;
 }
 
 /**
@@ -96,6 +105,16 @@ export function SurveillanceActionDrawer({
 
   if (!target) return null;
 
+  // Phase 1 recommendation engine: every fired rule renders as an
+  // informational card above the status form. Cards never add new write
+  // actions — the existing Status select + Save button still drive the
+  // workflow. Empty list means no rules matched and the card area is
+  // suppressed.
+  const recs =
+    target.module && target.row
+      ? recommendationsFor(target.module, target.row)
+      : [];
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
@@ -105,6 +124,13 @@ export function SurveillanceActionDrawer({
             <StatusBadge status={status} />
           </DialogTitle>
         </DialogHeader>
+        {recs.length > 0 && (
+          <div className="space-y-2" data-testid="recommendation-list">
+            {recs.map((r) => (
+              <RecommendationCard key={r.id} rec={r} />
+            ))}
+          </div>
+        )}
         <div className="space-y-3">
           <div>
             <label className="text-xs text-muted-foreground">Status</label>
