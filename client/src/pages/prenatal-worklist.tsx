@@ -174,7 +174,7 @@ export default function PrenatalWorklist() {
         <CardContent className="pt-4 space-y-2">
           {filteredMothers.length === 0 && (
             <p className="text-muted-foreground text-center py-8" data-testid="text-no-items">
-              No mothers match the current filters.
+              No mothers match the current filters. Try a different status, search term, or barangay above.
             </p>
           )}
           {pagination.pagedItems.map((m) => {

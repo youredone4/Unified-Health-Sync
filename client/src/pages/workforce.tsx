@@ -252,7 +252,7 @@ export default function WorkforcePage() {
             <p className="text-sm text-muted-foreground py-4 text-center">Loading…</p>
           ) : members.length === 0 ? (
             <p className="text-sm text-muted-foreground py-4 text-center">
-              No workforce members yet. Click &ldquo;Add member&rdquo; to start the roster.
+              No workforce members yet. Click &ldquo;Add member&rdquo; to start the roster — license + training entries roll up to the workforce dashboard.
             </p>
           ) : (
             <Table>

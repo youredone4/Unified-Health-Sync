@@ -158,7 +158,7 @@ export default function SchoolImmunizationsPage() {
         </CardHeader>
         <CardContent>
           {rows.length === 0 ? (
-            <p className="text-sm text-muted-foreground py-3 text-center">No school immunization records yet.</p>
+            <p className="text-sm text-muted-foreground py-3 text-center">No school immunization records yet. Log HPV (9 yo F) and Grade-1 Td above; rows feed M1 Section D4.</p>
           ) : (
             <Table>
               <TableHeader>

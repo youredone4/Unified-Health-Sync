@@ -159,7 +159,7 @@ export default function SeniorWorklist() {
         <CardContent className="pt-4 space-y-2">
           {filteredSeniors.length === 0 && (
             <p className="text-muted-foreground text-center py-8" data-testid="text-no-items">
-              No seniors match the current filters.
+              No seniors match the current filters. Try a different status or search above.
             </p>
           )}
           {pagination.pagedItems.map((s) => (

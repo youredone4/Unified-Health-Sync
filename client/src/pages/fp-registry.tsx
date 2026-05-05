@@ -371,7 +371,7 @@ function FpFormDialog({ open, onClose, record, defaultBarangay }: FpFormDialogPr
                   )}
                   {motherSearch.length >= 2 && (!motherResults || motherResults.length === 0) && (
                     <div className="absolute z-50 w-full mt-1 bg-popover border rounded shadow-lg px-3 py-2 text-sm text-muted-foreground">
-                      No mothers found. Leave blank to register as general patient.
+                      No mothers found in this barangay. Leave the field blank to register the FP record under a general patient name.
                     </div>
                   )}
                 </div>

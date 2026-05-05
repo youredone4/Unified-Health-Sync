@@ -150,7 +150,7 @@ export default function WorkforceDetailPage() {
               </TableBody>
             </Table>
           ) : (
-            <p className="text-sm text-muted-foreground py-3 text-center">No credentials recorded yet.</p>
+            <p className="text-sm text-muted-foreground py-3 text-center">No credentials recorded yet. Add a license, training, or certification above to track expiry dates.</p>
           )}
         </CardContent>
       </Card>

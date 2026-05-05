@@ -122,7 +122,7 @@ export default function MentalHealthScreeningsPage() {
         </CardHeader>
         <CardContent>
           {rows.length === 0 ? (
-            <p className="text-sm text-muted-foreground py-3 text-center">No mental health screenings yet.</p>
+            <p className="text-sm text-muted-foreground py-3 text-center">No mental health screenings yet. Log a mhGAP screening above; rows feed M1 Section G8.</p>
           ) : (
             <Table>
               <TableHeader>

@@ -121,7 +121,7 @@ export default function OralHealthPage() {
         </CardHeader>
         <CardContent>
           {rows.length === 0 ? (
-            <p className="text-sm text-muted-foreground py-3 text-center">No oral health visits yet.</p>
+            <p className="text-sm text-muted-foreground py-3 text-center">No oral health visits yet. Log a first-visit dental check above; rows feed M1 Section ORAL.</p>
           ) : (
             <Table>
               <TableHeader>

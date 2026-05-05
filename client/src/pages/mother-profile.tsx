@@ -290,7 +290,7 @@ export default function MotherProfile() {
         </CardHeader>
         <CardContent>
           {linkedChildren.length === 0 ? (
-            <p className="text-sm text-muted-foreground py-2">No children linked to this mother yet.</p>
+            <p className="text-sm text-muted-foreground py-2">No children linked to this mother yet. Children logged with this mother as their parent will appear here automatically.</p>
           ) : (
             <div className="space-y-2">
               {linkedChildren.map((c) => (

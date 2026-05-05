@@ -173,7 +173,9 @@ export default function ConsultationHistoryCard({ profileType, profileId }: Prop
         {isLoading ? (
           <p className="text-sm text-muted-foreground">Loading consultations...</p>
         ) : consults.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No consultation records yet.</p>
+          <p className="text-sm text-muted-foreground">
+            No consultation records yet. Walk-in and clinic-checkup notes will appear here once an MD signs off.
+          </p>
         ) : (
           <div className="space-y-2">
             {consults.map((c) => (
