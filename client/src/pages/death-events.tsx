@@ -15,6 +15,7 @@ import { EmptyState } from "@/components/states/empty-state";
 import { ListSkeleton } from "@/components/states/loading-skeleton";
 import { ErrorState } from "@/components/states/error-state";
 import { severityBadge } from "@/lib/severity";
+import { Term } from "@/components/term";
 
 type ReviewStatus = "PENDING_NOTIFY" | "NOTIFIED" | "REVIEW_SCHEDULED" | "REVIEWED" | "CLOSED";
 type ReviewType = "MDR" | "PDR";
@@ -66,7 +67,7 @@ export default function DeathEventsPage() {
       <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-semibold flex items-center gap-2" data-testid="death-reviews-title">
-            <Skull className="w-5 h-5 text-primary" aria-hidden /> Death Reviews — MDR / PDR
+            <Skull className="w-5 h-5 text-primary" aria-hidden /> Death Reviews — <Term name="MDR">MDR</Term> / <Term name="PDR">PDR</Term>
           </h1>
           <p className="text-sm text-muted-foreground">
             DOH AO 2008-0029 (Maternal Death Review) and AO 2016-0035 (Perinatal / Newborn Death Review).
