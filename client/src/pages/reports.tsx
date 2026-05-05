@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -6,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import {
   FileText, ArrowRight, ClipboardList, Activity, ShieldAlert, BarChart3, Shield,
 } from "lucide-react";
+import { Term } from "@/components/term";
 
 interface ReportDef {
   slug: string;
@@ -16,11 +18,11 @@ interface ReportDef {
   source: string | null;
 }
 
-const CATEGORY_LABELS: Record<ReportDef["category"], string> = {
-  fhsis: "FHSIS Family",
+const CATEGORY_LABELS: Record<ReportDef["category"], ReactNode> = {
+  fhsis: <><Term name="FHSIS">FHSIS</Term> Family</>,
   program: "Program-Specific",
   surveillance: "Surveillance",
-  performance: "LGU Performance",
+  performance: <><Term name="LGU">LGU</Term> Performance</>,
   admin: "Administration",
 };
 
