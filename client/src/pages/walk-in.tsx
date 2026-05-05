@@ -958,7 +958,7 @@ function TriageStep({ form }: { form: ReturnType<typeof useForm<WizardValues>> }
         <>
           <div>
             <Label className="text-sm font-semibold flex items-center gap-1">
-              <Baby className="w-4 h-4" aria-hidden /> IMCI danger signs (any one → EMERGENT)
+              <Baby className="w-4 h-4" aria-hidden /> <Term name="IMCI">IMCI</Term> danger signs (any one → <Term name="EMERGENT">EMERGENT</Term>)
             </Label>
             <div className="flex flex-wrap gap-1.5 mt-2">
               {IMCI_DANGER_SIGNS.map((c) => (
@@ -973,7 +973,7 @@ function TriageStep({ form }: { form: ReturnType<typeof useForm<WizardValues>> }
             </div>
           </div>
           <div>
-            <Label className="text-sm font-semibold">IMCI main symptoms</Label>
+            <Label className="text-sm font-semibold"><Term name="IMCI">IMCI</Term> main symptoms</Label>
             <div className="flex flex-wrap gap-1.5 mt-2">
               {IMCI_MAIN_SYMPTOMS.map((c) => (
                 <Chip
