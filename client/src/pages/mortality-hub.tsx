@@ -4,6 +4,7 @@ import { Skull, ClipboardCheck } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import MortalityPage from "@/pages/mortality";
 import DeathEventsPage from "@/pages/death-events";
+import { Term } from "@/components/term";
 
 // Group 2 of the Phase 1 architecture review: collapses the previous
 // "Mortality Registry" + "Death Reviews" sidebar entries into one hub.
@@ -45,7 +46,7 @@ export default function MortalityHubPage() {
           <Skull className="w-5 h-5 text-primary" aria-hidden /> Mortality &amp; Death Surveillance
         </h1>
         <p className="text-sm text-muted-foreground">
-          Registry feeds M1 Section H. Reviews track the 30-day MDR/PDR lifecycle (DOH AO 2008-0029, AO 2016-0035).
+          Registry feeds M1 Section H. Reviews track the 30-day <Term name="MDR">MDR</Term>/<Term name="PDR">PDR</Term> lifecycle (DOH AO 2008-0029, AO 2016-0035).
         </p>
       </div>
 

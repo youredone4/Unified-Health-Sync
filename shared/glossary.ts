@@ -211,6 +211,30 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
     long: "Combination antibiotic regimen (rifampicin + dapsone ± clofazimine) given over 6–12 months.",
   },
 
+  // ─── Mortality / Death Reviews ────────────────────────────────────────
+  MDR: {
+    short: "Maternal Death Review",
+    long: "Mandatory facility + community review for every maternal death within 30 days, examining clinical care, system delays, and recommended actions.",
+    source: "DOH AO 2008-0029",
+  },
+  PDR: {
+    short: "Perinatal / Newborn Death Review",
+    long: "Review of every perinatal (≥28 wk gestation through 7d post-birth) and newborn death (0-28d). 30-day deadline.",
+    source: "DOH AO 2016-0035",
+  },
+  Perinatal: {
+    short: "Late-pregnancy + first week of life",
+    long: "From 28 weeks gestation (or 1000 g) through 7 days after birth. Includes stillbirths and early neonatal deaths.",
+  },
+  "Fetal death": {
+    short: "Stillbirth — death before delivery",
+    long: "Death of a fetus ≥20 weeks gestation before complete expulsion. Distinct from miscarriage (<20 wk) and live-born early neonatal death.",
+  },
+  "Early neonatal": {
+    short: "Death in the first 7 days after birth",
+    long: "Live-born infant who dies on day 0-6. Combined with stillbirths to compute the perinatal mortality rate.",
+  },
+
   // ─── Surveillance workflow statuses ───────────────────────────────────
   REPORTED: {
     short: "New record — not yet reviewed",

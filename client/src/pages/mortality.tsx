@@ -21,6 +21,7 @@ import {
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skull, Save } from "lucide-react";
 import { format } from "date-fns";
+import { Term } from "@/components/term";
 
 const today = () => format(new Date(), "yyyy-MM-dd");
 
@@ -113,7 +114,7 @@ export default function MortalityPage() {
                   <Input type="number" min="0" value={age} onChange={(e) => setAge(e.target.value)} data-testid="input-age-yrs" />
                 </div>
                 <div>
-                  <label className="text-xs text-muted-foreground">Age (days, neonatal/perinatal)</label>
+                  <label className="text-xs text-muted-foreground">Age (days, neonatal/<Term name="Perinatal">perinatal</Term>)</label>
                   <Input type="number" min="0" value={ageDays} onChange={(e) => setAgeDays(e.target.value)} data-testid="input-age-days" />
                 </div>
                 <div>
@@ -132,8 +133,8 @@ export default function MortalityPage() {
                 </Select>
               </div>
               <div className="flex flex-wrap gap-3 pt-3 text-sm">
-                <label className="flex items-center gap-2"><Checkbox checked={isFetalDeath} onCheckedChange={(v) => setIsFetalDeath(!!v)} data-testid="check-fetal" /> Fetal death (perinatal)</label>
-                <label className="flex items-center gap-2"><Checkbox checked={earlyNeonatal} onCheckedChange={(v) => setEarlyNeonatal(!!v)} data-testid="check-early-neonatal" /> Live-born, early neonatal (≤6d)</label>
+                <label className="flex items-center gap-2"><Checkbox checked={isFetalDeath} onCheckedChange={(v) => setIsFetalDeath(!!v)} data-testid="check-fetal" /> <Term name="Fetal death">Fetal death</Term> (<Term name="Perinatal">perinatal</Term>)</label>
+                <label className="flex items-center gap-2"><Checkbox checked={earlyNeonatal} onCheckedChange={(v) => setEarlyNeonatal(!!v)} data-testid="check-early-neonatal" /> Live-born, <Term name="Early neonatal">early neonatal</Term> (≤6d)</label>
               </div>
               <Textarea rows={1} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Notes (optional)" className="mt-3" data-testid="input-notes" />
               <div className="flex justify-end pt-3">
