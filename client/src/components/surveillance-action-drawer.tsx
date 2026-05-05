@@ -163,7 +163,13 @@ export function SurveillanceActionDrawer({
         {recs.length > 0 && (
           <div className="space-y-2" data-testid="recommendation-list">
             {recs.map((r) => (
-              <RecommendationCard key={r.id} rec={r} />
+              <RecommendationCard
+                key={r.id}
+                rec={r}
+                module={target.module}
+                barangay={target.barangayName}
+                entityId={target.id}
+              />
             ))}
           </div>
         )}

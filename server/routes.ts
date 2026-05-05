@@ -1195,6 +1195,44 @@ export async function registerRoutes(
     res.json({ logged: ruleIds.length });
   }));
 
+  // Phase 2 — plain-language summary. Rewrites a rule's bullets in
+  // 5th-grade Filipino-English via the existing OpenAI integration.
+  // Cached in-process by ruleId. Returns 200 with summary=null when the
+  // LLM call is unavailable (no API key or upstream error) so the card
+  // still renders the rule-based bullets.
+  const plainLanguageSchema = z.object({
+    ruleId: z.string().min(1).max(120),
+    title: z.string().min(1).max(300),
+    bullets: z.array(z.string().min(1).max(500)).min(1).max(10),
+  });
+  app.post("/api/recommendations/plain-language", loadUserInfo, requireAuth, ar(async (req, res) => {
+    const parsed = plainLanguageSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: "Invalid payload", issues: parsed.error.issues });
+    }
+    const { plainLanguageSummary } = await import("./recommendations-llm");
+    const summary = await plainLanguageSummary(parsed.data);
+    res.json({ summary });
+  }));
+
+  // Phase 2 — anomaly cluster hint. Pure DB scan, no LLM. Currently
+  // implemented for rabies Category III; other modules return null.
+  app.get("/api/recommendations/cluster-hint", loadUserInfo, requireAuth, ar(async (req, res) => {
+    const moduleRaw = req.query.module ? String(req.query.module) : "";
+    const barangay = req.query.barangay ? String(req.query.barangay) : "";
+    const entityIdRaw = req.query.entityId ? Number(req.query.entityId) : NaN;
+    if (!moduleRaw || !barangay || !Number.isFinite(entityIdRaw)) {
+      return res.status(400).json({ message: "module, barangay, entityId required" });
+    }
+    const { getClusterHint } = await import("./recommendations-llm");
+    const hint = await getClusterHint({
+      module: moduleRaw,
+      barangay,
+      entityId: entityIdRaw,
+    });
+    res.json({ hint });
+  }));
+
   // ===== PHASE 7 — Water & Sanitation =====
   ncdRoute("/api/household-water-records", "HOUSEHOLD_WATER_RECORD", insertHouseholdWaterRecordSchema,
     (p) => storage.getHouseholdWaterRecords(p), (r) => storage.createHouseholdWaterRecord(r));
