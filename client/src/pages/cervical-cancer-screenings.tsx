@@ -170,7 +170,7 @@ export default function CervicalCancerScreeningsPage() {
         </CardHeader>
         <CardContent>
           {rows.length === 0 ? (
-            <p className="text-sm text-muted-foreground py-3 text-center">No cervical screenings yet.</p>
+            <p className="text-sm text-muted-foreground py-3 text-center">No cervical screenings yet. Log a VIA / Pap / HPV result above; suspicious findings link to follow-up care.</p>
           ) : (
             <Table>
               <TableHeader>

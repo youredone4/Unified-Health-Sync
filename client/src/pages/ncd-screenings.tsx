@@ -390,7 +390,7 @@ function VisionSection({ barangay, canEnter }: { barangay: string | null; canEnt
         </CardHeader>
         <CardContent>
           {rows.length === 0 ? (
-            <p className="text-sm text-muted-foreground py-3 text-center">No vision screenings yet.</p>
+            <p className="text-sm text-muted-foreground py-3 text-center">No vision screenings yet. They'll appear here when a TL logs a senior's visual-acuity check.</p>
           ) : (
             <Table>
               <TableHeader>
@@ -509,7 +509,7 @@ function CervicalSection({ barangay, canEnter }: { barangay: string | null; canE
         </CardHeader>
         <CardContent>
           {rows.length === 0 ? (
-            <p className="text-sm text-muted-foreground py-3 text-center">No cervical screenings yet.</p>
+            <p className="text-sm text-muted-foreground py-3 text-center">No cervical screenings yet. Log a VIA / Pap / HPV result above; suspicious findings link to follow-up care.</p>
           ) : (
             <Table>
               <TableHeader>

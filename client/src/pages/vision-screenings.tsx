@@ -120,7 +120,7 @@ export default function VisionScreeningsPage() {
         </CardHeader>
         <CardContent>
           {rows.length === 0 ? (
-            <p className="text-sm text-muted-foreground py-3 text-center">No vision screenings yet.</p>
+            <p className="text-sm text-muted-foreground py-3 text-center">No vision screenings yet. They'll appear here when a TL logs a senior's visual-acuity check.</p>
           ) : (
             <Table>
               <TableHeader>

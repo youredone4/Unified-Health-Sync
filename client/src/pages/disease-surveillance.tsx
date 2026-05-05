@@ -185,7 +185,7 @@ function FilariasisCard({ barangay, canEnter }: { barangay: string | null; canEn
         </CardHeader>
         <CardContent>
           {rows.length === 0 ? (
-            <p className="text-sm text-muted-foreground py-3 text-center">No filariasis records yet.</p>
+            <p className="text-sm text-muted-foreground py-3 text-center">No filariasis records yet. Log an exam above; entries also appear when another TL in this barangay files one.</p>
           ) : (
             <Table>
               <TableHeader>
@@ -295,7 +295,7 @@ function RabiesCard({ barangay, canEnter }: { barangay: string | null; canEnter:
         </CardHeader>
         <CardContent>
           {rows.length === 0 ? (
-            <p className="text-sm text-muted-foreground py-3 text-center">No rabies exposures yet.</p>
+            <p className="text-sm text-muted-foreground py-3 text-center">No rabies exposures yet. Log an exposure above to start tracking the dose schedule.</p>
           ) : (
             <Table>
               <TableHeader>
@@ -406,7 +406,7 @@ function SchistoCard({ barangay, canEnter }: { barangay: string | null; canEnter
         </CardHeader>
         <CardContent>
           {rows.length === 0 ? (
-            <p className="text-sm text-muted-foreground py-3 text-center">No schistosomiasis records yet.</p>
+            <p className="text-sm text-muted-foreground py-3 text-center">No schistosomiasis records yet. Confirmed cases here trigger water-source investigations.</p>
           ) : (
             <Table>
               <TableHeader>
@@ -606,7 +606,7 @@ function LeprosyCard({ barangay, canEnter }: { barangay: string | null; canEnter
         </CardHeader>
         <CardContent>
           {rows.length === 0 ? (
-            <p className="text-sm text-muted-foreground py-3 text-center">No leprosy records yet.</p>
+            <p className="text-sm text-muted-foreground py-3 text-center">No leprosy records yet. New cases here open the contact-tracing + MDT workflow.</p>
           ) : (
             <Table>
               <TableHeader>

@@ -199,7 +199,7 @@ export default function DiseaseWorklist() {
         <CardContent className="pt-4 space-y-2">
           {filteredCases.length === 0 && (
             <p className="text-muted-foreground text-center py-8" data-testid="text-no-items">
-              No cases match the current filters.
+              No cases match the current filters. Try a different status or search above.
             </p>
           )}
           {pagination.pagedItems.map((c) => (

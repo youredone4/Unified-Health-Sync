@@ -117,7 +117,7 @@ export default function HouseholdWaterPage() {
         </CardHeader>
         <CardContent>
           {rows.length === 0 ? (
-            <p className="text-sm text-muted-foreground py-3 text-center">No household water records yet.</p>
+            <p className="text-sm text-muted-foreground py-3 text-center">No household water records yet. Log a household survey above; entries feed M1 Section W (water access).</p>
           ) : (
             <Table>
               <TableHeader>

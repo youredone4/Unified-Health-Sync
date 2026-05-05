@@ -1330,7 +1330,7 @@ export default function M1ReportPage({ initialMode }: { initialMode?: "view" | "
           {switcherOpen && (
             <CardContent className="pt-0 pb-3">
               {allBarangayReports.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-4">No reports submitted for this period yet.</p>
+                <p className="text-sm text-muted-foreground text-center py-4">No reports submitted for this period yet. Reports appear after a TL clicks Submit on their barangay's M1.</p>
               ) : (
                 <div className="flex flex-wrap gap-2">
                   {allBarangayReports.map(r => (
