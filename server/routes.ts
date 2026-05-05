@@ -2292,6 +2292,64 @@ export async function registerRoutes(
     }),
   );
 
+  // Recommendation calibration view. Aggregates RECOMMENDATION_SHOWN +
+  // RECOMMENDATION_ACTED rows by ruleId so provincial QA can spot
+  // never-actioned guidance (rule shown 50× but never acted = bad fit
+  // for the population) and high-conversion rules (rule fired 10× and
+  // acted on 9× = trustworthy guidance).
+  //
+  // Window: optional `?days=N` (default 90, max 365). MHO + SYSTEM_ADMIN
+  // both access since this is QA, not raw audit data.
+  app.get("/api/admin/recommendations-stats", loadUserInfo, requireAuth,
+    requireRole(UserRole.SYSTEM_ADMIN, UserRole.MHO),
+    ar(async (req, res) => {
+      const daysRaw = Number(req.query.days);
+      const days = Number.isFinite(daysRaw) && daysRaw > 0 ? Math.min(daysRaw, 365) : 90;
+      const since = new Date();
+      since.setDate(since.getDate() - days);
+
+      const rows = await db
+        .select({
+          action: auditLogs.action,
+          afterJson: auditLogs.afterJson,
+        })
+        .from(auditLogs)
+        .where(
+          and(
+            gte(auditLogs.createdAt, since),
+            inArray(auditLogs.action, ["RECOMMENDATION_SHOWN", "RECOMMENDATION_ACTED"] as any),
+          ),
+        );
+
+      // Aggregate by ruleId. afterJson shape from PR #206 is {ruleId}.
+      const byRule = new Map<string, { shown: number; acted: number }>();
+      for (const r of rows) {
+        const ruleId = (r.afterJson as any)?.ruleId;
+        if (typeof ruleId !== "string" || !ruleId) continue;
+        const isShown = r.action === "RECOMMENDATION_SHOWN";
+        const isActed = r.action === "RECOMMENDATION_ACTED";
+        if (!isShown && !isActed) continue;
+        const slot = byRule.get(ruleId) ?? { shown: 0, acted: 0 };
+        if (isShown) slot.shown++;
+        else slot.acted++;
+        byRule.set(ruleId, slot);
+      }
+
+      const stats = Array.from(byRule.entries())
+        .map(([ruleId, c]) => ({
+          ruleId,
+          shown: c.shown,
+          acted: c.acted,
+          // Conversion rate. shown=0 means we only have an ACTED log
+          // somehow (race, replay) — surface as null instead of fake.
+          ratio: c.shown > 0 ? Math.round((c.acted / c.shown) * 1000) / 10 : null,
+        }))
+        .sort((a, b) => b.shown - a.shown);
+
+      res.json({ windowDays: days, stats });
+    }),
+  );
+
   // === REFERRAL RECORDS (Phase 2 — operational-actions framework) ===
   // Unified handoff entity: any module (disease cases, TB, mothers, etc.)
   // creates a referral with status=PENDING; the receiving facility marks
