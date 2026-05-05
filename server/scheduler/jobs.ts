@@ -13,6 +13,7 @@
 
 import { db } from "../db";
 import { sql } from "drizzle-orm";
+import { scrapeCaragaDoh } from "./scrape-caraga-doh";
 import {
   workforceMembers,
   inventory,
@@ -843,6 +844,18 @@ export async function runDailyAlerts(): Promise<{ jobName: string; count: number
       results.push({ jobName, count: -1 });
     }
   }
+
+  // Pull fresh DOH guidance into the dashboards. No alerts written; the
+  // scraper inserts directly into doh_updates which the home/dashboard
+  // cards already render.
+  try {
+    const r = await scrapeCaragaDoh();
+    results.push({ jobName: "scrape-caraga-doh", count: r.inserted });
+  } catch (err) {
+    console.error("[scheduler] scrape-caraga-doh failed:", err);
+    results.push({ jobName: "scrape-caraga-doh", count: -1 });
+  }
+
   return results;
 }
 
