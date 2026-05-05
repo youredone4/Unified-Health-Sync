@@ -28,6 +28,7 @@ import { useState } from "react";
 import SmsModal from "@/components/sms-modal";
 import ConfirmModal from "@/components/confirm-modal";
 import { TbDoseLogCard } from "@/components/tb-dose-log-card";
+import { Term } from "@/components/term";
 import { useAuth, permissions } from "@/hooks/use-auth";
 import { addDays, format } from "date-fns";
 import {
@@ -124,7 +125,7 @@ export default function TBProfile() {
   if (isError || !patient) {
     return (
       <div className="flex flex-col items-center justify-center h-64 gap-3">
-        <p className="text-muted-foreground">TB DOTS record not found or could not be loaded.</p>
+        <p className="text-muted-foreground"><Term name="TB DOTS">TB DOTS</Term> record not found or could not be loaded.</p>
         <button onClick={() => navigate("/tb")} className="text-sm text-primary underline">Back to TB Worklist</button>
       </div>
     );
@@ -298,7 +299,7 @@ export default function TBProfile() {
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-base flex items-center gap-2">
-            <Calendar className="w-4 h-4 text-primary" /> DOTS Schedule
+            <Calendar className="w-4 h-4 text-primary" /> <Term name="DOTS">DOTS</Term> Schedule
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">

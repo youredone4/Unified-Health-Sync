@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
+import { Term } from "@/components/term";
 import { useAuth } from "@/hooks/use-auth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -89,9 +90,9 @@ export default function OutbreaksPage() {
           <SelectTrigger className="w-48" data-testid="status-filter"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All</SelectItem>
-            <SelectItem value="SUSPECTED">Suspected</SelectItem>
-            <SelectItem value="DECLARED">Declared</SelectItem>
-            <SelectItem value="CONTAINED">Contained</SelectItem>
+            <SelectItem value="SUSPECTED"><Term name="SUSPECTED">Suspected</Term></SelectItem>
+            <SelectItem value="DECLARED"><Term name="DECLARED">Declared</Term></SelectItem>
+            <SelectItem value="CONTAINED"><Term name="CONTAINED">Contained</Term></SelectItem>
             <SelectItem value="CLOSED">Closed</SelectItem>
           </SelectContent>
         </Select>

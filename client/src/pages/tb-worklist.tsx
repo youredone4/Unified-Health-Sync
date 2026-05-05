@@ -29,6 +29,7 @@ import {
 import { usePagination } from "@/hooks/use-pagination";
 import TablePagination from "@/components/table-pagination";
 import { useAuth } from "@/hooks/use-auth";
+import { Term } from "@/components/term";
 
 type StatusFilter = "urgent" | "overdue" | "dueToday" | "atRisk" | "active" | "completed" | "all";
 
@@ -251,7 +252,7 @@ export default function TBWorklist() {
                 <div className="flex items-center gap-2 mt-1">
                   <Progress value={p.progress} className="w-24 h-1.5" />
                   <span className="text-xs text-muted-foreground">{Math.round(p.progress)}%</span>
-                  <span className="text-xs text-muted-foreground">· Next DOTS {formatDate(p.nextDotsVisitDate)}</span>
+                  <span className="text-xs text-muted-foreground">· Next <Term name="DOTS">DOTS</Term> {formatDate(p.nextDotsVisitDate)}</span>
                 </div>
               </div>
               <ChevronRight className="w-4 h-4 text-muted-foreground" />

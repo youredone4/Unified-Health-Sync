@@ -12,6 +12,7 @@ import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { ClipboardList, ArrowLeft, Save } from "lucide-react";
+import { Term } from "@/components/term";
 
 const formSchema = z.object({
   firstName: z.string().min(1, "First name is required"),
@@ -122,7 +123,7 @@ export default function TBForm() {
             <ClipboardList className="w-6 h-6 text-purple-500" />
             {isEdit ? "Edit TB Patient" : "Register New TB Patient"}
           </h1>
-          <p className="text-muted-foreground">{isEdit ? "Update patient information" : "Add a new TB DOTS patient"}</p>
+          <p className="text-muted-foreground">{isEdit ? "Update patient information" : <>Add a new <Term name="TB DOTS">TB DOTS</Term> patient</>}</p>
         </div>
       </div>
 

@@ -23,6 +23,7 @@ import { ShieldAlert, Plus } from "lucide-react";
 import { EmptyState } from "@/components/states/empty-state";
 import { ListSkeleton } from "@/components/states/loading-skeleton";
 import { ErrorState } from "@/components/states/error-state";
+import { Term } from "@/components/term";
 
 // Cat-I diseases for which the DSO attests "zero cases this week" — drives
 // the PIDSR weekly cutoff scheduler check (server/scheduler/jobs.ts).
@@ -91,7 +92,7 @@ export default function PidsrPage() {
       <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-semibold flex items-center gap-2" data-testid="pidsr-title">
-            <ShieldAlert className="w-5 h-5 text-primary" aria-hidden /> PIDSR Weekly Submissions
+            <ShieldAlert className="w-5 h-5 text-primary" aria-hidden /> <Term name="PIDSR">PIDSR</Term> Weekly Submissions
           </h1>
           <p className="text-sm text-muted-foreground">
             Cat-II weekly attestation under RA 11332 (Mandatory Reporting of Notifiable Diseases). Friday cutoff.

@@ -182,6 +182,17 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
     long: "Vaccine ± RIG given after a potential rabies exposure to prevent the disease.",
   },
 
+  // ─── Tuberculosis (TB DOTS) ───────────────────────────────────────────
+  DOTS: {
+    short: "Directly Observed Treatment, Short-course",
+    long: "WHO/DOH strategy for TB control. A health worker watches the patient swallow each dose to ensure adherence over the full 6-month regimen.",
+    source: "DOH NTP Manual of Procedures 5th Ed.",
+  },
+  "TB DOTS": {
+    short: "Tuberculosis treatment under the DOTS strategy",
+    long: "The DOH National TB Program's standard of care: case-finding + supervised drug-taking + outcome monitoring at the BHS or RHU.",
+  },
+
   // ─── Disease surveillance — Schisto / STH / Leprosy ───────────────────
   Schistosomiasis: {
     short: "Parasitic disease from freshwater snail vector",
