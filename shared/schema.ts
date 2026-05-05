@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, boolean, timestamp, jsonb, unique, uniqueIndex, real, varchar } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, timestamp, jsonb, unique, uniqueIndex, index, real, varchar } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -2253,6 +2253,12 @@ export type DohUpdateBureau = typeof DOH_UPDATE_BUREAUS[number];
 export const DOH_UPDATE_SIGNIFICANCE = ["LOW", "MEDIUM", "HIGH"] as const;
 export type DohUpdateSignificance = typeof DOH_UPDATE_SIGNIFICANCE[number];
 
+// Distinguishes manual entries (admin-curated) from auto-scraped feed items
+// so admins can spot which rows came from the Caraga regional site without
+// pulling them up by URL.
+export const DOH_UPDATE_SOURCES = ["MANUAL", "SCRAPED_CARAGA"] as const;
+export type DohUpdateSource = typeof DOH_UPDATE_SOURCES[number];
+
 export const dohUpdates = pgTable("doh_updates", {
   id: serial("id").primaryKey(),
   title: text("title").notNull(),
@@ -2266,14 +2272,24 @@ export const dohUpdates = pgTable("doh_updates", {
   // rules might need revisiting when a new memo lands. Plain string array
   // for now; structured taxonomy comes later.
   tags: jsonb("tags").$type<string[]>().notNull().default([]),
+  // MANUAL = admin-entered; SCRAPED_CARAGA = caraga.doh.gov.ph daily scrape.
+  // Drives the admin UI badge so editors don't accidentally overwrite a
+  // scraped row with a manual edit (the scraper would then re-create it).
+  source: text("source").$type<DohUpdateSource>().notNull().default("MANUAL"),
   createdAt: timestamp("created_at").defaultNow(),
-});
+}, (table) => ({
+  // Plain (non-unique) index — speeds up the dedupe pre-check in
+  // scrape-caraga-doh.ts. Can't be UNIQUE because the existing manual seed
+  // intentionally reuses generic landing-page URLs for several rows.
+  sourceUrlIdx: index("doh_updates_source_url_idx").on(table.sourceUrl),
+}));
 
 export const insertDohUpdateSchema = createInsertSchema(dohUpdates)
   .omit({ id: true, createdAt: true })
   .extend({
     bureau: z.enum(DOH_UPDATE_BUREAUS),
     significance: z.enum(DOH_UPDATE_SIGNIFICANCE),
+    source: z.enum(DOH_UPDATE_SOURCES).optional(),
     tags: z.array(z.string()).optional(),
   });
 export type DohUpdate = typeof dohUpdates.$inferSelect;

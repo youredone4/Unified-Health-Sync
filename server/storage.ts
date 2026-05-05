@@ -3643,8 +3643,19 @@ export class DatabaseStorage implements IStorage {
         source_url      TEXT      NOT NULL,
         published_date  TEXT      NOT NULL,
         tags            JSONB     NOT NULL DEFAULT '[]'::jsonb,
+        source          TEXT      NOT NULL DEFAULT 'MANUAL',
         created_at      TIMESTAMP DEFAULT NOW()
       )
+    `);
+    // Add source column to existing deployments + dedupe index for the
+    // Caraga scraper's URL-based upsert.
+    await db.execute(sql`
+      ALTER TABLE doh_updates
+        ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT 'MANUAL'
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS doh_updates_source_url_idx
+        ON doh_updates (source_url)
     `);
 
     // Surveillance workflow columns shared across all 5 disease-program

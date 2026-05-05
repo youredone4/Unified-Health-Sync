@@ -2181,6 +2181,18 @@ export async function registerRoutes(
     }),
   );
 
+  // Manually trigger the Caraga DOH scraper. Useful for testing on Replit
+  // (where caraga.doh.gov.ph is reachable) and for backfilling after a long
+  // outage. Same SYSTEM_ADMIN gate as the scheduler trigger.
+  app.post("/api/admin/scrape-doh-updates", loadUserInfo, requireAuth,
+    requireRole(UserRole.SYSTEM_ADMIN),
+    ar(async (_req, res) => {
+      const { scrapeCaragaDoh } = await import("./scheduler/scrape-caraga-doh");
+      const result = await scrapeCaragaDoh();
+      res.json(result);
+    }),
+  );
+
   // === AUDIT LOGS (Phase 1) ===
   // SYSTEM_ADMIN-only viewer of the audit_logs table. Supports filters by
   // action, entity type, and barangay, plus a hard cap of 500 rows so a
