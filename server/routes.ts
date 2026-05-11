@@ -501,11 +501,34 @@ export async function registerRoutes(
       let status = "Queued (Demo)";
       if (semaphoreKey && input.recipientPhone) {
         try {
+          // Semaphore rejects sender names that aren't pre-registered with
+          // their support team (error: "The senderName supplied is not
+          // valid"). Read from env so deployments that haven't registered
+          // a custom name simply omit the field and use Semaphore's
+          // default (SEMAPHORE / PHILSMS depending on package).
+          //
+          // Format constraints: ≤11 alphanumeric chars, no spaces. We warn
+          // (not reject) on malformed input so a misconfigured env var
+          // produces a server log rather than a silent fallback.
+          const rawSender = process.env.SEMAPHORE_SENDER_NAME?.trim() || "";
+          let senderName: string | undefined;
+          if (rawSender) {
+            if (/^[A-Za-z0-9]{1,11}$/.test(rawSender)) {
+              senderName = rawSender;
+            } else {
+              console.warn(
+                `[sms] SEMAPHORE_SENDER_NAME="${rawSender}" is not valid ` +
+                  `(needs ≤11 alphanumeric chars, no spaces). Falling back ` +
+                  `to Semaphore's default sender.`,
+              );
+            }
+          }
+
           const params = new URLSearchParams({
             apikey: semaphoreKey,
             number: input.recipientPhone.replace(/^\+63/, "0"),
             message: input.message,
-            sendername: "HealthSync",
+            ...(senderName ? { sendername: senderName } : {}),
           });
           const smsFetch = await fetch("https://api.semaphore.co/api/v4/messages", {
             method: "POST",
