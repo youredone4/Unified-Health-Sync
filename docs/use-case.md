@@ -5,10 +5,11 @@
 **Population:** 12 barangays · 1 RHU · ~9,400 residents.
 
 This document walks a realistic month through HealthSync from every operator's
-perspective — Team Leader nurses at the BHS, Sanitary Health Aides + the MHO at
-the RHU, the Mayor, the Sangguniang Bayan Health Committee, and the System
-Admin. It shows how routine encounters become indicators, how indicators become
-decisions, and how decisions feed back into the next month's work.
+perspective — Team Leader nurses at the BHS, the Senior Health Administrator
+and the MHO at the RHU, the Mayor, the Sangguniang Bayan Health Committee, and
+the System Admin. It shows how routine encounters become indicators, how
+indicators become decisions, and how decisions feed back into the next month's
+work.
 
 ---
 
@@ -19,7 +20,7 @@ decisions, and how decisions feed back into the next month's work.
 | **TL** (Team Leader nurse) | Nurse Joy | BHS in Brgy. Pacifico | Capturing every mother / child / senior visit accurately and on time. |
 | **TL** | Nurse Marvin | BHS in Brgy. Honrado | Same; covers a barangay with a recent rabies cluster. |
 | **MHO** (Municipal Health Officer) | Dr. Cuyno | San Isidro RHU | Reviews escalations, signs the M1 report, runs MDR / death reviews. |
-| **SHA** (Sanitary Health Aide) | Mr. Lumayno | San Isidro RHU | Surveillance + sanitation + outbreak field response. |
+| **SHA** (Senior Health Administrator) | Mr. Lumayno | San Isidro RHU | Second in command to the MHO; administrative officer handling RHU operations, approvals, and oversight across barangays. |
 | **MAYOR** | Mayor Ribargoso | Municipal Hall | Quarterly oversight; cares about indicator trends and barangay equity. |
 | **HEALTH_COMMITTEE** | Councilor Tan | Sangguniang Bayan | Same view as Mayor; reads M1 + dashboards before Council sessions. |
 | **SYSTEM_ADMIN** | IT Officer | RHU back-office | User management, audit, DOH update curation. |

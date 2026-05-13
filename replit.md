@@ -79,7 +79,7 @@ The system uses session-based username/password authentication. There is NO soci
 **Roles:**
 - `SYSTEM_ADMIN` - Full access, can manage users and view audit logs
 - `MHO` - Municipal Health Officer, management access
-- `SHA` - Sanitary Health Aide, operational access  
+- `SHA` - Senior Health Administrator, second in command to the MHO (administrative officer)
 - `TL` - Team Leader, restricted to assigned barangays only
 
 **TL Barangay Scoping:**

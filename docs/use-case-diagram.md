@@ -13,7 +13,7 @@ flowchart LR
     %% ── Actors (left side) ───────────────────────────────────────────────
     TL((TL<br/>Barangay Nurse))
     MHO((MHO<br/>Municipal Health Officer))
-    SHA((SHA<br/>Sanitary Health Aide))
+    SHA((SHA<br/>Senior Health Administrator))
     MAYOR((MAYOR))
     HC((HEALTH<br/>COMMITTEE))
     ADMIN((SYSTEM<br/>ADMIN))
