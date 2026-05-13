@@ -94,8 +94,9 @@ Defined in `shared/models/auth.ts`:
   system settings.
 - **MHO** (Municipal Health Officer) — municipal scope, approves / reopens M1
   reports, supervisory clinical functions.
-- **SHA** (Sanitary Health Aide) — field staff, enters patient and encounter
-  data.
+- **SHA** (Senior Health Administrator) — second in command to the MHO;
+  administrative officer of the RHU handling operations, oversight, and
+  approvals across barangays.
 - **TL** (Team Leader) — barangay-scoped; only sees / edits data for the
   barangay(s) they're assigned to, read-only on other barangays' M1, cannot
   reopen SUBMITTED reports.

@@ -1,8 +1,8 @@
 # HealthSync — User Manual
 
 A friendly, click-by-click guide for everyone who uses HealthSync — barangay
-nurses (Team Leaders), Municipal Health Officers, Sanitary Health Aides, the
-Mayor, and the Health Committee. No technical knowledge needed.
+nurses (Team Leaders), Municipal Health Officers, Senior Health Administrators,
+the Mayor, and the Health Committee. No technical knowledge needed.
 
 If you can read and click, you can use this guide.
 
@@ -81,7 +81,7 @@ Every user has a **role**. The role decides which menu items you see and what yo
 |---|---|---|
 | **Team Leader (TL)** | Barangay nurse — captures the day's records | Add mothers, children, seniors, TB patients, vaccines, screenings; submit weekly PIDSR; submit your M1 |
 | **Municipal Health Officer (MHO)** | RHU physician | See ALL barangays; review escalated cases; approve M1; manage outbreak responses |
-| **Sanitary Health Aide (SHA)** | Field support to the MHO | Same as MHO for most pages; helps follow up on referrals, surveillance, water records |
+| **Senior Health Administrator (SHA)** | Second in command to the MHO — the RHU's administrative officer | Same access as MHO for most pages; oversees operations, approvals, and day-to-day administration across barangays |
 | **System Administrator** | The IT focal | Create user accounts, change settings, see audit logs, access everything |
 | **Mayor** | Read-only municipal view | Look at dashboards and reports; cannot change records |
 | **Health Committee** | Read-only oversight view | Same as Mayor |
