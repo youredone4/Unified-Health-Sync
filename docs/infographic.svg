@@ -1,0 +1,311 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 2700" font-family="Inter, system-ui, -apple-system, Segoe UI, sans-serif">
+  <!-- Background -->
+  <rect width="1200" height="2700" fill="#f8fafc"/>
+
+  <!-- =================================================================== -->
+  <!-- HEADER -->
+  <!-- =================================================================== -->
+  <rect x="0" y="0" width="1200" height="260" fill="#047857"/>
+  <rect x="0" y="240" width="1200" height="20" fill="#065f46"/>
+
+  <!-- Logo mark -->
+  <circle cx="120" cy="130" r="60" fill="#ffffff" opacity="0.15"/>
+  <circle cx="120" cy="130" r="42" fill="#ffffff"/>
+  <path d="M 95 130 L 110 145 L 145 110" stroke="#047857" stroke-width="9" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- Wordmark -->
+  <text x="220" y="115" font-size="64" font-weight="800" fill="#ffffff">HealthSync</text>
+  <text x="220" y="170" font-size="22" font-weight="500" fill="#a7f3d0">Unified clinical surveillance for barangay health workers</text>
+  <text x="220" y="205" font-size="18" font-weight="400" fill="#a7f3d0">DOH FHSIS · PIDSR · M1 Brgy Report · Caraga Region</text>
+
+  <!-- =================================================================== -->
+  <!-- AT A GLANCE — stat tiles -->
+  <!-- =================================================================== -->
+  <text x="60" y="320" font-size="22" font-weight="700" fill="#0f172a" letter-spacing="2">AT A GLANCE</text>
+  <line x1="60" y1="335" x2="1140" y2="335" stroke="#cbd5e1" stroke-width="1"/>
+
+  <!-- Stat tile 1 -->
+  <rect x="60" y="360" width="250" height="140" rx="12" fill="#ffffff" stroke="#e2e8f0"/>
+  <text x="185" y="420" font-size="48" font-weight="800" fill="#047857" text-anchor="middle">28+</text>
+  <text x="185" y="455" font-size="14" font-weight="600" fill="#0f172a" text-anchor="middle">OPERATIONAL MODULES</text>
+  <text x="185" y="478" font-size="12" font-weight="400" fill="#475569" text-anchor="middle">covering DOH-mandated</text>
+  <text x="185" y="492" font-size="12" font-weight="400" fill="#475569" text-anchor="middle">field workflows</text>
+
+  <!-- Stat tile 2 -->
+  <rect x="335" y="360" width="250" height="140" rx="12" fill="#ffffff" stroke="#e2e8f0"/>
+  <text x="460" y="420" font-size="48" font-weight="800" fill="#0284c7" text-anchor="middle">192</text>
+  <text x="460" y="455" font-size="14" font-weight="600" fill="#0f172a" text-anchor="middle">M1 ROW KEYS</text>
+  <text x="460" y="478" font-size="12" font-weight="400" fill="#475569" text-anchor="middle">auto-computed from</text>
+  <text x="460" y="492" font-size="12" font-weight="400" fill="#475569" text-anchor="middle">operational records</text>
+
+  <!-- Stat tile 3 -->
+  <rect x="610" y="360" width="250" height="140" rx="12" fill="#ffffff" stroke="#e2e8f0"/>
+  <text x="735" y="420" font-size="48" font-weight="800" fill="#dc2626" text-anchor="middle">5</text>
+  <text x="735" y="455" font-size="14" font-weight="600" fill="#0f172a" text-anchor="middle">DISEASE REGISTERS</text>
+  <text x="735" y="478" font-size="12" font-weight="400" fill="#475569" text-anchor="middle">Filariasis · Rabies · Schisto</text>
+  <text x="735" y="492" font-size="12" font-weight="400" fill="#475569" text-anchor="middle">STH · Leprosy</text>
+
+  <!-- Stat tile 4 -->
+  <rect x="885" y="360" width="250" height="140" rx="12" fill="#ffffff" stroke="#e2e8f0"/>
+  <text x="1010" y="420" font-size="48" font-weight="800" fill="#f59e0b" text-anchor="middle">6</text>
+  <text x="1010" y="455" font-size="14" font-weight="600" fill="#0f172a" text-anchor="middle">USER ROLES</text>
+  <text x="1010" y="478" font-size="12" font-weight="400" fill="#475569" text-anchor="middle">TL · MHO · SHA · Admin</text>
+  <text x="1010" y="492" font-size="12" font-weight="400" fill="#475569" text-anchor="middle">Mayor · Health Committee</text>
+
+  <!-- =================================================================== -->
+  <!-- WHO USES IT — role cards -->
+  <!-- =================================================================== -->
+  <text x="60" y="580" font-size="22" font-weight="700" fill="#0f172a" letter-spacing="2">WHO USES IT</text>
+  <line x1="60" y1="595" x2="1140" y2="595" stroke="#cbd5e1" stroke-width="1"/>
+
+  <!-- TL -->
+  <rect x="60" y="620" width="340" height="170" rx="12" fill="#ffffff" stroke="#e2e8f0"/>
+  <rect x="60" y="620" width="6" height="170" rx="3" fill="#047857"/>
+  <text x="85" y="660" font-size="22" font-weight="700" fill="#0f172a">Team Leader</text>
+  <text x="85" y="682" font-size="13" font-weight="500" fill="#047857">BARANGAY NURSE (BHS)</text>
+  <text x="85" y="720" font-size="13" fill="#475569">Captures every encounter:</text>
+  <text x="85" y="740" font-size="13" fill="#475569">mothers, children, seniors,</text>
+  <text x="85" y="760" font-size="13" fill="#475569">TB doses, walk-ins, PIDSR.</text>
+  <text x="85" y="780" font-size="13" font-style="italic" fill="#94a3b8">Sees only their barangay.</text>
+
+  <!-- MHO -->
+  <rect x="430" y="620" width="340" height="170" rx="12" fill="#ffffff" stroke="#e2e8f0"/>
+  <rect x="430" y="620" width="6" height="170" rx="3" fill="#0284c7"/>
+  <text x="455" y="660" font-size="22" font-weight="700" fill="#0f172a">Municipal Health Officer</text>
+  <text x="455" y="682" font-size="13" font-weight="500" fill="#0284c7">RHU PHYSICIAN</text>
+  <text x="455" y="720" font-size="13" fill="#475569">Reviews escalated cases,</text>
+  <text x="455" y="740" font-size="13" fill="#475569">manages outbreak responses,</text>
+  <text x="455" y="760" font-size="13" fill="#475569">approves the monthly M1.</text>
+  <text x="455" y="780" font-size="13" font-style="italic" fill="#94a3b8">Sees all barangays.</text>
+
+  <!-- SHA -->
+  <rect x="800" y="620" width="340" height="170" rx="12" fill="#ffffff" stroke="#e2e8f0"/>
+  <rect x="800" y="620" width="6" height="170" rx="3" fill="#0284c7"/>
+  <text x="825" y="660" font-size="22" font-weight="700" fill="#0f172a">Sanitary Health Aide</text>
+  <text x="825" y="682" font-size="13" font-weight="500" fill="#0284c7">RHU FIELD SUPPORT</text>
+  <text x="825" y="720" font-size="13" fill="#475569">Follows up surveillance,</text>
+  <text x="825" y="740" font-size="13" fill="#475569">referrals, water records.</text>
+  <text x="825" y="760" font-size="13" fill="#475569">Backs up the MHO.</text>
+  <text x="825" y="780" font-size="13" font-style="italic" fill="#94a3b8">Sees all barangays.</text>
+
+  <!-- Admin -->
+  <rect x="60" y="810" width="340" height="170" rx="12" fill="#ffffff" stroke="#e2e8f0"/>
+  <rect x="60" y="810" width="6" height="170" rx="3" fill="#7c3aed"/>
+  <text x="85" y="850" font-size="22" font-weight="700" fill="#0f172a">System Administrator</text>
+  <text x="85" y="872" font-size="13" font-weight="500" fill="#7c3aed">IT FOCAL</text>
+  <text x="85" y="910" font-size="13" fill="#475569">Creates accounts, audits</text>
+  <text x="85" y="930" font-size="13" fill="#475569">changes, configures the</text>
+  <text x="85" y="950" font-size="13" fill="#475569">scheduler and integrations.</text>
+  <text x="85" y="970" font-size="13" font-style="italic" fill="#94a3b8">Full system access.</text>
+
+  <!-- Mayor -->
+  <rect x="430" y="810" width="340" height="170" rx="12" fill="#ffffff" stroke="#e2e8f0"/>
+  <rect x="430" y="810" width="6" height="170" rx="3" fill="#f59e0b"/>
+  <text x="455" y="850" font-size="22" font-weight="700" fill="#0f172a">Mayor</text>
+  <text x="455" y="872" font-size="13" font-weight="500" fill="#f59e0b">LGU EXECUTIVE</text>
+  <text x="455" y="910" font-size="13" fill="#475569">Read-only view of the</text>
+  <text x="455" y="930" font-size="13" fill="#475569">municipal dashboards and</text>
+  <text x="455" y="950" font-size="13" fill="#475569">approved M1 reports.</text>
+  <text x="455" y="970" font-size="13" font-style="italic" fill="#94a3b8">No write access.</text>
+
+  <!-- Health Committee -->
+  <rect x="800" y="810" width="340" height="170" rx="12" fill="#ffffff" stroke="#e2e8f0"/>
+  <rect x="800" y="810" width="6" height="170" rx="3" fill="#f59e0b"/>
+  <text x="825" y="850" font-size="22" font-weight="700" fill="#0f172a">Health Committee</text>
+  <text x="825" y="872" font-size="13" font-weight="500" fill="#f59e0b">LGU OVERSIGHT</text>
+  <text x="825" y="910" font-size="13" fill="#475569">Read-only oversight of</text>
+  <text x="825" y="930" font-size="13" fill="#475569">program performance and</text>
+  <text x="825" y="950" font-size="13" fill="#475569">surveillance trends.</text>
+  <text x="825" y="970" font-size="13" font-style="italic" fill="#94a3b8">No write access.</text>
+
+  <!-- =================================================================== -->
+  <!-- WHAT IT DOES — module pillars -->
+  <!-- =================================================================== -->
+  <text x="60" y="1060" font-size="22" font-weight="700" fill="#0f172a" letter-spacing="2">WHAT IT DOES</text>
+  <line x1="60" y1="1075" x2="1140" y2="1075" stroke="#cbd5e1" stroke-width="1"/>
+
+  <!-- Pillar 1: Patient Registers -->
+  <rect x="60" y="1100" width="510" height="280" rx="12" fill="#ecfdf5" stroke="#a7f3d0"/>
+  <circle cx="100" cy="1140" r="20" fill="#047857"/>
+  <text x="100" y="1147" font-size="22" font-weight="800" fill="#ffffff" text-anchor="middle">1</text>
+  <text x="140" y="1148" font-size="20" font-weight="700" fill="#064e3b">Patient Registers</text>
+  <text x="80" y="1188" font-size="14" font-weight="600" fill="#064e3b">Mothers</text>
+  <text x="80" y="1208" font-size="13" fill="#475569">Prenatal · ANC · PNC · FP · Birth attendance</text>
+  <text x="80" y="1238" font-size="14" font-weight="600" fill="#064e3b">Children</text>
+  <text x="80" y="1258" font-size="13" fill="#475569">Vaccines · growth · sick child · nutrition (MAM/SAM)</text>
+  <text x="80" y="1288" font-size="14" font-weight="600" fill="#064e3b">Seniors</text>
+  <text x="80" y="1308" font-size="13" fill="#475569">Blood pressure · meds · vision · PhilPEN</text>
+  <text x="80" y="1338" font-size="14" font-weight="600" fill="#064e3b">TB DOTS</text>
+  <text x="80" y="1358" font-size="13" fill="#475569">Daily doses · SMS reminders · sputum tracking</text>
+
+  <!-- Pillar 2: Surveillance -->
+  <rect x="600" y="1100" width="510" height="280" rx="12" fill="#fef2f2" stroke="#fecaca"/>
+  <circle cx="640" cy="1140" r="20" fill="#dc2626"/>
+  <text x="640" y="1147" font-size="22" font-weight="800" fill="#ffffff" text-anchor="middle">2</text>
+  <text x="680" y="1148" font-size="20" font-weight="700" fill="#7f1d1d">Disease Surveillance</text>
+  <text x="620" y="1188" font-size="14" font-weight="600" fill="#7f1d1d">5 vertical disease programs</text>
+  <text x="620" y="1208" font-size="13" fill="#475569">Filariasis · Rabies · Schisto · STH · Leprosy</text>
+  <text x="620" y="1238" font-size="14" font-weight="600" fill="#7f1d1d">PIDSR weekly attestation</text>
+  <text x="620" y="1258" font-size="13" fill="#475569">RA 11332 · Friday 4 PM cutoff · missed-week alerts</text>
+  <text x="620" y="1288" font-size="14" font-weight="600" fill="#7f1d1d">Auto-detected outbreaks</text>
+  <text x="620" y="1308" font-size="13" fill="#475569">Cluster detection · status lifecycle · MGMT escalation</text>
+  <text x="620" y="1338" font-size="14" font-weight="600" fill="#7f1d1d">AEFI surveillance</text>
+  <text x="620" y="1358" font-size="13" fill="#475569">WHO causality · lot-cluster detection · CHD reporting</text>
+
+  <!-- Pillar 3: Screenings -->
+  <rect x="60" y="1400" width="510" height="280" rx="12" fill="#eff6ff" stroke="#bfdbfe"/>
+  <circle cx="100" cy="1440" r="20" fill="#0284c7"/>
+  <text x="100" y="1447" font-size="22" font-weight="800" fill="#ffffff" text-anchor="middle">3</text>
+  <text x="140" y="1448" font-size="20" font-weight="700" fill="#0c4a6e">Adult Screenings</text>
+  <text x="80" y="1488" font-size="14" font-weight="600" fill="#0c4a6e">NCD &amp; PhilPEN</text>
+  <text x="80" y="1508" font-size="13" fill="#475569">HTN · diabetes · risk-factor assessment</text>
+  <text x="80" y="1538" font-size="14" font-weight="600" fill="#0c4a6e">Cancer screenings</text>
+  <text x="80" y="1558" font-size="13" fill="#475569">Cervical (VIA/Pap) · breast cancer (women 30-65)</text>
+  <text x="80" y="1588" font-size="14" font-weight="600" fill="#0c4a6e">Mental health (mhGAP)</text>
+  <text x="80" y="1608" font-size="13" fill="#475569">Tool-based screening · positive-screen follow-up</text>
+  <text x="80" y="1638" font-size="14" font-weight="600" fill="#0c4a6e">Vision &amp; oral health</text>
+  <text x="80" y="1658" font-size="13" fill="#475569">Seniors 60+ · adult dental visits</text>
+
+  <!-- Pillar 4: Operations & Reports -->
+  <rect x="600" y="1400" width="510" height="280" rx="12" fill="#fffbeb" stroke="#fde68a"/>
+  <circle cx="640" cy="1440" r="20" fill="#f59e0b"/>
+  <text x="640" y="1447" font-size="22" font-weight="800" fill="#ffffff" text-anchor="middle">4</text>
+  <text x="680" y="1448" font-size="20" font-weight="700" fill="#78350f">Operations &amp; Reports</text>
+  <text x="620" y="1488" font-size="14" font-weight="600" fill="#78350f">Pharmacy &amp; inventory</text>
+  <text x="620" y="1508" font-size="13" fill="#475569">Cold-chain · stockouts · dispensings · restock requests</text>
+  <text x="620" y="1538" font-size="14" font-weight="600" fill="#78350f">Triage / walk-in (IMCI)</text>
+  <text x="620" y="1558" font-size="13" fill="#475569">Auto-acuity · disposition · escalation to RHU</text>
+  <text x="620" y="1588" font-size="14" font-weight="600" fill="#78350f">Mortality &amp; death reviews</text>
+  <text x="620" y="1608" font-size="13" fill="#475569">MDR/PDR 30-day lifecycle · committee findings</text>
+  <text x="620" y="1638" font-size="14" font-weight="600" fill="#78350f">M1 Brgy Report (FHSIS)</text>
+  <text x="620" y="1658" font-size="13" fill="#475569">Auto-computed · submit · approve · PDF export</text>
+
+  <!-- =================================================================== -->
+  <!-- M1 MAGIC — data flow -->
+  <!-- =================================================================== -->
+  <text x="60" y="1760" font-size="22" font-weight="700" fill="#0f172a" letter-spacing="2">THE M1 PROMISE</text>
+  <line x1="60" y1="1775" x2="1140" y2="1775" stroke="#cbd5e1" stroke-width="1"/>
+
+  <text x="60" y="1810" font-size="16" fill="#475569">Operational data captured during routine work auto-fills the monthly DOH FHSIS M1 report.</text>
+  <text x="60" y="1830" font-size="16" fill="#475569">Operators stop entering numbers into the M1 form by hand.</text>
+
+  <!-- Flow diagram -->
+  <!-- Source boxes -->
+  <rect x="60" y="1870" width="180" height="60" rx="8" fill="#ecfdf5" stroke="#10b981"/>
+  <text x="150" y="1895" font-size="13" font-weight="700" fill="#064e3b" text-anchor="middle">Mother registry</text>
+  <text x="150" y="1915" font-size="11" fill="#475569" text-anchor="middle">ANC visits, deliveries, PNC</text>
+
+  <rect x="60" y="1940" width="180" height="60" rx="8" fill="#ecfdf5" stroke="#10b981"/>
+  <text x="150" y="1965" font-size="13" font-weight="700" fill="#064e3b" text-anchor="middle">Child registry</text>
+  <text x="150" y="1985" font-size="11" fill="#475569" text-anchor="middle">Vaccines, growth, sick visits</text>
+
+  <rect x="60" y="2010" width="180" height="60" rx="8" fill="#ecfdf5" stroke="#10b981"/>
+  <text x="150" y="2035" font-size="13" font-weight="700" fill="#064e3b" text-anchor="middle">Senior registry</text>
+  <text x="150" y="2055" font-size="11" fill="#475569" text-anchor="middle">PhilPEN, BP, NCD meds</text>
+
+  <rect x="60" y="2080" width="180" height="60" rx="8" fill="#ecfdf5" stroke="#10b981"/>
+  <text x="150" y="2105" font-size="13" font-weight="700" fill="#064e3b" text-anchor="middle">Disease registers</text>
+  <text x="150" y="2125" font-size="11" fill="#475569" text-anchor="middle">5 vertical programs + PIDSR</text>
+
+  <!-- Compute box (middle) -->
+  <rect x="450" y="1960" width="300" height="140" rx="12" fill="#047857" stroke="#065f46" stroke-width="2"/>
+  <text x="600" y="2000" font-size="18" font-weight="800" fill="#ffffff" text-anchor="middle">computeM1Values()</text>
+  <text x="600" y="2025" font-size="12" fill="#a7f3d0" text-anchor="middle">Pure derivation</text>
+  <text x="600" y="2045" font-size="12" fill="#a7f3d0" text-anchor="middle">192 row keys auto-computed</text>
+  <text x="600" y="2065" font-size="12" fill="#a7f3d0" text-anchor="middle">Catalog-driven rendering</text>
+  <text x="600" y="2085" font-size="12" fill="#a7f3d0" text-anchor="middle">Manual override available</text>
+
+  <!-- Arrows from sources to compute -->
+  <path d="M 245 1900 Q 350 1950 445 2010" fill="none" stroke="#10b981" stroke-width="2" marker-end="url(#arrow-g)"/>
+  <path d="M 245 1970 L 445 2020" fill="none" stroke="#10b981" stroke-width="2" marker-end="url(#arrow-g)"/>
+  <path d="M 245 2040 L 445 2030" fill="none" stroke="#10b981" stroke-width="2" marker-end="url(#arrow-g)"/>
+  <path d="M 245 2110 Q 350 2080 445 2050" fill="none" stroke="#10b981" stroke-width="2" marker-end="url(#arrow-g)"/>
+
+  <!-- Output -->
+  <rect x="930" y="1955" width="200" height="160" rx="12" fill="#ffffff" stroke="#047857" stroke-width="2"/>
+  <text x="1030" y="1985" font-size="16" font-weight="700" fill="#0f172a" text-anchor="middle">FHSIS M1 Brgy</text>
+  <text x="1030" y="2005" font-size="12" fill="#475569" text-anchor="middle">Sections A · B · C · D · E</text>
+  <text x="1030" y="2022" font-size="12" fill="#475569" text-anchor="middle">F · G1 · G2 · G4 · H · I</text>
+  <text x="1030" y="2050" font-size="11" fill="#94a3b8" text-anchor="middle" font-style="italic">submit → approve → PDF</text>
+  <rect x="950" y="2070" width="160" height="32" rx="6" fill="#047857"/>
+  <text x="1030" y="2092" font-size="13" font-weight="700" fill="#ffffff" text-anchor="middle">Auto-filled</text>
+
+  <!-- Arrow from compute to output -->
+  <path d="M 755 2030 L 920 2030" fill="none" stroke="#047857" stroke-width="3" marker-end="url(#arrow-d)"/>
+
+  <!-- Arrow markers -->
+  <defs>
+    <marker id="arrow-g" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+      <path d="M 0 0 L 8 3 L 0 6 Z" fill="#10b981"/>
+    </marker>
+    <marker id="arrow-d" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+      <path d="M 0 0 L 8 3 L 0 6 Z" fill="#047857"/>
+    </marker>
+    <marker id="arrow-b" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+      <path d="M 0 0 L 8 3 L 0 6 Z" fill="#0284c7"/>
+    </marker>
+  </defs>
+
+  <!-- =================================================================== -->
+  <!-- RECOMMENDATION ENGINE -->
+  <!-- =================================================================== -->
+  <text x="60" y="2220" font-size="22" font-weight="700" fill="#0f172a" letter-spacing="2">DOH-GROUNDED RECOMMENDATIONS</text>
+  <line x1="60" y1="2235" x2="1140" y2="2235" stroke="#cbd5e1" stroke-width="1"/>
+
+  <text x="60" y="2270" font-size="16" fill="#475569">When a reviewer opens a Cat III rabies or new leprosy case, the action drawer surfaces the matching DOH</text>
+  <text x="60" y="2290" font-size="16" fill="#475569">protocol checklist with source citation, optional plain-language summary, and cluster alerts.</text>
+
+  <!-- 3 layer card -->
+  <rect x="60" y="2320" width="340" height="200" rx="12" fill="#ffffff" stroke="#dc2626" stroke-width="2"/>
+  <rect x="60" y="2320" width="340" height="6" fill="#dc2626"/>
+  <text x="80" y="2360" font-size="16" font-weight="700" fill="#7f1d1d">⚠ Rule-based (always shown)</text>
+  <text x="80" y="2385" font-size="13" fill="#475569">If category = III →</text>
+  <text x="80" y="2405" font-size="12" fill="#475569">• Wash wound 15 min</text>
+  <text x="80" y="2425" font-size="12" fill="#475569">• Vaccine Days 0/3/7/14/28</text>
+  <text x="80" y="2445" font-size="12" fill="#475569">• RIG at wound site</text>
+  <text x="80" y="2465" font-size="12" fill="#475569">• Refer to ABTC</text>
+  <text x="80" y="2495" font-size="11" font-weight="600" fill="#dc2626">Source: DOH 2018 Rabies Manual</text>
+
+  <rect x="430" y="2320" width="340" height="200" rx="12" fill="#ffffff" stroke="#7c3aed" stroke-width="2"/>
+  <rect x="430" y="2320" width="340" height="6" fill="#7c3aed"/>
+  <text x="450" y="2360" font-size="16" font-weight="700" fill="#5b21b6">✨ Plain language (on demand)</text>
+  <text x="450" y="2385" font-size="13" fill="#475569">LLM rewrites the checklist in</text>
+  <text x="450" y="2405" font-size="13" fill="#475569">5th-grade Filipino-English</text>
+  <text x="450" y="2425" font-size="13" fill="#475569">for the patient's family or</text>
+  <text x="450" y="2445" font-size="13" fill="#475569">non-clinical decision-makers.</text>
+  <text x="450" y="2475" font-size="11" font-style="italic" fill="#94a3b8">Cached per rule · DOH citation</text>
+  <text x="450" y="2490" font-size="11" font-style="italic" fill="#94a3b8">remains visible alongside.</text>
+
+  <rect x="800" y="2320" width="340" height="200" rx="12" fill="#ffffff" stroke="#0284c7" stroke-width="2"/>
+  <rect x="800" y="2320" width="340" height="6" fill="#0284c7"/>
+  <text x="820" y="2360" font-size="16" font-weight="700" fill="#0c4a6e">🔬 Cluster hint</text>
+  <text x="820" y="2385" font-size="13" fill="#475569">When 3+ Cat III rabies</text>
+  <text x="820" y="2405" font-size="13" fill="#475569">in the same barangay within</text>
+  <text x="820" y="2425" font-size="13" fill="#475569">7 days → red banner above</text>
+  <text x="820" y="2445" font-size="13" fill="#475569">the bullets:</text>
+  <text x="820" y="2475" font-size="11" font-style="italic" fill="#0c4a6e">"Possible cluster — consider</text>
+  <text x="820" y="2490" font-size="11" font-style="italic" fill="#0c4a6e"> raising an outbreak alert."</text>
+
+  <!-- =================================================================== -->
+  <!-- FOOTER — Background jobs + Compliance + Stack -->
+  <!-- =================================================================== -->
+  <rect x="0" y="2570" width="1200" height="130" fill="#0f172a"/>
+
+  <text x="60" y="2605" font-size="14" font-weight="700" fill="#10b981" letter-spacing="2">BACKGROUND JOBS</text>
+  <text x="60" y="2628" font-size="12" fill="#cbd5e1">Daily 6 AM Manila: alerts + Caraga DOH news scrape</text>
+  <text x="60" y="2645" font-size="12" fill="#cbd5e1">Friday 4 PM Manila: PIDSR cutoff check</text>
+  <text x="60" y="2662" font-size="12" fill="#cbd5e1">Always-on: audit log on every write</text>
+
+  <text x="460" y="2605" font-size="14" font-weight="700" fill="#10b981" letter-spacing="2">COMPLIANCE ANCHORS</text>
+  <text x="460" y="2628" font-size="12" fill="#cbd5e1">DOH FHSIS Manual 2025 · M1 Brgy</text>
+  <text x="460" y="2645" font-size="12" fill="#cbd5e1">RA 11332 · PIDSR Cat-I &amp; Cat-II</text>
+  <text x="460" y="2662" font-size="12" fill="#cbd5e1">DOH AO 2008-0029 · 2016-0035 · 2018-0030</text>
+
+  <text x="850" y="2605" font-size="14" font-weight="700" fill="#10b981" letter-spacing="2">DEPLOYED FOR</text>
+  <text x="850" y="2628" font-size="12" fill="#cbd5e1">Caraga Region · Surigao del Norte</text>
+  <text x="850" y="2645" font-size="12" fill="#cbd5e1">Barangay Health Stations + RHUs</text>
+  <text x="850" y="2662" font-size="12" fill="#cbd5e1">Field-to-report data spine</text>
+
+  <text x="600" y="2690" font-size="11" fill="#64748b" text-anchor="middle">HealthSync · open development on GitHub · DOH-aligned by design</text>
+</svg>
