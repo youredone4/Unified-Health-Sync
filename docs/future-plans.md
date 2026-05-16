@@ -70,6 +70,90 @@ prompt). Re-read before scoping.
 
 ---
 
+## Automatic SMS reminders
+
+**What.** Today SMS is manual: an operator opens a patient profile and
+clicks "Send DOTS reminder" / "Send vaccine reminder" / composes a one-off.
+The Semaphore integration works (PR #212 fixed the sender-name issue) but
+no scheduler fires SMS on its own.
+
+The goal: the scheduler scans upcoming clinical events daily and sends
+templated reminders at configured lead times. Examples:
+
+- **TB DOTS** — night before next visit ("Hello {name}, your DOTS visit
+  is tomorrow {date} at the BHS. Please come for your observed dose.")
+- **ANC** — monthly during pregnancy, with the next visit date
+- **PNC** — 24 h before the 24 h / 72 h / 7-day / 6-week milestone
+- **Childhood immunization** — 7 days before the next dose due date
+- **NCD follow-up** — when the patient's BP-control review window is due
+- **TB defaulter recovery** — 24 h after a missed dose, escalating to
+  the family-supporter contact after 3 days
+
+**Why deferred.** Six real engineering tasks need to land first, not just
+"fire a setTimeout":
+
+1. **Phone-number quality** — many records have malformed numbers
+   (`09xx` vs `+639xx` vs landline vs blank). Need a normalization +
+   validation pass + a "needs phone cleanup" worklist before auto-SMS
+   would reach the right inboxes.
+2. **Opt-in / opt-out** — per-patient consent field, with a way to
+   capture opt-in at registration and honor a STOP keyword sent by the
+   patient. Required for DOH / Data Privacy Act compliance with
+   unsolicited health messages.
+3. **Cost guardrails** — Semaphore charges per message. A naive cron
+   could blow through SMS credits in a day. Need rate limits (per
+   barangay / per day) and a cost-monitoring dashboard.
+4. **Quiet hours** — no SMS between 9 PM and 7 AM Manila. Trivial logic
+   but easy to forget.
+5. **Delivery status** — Semaphore exposes delivery webhooks; the system
+   needs to consume them and mark messages "Delivered" / "Failed" /
+   "Pending" so operators can spot patients whose phones are off.
+6. **Audit trail** — every auto-sent SMS audit-logged with template id,
+   recipient, content, send time, delivery status. So when a Mayor asks
+   "did you remind Mr. Cruz about his TB dose?", the answer is one query
+   away.
+
+Without all six, auto-SMS becomes a liability (wrong number → wrong
+person gets clinical info; runaway sends → bill shock; no consent →
+DPA complaint).
+
+**When to revisit.**
+- Phone-number quality on the active patient registers is ≥90% valid, AND
+- The opt-in capture is added at every registration form (mothers,
+  children, seniors, TB), AND
+- An MHO commits to monthly review of the auto-SMS audit report
+
+**Where to start.** Single-disease pilot, not big-bang. Pick **TB DOTS
+reminder** as the pilot because:
+- Patient lists are small (≤50 per barangay) — easy to clean phone numbers
+- Daily cadence is well-defined (`nextDotsVisitDate` field already exists)
+- Operational value is real (missed doses are the program's biggest risk)
+- One template, one event type — limits blast radius
+
+Pilot scope:
+1. Add `smsOptIn` boolean + `smsOptInDate` to the `tb_patients` table.
+2. Phone-number normalization pass over existing TB patients;
+   surface invalid ones in a new `/tb/phone-cleanup` worklist for TLs.
+3. New scheduler job `sendDotsReminders()` in `server/scheduler/jobs.ts` —
+   queries patients with `nextDotsVisitDate = today + 1 day` and
+   `smsOptIn = true`, renders the template, batches via Semaphore.
+4. Quiet-hours guard (skip if outside 7 AM-9 PM Manila).
+5. Rate limit: max 100 SMS / barangay / day (configurable).
+6. Audit-log every send with template id + status.
+7. `/admin/auto-sms` page showing yesterday's sends + delivery status +
+   cost estimate.
+
+Generalize to PNC, ANC, immunization, NCD only after the TB pilot has
+been live and observed-clean for one month.
+
+**References.**
+- `server/routes.ts` lines 489-534 — current manual SMS handler
+- `server/scheduler/jobs.ts` — pattern for new scheduler jobs (the
+  TB-defaulters job is the closest cousin)
+- Semaphore API docs: https://semaphore.co/docs
+
+---
+
 ## Draft referral letter generator
 
 **What.** When a reviewer clicks "Refer to ABTC" on a Cat III rabies row
