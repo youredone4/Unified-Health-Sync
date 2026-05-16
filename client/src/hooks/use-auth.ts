@@ -132,6 +132,7 @@ export const sidebarPermissions: Record<string, readonly string[]> = {
   "/admin/users": ADMIN_ONLY_ROLES,
   "/admin/audit": ADMIN_ONLY_ROLES,
   "/admin/recommendations": ADMIN_MHO_ROLES,
+  "/tb/phone-cleanup": ALL_ROLES,
 };
 
 // Permission helpers — all role logic lives here
