@@ -29,7 +29,9 @@ import {
   ExternalLink,
   Baby,
   AlertTriangle,
+  Phone,
 } from "lucide-react";
+import { isValidPhilippineMobile } from "@shared/phone";
 import ConsultationHistoryCard from "@/components/consultation-history-card";
 import { PncVisitsCard } from "@/components/pnc-visits-card";
 import { MaternalExtrasCard } from "@/components/maternal-extras-card";
@@ -204,6 +206,16 @@ export default function MotherProfile() {
   }
   if (latestPrenatalVisit?.riskStatus === "high") {
     statusPills.push({ label: "High-risk pregnancy", tone: "danger", icon: AlertTriangle, testId: "pill-risk" });
+  }
+  // Phone-quality flag — see docs/future-plans.md "Automatic SMS reminders".
+  // ANC and PNC reminders can't be sent until this is fixed.
+  if (!isValidPhilippineMobile(mother.phone)) {
+    statusPills.push({
+      label: mother.phone ? "Invalid phone — SMS will fail" : "No phone on file",
+      tone: "warning",
+      icon: Phone,
+      testId: "pill-phone-needs-update",
+    });
   }
 
   // ── At-a-glance ──────────────────────────────────────────────────────────

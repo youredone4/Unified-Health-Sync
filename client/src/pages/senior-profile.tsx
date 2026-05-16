@@ -33,7 +33,9 @@ import {
   History,
   Pencil,
   Trash2,
+  Phone,
 } from "lucide-react";
+import { isValidPhilippineMobile } from "@shared/phone";
 import { useState } from "react";
 import { apiRequest, invalidateScopedQueries } from "@/lib/queryClient";
 
@@ -192,6 +194,16 @@ export default function SeniorProfile() {
     });
   } else if (pickup.status === "due_soon") {
     statusPills.push({ label: "Medication due soon", tone: "warning", testId: "pill-meds-due" });
+  }
+  // Phone-quality flag — see docs/future-plans.md "Automatic SMS reminders".
+  // BP follow-up and medication-pickup reminders need a valid number.
+  if (!isValidPhilippineMobile(senior.phone)) {
+    statusPills.push({
+      label: senior.phone ? "Invalid phone — SMS will fail" : "No phone on file",
+      tone: "warning",
+      icon: Phone,
+      testId: "pill-phone-needs-update",
+    });
   }
 
   // ── At a glance ──────────────────────────────────────────────────────────
