@@ -25,11 +25,13 @@ import {
   ChevronRight,
   Activity,
   CheckCircle,
+  Phone,
 } from "lucide-react";
 import { usePagination } from "@/hooks/use-pagination";
 import TablePagination from "@/components/table-pagination";
 import { useAuth } from "@/hooks/use-auth";
 import { Term } from "@/components/term";
+import { isValidPhilippineMobile } from "@shared/phone";
 
 type StatusFilter = "urgent" | "overdue" | "dueToday" | "atRisk" | "active" | "completed" | "all";
 
@@ -146,8 +148,36 @@ export default function TBWorklist() {
     }
   };
 
+  // Phone-cleanup count: number of patients in scope whose phone is
+  // missing or invalid. Drives the cleanup banner below.
+  const phoneCleanupCount = patients.filter(
+    (p) => !isValidPhilippineMobile(p.phone),
+  ).length;
+
   return (
     <div className="space-y-4">
+      {phoneCleanupCount > 0 && (
+        <button
+          type="button"
+          onClick={() => navigate("/tb/phone-cleanup")}
+          className="w-full text-left flex items-center justify-between gap-3 rounded-md border border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/15 px-3 py-2 text-sm transition-colors"
+          data-testid="banner-phone-cleanup"
+        >
+          <span className="flex items-center gap-2 text-amber-900 dark:text-amber-100">
+            <Phone className="w-4 h-4" aria-hidden />
+            <span className="font-medium" data-testid="text-phone-cleanup-count">
+              {phoneCleanupCount}
+            </span>
+            <span>
+              {phoneCleanupCount === 1 ? "patient needs" : "patients need"} phone cleanup before SMS reminders will work
+            </span>
+          </span>
+          <span className="flex items-center gap-1 text-xs font-medium text-amber-900 dark:text-amber-100">
+            Fix now
+            <ChevronRight className="w-3 h-3" aria-hidden />
+          </span>
+        </button>
+      )}
       <div className="flex flex-wrap gap-1" data-testid="status-filters">
         <FilterChip value="urgent" active={statusFilter} onSelect={setStatusFilter} count={counts.urgent} icon={AlertTriangle}>
           Urgent

@@ -71,6 +71,7 @@ const SettingsPage = lazy(() => import("@/pages/settings"));
 const UserManagement = lazy(() => import("@/pages/admin/user-management"));
 const AuditLogs = lazy(() => import("@/pages/admin/audit-logs"));
 const RecommendationsStats = lazy(() => import("@/pages/admin/recommendations-stats"));
+const TBPhoneCleanup = lazy(() => import("@/pages/tb-phone-cleanup"));
 const M1ReportPage = lazy(() => import("@/pages/m1-report"));
 import NotificationDrawer from "@/components/notification-drawer";
 import SmsOutbox from "@/components/sms-outbox";
@@ -505,6 +506,8 @@ function Router() {
       {/* TB DOTS hub: Patients */}
       <Route path="/tb"><TBHub><TBWorklist /></TBHub></Route>
       <Route path="/tb/new" component={TBForm} />
+      {/* phone-cleanup must come BEFORE the catch-all /tb/:id route */}
+      <Route path="/tb/phone-cleanup"><TBHub><RoleRoute component={TBPhoneCleanup} /></TBHub></Route>
       <Route path="/tb/:id/edit" component={TBForm} />
       <Route path="/tb/:id" component={TBProfile} />
 
