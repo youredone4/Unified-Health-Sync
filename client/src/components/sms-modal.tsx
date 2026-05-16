@@ -9,16 +9,13 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { AlertTriangle, Phone, MapPin } from "lucide-react";
+import { validatePhilippineMobile } from "@shared/phone";
 
-const PH_PHONE_RE = /^(09\d{9}|\+639\d{9})$/;
-
-function validatePhone(value: string): string | null {
-  if (!value.trim()) return "Phone number is required.";
-  if (!PH_PHONE_RE.test(value.trim())) {
-    return "Enter a valid Philippine mobile number (e.g. 09171234567 or +639171234567).";
-  }
-  return null;
-}
+// Local alias so the rest of the file reads the same as before. The
+// shared validator accepts more formats (with spaces, dashes, +63
+// prefix without the +) and is also used server-side and by the TB
+// profile flag.
+const validatePhone = validatePhilippineMobile;
 
 interface SmsModalProps {
   open: boolean;

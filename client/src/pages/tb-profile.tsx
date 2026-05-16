@@ -21,7 +21,9 @@ import {
   MessageSquare,
   Trash2,
   ShieldCheck,
+  Phone,
 } from "lucide-react";
+import { isValidPhilippineMobile } from "@shared/phone";
 import { apiRequest, queryClient, invalidateScopedQueries } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
@@ -159,6 +161,19 @@ export default function TBProfile() {
   }
   if (sputumStatus.status === "overdue") {
     statusPills.push({ label: "Sputum check overdue", tone: "danger", testId: "pill-sputum-overdue" });
+  }
+  // Phone-quality flag — surfaces invalid or missing numbers so the
+  // nurse can fix them before any DOTS / SMS reminder fails. This is
+  // the foundation for the future auto-SMS scheduler — auto-sends will
+  // refuse to fire on flagged patients (see docs/future-plans.md
+  // "Automatic SMS reminders").
+  if (!isValidPhilippineMobile(patient.phone)) {
+    statusPills.push({
+      label: patient.phone ? "Invalid phone — SMS will fail" : "No phone on file",
+      tone: "warning",
+      icon: Phone,
+      testId: "pill-phone-needs-update",
+    });
   }
 
   // ── At-a-glance ──────────────────────────────────────────────────────────
