@@ -5,6 +5,7 @@ import { db } from "./db";
 import { max, eq, and, desc, gte, or, inArray, isNull } from "drizzle-orm";
 import { prenatalVisits, childVisits, seniorVisits, insertFpServiceRecordSchema, insertNutritionFollowUpSchema, insertColdChainLogSchema, insertTbDoseLogSchema, insertPostpartumVisitSchema, insertPrenatalScreeningSchema, insertBirthAttendanceRecordSchema, insertSickChildVisitSchema, insertSchoolImmunizationSchema, insertOralHealthVisitSchema, insertPhilpenAssessmentSchema, insertNcdScreeningSchema, insertVisionScreeningSchema, insertCervicalCancerScreeningSchema, insertMentalHealthScreeningSchema, insertFilariasisRecordSchema, insertRabiesExposureSchema, insertSchistosomiasisRecordSchema, insertSthRecordSchema, insertLeprosyRecordSchema, insertDeathEventSchema, insertHouseholdWaterRecordSchema, insertPidsrSubmissionSchema, insertWorkforceMemberSchema, insertWorkforceCredentialSchema, referralRecords, insertReferralRecordSchema, ncdScreenings, filariasisRecords, rabiesExposures, schistosomiasisRecords, sthRecords, leprosyRecords } from "@shared/schema";
 import { api } from "@shared/routes";
+import { validatePhilippineMobile } from "@shared/phone";
 import { z } from "zod";
 import { setupAuth, registerAuthRoutes } from "./auth";
 import { registerAdminRoutes } from "./routes/admin";
@@ -495,6 +496,26 @@ export async function registerRoutes(
   app.post(api.sms.send.path, async (req, res) => {
     try {
       const input = api.sms.send.input.parse(req.body);
+
+      // Defense-in-depth phone validation. Even though the client also
+      // validates, this catches:
+      //  - direct API hits that skip the UI
+      //  - future auto-SMS scheduler jobs (must not blast invalid numbers)
+      //  - the Semaphore "senderName supplied is not valid" class of
+      //    failures that wastes our send credit
+      // On invalid input we don't even try to send — return a structured
+      // error the client can render as "this patient's phone needs an
+      // update before SMS can be sent."
+      if (input.recipientPhone !== undefined && input.recipientPhone !== null) {
+        const phoneErr = validatePhilippineMobile(input.recipientPhone);
+        if (phoneErr) {
+          return res.status(400).json({
+            message: "INVALID_PHONE",
+            error: phoneErr,
+            recipient: input.recipient,
+          });
+        }
+      }
 
       // Send real SMS via Semaphore if API key is configured
       const semaphoreKey = process.env.SEMAPHORE_API_KEY;
