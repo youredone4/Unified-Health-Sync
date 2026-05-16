@@ -53,6 +53,7 @@ const motherFormSchema = z.object({
   tt5Date: z.string().optional().or(z.literal("")),
   status:  z.enum(["active", "delivered", "deceased"]).default("active"),
   outcome: z.enum(["", "live_birth", "stillbirth", "miscarriage", "maternal_death"]).optional(),
+  smsOptIn: z.boolean().optional(),
 });
 
 type MotherFormValues = z.infer<typeof motherFormSchema>;
@@ -66,6 +67,7 @@ const DEFAULT_VALUES: MotherFormValues = {
   ancVisits: 0, bmiStatus: "",
   tt1Date: "", tt2Date: "", tt3Date: "", tt4Date: "", tt5Date: "",
   status: "active", outcome: "",
+  smsOptIn: false,
 };
 
 export default function MotherForm() {
@@ -109,11 +111,12 @@ export default function MotherForm() {
       tt5Date: existingMother.tt5Date ?? "",
       status:  (existingMother.status as MotherFormValues["status"]) ?? "active",
       outcome: (existingMother.outcome as MotherFormValues["outcome"]) ?? "",
+      smsOptIn: existingMother.smsOptIn ?? false,
     });
   }, [existingMother, form]);
 
   const createMutation = useMutation({
-    mutationFn: (data: MotherFormValues) => apiRequest("POST", "/api/mothers", normalizeForApi(data)),
+    mutationFn: (data: MotherFormValues) => apiRequest("POST", "/api/mothers", normalizeForApi(data, existingMother)),
     onSuccess: () => {
       invalidateScopedQueries("/api/mothers");
       toast({ title: "Success", description: "Mother registered successfully" });
@@ -123,7 +126,7 @@ export default function MotherForm() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: (data: MotherFormValues) => apiRequest("PUT", `/api/mothers/${params.id}`, normalizeForApi(data)),
+    mutationFn: (data: MotherFormValues) => apiRequest("PUT", `/api/mothers/${params.id}`, normalizeForApi(data, existingMother)),
     onSuccess: () => {
       invalidateScopedQueries("/api/mothers");
       toast({ title: "Success", description: "Mother updated successfully" });
@@ -245,6 +248,41 @@ export default function MotherForm() {
             </CardContent>
           </Card>
 
+          {/* SMS consent — DPA (RA 10173) for automated reminders. Stored
+              as a boolean plus audit dates stamped by normalizeForApi(). */}
+          <Card>
+            <CardContent className="pt-6">
+              <FormField
+                control={form.control}
+                name="smsOptIn"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-start gap-3 rounded-md border border-input bg-muted/30 p-3">
+                    <FormControl>
+                      <input
+                        type="checkbox"
+                        checked={!!field.value}
+                        onChange={(e) => field.onChange(e.target.checked)}
+                        className="mt-1 h-4 w-4 rounded border-input"
+                        data-testid="check-sms-opt-in"
+                      />
+                    </FormControl>
+                    <div className="space-y-1 leading-tight">
+                      <FormLabel className="cursor-pointer">
+                        Patient consents to receive SMS reminders
+                      </FormLabel>
+                      <p className="text-xs text-muted-foreground">
+                        Required before automated ANC / PNC reminders can be sent.
+                        Patient may revoke at any time by texting STOP or by
+                        un-checking this box at her next visit. Consent date is
+                        stamped automatically.
+                      </p>
+                    </div>
+                  </FormItem>
+                )}
+              />
+            </CardContent>
+          </Card>
+
           <div className="flex gap-4 justify-end">
             <Button type="button" variant="outline" onClick={() => window.history.back()} data-testid="button-cancel">
               Cancel
@@ -261,7 +299,18 @@ export default function MotherForm() {
 }
 
 // API expects nullable strings for optional dates / enums; coerce empty strings.
-function normalizeForApi(data: MotherFormValues) {
+function normalizeForApi(data: MotherFormValues, existing?: Mother) {
+  // Stamp SMS consent dates whenever the flag flips. Preserve existing
+  // dates when the toggle doesn't change so re-saves don't reset audit.
+  const today = new Date().toISOString().split("T")[0];
+  const prevOptIn = existing?.smsOptIn;
+  const smsOptInDate = data.smsOptIn && !prevOptIn
+    ? today
+    : (existing?.smsOptInDate ?? null);
+  const smsOptOutDate = !data.smsOptIn && prevOptIn === true
+    ? today
+    : (existing?.smsOptOutDate ?? null);
+
   return {
     ...data,
     addressLine: data.addressLine || null,
@@ -275,6 +324,8 @@ function normalizeForApi(data: MotherFormValues) {
     tt4Date: data.tt4Date || null,
     tt5Date: data.tt5Date || null,
     outcome: data.outcome || null,
+    smsOptInDate,
+    smsOptOutDate,
   };
 }
 

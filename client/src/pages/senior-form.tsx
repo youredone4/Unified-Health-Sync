@@ -50,6 +50,7 @@ export default function SeniorForm() {
     nextPickupDate: "",
     htnMedsReady: false,
     pickedUp: false,
+    smsOptIn: false as boolean,
   });
 
   useEffect(() => {
@@ -75,6 +76,7 @@ export default function SeniorForm() {
         nextPickupDate: existingSenior.nextPickupDate || "",
         htnMedsReady: existingSenior.htnMedsReady || false,
         pickedUp: existingSenior.pickedUp || false,
+        smsOptIn: existingSenior.smsOptIn ?? false,
       });
     }
   }, [existingSenior]);
@@ -105,7 +107,18 @@ export default function SeniorForm() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
+
+    // Stamp SMS consent dates on flip. Preserves existing audit when
+    // toggle state doesn't change.
+    const today = new Date().toISOString().split("T")[0];
+    const prevOptIn = existingSenior?.smsOptIn;
+    const smsOptInDate = formData.smsOptIn && !prevOptIn
+      ? today
+      : (existingSenior?.smsOptInDate ?? null);
+    const smsOptOutDate = !formData.smsOptIn && prevOptIn === true
+      ? today
+      : (existingSenior?.smsOptOutDate ?? null);
+
     const payload = {
       seniorUniqueId: formData.seniorUniqueId || null,
       seniorCitizenId: formData.seniorCitizenId || null,
@@ -127,6 +140,9 @@ export default function SeniorForm() {
       nextPickupDate: formData.nextPickupDate || null,
       htnMedsReady: formData.htnMedsReady,
       pickedUp: formData.pickedUp,
+      smsOptIn: formData.smsOptIn,
+      smsOptInDate,
+      smsOptOutDate,
     };
 
     if (isEditing) {
@@ -408,6 +424,32 @@ export default function SeniorForm() {
                 <Label htmlFor="pickedUp" className="cursor-pointer">Already Picked Up</Label>
               </div>
             </div>
+          </CardContent>
+        </Card>
+
+        {/* SMS consent — DPA (RA 10173) for BP-follow-up + medication-pickup reminders. */}
+        <Card>
+          <CardContent className="pt-6">
+            <label className="flex items-start gap-3 rounded-md border border-input bg-muted/30 p-3 cursor-pointer">
+              <Checkbox
+                checked={formData.smsOptIn}
+                onCheckedChange={(v) =>
+                  setFormData({ ...formData, smsOptIn: v === true })
+                }
+                className="mt-1"
+                data-testid="check-sms-opt-in"
+              />
+              <div className="space-y-1 leading-tight">
+                <div className="text-sm font-medium">
+                  Senior consents to receive SMS reminders
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Required before automated BP follow-up + medication-pickup
+                  reminders can be sent. Consent date is stamped automatically;
+                  un-check to revoke.
+                </p>
+              </div>
+            </label>
           </CardContent>
         </Card>
 
