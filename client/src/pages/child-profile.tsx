@@ -36,7 +36,9 @@ import {
   User,
   Pencil,
   Trash2,
+  Phone,
 } from "lucide-react";
+import { isValidPhilippineMobile } from "@shared/phone";
 import ConsultationHistoryCard from "@/components/consultation-history-card";
 import { SickChildVisitsCard } from "@/components/sick-child-visits-card";
 import VisitHistoryCard from "@/components/visit-history-card";
@@ -185,6 +187,25 @@ export default function ChildProfile() {
   }
   if (missingGrowth) {
     statusPills.push({ label: "Growth check overdue", tone: "warning", testId: "pill-missing-growth" });
+  }
+  // Phone-quality flag — see docs/future-plans.md "Automatic SMS reminders".
+  // The child profile's SMS path uses the linked mother's phone, so the
+  // flag tracks both "no mother linked" and "mother's phone is invalid".
+  // Vaccine-due reminders can't go out until this is fixed.
+  if (!mother) {
+    statusPills.push({
+      label: "No linked mother — SMS unavailable",
+      tone: "warning",
+      icon: Phone,
+      testId: "pill-no-mother",
+    });
+  } else if (!isValidPhilippineMobile(mother.phone)) {
+    statusPills.push({
+      label: mother.phone ? "Mother's phone invalid — SMS will fail" : "Mother has no phone on file",
+      tone: "warning",
+      icon: Phone,
+      testId: "pill-phone-needs-update",
+    });
   }
 
   // ── At-a-glance ──────────────────────────────────────────────────────────
