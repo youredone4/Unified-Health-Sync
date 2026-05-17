@@ -2248,11 +2248,17 @@ export async function registerRoutes(
   app.post("/api/admin/run-scheduler-now", loadUserInfo, requireAuth,
     requireRole(UserRole.SYSTEM_ADMIN),
     ar(async (_req, res) => {
-      const { runDailyAlerts, runDotsReminders, runWeeklyAlerts } = await import("./scheduler");
+      const {
+        runDailyAlerts,
+        runDotsReminders,
+        runM1MonthlyBootstrap,
+        runWeeklyAlerts,
+      } = await import("./scheduler");
       const daily = await runDailyAlerts();
       const dotsReminders = await runDotsReminders();
+      const m1Bootstrap = await runM1MonthlyBootstrap();
       const weekly = await runWeeklyAlerts();
-      res.json({ daily, dotsReminders, weekly });
+      res.json({ daily, dotsReminders, m1Bootstrap, weekly });
     }),
   );
 

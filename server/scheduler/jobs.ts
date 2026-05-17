@@ -12,14 +12,16 @@
  */
 
 import { db } from "../db";
-import { sql } from "drizzle-orm";
+import { sql, eq } from "drizzle-orm";
 import { scrapeCaragaDoh } from "./scrape-caraga-doh";
 import { sendSms } from "../sms";
+import { barangays } from "@shared/models/auth";
 import {
   workforceMembers,
   inventory,
   tbPatients,
   m1ReportInstances,
+  m1TemplateVersions,
   pidsrSubmissions,
   diseaseCases,
   deathReviews,
@@ -154,22 +156,53 @@ async function checkTbDefaulters(): Promise<AlertFinding[]> {
 /** M1 deadline: it's after the 5th of a month and last month's M1 isn't SUBMITTED_LOCKED. */
 async function checkM1Deadlines(): Promise<AlertFinding[]> {
   const now = today();
-  // Only fire after the 5th of a given month.
+  // Only fire after the 5th of a given month — DOH submission deadline
+  // is typically the 5th of the following month. Daily reminders after
+  // that escalate in severity via the existing alert framework.
   if (now.getDate() <= 5) return [];
   const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
   const targetYear = lastMonth.getFullYear();
   const targetMonth = lastMonth.getMonth() + 1;
-  const instances = await db
+  const ym = `${targetYear}-${String(targetMonth).padStart(2, "0")}`;
+
+  // 1 — instances that exist but aren't locked yet (TL hasn't submitted
+  //     OR MHO hasn't approved).
+  const drafty = await db
     .select()
     .from(m1ReportInstances)
     .where(sql`year = ${targetYear} AND month = ${targetMonth} AND status != 'SUBMITTED_LOCKED'`);
-  return instances.map((r) => ({
+  const findings: AlertFinding[] = drafty.map((r) => ({
     entityType: "M1_REPORT",
     entityId: String(r.id),
     barangayName: r.barangayName,
-    reason: `M1 ${targetYear}-${String(targetMonth).padStart(2, "0")} not submitted by deadline (status=${r.status})`,
+    reason: `M1 ${ym} not submitted by DOH deadline (current status: ${r.status})`,
     details: { year: r.year, month: r.month, status: r.status },
   }));
+
+  // 2 — barangays with NO instance at all for the period. Bootstrap
+  //     auto-create runs on the 1st, but if it failed for any reason
+  //     (downtime, DB lag), surface the gap here so MGMT can react.
+  const allBarangays = await db.select().from(barangays);
+  const existingNames = new Set(drafty.map((r) => r.barangayName).filter(Boolean) as string[]);
+  // Also include the SUBMITTED_LOCKED ones so we don't false-positive
+  // a barangay that already finished its report.
+  const locked = await db
+    .select({ barangayName: m1ReportInstances.barangayName })
+    .from(m1ReportInstances)
+    .where(sql`year = ${targetYear} AND month = ${targetMonth} AND status = 'SUBMITTED_LOCKED'`);
+  for (const b of locked) if (b.barangayName) existingNames.add(b.barangayName);
+
+  for (const b of allBarangays) {
+    if (!b.name || existingNames.has(b.name)) continue;
+    findings.push({
+      entityType: "M1_REPORT",
+      entityId: `missing-${b.id}`,
+      barangayName: b.name,
+      reason: `M1 ${ym} report instance never created for ${b.name} — bootstrap may have failed; create manually`,
+      details: { year: targetYear, month: targetMonth, status: "MISSING" },
+    });
+  }
+  return findings;
 }
 
 /** Friday Cat-II PIDSR: reminder if no submission for the current ISO week. */
@@ -939,6 +972,105 @@ export async function runDotsReminders(): Promise<{ jobName: string; count: numb
   } catch (err) {
     console.error("[scheduler] dots-reminders run failed:", err);
     results.push({ jobName: "dots-reminders", count: -1 });
+  }
+  return results;
+}
+
+/**
+ * Monthly 1st @ 05:00 Manila — bootstrap M1 report instances for the
+ * month that just ended. Embodies the "capture once, it shows up
+ * everywhere" promise: TLs never click "Create Report" again. When
+ * they arrive at /reports/m1 on the 1st, the report instance already
+ * exists, pre-populated by computeM1Values() from operational data.
+ *
+ * Idempotent — skips any (barangay × month × year) that already has
+ * a row in m1_report_instances. Safe to re-run.
+ *
+ * Edge cases handled:
+ *  - No active M1 template version → no-op, logs a warning
+ *  - Barangay deleted between months → only iterates current barangays
+ *  - Manual instance already created by a TL → skipped (no overwrite)
+ *  - Single-run race (two scheduler ticks fire) → first wins; second
+ *    finds the row exists and skips
+ */
+export async function runM1MonthlyBootstrap(): Promise<{ jobName: string; count: number }[]> {
+  const results: { jobName: string; count: number }[] = [];
+  try {
+    // Target month: the one that just ended (Manila wall-clock).
+    const nowManila = new Date(Date.now() + 8 * 3600 * 1000);
+    const lastMonth = new Date(nowManila);
+    lastMonth.setUTCDate(1);
+    lastMonth.setUTCMonth(lastMonth.getUTCMonth() - 1);
+    const targetYear = lastMonth.getUTCFullYear();
+    const targetMonth = lastMonth.getUTCMonth() + 1; // 1-12
+    const ym = `${targetYear}-${String(targetMonth).padStart(2, "0")}`;
+
+    // Find the active template version. If none, we can't anchor the
+    // instances — log and bail. The catalog seeder normally guarantees
+    // one active row, but defensive code is cheap.
+    const [activeTemplate] = await db
+      .select()
+      .from(m1TemplateVersions)
+      .where(eq(m1TemplateVersions.isActive, true))
+      .limit(1);
+    if (!activeTemplate) {
+      console.warn(`[m1-bootstrap] no active M1 template version — skipping bootstrap for ${ym}`);
+      results.push({ jobName: "m1-bootstrap-no-template", count: 0 });
+      return results;
+    }
+
+    const allBarangays = await db.select().from(barangays);
+
+    // One round-trip to find which barangays already have an instance —
+    // avoids N+1 SELECTs and gives us a fast in-memory set check.
+    const existing = await db
+      .select({ barangayId: m1ReportInstances.barangayId })
+      .from(m1ReportInstances)
+      .where(sql`year = ${targetYear} AND month = ${targetMonth}`);
+    const existingBarangayIds = new Set(
+      existing.map((r) => r.barangayId).filter((id) => id != null) as number[],
+    );
+
+    const nowIso = new Date().toISOString();
+    let created = 0;
+    let skipped = 0;
+    let failed = 0;
+
+    for (const b of allBarangays) {
+      if (existingBarangayIds.has(b.id)) {
+        skipped++;
+        continue;
+      }
+      try {
+        await db.insert(m1ReportInstances).values({
+          templateVersionId: activeTemplate.id,
+          scopeType: "BARANGAY",
+          barangayId: b.id,
+          barangayName: b.name,
+          year: targetYear,
+          month: targetMonth,
+          status: "DRAFT",
+          createdByUserId: "scheduler:m1-bootstrap",
+          createdAt: nowIso,
+          updatedAt: nowIso,
+        });
+        created++;
+      } catch (err) {
+        console.error(`[m1-bootstrap] insert failed for barangay ${b.name} (${b.id}):`, err);
+        failed++;
+      }
+    }
+
+    console.log(
+      `[m1-bootstrap] ${ym}: created=${created} skipped=${skipped} failed=${failed} ` +
+        `(total barangays=${allBarangays.length})`,
+    );
+    results.push({ jobName: "m1-bootstrap-created", count: created });
+    results.push({ jobName: "m1-bootstrap-skipped", count: skipped });
+    results.push({ jobName: "m1-bootstrap-failed", count: failed });
+  } catch (err) {
+    console.error("[scheduler] m1-bootstrap run failed:", err);
+    results.push({ jobName: "m1-bootstrap", count: -1 });
   }
   return results;
 }
