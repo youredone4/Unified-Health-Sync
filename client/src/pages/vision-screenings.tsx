@@ -17,6 +17,10 @@ import { Eye, Save } from "lucide-react";
 import { format } from "date-fns";
 import { Term } from "@/components/term";
 
+import {
+  PatientSearchCombobox,
+  type PatientKind,
+} from "@/components/patient-search-combobox";
 /**
  * Vision screening for senior citizens (60+). Drives M1 G4-01..G4-03.
  */
@@ -35,6 +39,8 @@ export default function VisionScreeningsPage() {
   const { data: rows = [] } = useQuery<VisionScreening[]>({ queryKey });
 
   const [patientName, setPatientName] = useState("");
+  const [linkedPersonType, setLinkedPersonType] = useState<PatientKind | null>(null);
+  const [linkedPersonId, setLinkedPersonId] = useState<number | null>(null);
   const [dob, setDob] = useState("");
   const [sex, setSex] = useState<"M" | "F">("M");
   const [screenDate, setScreenDate] = useState(today);
@@ -44,7 +50,7 @@ export default function VisionScreeningsPage() {
   const create = useMutation({
     mutationFn: async () => {
       const res = await apiRequest("POST", "/api/vision-screenings", {
-        patientName, barangay: selectedBarangay, dob, sex, screenDate,
+        patientName, linkedPersonType, linkedPersonId, barangay: selectedBarangay, dob, sex, screenDate,
         eyeDiseaseFound: eyeDisease,
         referredToEyeCare: referred,
       });
@@ -53,7 +59,7 @@ export default function VisionScreeningsPage() {
     onSuccess: () => {
       toast({ title: "Screening recorded" });
       queryClient.invalidateQueries({ queryKey });
-      setPatientName(""); setDob("");
+      setPatientName(""); setLinkedPersonType(null); setLinkedPersonId(null); setDob("");
       setEyeDisease(false); setReferred(false);
     },
     onError: (err: Error) =>
@@ -78,7 +84,26 @@ export default function VisionScreeningsPage() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <div>
                 <label className="text-xs text-muted-foreground">Patient name</label>
-                <Input value={patientName} onChange={(e) => setPatientName(e.target.value)} data-testid="input-vision-name" />
+                <PatientSearchCombobox
+                  value={
+                    patientName
+                      ? linkedPersonType && linkedPersonId
+                        ? { kind: linkedPersonType, id: linkedPersonId, displayName: patientName, barangay: "" }
+                        : { kind: "FREE_TEXT", displayName: patientName }
+                      : null
+                  }
+                  onChange={(picked) => {
+                    if (!picked) {
+                      setPatientName(""); setLinkedPersonType(null); setLinkedPersonId(null);
+                    } else if (picked.kind === "FREE_TEXT") {
+                      setPatientName(picked.displayName); setLinkedPersonType(null); setLinkedPersonId(null);
+                    } else {
+                      setPatientName(picked.displayName); setLinkedPersonType(picked.kind); setLinkedPersonId(picked.id);
+                    }
+                  }}
+                  placeholder="Search or type patient name…"
+                  testId="input-vision-name"
+                />
               </div>
               <div>
                 <label className="text-xs text-muted-foreground">DOB</label>

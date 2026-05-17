@@ -27,22 +27,62 @@ import { HeartPulse, Save } from "lucide-react";
 import { format } from "date-fns";
 import { Term } from "@/components/term";
 
+import {
+  PatientSearchCombobox,
+  type PatientKind,
+} from "@/components/patient-search-combobox";
 const today = () => format(new Date(), "yyyy-MM-dd");
 
 interface BasicCommon {
   patientName: string;
   dob: string;
   sex: "M" | "F";
+  // Cross-domain linkage — populated by <PatientSearchCombobox> when the
+  // operator picks an existing mother / child / senior / tb_patient.
+  linkedPersonType: PatientKind | null;
+  linkedPersonId: number | null;
 }
+
+const EMPTY_COMMON: BasicCommon = {
+  patientName: "",
+  dob: "",
+  sex: "M",
+  linkedPersonType: null,
+  linkedPersonId: null,
+};
 
 function CommonFields({
   v, onChange, includeSex = true,
 }: { v: BasicCommon; onChange: (v: BasicCommon) => void; includeSex?: boolean }) {
   return (
     <>
-      <div>
-        <label className="text-xs text-muted-foreground">Patient name</label>
-        <Input value={v.patientName} onChange={(e) => onChange({ ...v, patientName: e.target.value })} data-testid="input-patient-name" />
+      <div className="md:col-span-2">
+        <label className="text-xs text-muted-foreground">Patient</label>
+        <PatientSearchCombobox
+          value={
+            v.patientName
+              ? v.linkedPersonType && v.linkedPersonId
+                ? { kind: v.linkedPersonType, id: v.linkedPersonId, displayName: v.patientName, barangay: "" }
+                : { kind: "FREE_TEXT", displayName: v.patientName }
+              : null
+          }
+          onChange={(picked) => {
+            if (!picked) {
+              onChange({ ...v, patientName: "", linkedPersonType: null, linkedPersonId: null });
+            } else if (picked.kind === "FREE_TEXT") {
+              onChange({ ...v, patientName: picked.displayName, linkedPersonType: null, linkedPersonId: null });
+            } else {
+              onChange({
+                ...v,
+                patientName: picked.displayName,
+                linkedPersonType: picked.kind,
+                linkedPersonId: picked.id,
+              });
+            }
+          }}
+          placeholder="Search or type patient name…"
+          testId="input-patient-name"
+        />
       </div>
       <div>
         <label className="text-xs text-muted-foreground">DOB</label>
@@ -109,7 +149,7 @@ function PhilpenSection({ barangay, canEnter }: { barangay: string | null; canEn
   );
   const { data: rows = [] } = useQuery<PhilpenAssessment[]>({ queryKey });
 
-  const [common, setCommon] = useState<BasicCommon>({ patientName: "", dob: "", sex: "M" });
+  const [common, setCommon] = useState<BasicCommon>(EMPTY_COMMON);
   const [date, setDate] = useState(today());
   const [smoking, setSmoking] = useState(false);
   const [drinker, setDrinker] = useState(false);
@@ -130,7 +170,7 @@ function PhilpenSection({ barangay, canEnter }: { barangay: string | null; canEn
     onSuccess: () => {
       toast({ title: "PhilPEN assessment recorded" });
       queryClient.invalidateQueries({ queryKey });
-      setCommon({ patientName: "", dob: "", sex: "M" });
+      setCommon(EMPTY_COMMON);
       setSmoking(false); setDrinker(false); setInsufficient(false); setUnhealthy(false); setBmi("");
     },
     onError: (e: Error) => toast({ title: "Could not save", description: e.message, variant: "destructive" }),
@@ -223,7 +263,7 @@ function NcdSection({ barangay, canEnter }: { barangay: string | null; canEnter:
   );
   const { data: rows = [] } = useQuery<NcdScreening[]>({ queryKey });
 
-  const [common, setCommon] = useState<BasicCommon>({ patientName: "", dob: "", sex: "M" });
+  const [common, setCommon] = useState<BasicCommon>(EMPTY_COMMON);
   const [date, setDate] = useState(today());
   const [condition, setCondition] = useState<NcdCondition>("HTN");
   const [diagnosed, setDiagnosed] = useState(false);
@@ -241,7 +281,7 @@ function NcdSection({ barangay, canEnter }: { barangay: string | null; canEnter:
     onSuccess: () => {
       toast({ title: "NCD screening recorded" });
       queryClient.invalidateQueries({ queryKey });
-      setCommon({ patientName: "", dob: "", sex: "M" });
+      setCommon(EMPTY_COMMON);
       setDiagnosed(false); setMeds(false); setSource("");
     },
     onError: (e: Error) => toast({ title: "Could not save", description: e.message, variant: "destructive" }),
@@ -336,7 +376,7 @@ function VisionSection({ barangay, canEnter }: { barangay: string | null; canEnt
   );
   const { data: rows = [] } = useQuery<VisionScreening[]>({ queryKey });
 
-  const [common, setCommon] = useState<BasicCommon>({ patientName: "", dob: "", sex: "M" });
+  const [common, setCommon] = useState<BasicCommon>(EMPTY_COMMON);
   const [date, setDate] = useState(today());
   const [eyeDisease, setEyeDisease] = useState(false);
   const [referred, setReferred] = useState(false);
@@ -352,7 +392,7 @@ function VisionSection({ barangay, canEnter }: { barangay: string | null; canEnt
     onSuccess: () => {
       toast({ title: "Vision screening recorded" });
       queryClient.invalidateQueries({ queryKey });
-      setCommon({ patientName: "", dob: "", sex: "M" });
+      setCommon(EMPTY_COMMON);
       setEyeDisease(false); setReferred(false);
     },
     onError: (e: Error) => toast({ title: "Could not save", description: e.message, variant: "destructive" }),
@@ -432,7 +472,7 @@ function CervicalSection({ barangay, canEnter }: { barangay: string | null; canE
   );
   const { data: rows = [] } = useQuery<CervicalCancerScreening[]>({ queryKey });
 
-  const [common, setCommon] = useState<BasicCommon>({ patientName: "", dob: "", sex: "F" });
+  const [common, setCommon] = useState<BasicCommon>({ ...EMPTY_COMMON, sex: "F" });
   const [date, setDate] = useState(today());
   const [method, setMethod] = useState<CervicalScreenMethod | "">("VIA");
   const [suspicious, setSuspicious] = useState(false);
@@ -444,7 +484,7 @@ function CervicalSection({ barangay, canEnter }: { barangay: string | null; canE
   const create = useMutation({
     mutationFn: async () => {
       const res = await apiRequest("POST", "/api/cervical-cancer-screenings", {
-        patientName: common.patientName, barangay, dob: common.dob, screenDate: date,
+        patientName: common.patientName, linkedPersonType: common.linkedPersonType, linkedPersonId: common.linkedPersonId, barangay, dob: common.dob, screenDate: date,
         screenMethod: method || null,
         suspicious, linkedToCare: linked, linkedOutcome: linkedOutcome || null,
         precancerous: precancer, precancerousOutcome: precancerOutcome || null,
@@ -454,7 +494,7 @@ function CervicalSection({ barangay, canEnter }: { barangay: string | null; canE
     onSuccess: () => {
       toast({ title: "Cervical cancer screening recorded" });
       queryClient.invalidateQueries({ queryKey });
-      setCommon({ patientName: "", dob: "", sex: "F" });
+      setCommon({ ...EMPTY_COMMON, sex: "F" });
       setSuspicious(false); setLinked(false); setLinkedOutcome("");
       setPrecancer(false); setPrecancerOutcome("");
     },
@@ -553,7 +593,7 @@ function MentalSection({ barangay, canEnter }: { barangay: string | null; canEnt
   );
   const { data: rows = [] } = useQuery<MentalHealthScreening[]>({ queryKey });
 
-  const [common, setCommon] = useState<BasicCommon>({ patientName: "", dob: "", sex: "M" });
+  const [common, setCommon] = useState<BasicCommon>(EMPTY_COMMON);
   const [date, setDate] = useState(today());
   const [positive, setPositive] = useState(false);
 
@@ -567,7 +607,7 @@ function MentalSection({ barangay, canEnter }: { barangay: string | null; canEnt
     onSuccess: () => {
       toast({ title: "mhGAP screening recorded" });
       queryClient.invalidateQueries({ queryKey });
-      setCommon({ patientName: "", dob: "", sex: "M" });
+      setCommon(EMPTY_COMMON);
       setPositive(false);
     },
     onError: (e: Error) => toast({ title: "Could not save", description: e.message, variant: "destructive" }),

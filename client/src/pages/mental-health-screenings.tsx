@@ -17,6 +17,10 @@ import { Brain, Save } from "lucide-react";
 import { format } from "date-fns";
 import { Term } from "@/components/term";
 
+import {
+  PatientSearchCombobox,
+  type PatientKind,
+} from "@/components/patient-search-combobox";
 /**
  * mhGAP mental health screening — drives M1 Section G8-01.
  */
@@ -35,6 +39,8 @@ export default function MentalHealthScreeningsPage() {
   const { data: rows = [] } = useQuery<MentalHealthScreening[]>({ queryKey });
 
   const [patientName, setPatientName] = useState("");
+  const [linkedPersonType, setLinkedPersonType] = useState<PatientKind | null>(null);
+  const [linkedPersonId, setLinkedPersonId] = useState<number | null>(null);
   const [dob, setDob] = useState("");
   const [sex, setSex] = useState<"M" | "F">("M");
   const [screenDate, setScreenDate] = useState(today);
@@ -44,7 +50,7 @@ export default function MentalHealthScreeningsPage() {
   const create = useMutation({
     mutationFn: async () => {
       const res = await apiRequest("POST", "/api/mental-health-screenings", {
-        patientName, barangay: selectedBarangay, dob, sex, screenDate,
+        patientName, linkedPersonType, linkedPersonId, barangay: selectedBarangay, dob, sex, screenDate,
         tool, positive,
       });
       return res.json();
@@ -52,7 +58,7 @@ export default function MentalHealthScreeningsPage() {
     onSuccess: () => {
       toast({ title: "Screening recorded" });
       queryClient.invalidateQueries({ queryKey });
-      setPatientName(""); setDob("");
+      setPatientName(""); setLinkedPersonType(null); setLinkedPersonId(null); setDob("");
       setPositive(false);
     },
     onError: (err: Error) =>
@@ -77,7 +83,26 @@ export default function MentalHealthScreeningsPage() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <div>
                 <label className="text-xs text-muted-foreground">Patient name</label>
-                <Input value={patientName} onChange={(e) => setPatientName(e.target.value)} data-testid="input-mh-name" />
+                <PatientSearchCombobox
+                  value={
+                    patientName
+                      ? linkedPersonType && linkedPersonId
+                        ? { kind: linkedPersonType, id: linkedPersonId, displayName: patientName, barangay: "" }
+                        : { kind: "FREE_TEXT", displayName: patientName }
+                      : null
+                  }
+                  onChange={(picked) => {
+                    if (!picked) {
+                      setPatientName(""); setLinkedPersonType(null); setLinkedPersonId(null);
+                    } else if (picked.kind === "FREE_TEXT") {
+                      setPatientName(picked.displayName); setLinkedPersonType(null); setLinkedPersonId(null);
+                    } else {
+                      setPatientName(picked.displayName); setLinkedPersonType(picked.kind); setLinkedPersonId(picked.id);
+                    }
+                  }}
+                  placeholder="Search or type patient name…"
+                  testId="input-mh-name"
+                />
               </div>
               <div>
                 <label className="text-xs text-muted-foreground">DOB</label>

@@ -18,6 +18,10 @@ import { HeartPulse, Save } from "lucide-react";
 import { Term } from "@/components/term";
 import { format } from "date-fns";
 
+import {
+  PatientSearchCombobox,
+  type PatientKind,
+} from "@/components/patient-search-combobox";
 /**
  * PhilPEN Risk Assessment — drives M1 Section G1-01..G1-01f.
  * Patterned after the oral-health page: inline form + table.
@@ -37,6 +41,8 @@ export default function PhilpenAssessmentsPage() {
   const { data: rows = [] } = useQuery<PhilpenAssessment[]>({ queryKey });
 
   const [patientName, setPatientName] = useState("");
+  const [linkedPersonType, setLinkedPersonType] = useState<PatientKind | null>(null);
+  const [linkedPersonId, setLinkedPersonId] = useState<number | null>(null);
   const [dob, setDob] = useState("");
   const [sex, setSex] = useState<"M" | "F">("M");
   const [assessmentDate, setAssessmentDate] = useState(today);
@@ -49,7 +55,7 @@ export default function PhilpenAssessmentsPage() {
   const create = useMutation({
     mutationFn: async () => {
       const res = await apiRequest("POST", "/api/philpen-assessments", {
-        patientName, barangay: selectedBarangay, dob, sex, assessmentDate,
+        patientName, linkedPersonType, linkedPersonId, barangay: selectedBarangay, dob, sex, assessmentDate,
         smokingHistory: smoking,
         bingeDrinker: binge,
         insufficientActivity: insufficient,
@@ -61,7 +67,7 @@ export default function PhilpenAssessmentsPage() {
     onSuccess: () => {
       toast({ title: "Assessment recorded" });
       queryClient.invalidateQueries({ queryKey });
-      setPatientName(""); setDob("");
+      setPatientName(""); setLinkedPersonType(null); setLinkedPersonId(null); setDob("");
       setSmoking(false); setBinge(false); setInsufficient(false); setUnhealthy(false);
       setBmi("");
     },
@@ -87,7 +93,26 @@ export default function PhilpenAssessmentsPage() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <div>
                 <label className="text-xs text-muted-foreground">Patient name</label>
-                <Input value={patientName} onChange={(e) => setPatientName(e.target.value)} data-testid="input-philpen-name" />
+                <PatientSearchCombobox
+                  value={
+                    patientName
+                      ? linkedPersonType && linkedPersonId
+                        ? { kind: linkedPersonType, id: linkedPersonId, displayName: patientName, barangay: "" }
+                        : { kind: "FREE_TEXT", displayName: patientName }
+                      : null
+                  }
+                  onChange={(picked) => {
+                    if (!picked) {
+                      setPatientName(""); setLinkedPersonType(null); setLinkedPersonId(null);
+                    } else if (picked.kind === "FREE_TEXT") {
+                      setPatientName(picked.displayName); setLinkedPersonType(null); setLinkedPersonId(null);
+                    } else {
+                      setPatientName(picked.displayName); setLinkedPersonType(picked.kind); setLinkedPersonId(picked.id);
+                    }
+                  }}
+                  placeholder="Search or type patient name…"
+                  testId="input-philpen-name"
+                />
               </div>
               <div>
                 <label className="text-xs text-muted-foreground">DOB</label>
