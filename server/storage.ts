@@ -4026,6 +4026,24 @@ export class DatabaseStorage implements IStorage {
     await db.execute(sql`ALTER TABLE sms_outbox ADD COLUMN IF NOT EXISTS barangay TEXT`);
     await db.execute(sql`ALTER TABLE sms_outbox ADD COLUMN IF NOT EXISTS automated BOOLEAN DEFAULT FALSE`);
 
+    // Cross-domain patient linking — Option A from
+    // docs/cross-domain-linking-audit.md. Adds optional discriminator +
+    // FK columns to every free-text patient table so that a TL can pick
+    // an existing mother/child/senior/tb_patient at capture time and the
+    // record is linked (not just typed as a parallel string). NULL
+    // means "walk-in not yet in any registry" — patient_name stays as
+    // the source of truth in that case.
+    for (const t of [
+      "oral_health_visits", "philpen_assessments", "ncd_screenings",
+      "vision_screenings", "cervical_cancer_screenings", "mental_health_screenings",
+      "filariasis_records", "rabies_exposures", "schistosomiasis_records",
+      "sth_records", "leprosy_records", "aefi_events", "referral_records",
+      "medical_certificates",
+    ]) {
+      await db.execute(sql.raw(`ALTER TABLE ${t} ADD COLUMN IF NOT EXISTS linked_person_type TEXT`));
+      await db.execute(sql.raw(`ALTER TABLE ${t} ADD COLUMN IF NOT EXISTS linked_person_id INTEGER`));
+    }
+
     await db.execute(sql`ALTER TABLE aefi_events ADD COLUMN IF NOT EXISTS investigated_by_user_id VARCHAR`);
     await db.execute(sql`ALTER TABLE aefi_events ADD COLUMN IF NOT EXISTS investigated_at TIMESTAMP`);
     await db.execute(sql`ALTER TABLE aefi_events ADD COLUMN IF NOT EXISTS classified_by_user_id VARCHAR`);
