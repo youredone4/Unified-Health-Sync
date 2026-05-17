@@ -25,6 +25,10 @@ import { FileText, Plus, Download } from "lucide-react";
 import { EmptyState } from "@/components/states/empty-state";
 import { ListSkeleton } from "@/components/states/loading-skeleton";
 import { ErrorState } from "@/components/states/error-state";
+import {
+  PatientSearchCombobox,
+  type PatientKind,
+} from "@/components/patient-search-combobox";
 
 const CERT_TYPES = [
   { v: "SCHOOL",            l: "School excuse" },
@@ -71,6 +75,10 @@ const newCertSchema = z.object({
   signedByName: z.string().min(1, "Signer name is required"),
   signedByTitle: z.string().max(60).optional().or(z.literal("")),
   notes:        z.string().max(500).optional().or(z.literal("")),
+  // Cross-domain linkage — populated by <PatientSearchCombobox> when the
+  // operator picks an existing patient.
+  linkedPersonType: z.string().nullable().optional(),
+  linkedPersonId:   z.number().nullable().optional(),
 });
 type NewCertValues = z.infer<typeof newCertSchema>;
 
@@ -186,6 +194,8 @@ function NewCertDialog({
       purpose: "", findings: "",
       signedByName: defaultSignerName, signedByTitle: "RHU Nurse",
       notes: "",
+      linkedPersonType: null,
+      linkedPersonId: null,
     },
   });
 
@@ -222,7 +232,42 @@ function NewCertDialog({
             )} />
             <div className="grid grid-cols-2 gap-3">
               <FormField control={form.control} name="patientName" render={({ field }) => (
-                <FormItem className="col-span-2"><FormLabel>Patient name *</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+                <FormItem className="col-span-2">
+                  <FormLabel>Patient *</FormLabel>
+                  <FormControl>
+                    <PatientSearchCombobox
+                      value={
+                        field.value
+                          ? form.watch("linkedPersonType") && form.watch("linkedPersonId")
+                            ? {
+                                kind: form.watch("linkedPersonType") as PatientKind,
+                                id: form.watch("linkedPersonId") as number,
+                                displayName: field.value,
+                                barangay: "",
+                              }
+                            : { kind: "FREE_TEXT", displayName: field.value }
+                          : null
+                      }
+                      onChange={(picked) => {
+                        if (!picked) {
+                          field.onChange("");
+                          form.setValue("linkedPersonType", null);
+                          form.setValue("linkedPersonId", null);
+                        } else if (picked.kind === "FREE_TEXT") {
+                          field.onChange(picked.displayName);
+                          form.setValue("linkedPersonType", null);
+                          form.setValue("linkedPersonId", null);
+                        } else {
+                          field.onChange(picked.displayName);
+                          form.setValue("linkedPersonType", picked.kind);
+                          form.setValue("linkedPersonId", picked.id);
+                        }
+                      }}
+                      placeholder="Search or type patient name…"
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
               )} />
               <FormField control={form.control} name="patientAge" render={({ field }) => (
                 <FormItem><FormLabel>Age</FormLabel><FormControl><Input type="number" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>
