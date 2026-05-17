@@ -299,6 +299,14 @@ export const smsOutbox = pgTable("sms_outbox", {
   message: text("message").notNull(),
   sentAt: text("sent_at").notNull(),
   status: text("status").default("Queued (Demo)"),
+  // Optional barangay scope — populated by the SMS endpoint when the
+  // caller knows it. Used by the auto-SMS rate limiter
+  // (shared/sms-policy.ts) to enforce per-barangay daily caps.
+  barangay: text("barangay"),
+  // Distinguishes operator-initiated sends from scheduler-fired ones.
+  // Manual sends bypass quiet-hours and rate-limit guards (clinical
+  // judgement overrides automation policy).
+  automated: boolean("automated").default(false),
 });
 
 export const insertSmsSchema = createInsertSchema(smsOutbox).omit({ id: true });
