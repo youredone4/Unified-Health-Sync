@@ -5,13 +5,7 @@ import { db } from "./db";
 import { max, eq, and, desc, gte, or, inArray, isNull, sql } from "drizzle-orm";
 import { prenatalVisits, childVisits, seniorVisits, insertFpServiceRecordSchema, insertNutritionFollowUpSchema, insertColdChainLogSchema, insertTbDoseLogSchema, insertPostpartumVisitSchema, insertPrenatalScreeningSchema, insertBirthAttendanceRecordSchema, insertSickChildVisitSchema, insertSchoolImmunizationSchema, insertOralHealthVisitSchema, insertPhilpenAssessmentSchema, insertNcdScreeningSchema, insertVisionScreeningSchema, insertCervicalCancerScreeningSchema, insertMentalHealthScreeningSchema, insertFilariasisRecordSchema, insertRabiesExposureSchema, insertSchistosomiasisRecordSchema, insertSthRecordSchema, insertLeprosyRecordSchema, insertDeathEventSchema, insertHouseholdWaterRecordSchema, insertPidsrSubmissionSchema, insertWorkforceMemberSchema, insertWorkforceCredentialSchema, referralRecords, insertReferralRecordSchema, ncdScreenings, filariasisRecords, rabiesExposures, schistosomiasisRecords, sthRecords, leprosyRecords } from "@shared/schema";
 import { api } from "@shared/routes";
-import { validatePhilippineMobile } from "@shared/phone";
-import {
-  isWithinQuietHours,
-  wouldExceedRateLimit,
-  getSmsDailyLimit,
-  QUIET_HOURS_LABEL,
-} from "@shared/sms-policy";
+import { sendSms } from "./sms";
 import { z } from "zod";
 import { setupAuth, registerAuthRoutes } from "./auth";
 import { registerAdminRoutes } from "./routes/admin";
@@ -503,127 +497,37 @@ export async function registerRoutes(
     try {
       const input = api.sms.send.input.parse(req.body);
 
-      // Defense-in-depth phone validation. Even though the client also
-      // validates, this catches:
-      //  - direct API hits that skip the UI
-      //  - future auto-SMS scheduler jobs (must not blast invalid numbers)
-      //  - the Semaphore "senderName supplied is not valid" class of
-      //    failures that wastes our send credit
-      // On invalid input we don't even try to send — return a structured
-      // error the client can render as "this patient's phone needs an
-      // update before SMS can be sent."
-      if (input.recipientPhone !== undefined && input.recipientPhone !== null) {
-        const phoneErr = validatePhilippineMobile(input.recipientPhone);
-        if (phoneErr) {
-          return res.status(400).json({
-            message: "INVALID_PHONE",
-            error: phoneErr,
-            recipient: input.recipient,
-          });
-        }
+      // Delegate to the shared SMS pipeline (server/sms.ts). One code
+      // path = one place for phone validation, automation guards, and
+      // audit logging. The scheduler in server/scheduler/jobs.ts
+      // calls the exact same function for automated sends.
+      const result = await sendSms({
+        recipient: input.recipient,
+        recipientPhone: input.recipientPhone,
+        message: input.message,
+        barangay: (input as any).barangay ?? null,
+        automated: (input as any).automated === true,
+      });
+
+      if (result.kind === "INVALID_PHONE") {
+        return res.status(400).json({
+          message: "INVALID_PHONE",
+          error: result.error,
+          recipient: input.recipient,
+        });
       }
-
-      // Policy guards — apply ONLY to automated (scheduler-initiated)
-      // sends. Manual clinician-initiated sends bypass both: clinical
-      // judgement overrides automation policy. Drives off the
-      // `automated` field on the SMS payload (default false).
-      const automated = (input as any).automated === true;
-      const barangay = (input as any).barangay || null;
-      if (automated) {
-        // Guard 1 — quiet hours (9 PM – 7 AM Manila)
-        if (isWithinQuietHours()) {
-          return res.json({
-            deferred: true,
-            reason: "QUIET_HOURS",
-            message: `Automated SMS deferred — quiet hours active (${QUIET_HOURS_LABEL})`,
-          });
-        }
-        // Guard 2 — per-barangay daily rate limit. Counts the last 24 h
-        // of automated sends for the same barangay. Manual sends are
-        // excluded from the count so a busy clinic can't accidentally
-        // exhaust the auto quota.
-        if (barangay) {
-          const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
-          const [c] = await db
-            .select({ n: sql<number>`count(*)::int` })
-            .from(smsOutbox)
-            .where(
-              and(
-                eq(smsOutbox.barangay, barangay),
-                eq(smsOutbox.automated, true),
-                gte(smsOutbox.sentAt, since),
-              ),
-            );
-          const count = c?.n ?? 0;
-          if (wouldExceedRateLimit(count)) {
-            return res.json({
-              deferred: true,
-              reason: "RATE_LIMITED",
-              message:
-                `Automated SMS deferred — daily limit reached for ${barangay} ` +
-                `(${count} / ${getSmsDailyLimit()} in last 24 h)`,
-              count,
-              limit: getSmsDailyLimit(),
-            });
-          }
-        }
+      if (result.kind === "DEFERRED") {
+        return res.json({
+          deferred: true,
+          reason: result.reason,
+          message: result.message,
+          count: result.count,
+          limit: result.limit,
+        });
       }
-
-      // Send real SMS via Semaphore if API key is configured
-      const semaphoreKey = process.env.SEMAPHORE_API_KEY;
-      let status = "Queued (Demo)";
-      if (semaphoreKey && input.recipientPhone) {
-        try {
-          // Semaphore rejects sender names that aren't pre-registered with
-          // their support team (error: "The senderName supplied is not
-          // valid"). Read from env so deployments that haven't registered
-          // a custom name simply omit the field and use Semaphore's
-          // default (SEMAPHORE / PHILSMS depending on package).
-          //
-          // Format constraints: ≤11 alphanumeric chars, no spaces. We warn
-          // (not reject) on malformed input so a misconfigured env var
-          // produces a server log rather than a silent fallback.
-          const rawSender = process.env.SEMAPHORE_SENDER_NAME?.trim() || "";
-          let senderName: string | undefined;
-          if (rawSender) {
-            if (/^[A-Za-z0-9]{1,11}$/.test(rawSender)) {
-              senderName = rawSender;
-            } else {
-              console.warn(
-                `[sms] SEMAPHORE_SENDER_NAME="${rawSender}" is not valid ` +
-                  `(needs ≤11 alphanumeric chars, no spaces). Falling back ` +
-                  `to Semaphore's default sender.`,
-              );
-            }
-          }
-
-          const params = new URLSearchParams({
-            apikey: semaphoreKey,
-            number: input.recipientPhone.replace(/^\+63/, "0"),
-            message: input.message,
-            ...(senderName ? { sendername: senderName } : {}),
-          });
-          const smsFetch = await fetch("https://api.semaphore.co/api/v4/messages", {
-            method: "POST",
-            headers: { "Content-Type": "application/x-www-form-urlencoded" },
-            body: params.toString(),
-          });
-          const smsResult = await smsFetch.json();
-          if (smsFetch.ok && Array.isArray(smsResult) && smsResult[0]?.status) {
-            status = smsResult[0].status === "Queued" ? "Sent" : smsResult[0].status;
-          } else {
-            const errMsg = smsResult?.message || JSON.stringify(smsResult);
-            console.error("Semaphore error:", errMsg);
-            status = `Failed: ${errMsg}`;
-          }
-        } catch (smsErr) {
-          console.error("Semaphore request failed:", smsErr);
-          status = "Failed: network error";
-        }
-      }
-
-      const created = await storage.sendSms({ ...input, status });
-      res.status(201).json(created);
+      // Sent (or queued in demo mode). Return the latest outbox row.
+      const rows = await storage.getSmsMessages();
+      res.status(201).json(rows[rows.length - 1] ?? { status: result.status });
     } catch (err) {
       res.status(400).json({ message: "Invalid SMS data" });
     }
@@ -2344,10 +2248,11 @@ export async function registerRoutes(
   app.post("/api/admin/run-scheduler-now", loadUserInfo, requireAuth,
     requireRole(UserRole.SYSTEM_ADMIN),
     ar(async (_req, res) => {
-      const { runDailyAlerts, runWeeklyAlerts } = await import("./scheduler");
+      const { runDailyAlerts, runDotsReminders, runWeeklyAlerts } = await import("./scheduler");
       const daily = await runDailyAlerts();
+      const dotsReminders = await runDotsReminders();
       const weekly = await runWeeklyAlerts();
-      res.json({ daily, weekly });
+      res.json({ daily, dotsReminders, weekly });
     }),
   );
 

@@ -2,16 +2,22 @@
  * Scheduler entry point — Phase 3 of operational-actions framework.
  *
  * Uses self-rescheduling setTimeout instead of node-cron so we avoid the
- * dependency. Two jobs:
- *   - daily 6 AM (Asia/Manila)  → runDailyAlerts()
- *   - Friday 4 PM (Asia/Manila) → runWeeklyAlerts()
+ * dependency. Three jobs:
+ *   - daily 6 AM (Asia/Manila)  → runDailyAlerts() — MGMT inbox alerts +
+ *                                  Caraga DOH news scrape
+ *   - daily 8 AM (Asia/Manila)  → runDotsReminders() — DOTS visit SMS
+ *                                  reminders to consenting TB patients.
+ *                                  Deliberately scheduled outside the
+ *                                  21:00-07:00 quiet-hours window enforced
+ *                                  by shared/sms-policy.ts.
+ *   - Friday 4 PM (Asia/Manila) → runWeeklyAlerts() — PIDSR cutoff check
  *
  * The scheduler is idempotent + best-effort. If the process restarts mid-day
  * we don't try to "catch up" — we just run on the next configured slot. An
  * admin can fire jobs manually via POST /api/admin/run-scheduler-now.
  */
 
-import { runDailyAlerts, runWeeklyAlerts } from "./jobs";
+import { runDailyAlerts, runDotsReminders, runWeeklyAlerts } from "./jobs";
 
 // Use Asia/Manila offset (UTC+8) for scheduling. We compute next-fire by
 // converting "now" into Manila time, then bumping forward.
@@ -42,6 +48,7 @@ function msUntilNextFriday(hourManila: number, minuteManila = 0): number {
 }
 
 let dailyTimer: NodeJS.Timeout | null = null;
+let smsTimer: NodeJS.Timeout | null = null;
 let weeklyTimer: NodeJS.Timeout | null = null;
 let started = false;
 
@@ -56,6 +63,20 @@ function scheduleDaily() {
       console.error("[scheduler] daily run failed:", err);
     }
     scheduleDaily();
+  }, ms);
+}
+
+function scheduleDotsReminders() {
+  const ms = msUntilNext(8, 0); // 8:00 AM Manila — well clear of quiet hours
+  console.log(`[scheduler] next DOTS reminders run in ${Math.round(ms / 60000)} minutes`);
+  smsTimer = setTimeout(async () => {
+    console.log("[scheduler] running DOTS reminders");
+    try {
+      await runDotsReminders();
+    } catch (err) {
+      console.error("[scheduler] DOTS reminders run failed:", err);
+    }
+    scheduleDotsReminders();
   }, ms);
 }
 
@@ -77,16 +98,19 @@ export function startScheduler(): void {
   if (started) return;
   started = true;
   scheduleDaily();
+  scheduleDotsReminders();
   scheduleWeekly();
-  console.log("[scheduler] started — daily 6 AM + Friday 4 PM (Asia/Manila)");
+  console.log("[scheduler] started — daily 6 AM + 8 AM SMS + Friday 4 PM (Asia/Manila)");
 }
 
 export function stopScheduler(): void {
   if (dailyTimer) clearTimeout(dailyTimer);
+  if (smsTimer) clearTimeout(smsTimer);
   if (weeklyTimer) clearTimeout(weeklyTimer);
   dailyTimer = null;
+  smsTimer = null;
   weeklyTimer = null;
   started = false;
 }
 
-export { runDailyAlerts, runWeeklyAlerts };
+export { runDailyAlerts, runDotsReminders, runWeeklyAlerts };

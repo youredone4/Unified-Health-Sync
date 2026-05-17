@@ -14,6 +14,7 @@
 import { db } from "../db";
 import { sql } from "drizzle-orm";
 import { scrapeCaragaDoh } from "./scrape-caraga-doh";
+import { sendSms } from "../sms";
 import {
   workforceMembers,
   inventory,
@@ -869,4 +870,75 @@ export async function runWeeklyAlerts(): Promise<{ jobName: string; count: numbe
     console.error(`[scheduler] pidsr-friday-cutoff failed:`, err);
     return [{ jobName: "pidsr-friday-cutoff", count: -1 }];
   }
+}
+
+/**
+ * Daily 8 AM Manila — DOTS visit SMS reminders for TB patients whose
+ * next observed-dose visit is tomorrow. The 8 AM tick is deliberately
+ * outside the 21:00-07:00 quiet-hours window so sends are not
+ * automatically deferred by the policy in shared/sms-policy.ts.
+ *
+ * Eligibility filter (all must be true):
+ *   - outcome_status = 'Ongoing'   (still in treatment)
+ *   - sms_opt_in = TRUE            (explicit consent on file)
+ *   - phone IS NOT NULL            (further validated by sendSms)
+ *   - next_dots_visit_date = today + 1   (tomorrow's visit)
+ *
+ * Every send goes through sendSms() (server/sms.ts) so phone validation,
+ * rate-limit guards, and the sms_outbox audit trail all apply uniformly.
+ * Manual + scheduled sends share one code path.
+ */
+export async function runDotsReminders(): Promise<{ jobName: string; count: number }[]> {
+  const results: { jobName: string; count: number }[] = [];
+  try {
+    // Compute "tomorrow" in Manila wall-clock terms; SMS reminders go
+    // out the day before the visit.
+    const nowManila = new Date(Date.now() + 8 * 3600 * 1000);
+    nowManila.setUTCDate(nowManila.getUTCDate() + 1);
+    const tomorrow = nowManila.toISOString().slice(0, 10);
+
+    const eligible = await db
+      .select()
+      .from(tbPatients)
+      .where(sql`outcome_status = 'Ongoing'
+        AND sms_opt_in IS TRUE
+        AND phone IS NOT NULL
+        AND next_dots_visit_date = ${tomorrow}`);
+
+    console.log(`[dots-reminders] ${eligible.length} eligible patient(s) for ${tomorrow}`);
+
+    let sent = 0;
+    let deferred = 0;
+    let failed = 0;
+    for (const p of eligible) {
+      const message =
+        `Hello ${p.firstName}, this is a reminder for your TB DOTS visit ` +
+        `scheduled on ${tomorrow}. Please come to your barangay health ` +
+        `station for your observed dose.`;
+      try {
+        const r = await sendSms({
+          recipient: `${p.firstName} ${p.lastName}`,
+          recipientPhone: p.phone,
+          message,
+          barangay: p.barangay,
+          automated: true,
+        });
+        if (r.kind === "SENT") sent++;
+        else if (r.kind === "DEFERRED") deferred++;
+        else failed++;
+      } catch (err) {
+        console.error(`[dots-reminders] send failed for patient ${p.id}:`, err);
+        failed++;
+      }
+    }
+
+    console.log(`[dots-reminders] sent=${sent} deferred=${deferred} failed=${failed}`);
+    results.push({ jobName: "dots-reminders-sent", count: sent });
+    results.push({ jobName: "dots-reminders-deferred", count: deferred });
+    results.push({ jobName: "dots-reminders-failed", count: failed });
+  } catch (err) {
+    console.error("[scheduler] dots-reminders run failed:", err);
+    results.push({ jobName: "dots-reminders", count: -1 });
+  }
+  return results;
 }
