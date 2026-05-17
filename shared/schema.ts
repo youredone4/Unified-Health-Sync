@@ -729,6 +729,14 @@ export const medicalCertificates = pgTable("medical_certificates", {
   signedByTitle: text("signed_by_title"),                  // e.g. "RHU Nurse / MHO"
   notes: text("notes"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
+  // Cross-domain linking — see docs/cross-domain-linking-audit.md
+  // (Option A). Populated by <PatientSearchCombobox> when the operator
+  // picks an existing mother/child/senior/tb_patient at capture time;
+  // null when the patient is a brand-new walk-in not yet registered
+  // in any registry (patientName preserved as free text in that case).
+  linkedPersonType: text("linked_person_type"), // "MOTHER" | "CHILD" | "SENIOR" | "TB_PATIENT"
+  linkedPersonId: integer("linked_person_id"),
+
 });
 export const insertMedicalCertificateSchema = createInsertSchema(medicalCertificates)
   .omit({ id: true, createdAt: true, certificateNumber: true })
@@ -1357,6 +1365,14 @@ export const oralHealthVisits = pgTable("oral_health_visits", {
   notes: text("notes"),
   recordedByUserId: varchar("recorded_by_user_id"),
   createdAt: timestamp("created_at").defaultNow(),
+  // Cross-domain linking — see docs/cross-domain-linking-audit.md
+  // (Option A). Populated by <PatientSearchCombobox> when the operator
+  // picks an existing mother/child/senior/tb_patient at capture time;
+  // null when the patient is a brand-new walk-in not yet registered
+  // in any registry (patientName preserved as free text in that case).
+  linkedPersonType: text("linked_person_type"), // "MOTHER" | "CHILD" | "SENIOR" | "TB_PATIENT"
+  linkedPersonId: integer("linked_person_id"),
+
 });
 
 export const insertOralHealthVisitSchema = createInsertSchema(oralHealthVisits)
@@ -1388,6 +1404,14 @@ export const philpenAssessments = pgTable("philpen_assessments", {
   notes: text("notes"),
   recordedByUserId: varchar("recorded_by_user_id"),
   createdAt: timestamp("created_at").defaultNow(),
+  // Cross-domain linking — see docs/cross-domain-linking-audit.md
+  // (Option A). Populated by <PatientSearchCombobox> when the operator
+  // picks an existing mother/child/senior/tb_patient at capture time;
+  // null when the patient is a brand-new walk-in not yet registered
+  // in any registry (patientName preserved as free text in that case).
+  linkedPersonType: text("linked_person_type"), // "MOTHER" | "CHILD" | "SENIOR" | "TB_PATIENT"
+  linkedPersonId: integer("linked_person_id"),
+
 });
 export const insertPhilpenAssessmentSchema = createInsertSchema(philpenAssessments)
   .omit({ id: true, createdAt: true })
@@ -1415,6 +1439,14 @@ export const ncdScreenings = pgTable("ncd_screenings", {
   notes: text("notes"),
   recordedByUserId: varchar("recorded_by_user_id"),
   createdAt: timestamp("created_at").defaultNow(),
+  // Cross-domain linking — see docs/cross-domain-linking-audit.md
+  // (Option A). Populated by <PatientSearchCombobox> when the operator
+  // picks an existing mother/child/senior/tb_patient at capture time;
+  // null when the patient is a brand-new walk-in not yet registered
+  // in any registry (patientName preserved as free text in that case).
+  linkedPersonType: text("linked_person_type"), // "MOTHER" | "CHILD" | "SENIOR" | "TB_PATIENT"
+  linkedPersonId: integer("linked_person_id"),
+
 });
 export const insertNcdScreeningSchema = createInsertSchema(ncdScreenings)
   .omit({ id: true, createdAt: true })
@@ -1439,6 +1471,14 @@ export const visionScreenings = pgTable("vision_screenings", {
   notes: text("notes"),
   recordedByUserId: varchar("recorded_by_user_id"),
   createdAt: timestamp("created_at").defaultNow(),
+  // Cross-domain linking — see docs/cross-domain-linking-audit.md
+  // (Option A). Populated by <PatientSearchCombobox> when the operator
+  // picks an existing mother/child/senior/tb_patient at capture time;
+  // null when the patient is a brand-new walk-in not yet registered
+  // in any registry (patientName preserved as free text in that case).
+  linkedPersonType: text("linked_person_type"), // "MOTHER" | "CHILD" | "SENIOR" | "TB_PATIENT"
+  linkedPersonId: integer("linked_person_id"),
+
 });
 export const insertVisionScreeningSchema = createInsertSchema(visionScreenings)
   .omit({ id: true, createdAt: true })
@@ -1467,6 +1507,14 @@ export const cervicalCancerScreenings = pgTable("cervical_cancer_screenings", {
   notes: text("notes"),
   recordedByUserId: varchar("recorded_by_user_id"),
   createdAt: timestamp("created_at").defaultNow(),
+  // Cross-domain linking — see docs/cross-domain-linking-audit.md
+  // (Option A). Populated by <PatientSearchCombobox> when the operator
+  // picks an existing mother/child/senior/tb_patient at capture time;
+  // null when the patient is a brand-new walk-in not yet registered
+  // in any registry (patientName preserved as free text in that case).
+  linkedPersonType: text("linked_person_type"), // "MOTHER" | "CHILD" | "SENIOR" | "TB_PATIENT"
+  linkedPersonId: integer("linked_person_id"),
+
 });
 export const insertCervicalCancerScreeningSchema = createInsertSchema(cervicalCancerScreenings)
   .omit({ id: true, createdAt: true })
@@ -1491,6 +1539,14 @@ export const mentalHealthScreenings = pgTable("mental_health_screenings", {
   notes: text("notes"),
   recordedByUserId: varchar("recorded_by_user_id"),
   createdAt: timestamp("created_at").defaultNow(),
+  // Cross-domain linking — see docs/cross-domain-linking-audit.md
+  // (Option A). Populated by <PatientSearchCombobox> when the operator
+  // picks an existing mother/child/senior/tb_patient at capture time;
+  // null when the patient is a brand-new walk-in not yet registered
+  // in any registry (patientName preserved as free text in that case).
+  linkedPersonType: text("linked_person_type"), // "MOTHER" | "CHILD" | "SENIOR" | "TB_PATIENT"
+  linkedPersonId: integer("linked_person_id"),
+
 });
 export const insertMentalHealthScreeningSchema = createInsertSchema(mentalHealthScreenings)
   .omit({ id: true, createdAt: true })
@@ -1527,6 +1583,14 @@ export const filariasisRecords = pgTable("filariasis_records", {
   reviewerNotes: text("reviewer_notes"),
   reviewedAt: timestamp("reviewed_at"),
   reviewedByUserId: varchar("reviewed_by_user_id"),
+  // Cross-domain linking — see docs/cross-domain-linking-audit.md
+  // (Option A). Populated by <PatientSearchCombobox> when the operator
+  // picks an existing mother/child/senior/tb_patient at capture time;
+  // null when the patient is a brand-new walk-in not yet registered
+  // in any registry (patientName preserved as free text in that case).
+  linkedPersonType: text("linked_person_type"), // "MOTHER" | "CHILD" | "SENIOR" | "TB_PATIENT"
+  linkedPersonId: integer("linked_person_id"),
+
 });
 export const insertFilariasisRecordSchema = createInsertSchema(filariasisRecords)
   .omit({ id: true, createdAt: true })
@@ -1557,6 +1621,14 @@ export const rabiesExposures = pgTable("rabies_exposures", {
   reviewerNotes: text("reviewer_notes"),
   reviewedAt: timestamp("reviewed_at"),
   reviewedByUserId: varchar("reviewed_by_user_id"),
+  // Cross-domain linking — see docs/cross-domain-linking-audit.md
+  // (Option A). Populated by <PatientSearchCombobox> when the operator
+  // picks an existing mother/child/senior/tb_patient at capture time;
+  // null when the patient is a brand-new walk-in not yet registered
+  // in any registry (patientName preserved as free text in that case).
+  linkedPersonType: text("linked_person_type"), // "MOTHER" | "CHILD" | "SENIOR" | "TB_PATIENT"
+  linkedPersonId: integer("linked_person_id"),
+
 });
 export const insertRabiesExposureSchema = createInsertSchema(rabiesExposures)
   .omit({ id: true, createdAt: true })
@@ -1586,6 +1658,14 @@ export const schistosomiasisRecords = pgTable("schistosomiasis_records", {
   reviewerNotes: text("reviewer_notes"),
   reviewedAt: timestamp("reviewed_at"),
   reviewedByUserId: varchar("reviewed_by_user_id"),
+  // Cross-domain linking — see docs/cross-domain-linking-audit.md
+  // (Option A). Populated by <PatientSearchCombobox> when the operator
+  // picks an existing mother/child/senior/tb_patient at capture time;
+  // null when the patient is a brand-new walk-in not yet registered
+  // in any registry (patientName preserved as free text in that case).
+  linkedPersonType: text("linked_person_type"), // "MOTHER" | "CHILD" | "SENIOR" | "TB_PATIENT"
+  linkedPersonId: integer("linked_person_id"),
+
 });
 export const insertSchistosomiasisRecordSchema = createInsertSchema(schistosomiasisRecords)
   .omit({ id: true, createdAt: true })
@@ -1610,6 +1690,14 @@ export const sthRecords = pgTable("sth_records", {
   reviewerNotes: text("reviewer_notes"),
   reviewedAt: timestamp("reviewed_at"),
   reviewedByUserId: varchar("reviewed_by_user_id"),
+  // Cross-domain linking — see docs/cross-domain-linking-audit.md
+  // (Option A). Populated by <PatientSearchCombobox> when the operator
+  // picks an existing mother/child/senior/tb_patient at capture time;
+  // null when the patient is a brand-new walk-in not yet registered
+  // in any registry (patientName preserved as free text in that case).
+  linkedPersonType: text("linked_person_type"), // "MOTHER" | "CHILD" | "SENIOR" | "TB_PATIENT"
+  linkedPersonId: integer("linked_person_id"),
+
 });
 export const insertSthRecordSchema = createInsertSchema(sthRecords)
   .omit({ id: true, createdAt: true })
@@ -1633,6 +1721,14 @@ export const leprosyRecords = pgTable("leprosy_records", {
   reviewerNotes: text("reviewer_notes"),
   reviewedAt: timestamp("reviewed_at"),
   reviewedByUserId: varchar("reviewed_by_user_id"),
+  // Cross-domain linking — see docs/cross-domain-linking-audit.md
+  // (Option A). Populated by <PatientSearchCombobox> when the operator
+  // picks an existing mother/child/senior/tb_patient at capture time;
+  // null when the patient is a brand-new walk-in not yet registered
+  // in any registry (patientName preserved as free text in that case).
+  linkedPersonType: text("linked_person_type"), // "MOTHER" | "CHILD" | "SENIOR" | "TB_PATIENT"
+  linkedPersonId: integer("linked_person_id"),
+
 });
 export const insertLeprosyRecordSchema = createInsertSchema(leprosyRecords)
   .omit({ id: true, createdAt: true })
@@ -1686,6 +1782,14 @@ export const referralRecords = pgTable("referral_records", {
   // Receiver-side data captured on RECEIVED / COMPLETED transitions
   receivedNotes: text("received_notes"),
   completionOutcome: text("completion_outcome"),          // free-text outcome summary
+  // Cross-domain linking — see docs/cross-domain-linking-audit.md
+  // (Option A). Populated by <PatientSearchCombobox> when the operator
+  // picks an existing mother/child/senior/tb_patient at capture time;
+  // null when the patient is a brand-new walk-in not yet registered
+  // in any registry (patientName preserved as free text in that case).
+  linkedPersonType: text("linked_person_type"), // "MOTHER" | "CHILD" | "SENIOR" | "TB_PATIENT"
+  linkedPersonId: integer("linked_person_id"),
+
 });
 export const insertReferralRecordSchema = createInsertSchema(referralRecords)
   .omit({ id: true, createdAt: true, receivedAt: true, completedAt: true, status: true, targetUserId: true, receivedNotes: true, completionOutcome: true })
@@ -1869,6 +1973,14 @@ export const aefiEvents = pgTable("aefi_events", {
   recordedByUserId: varchar("recorded_by_user_id"),
   notes: text("notes"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
+  // Cross-domain linking — see docs/cross-domain-linking-audit.md
+  // (Option A). Populated by <PatientSearchCombobox> when the operator
+  // picks an existing mother/child/senior/tb_patient at capture time;
+  // null when the patient is a brand-new walk-in not yet registered
+  // in any registry (patientName preserved as free text in that case).
+  linkedPersonType: text("linked_person_type"), // "MOTHER" | "CHILD" | "SENIOR" | "TB_PATIENT"
+  linkedPersonId: integer("linked_person_id"),
+
 });
 export const insertAefiEventSchema = createInsertSchema(aefiEvents)
   .omit({
