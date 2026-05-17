@@ -6,6 +6,7 @@ import { max, eq, and, desc, gte, or, inArray, isNull, sql } from "drizzle-orm";
 import { prenatalVisits, childVisits, seniorVisits, insertFpServiceRecordSchema, insertNutritionFollowUpSchema, insertColdChainLogSchema, insertTbDoseLogSchema, insertPostpartumVisitSchema, insertPrenatalScreeningSchema, insertBirthAttendanceRecordSchema, insertSickChildVisitSchema, insertSchoolImmunizationSchema, insertOralHealthVisitSchema, insertPhilpenAssessmentSchema, insertNcdScreeningSchema, insertVisionScreeningSchema, insertCervicalCancerScreeningSchema, insertMentalHealthScreeningSchema, insertFilariasisRecordSchema, insertRabiesExposureSchema, insertSchistosomiasisRecordSchema, insertSthRecordSchema, insertLeprosyRecordSchema, insertDeathEventSchema, insertHouseholdWaterRecordSchema, insertPidsrSubmissionSchema, insertWorkforceMemberSchema, insertWorkforceCredentialSchema, referralRecords, insertReferralRecordSchema, ncdScreenings, filariasisRecords, rabiesExposures, schistosomiasisRecords, sthRecords, leprosyRecords } from "@shared/schema";
 import { api } from "@shared/routes";
 import { sendSms } from "./sms";
+import { searchPatients } from "./patient-search";
 import { z } from "zod";
 import { setupAuth, registerAuthRoutes } from "./auth";
 import { registerAdminRoutes } from "./routes/admin";
@@ -160,6 +161,23 @@ export async function registerRoutes(
       }));
     res.json(results);
   });
+
+  // Unified cross-registry patient search. Powers the
+  // <PatientSearchCombobox> used on every patient-capture form so a TL
+  // who already registered "Maria Santos" anywhere in the system sees
+  // her in the dropdown when she next appears on a surveillance or
+  // screening form — instead of being typed in as a parallel string.
+  // See server/patient-search.ts for the search + ranking logic.
+  app.get("/api/patients/search", loadUserInfo, requireAuth, ar(async (req, res) => {
+    const query = String(req.query.q ?? "").trim();
+    const limit = Math.min(Math.max(Number(req.query.limit) || 10, 1), 25);
+    if (query.length < 2) return res.json([]);
+    const allowedBarangays = req.userInfo?.role === UserRole.TL
+      ? req.userInfo.assignedBarangays
+      : undefined;
+    const results = await searchPatients({ query, limit, allowedBarangays });
+    res.json(results);
+  }));
 
   app.get(api.mothers.get.path, registryReadRBAC, ar(async (req, res) => {
     const id = parseId(req.params.id, res); if (id === null) return;
