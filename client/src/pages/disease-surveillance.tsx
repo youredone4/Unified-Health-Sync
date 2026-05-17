@@ -28,6 +28,11 @@ import {
 } from "@/components/surveillance-action-drawer";
 import type { RecommendationModule } from "@shared/recommendations";
 import { Term } from "@/components/term";
+import {
+  PatientSearchCombobox,
+  type PatientKind,
+  type PatientLink,
+} from "@/components/patient-search-combobox";
 
 // Hook helper — manages action drawer state for a given module's cards.
 // Returns the open prop, the onOpenChange handler, the current target,
@@ -81,12 +86,74 @@ function useSurveillanceAction(
 
 const today = () => format(new Date(), "yyyy-MM-dd");
 
-interface PtCommon { patientName: string; dob: string; sex: "M" | "F" }
+/**
+ * Shape of the patient-identity portion of every surveillance form on
+ * this page. The two `linked*` fields are populated by
+ * <PatientSearchCombobox> when the operator picks an existing record;
+ * they stay null when the patient is a walk-in not yet in any registry.
+ *
+ * "Capture once → shows up everywhere" is honored at the moment the
+ * operator types: if Maria Santos already exists as a mother / senior /
+ * tb_patient, the combobox surfaces her and the linkage gets stored.
+ */
+interface PtCommon {
+  patientName: string;
+  dob: string;
+  sex: "M" | "F";
+  linkedPersonType: PatientKind | null;
+  linkedPersonId: number | null;
+}
+
+const EMPTY_PT: PtCommon = {
+  patientName: "",
+  dob: "",
+  sex: "M",
+  linkedPersonType: null,
+  linkedPersonId: null,
+};
+
 function PtFields({ v, onChange }: { v: PtCommon; onChange: (v: PtCommon) => void }) {
+  // Translate the combobox's PatientLink shape into PtCommon. When an
+  // existing record is picked, populate name + linkage so the row saved
+  // by the server can resolve back to that mother/child/senior/tb.
+  // When the operator types a new name and confirms ("Use as new
+  // patient"), the linkage is cleared and the name persists as text.
+  const link: PatientLink | null = v.patientName
+    ? v.linkedPersonType && v.linkedPersonId
+      ? {
+          kind: v.linkedPersonType,
+          id: v.linkedPersonId,
+          displayName: v.patientName,
+          barangay: "",
+        }
+      : { kind: "FREE_TEXT", displayName: v.patientName }
+    : null;
+
   return (
     <>
-      <div><label className="text-xs text-muted-foreground">Patient</label>
-        <Input value={v.patientName} onChange={(e) => onChange({ ...v, patientName: e.target.value })} data-testid="input-name" />
+      <div className="md:col-span-2">
+        <label className="text-xs text-muted-foreground">Patient</label>
+        <PatientSearchCombobox
+          value={link}
+          onChange={(picked) => {
+            if (!picked) {
+              onChange({ ...v, patientName: "", linkedPersonType: null, linkedPersonId: null });
+              return;
+            }
+            if (picked.kind === "FREE_TEXT") {
+              onChange({ ...v, patientName: picked.displayName, linkedPersonType: null, linkedPersonId: null });
+              return;
+            }
+            onChange({
+              ...v,
+              patientName: picked.displayName,
+              linkedPersonType: picked.kind,
+              linkedPersonId: picked.id,
+            });
+          }}
+          placeholder="Search or type patient name…"
+          testId="input-name"
+        />
       </div>
       <div><label className="text-xs text-muted-foreground">DOB</label>
         <Input type="date" value={v.dob} max={today()} onChange={(e) => onChange({ ...v, dob: e.target.value })} data-testid="input-dob" />
@@ -158,7 +225,7 @@ function FilariasisCard({ barangay, canEnter }: { barangay: string | null; canEn
   );
   const { data: rows = [] } = useQuery<FilariasisRecord[]>({ queryKey });
   const action = useSurveillanceAction("/api/filariasis-records", "Filariasis exam", queryKey, "filariasis", "FILARIASIS_RECORD");
-  const [pt, setPt] = useState<PtCommon>({ patientName: "", dob: "", sex: "M" });
+  const [pt, setPt] = useState<PtCommon>(EMPTY_PT);
   const [date, setDate] = useState(today());
   const [result, setResult] = useState<"POSITIVE" | "NEGATIVE" | "">("NEGATIVE");
   const [manif, setManif] = useState<"LYMPHEDEMA" | "HYDROCELE" | "NONE">("NONE");
@@ -166,7 +233,7 @@ function FilariasisCard({ barangay, canEnter }: { barangay: string | null; canEn
     mutationFn: async () => (await apiRequest("POST", "/api/filariasis-records", {
       ...pt, barangay, examDate: date, result: result || null, manifestation: manif,
     })).json(),
-    onSuccess: () => { toast({ title: "Filariasis record saved" }); queryClient.invalidateQueries({ queryKey }); setPt({ patientName: "", dob: "", sex: "M" }); },
+    onSuccess: () => { toast({ title: "Filariasis record saved" }); queryClient.invalidateQueries({ queryKey }); setPt(EMPTY_PT); },
     onError: (e: Error) => toast({ title: "Could not save", description: e.message, variant: "destructive" }),
   });
   return (
@@ -262,7 +329,7 @@ function RabiesCard({ barangay, canEnter }: { barangay: string | null; canEnter:
   );
   const { data: rows = [] } = useQuery<RabiesExposure[]>({ queryKey });
   const action = useSurveillanceAction("/api/rabies-exposures", "Rabies exposure", queryKey, "rabies", "RABIES_EXPOSURE");
-  const [pt, setPt] = useState<PtCommon>({ patientName: "", dob: "", sex: "M" });
+  const [pt, setPt] = useState<PtCommon>(EMPTY_PT);
   const [date, setDate] = useState(today());
   const [cat, setCat] = useState<"I" | "II" | "III">("I");
   const [center, setCenter] = useState<"ABTC" | "NON_ABTC" | "">("ABTC");
@@ -271,7 +338,7 @@ function RabiesCard({ barangay, canEnter }: { barangay: string | null; canEnter:
     mutationFn: async () => (await apiRequest("POST", "/api/rabies-exposures", {
       ...pt, barangay, exposureDate: date, category: cat, treatmentCenter: center || null, completeDoses: complete,
     })).json(),
-    onSuccess: () => { toast({ title: "Rabies exposure saved" }); queryClient.invalidateQueries({ queryKey }); setPt({ patientName: "", dob: "", sex: "M" }); setComplete(false); },
+    onSuccess: () => { toast({ title: "Rabies exposure saved" }); queryClient.invalidateQueries({ queryKey }); setPt(EMPTY_PT); setComplete(false); },
     onError: (e: Error) => toast({ title: "Could not save", description: e.message, variant: "destructive" }),
   });
   return (
@@ -383,7 +450,7 @@ function SchistoCard({ barangay, canEnter }: { barangay: string | null; canEnter
   );
   const { data: rows = [] } = useQuery<SchistosomiasisRecord[]>({ queryKey });
   const action = useSurveillanceAction("/api/schistosomiasis-records", "Schisto record", queryKey, "schisto", "SCHISTOSOMIASIS_RECORD");
-  const [pt, setPt] = useState<PtCommon>({ patientName: "", dob: "", sex: "M" });
+  const [pt, setPt] = useState<PtCommon>(EMPTY_PT);
   const [date, setDate] = useState(today());
   const [suspected, setSuspected] = useState(false);
   const [treated, setTreated] = useState(false);
@@ -393,7 +460,7 @@ function SchistoCard({ barangay, canEnter }: { barangay: string | null; canEnter
     mutationFn: async () => (await apiRequest("POST", "/api/schistosomiasis-records", {
       ...pt, barangay, seenDate: date, suspected, treated, confirmed, complicated,
     })).json(),
-    onSuccess: () => { toast({ title: "Schistosomiasis record saved" }); queryClient.invalidateQueries({ queryKey }); setPt({ patientName: "", dob: "", sex: "M" }); setSuspected(false); setTreated(false); setConfirmed(false); setComplicated(false); },
+    onSuccess: () => { toast({ title: "Schistosomiasis record saved" }); queryClient.invalidateQueries({ queryKey }); setPt(EMPTY_PT); setSuspected(false); setTreated(false); setConfirmed(false); setComplicated(false); },
     onError: (e: Error) => toast({ title: "Could not save", description: e.message, variant: "destructive" }),
   });
   return (
@@ -488,7 +555,7 @@ function SthCard({ barangay, canEnter }: { barangay: string | null; canEnter: bo
   );
   const { data: rows = [] } = useQuery<SthRecord[]>({ queryKey });
   const action = useSurveillanceAction("/api/sth-records", "STH record", queryKey, "sth", "STH_RECORD");
-  const [pt, setPt] = useState<PtCommon>({ patientName: "", dob: "", sex: "M" });
+  const [pt, setPt] = useState<PtCommon>(EMPTY_PT);
   const [date, setDate] = useState(today());
   const [confirmed, setConfirmed] = useState(false);
   const [residency, setResidency] = useState<"RESIDENT" | "NON_RESIDENT">("RESIDENT");
@@ -496,7 +563,7 @@ function SthCard({ barangay, canEnter }: { barangay: string | null; canEnter: bo
     mutationFn: async () => (await apiRequest("POST", "/api/sth-records", {
       ...pt, barangay, screenDate: date, confirmed, residency,
     })).json(),
-    onSuccess: () => { toast({ title: "STH record saved" }); queryClient.invalidateQueries({ queryKey }); setPt({ patientName: "", dob: "", sex: "M" }); setConfirmed(false); },
+    onSuccess: () => { toast({ title: "STH record saved" }); queryClient.invalidateQueries({ queryKey }); setPt(EMPTY_PT); setConfirmed(false); },
     onError: (e: Error) => toast({ title: "Could not save", description: e.message, variant: "destructive" }),
   });
   return (
@@ -589,7 +656,7 @@ function LeprosyCard({ barangay, canEnter }: { barangay: string | null; canEnter
   );
   const { data: rows = [] } = useQuery<LeprosyRecord[]>({ queryKey });
   const action = useSurveillanceAction("/api/leprosy-records", "Leprosy record", queryKey, "leprosy", "LEPROSY_RECORD");
-  const [pt, setPt] = useState<PtCommon>({ patientName: "", dob: "", sex: "M" });
+  const [pt, setPt] = useState<PtCommon>(EMPTY_PT);
   const [date, setDate] = useState(today());
   const [newCase, setNewCase] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
@@ -597,7 +664,7 @@ function LeprosyCard({ barangay, canEnter }: { barangay: string | null; canEnter
     mutationFn: async () => (await apiRequest("POST", "/api/leprosy-records", {
       ...pt, barangay, registeredDate: date, newCase, confirmed,
     })).json(),
-    onSuccess: () => { toast({ title: "Leprosy record saved" }); queryClient.invalidateQueries({ queryKey }); setPt({ patientName: "", dob: "", sex: "M" }); setNewCase(false); setConfirmed(false); },
+    onSuccess: () => { toast({ title: "Leprosy record saved" }); queryClient.invalidateQueries({ queryKey }); setPt(EMPTY_PT); setNewCase(false); setConfirmed(false); },
     onError: (e: Error) => toast({ title: "Could not save", description: e.message, variant: "destructive" }),
   });
   return (
