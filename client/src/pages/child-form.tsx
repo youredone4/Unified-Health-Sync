@@ -60,6 +60,7 @@ export default function ChildForm() {
     nextVisitDate: "",
     birthWeightKg: "",
     birthWeightCategory: "",
+    smsOptIn: false as boolean,
   });
 
   const [vaccines, setVaccines] = useState<Record<string, string>>({});
@@ -77,6 +78,7 @@ export default function ChildForm() {
         nextVisitDate: existingChild.nextVisitDate || "",
         birthWeightKg: existingChild.birthWeightKg || "",
         birthWeightCategory: existingChild.birthWeightCategory || "",
+        smsOptIn: existingChild.smsOptIn ?? false,
       });
       if (existingChild.vaccines) {
         setVaccines(existingChild.vaccines as Record<string, string>);
@@ -122,6 +124,18 @@ export default function ChildForm() {
       });
     }
 
+    // Stamp SMS consent dates whenever the flag flips. Preserves
+    // existing dates when the toggle doesn't change so re-saves don't
+    // reset the audit trail.
+    const today = new Date().toISOString().split("T")[0];
+    const prevOptIn = existingChild?.smsOptIn;
+    const smsOptInDate = formData.smsOptIn && !prevOptIn
+      ? today
+      : (existingChild?.smsOptInDate ?? null);
+    const smsOptOutDate = !formData.smsOptIn && prevOptIn === true
+      ? today
+      : (existingChild?.smsOptOutDate ?? null);
+
     const payload = {
       name: formData.name,
       dob: formData.dob,
@@ -134,6 +148,9 @@ export default function ChildForm() {
       birthWeightCategory: formData.birthWeightCategory || null,
       vaccines: Object.keys(vaccines).length > 0 ? vaccines : null,
       growth: growthArray.length > 0 ? growthArray : null,
+      smsOptIn: formData.smsOptIn,
+      smsOptInDate,
+      smsOptOutDate,
     };
 
     if (isEditing) {
@@ -375,6 +392,31 @@ export default function ChildForm() {
                 </div>
               ))}
             </div>
+          </CardContent>
+        </Card>
+
+        {/* SMS consent — DPA (RA 10173). Reminders go to the linked mother. */}
+        <Card>
+          <CardContent className="pt-6">
+            <label className="flex items-start gap-3 rounded-md border border-input bg-muted/30 p-3 cursor-pointer">
+              <Checkbox
+                checked={formData.smsOptIn}
+                onCheckedChange={(v) =>
+                  setFormData({ ...formData, smsOptIn: v === true })
+                }
+                className="mt-1"
+                data-testid="check-sms-opt-in"
+              />
+              <div className="space-y-1 leading-tight">
+                <div className="text-sm font-medium">
+                  Parent / guardian consents to receive SMS reminders
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Required before automated vaccine reminders can be sent.
+                  Consent date is stamped automatically; un-check to revoke.
+                </p>
+              </div>
+            </label>
           </CardContent>
         </Card>
 

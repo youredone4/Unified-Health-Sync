@@ -4007,6 +4007,18 @@ export class DatabaseStorage implements IStorage {
     // from reported_to_chd: true → REPORTED_TO_FDA, false → NOTIFIED.
     await db.execute(sql`ALTER TABLE aefi_events ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'NOTIFIED'`);
     await db.execute(sql`ALTER TABLE aefi_events ADD COLUMN IF NOT EXISTS who_causality TEXT`);
+
+    // SMS consent (RA 10173 / Data Privacy Act) on the four patient
+    // tables. Null = never asked (existing patients); true = opted in;
+    // false = explicitly declined or revoked. The future auto-SMS
+    // scheduler only sends when sms_opt_in IS TRUE. All three columns
+    // are nullable so existing rows backfill cleanly with NULL.
+    for (const t of ["mothers", "children", "seniors", "tb_patients"]) {
+      await db.execute(sql.raw(`ALTER TABLE ${t} ADD COLUMN IF NOT EXISTS sms_opt_in BOOLEAN`));
+      await db.execute(sql.raw(`ALTER TABLE ${t} ADD COLUMN IF NOT EXISTS sms_opt_in_date TEXT`));
+      await db.execute(sql.raw(`ALTER TABLE ${t} ADD COLUMN IF NOT EXISTS sms_opt_out_date TEXT`));
+    }
+
     await db.execute(sql`ALTER TABLE aefi_events ADD COLUMN IF NOT EXISTS investigated_by_user_id VARCHAR`);
     await db.execute(sql`ALTER TABLE aefi_events ADD COLUMN IF NOT EXISTS investigated_at TIMESTAMP`);
     await db.execute(sql`ALTER TABLE aefi_events ADD COLUMN IF NOT EXISTS classified_by_user_id VARCHAR`);

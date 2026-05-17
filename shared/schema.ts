@@ -45,6 +45,14 @@ export const mothers = pgTable("mothers", {
   
   latitude: text("latitude"),
   longitude: text("longitude"),
+
+  // SMS consent — Data Privacy Act (RA 10173) compliance for automated
+  // reminders. Null = never asked (existing patients); true = opted in;
+  // false = explicitly declined or revoked. The auto-SMS scheduler only
+  // sends when smsOptIn === true.
+  smsOptIn: boolean("sms_opt_in"),
+  smsOptInDate: text("sms_opt_in_date"),    // YYYY-MM-DD
+  smsOptOutDate: text("sms_opt_out_date"),  // YYYY-MM-DD; set when revoked
 });
 
 export const insertMotherSchema = createInsertSchema(mothers).omit({ id: true });
@@ -99,6 +107,13 @@ export const children = pgTable("children", {
   }>>().default([]),
   latitude: text("latitude"),
   longitude: text("longitude"),
+
+  // SMS consent — captured against the linked mother in practice, but
+  // tracked here too so a child without a linked mother (orphan record)
+  // can still carry consent state. Same semantics as mothers.smsOptIn.
+  smsOptIn: boolean("sms_opt_in"),
+  smsOptInDate: text("sms_opt_in_date"),
+  smsOptOutDate: text("sms_opt_out_date"),
 });
 
 export const insertChildSchema = createInsertSchema(children).omit({ id: true });
@@ -130,6 +145,11 @@ export const seniors = pgTable("seniors", {
   civilStatus: text("civil_status"),
   latitude: text("latitude"),
   longitude: text("longitude"),
+
+  // SMS consent — see mothers.smsOptIn for semantics.
+  smsOptIn: boolean("sms_opt_in"),
+  smsOptInDate: text("sms_opt_in_date"),
+  smsOptOutDate: text("sms_opt_out_date"),
 });
 
 export const insertSeniorSchema = createInsertSchema(seniors).omit({ id: true });
@@ -400,6 +420,13 @@ export const tbPatients = pgTable("tb_patients", {
   outcomeStatus: text("outcome_status").default("Ongoing"), // Ongoing, Completed, Transferred, LTFU
   latitude: text("latitude"),
   longitude: text("longitude"),
+
+  // SMS consent — see mothers.smsOptIn for semantics. Critical for the
+  // TB DOTS auto-SMS pilot; the scheduler refuses to send when this is
+  // not explicitly true.
+  smsOptIn: boolean("sms_opt_in"),
+  smsOptInDate: text("sms_opt_in_date"),
+  smsOptOutDate: text("sms_opt_out_date"),
 });
 
 export const insertTBPatientSchema = createInsertSchema(tbPatients)

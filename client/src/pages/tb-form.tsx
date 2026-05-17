@@ -26,6 +26,7 @@ const formSchema = z.object({
   treatmentStartDate: z.string().min(1, "Treatment start date is required"),
   medsRegimenName: z.string().optional(),
   outcomeStatus: z.string().default("Ongoing"),
+  smsOptIn: z.boolean().optional(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -56,6 +57,7 @@ export default function TBForm() {
       treatmentStartDate: new Date().toISOString().split('T')[0],
       medsRegimenName: "",
       outcomeStatus: "Ongoing",
+      smsOptIn: false,
     },
     values: isEdit && tbPatient ? {
       firstName: tbPatient.firstName,
@@ -68,12 +70,20 @@ export default function TBForm() {
       treatmentPhase: tbPatient.treatmentPhase,
       treatmentStartDate: tbPatient.treatmentStartDate,
       medsRegimenName: tbPatient.medsRegimenName || "",
+      smsOptIn: tbPatient.smsOptIn ?? false,
       outcomeStatus: tbPatient.outcomeStatus || "Ongoing",
     } : undefined,
   });
 
+  // Submit payload widens FormValues with the audit dates we stamp in
+  // onSubmit when the smsOptIn flag flips.
+  type SubmitPayload = FormValues & {
+    smsOptInDate?: string | null;
+    smsOptOutDate?: string | null;
+  };
+
   const createMutation = useMutation({
-    mutationFn: async (data: FormValues) => {
+    mutationFn: async (data: SubmitPayload) => {
       return apiRequest("POST", "/api/tb-patients", data);
     },
     onSuccess: () => {
@@ -87,7 +97,7 @@ export default function TBForm() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: async (data: FormValues) => {
+    mutationFn: async (data: SubmitPayload) => {
       return apiRequest("PUT", `/api/tb-patients/${params?.id}`, data);
     },
     onSuccess: () => {
@@ -101,10 +111,21 @@ export default function TBForm() {
   });
 
   const onSubmit = (data: FormValues) => {
+    // Stamp consent dates whenever the opt-in flag flips. Existing
+    // dates are preserved on submit when the toggle doesn't change.
+    const today = new Date().toISOString().split('T')[0];
+    const prevOptIn = tbPatient?.smsOptIn;
+    const payload = {
+      ...data,
+      smsOptInDate:
+        data.smsOptIn && !prevOptIn ? today : (tbPatient?.smsOptInDate ?? null),
+      smsOptOutDate:
+        !data.smsOptIn && prevOptIn === true ? today : (tbPatient?.smsOptOutDate ?? null),
+    };
     if (isEdit) {
-      updateMutation.mutate(data);
+      updateMutation.mutate(payload);
     } else {
-      createMutation.mutate(data);
+      createMutation.mutate(payload);
     }
   };
 
@@ -318,6 +339,36 @@ export default function TBForm() {
                   )}
                 />
               </div>
+
+              {/* SMS consent — DPA (RA 10173) compliance for automated reminders.
+                  Stored as a boolean plus audit dates stamped on each transition. */}
+              <FormField
+                control={form.control}
+                name="smsOptIn"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-start gap-3 rounded-md border border-input bg-muted/30 p-3">
+                    <FormControl>
+                      <input
+                        type="checkbox"
+                        checked={!!field.value}
+                        onChange={(e) => field.onChange(e.target.checked)}
+                        className="mt-1 h-4 w-4 rounded border-input"
+                        data-testid="check-sms-opt-in"
+                      />
+                    </FormControl>
+                    <div className="space-y-1 leading-tight">
+                      <FormLabel className="cursor-pointer">
+                        Patient consents to receive SMS reminders
+                      </FormLabel>
+                      <p className="text-xs text-muted-foreground">
+                        Required before automated DOTS visit reminders can be sent.
+                        Patient may revoke at any time by texting STOP or by un-checking
+                        this box on the next visit. Consent date is stamped automatically.
+                      </p>
+                    </div>
+                  </FormItem>
+                )}
+              />
 
               <div className="flex justify-end gap-2">
                 <Button type="button" variant="outline" onClick={() => window.history.back()} data-testid="button-cancel">
