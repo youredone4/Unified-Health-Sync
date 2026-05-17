@@ -4019,6 +4019,13 @@ export class DatabaseStorage implements IStorage {
       await db.execute(sql.raw(`ALTER TABLE ${t} ADD COLUMN IF NOT EXISTS sms_opt_out_date TEXT`));
     }
 
+    // sms_outbox audit columns. `barangay` lets the rate limiter scope
+    // its daily cap (shared/sms-policy.ts wouldExceedRateLimit).
+    // `automated` distinguishes scheduler-fired sends from operator-
+    // initiated ones so manual flows bypass the policy guards.
+    await db.execute(sql`ALTER TABLE sms_outbox ADD COLUMN IF NOT EXISTS barangay TEXT`);
+    await db.execute(sql`ALTER TABLE sms_outbox ADD COLUMN IF NOT EXISTS automated BOOLEAN DEFAULT FALSE`);
+
     await db.execute(sql`ALTER TABLE aefi_events ADD COLUMN IF NOT EXISTS investigated_by_user_id VARCHAR`);
     await db.execute(sql`ALTER TABLE aefi_events ADD COLUMN IF NOT EXISTS investigated_at TIMESTAMP`);
     await db.execute(sql`ALTER TABLE aefi_events ADD COLUMN IF NOT EXISTS classified_by_user_id VARCHAR`);

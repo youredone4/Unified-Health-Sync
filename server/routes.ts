@@ -2,15 +2,21 @@ import type { Express } from "express";
 import type { Server } from "http";
 import { storage } from "./storage";
 import { db } from "./db";
-import { max, eq, and, desc, gte, or, inArray, isNull } from "drizzle-orm";
+import { max, eq, and, desc, gte, or, inArray, isNull, sql } from "drizzle-orm";
 import { prenatalVisits, childVisits, seniorVisits, insertFpServiceRecordSchema, insertNutritionFollowUpSchema, insertColdChainLogSchema, insertTbDoseLogSchema, insertPostpartumVisitSchema, insertPrenatalScreeningSchema, insertBirthAttendanceRecordSchema, insertSickChildVisitSchema, insertSchoolImmunizationSchema, insertOralHealthVisitSchema, insertPhilpenAssessmentSchema, insertNcdScreeningSchema, insertVisionScreeningSchema, insertCervicalCancerScreeningSchema, insertMentalHealthScreeningSchema, insertFilariasisRecordSchema, insertRabiesExposureSchema, insertSchistosomiasisRecordSchema, insertSthRecordSchema, insertLeprosyRecordSchema, insertDeathEventSchema, insertHouseholdWaterRecordSchema, insertPidsrSubmissionSchema, insertWorkforceMemberSchema, insertWorkforceCredentialSchema, referralRecords, insertReferralRecordSchema, ncdScreenings, filariasisRecords, rabiesExposures, schistosomiasisRecords, sthRecords, leprosyRecords } from "@shared/schema";
 import { api } from "@shared/routes";
 import { validatePhilippineMobile } from "@shared/phone";
+import {
+  isWithinQuietHours,
+  wouldExceedRateLimit,
+  getSmsDailyLimit,
+  QUIET_HOURS_LABEL,
+} from "@shared/sms-policy";
 import { z } from "zod";
 import { setupAuth, registerAuthRoutes } from "./auth";
 import { registerAdminRoutes } from "./routes/admin";
 import { loadUserInfo, requireAuth, requireRole, createAuditLog } from "./middleware/rbac";
-import { UserRole, auditLogs, deathReviews, DEATH_REVIEW_STATUSES, aefiEvents, insertAefiEventSchema, outbreaks, OUTBREAK_STATUSES, consults, medicineInventory, medicationDispensings, insertMedicationDispensingSchema, inventoryRequests, insertInventoryRequestSchema, RESTOCK_STATUSES, SERVICE_CODES, MD_DISPOSITIONS, medicalCertificates, insertMedicalCertificateSchema, CERTIFICATE_TYPES, campaignTallies, insertCampaignTallySchema, CAMPAIGN_TYPES, konsultaEnrollments, insertKonsultaEnrollmentSchema, KONSULTA_ENROLLMENT_STATUSES, konsultaEncounters, insertKonsultaEncounterSchema, KONSULTA_ENCOUNTER_STATUSES, philhealthSubmissions } from "@shared/schema";
+import { UserRole, auditLogs, deathReviews, DEATH_REVIEW_STATUSES, aefiEvents, insertAefiEventSchema, outbreaks, OUTBREAK_STATUSES, consults, medicineInventory, medicationDispensings, insertMedicationDispensingSchema, inventoryRequests, insertInventoryRequestSchema, RESTOCK_STATUSES, SERVICE_CODES, MD_DISPOSITIONS, medicalCertificates, insertMedicalCertificateSchema, CERTIFICATE_TYPES, campaignTallies, insertCampaignTallySchema, CAMPAIGN_TYPES, konsultaEnrollments, insertKonsultaEnrollmentSchema, KONSULTA_ENROLLMENT_STATUSES, konsultaEncounters, insertKonsultaEncounterSchema, KONSULTA_ENCOUNTER_STATUSES, philhealthSubmissions, smsOutbox } from "@shared/schema";
 import * as philhealth from "./integrations/philhealth";
 import { ensureReportsRegistered, listReports, getReport } from "./reports";
 import { monthRange, quarterRange, annualRange, customRange } from "./reports/types";
@@ -514,6 +520,52 @@ export async function registerRoutes(
             error: phoneErr,
             recipient: input.recipient,
           });
+        }
+      }
+
+      // Policy guards — apply ONLY to automated (scheduler-initiated)
+      // sends. Manual clinician-initiated sends bypass both: clinical
+      // judgement overrides automation policy. Drives off the
+      // `automated` field on the SMS payload (default false).
+      const automated = (input as any).automated === true;
+      const barangay = (input as any).barangay || null;
+      if (automated) {
+        // Guard 1 — quiet hours (9 PM – 7 AM Manila)
+        if (isWithinQuietHours()) {
+          return res.json({
+            deferred: true,
+            reason: "QUIET_HOURS",
+            message: `Automated SMS deferred — quiet hours active (${QUIET_HOURS_LABEL})`,
+          });
+        }
+        // Guard 2 — per-barangay daily rate limit. Counts the last 24 h
+        // of automated sends for the same barangay. Manual sends are
+        // excluded from the count so a busy clinic can't accidentally
+        // exhaust the auto quota.
+        if (barangay) {
+          const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+          const [c] = await db
+            .select({ n: sql<number>`count(*)::int` })
+            .from(smsOutbox)
+            .where(
+              and(
+                eq(smsOutbox.barangay, barangay),
+                eq(smsOutbox.automated, true),
+                gte(smsOutbox.sentAt, since),
+              ),
+            );
+          const count = c?.n ?? 0;
+          if (wouldExceedRateLimit(count)) {
+            return res.json({
+              deferred: true,
+              reason: "RATE_LIMITED",
+              message:
+                `Automated SMS deferred — daily limit reached for ${barangay} ` +
+                `(${count} / ${getSmsDailyLimit()} in last 24 h)`,
+              count,
+              limit: getSmsDailyLimit(),
+            });
+          }
         }
       }
 
