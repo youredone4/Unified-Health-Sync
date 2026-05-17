@@ -27,6 +27,10 @@ import { ListSkeleton } from "@/components/states/loading-skeleton";
 import { ErrorState } from "@/components/states/error-state";
 import { severityBadge } from "@/lib/severity";
 import { Term } from "@/components/term";
+import {
+  PatientSearchCombobox,
+  type PatientKind,
+} from "@/components/patient-search-combobox";
 
 type Severity = "SERIOUS" | "NON_SERIOUS";
 type Outcome = "RECOVERED" | "RECOVERING" | "NOT_RECOVERED" | "DEATH" | "UNKNOWN";
@@ -87,6 +91,10 @@ const newAefiSchema = z.object({
   // null on submit. Free-text vaccineGiven keeps working alongside it.
   vaccinePreventableDisease: z.string().optional().or(z.literal("")),
   notes:            z.string().max(500).optional().or(z.literal("")),
+  // Cross-domain linkage — populated by <PatientSearchCombobox> when the
+  // operator picks an existing patient (mother / child / senior / tb_patient).
+  linkedPersonType: z.string().nullable().optional(),
+  linkedPersonId:   z.number().nullable().optional(),
 });
 type NewAefiValues = z.infer<typeof newAefiSchema>;
 
@@ -350,6 +358,8 @@ function NewAefiDialog({
       eventDescription: "", severity: "NON_SERIOUS",
       vaccinePreventableDisease: "",
       notes: "",
+      linkedPersonType: null,
+      linkedPersonId: null,
     },
   });
 
@@ -380,7 +390,42 @@ function NewAefiDialog({
           <form onSubmit={form.handleSubmit((d) => create.mutate(d))} className="space-y-3" noValidate>
             <div className="grid md:grid-cols-2 gap-3">
               <FormField control={form.control} name="patientName" render={({ field }) => (
-                <FormItem className="md:col-span-2"><FormLabel>Patient name *</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+                <FormItem className="md:col-span-2">
+                  <FormLabel>Patient *</FormLabel>
+                  <FormControl>
+                    <PatientSearchCombobox
+                      value={
+                        field.value
+                          ? form.watch("linkedPersonType") && form.watch("linkedPersonId")
+                            ? {
+                                kind: form.watch("linkedPersonType") as PatientKind,
+                                id: form.watch("linkedPersonId") as number,
+                                displayName: field.value,
+                                barangay: "",
+                              }
+                            : { kind: "FREE_TEXT", displayName: field.value }
+                          : null
+                      }
+                      onChange={(picked) => {
+                        if (!picked) {
+                          field.onChange("");
+                          form.setValue("linkedPersonType", null);
+                          form.setValue("linkedPersonId", null);
+                        } else if (picked.kind === "FREE_TEXT") {
+                          field.onChange(picked.displayName);
+                          form.setValue("linkedPersonType", null);
+                          form.setValue("linkedPersonId", null);
+                        } else {
+                          field.onChange(picked.displayName);
+                          form.setValue("linkedPersonType", picked.kind);
+                          form.setValue("linkedPersonId", picked.id);
+                        }
+                      }}
+                      placeholder="Search or type patient name…"
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
               )} />
               <FormField control={form.control} name="dob" render={({ field }) => (
                 <FormItem><FormLabel>DOB *</FormLabel><FormControl><Input type="date" {...field} /></FormControl><FormMessage /></FormItem>
