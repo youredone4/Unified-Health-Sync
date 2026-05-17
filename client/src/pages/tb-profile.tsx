@@ -24,6 +24,7 @@ import {
   Phone,
 } from "lucide-react";
 import { isValidPhilippineMobile } from "@shared/phone";
+import { LinkedEncountersCard } from "@/components/linked-encounters-card";
 import { apiRequest, queryClient, invalidateScopedQueries } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
@@ -210,13 +211,15 @@ export default function TBProfile() {
 
   // ── Profile tab ──────────────────────────────────────────────────────────
   const profileTab = (
-    <Card>
-      <CardContent className="py-4">
-        <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 text-sm">
-          <div>
-            <dt className="text-muted-foreground text-xs">Age</dt>
-            <dd>{patient.age} years old</dd>
-          </div>
+    <div className="space-y-4">
+      <LinkedEncountersCard kind="TB_PATIENT" id={patient.id} />
+      <Card>
+        <CardContent className="py-4">
+          <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 text-sm">
+            <div>
+              <dt className="text-muted-foreground text-xs">Age</dt>
+              <dd>{patient.age} years old</dd>
+            </div>
           <div>
             <dt className="text-muted-foreground text-xs">TB Type</dt>
             <dd>{patient.tbType}</dd>
@@ -237,9 +240,10 @@ export default function TBProfile() {
             <dt className="text-muted-foreground text-xs">Outcome</dt>
             <dd>{patient.outcomeStatus}</dd>
           </div>
-        </dl>
-      </CardContent>
-    </Card>
+          </dl>
+        </CardContent>
+      </Card>
+    </div>
   );
 
   // ── Transactions tab ─────────────────────────────────────────────────────

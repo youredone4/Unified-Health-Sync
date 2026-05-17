@@ -32,6 +32,7 @@ import {
   Phone,
 } from "lucide-react";
 import { isValidPhilippineMobile } from "@shared/phone";
+import { LinkedEncountersCard } from "@/components/linked-encounters-card";
 import ConsultationHistoryCard from "@/components/consultation-history-card";
 import { PncVisitsCard } from "@/components/pnc-visits-card";
 import { MaternalExtrasCard } from "@/components/maternal-extras-card";
@@ -255,6 +256,7 @@ export default function MotherProfile() {
   // ── Profile tab ──────────────────────────────────────────────────────────
   const profileTab = (
     <div className="space-y-4">
+      <LinkedEncountersCard kind="MOTHER" id={mother.id} />
       <Card>
         <CardContent className="py-4">
           <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 text-sm">

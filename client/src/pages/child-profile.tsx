@@ -39,6 +39,7 @@ import {
   Phone,
 } from "lucide-react";
 import { isValidPhilippineMobile } from "@shared/phone";
+import { LinkedEncountersCard } from "@/components/linked-encounters-card";
 import ConsultationHistoryCard from "@/components/consultation-history-card";
 import { SickChildVisitsCard } from "@/components/sick-child-visits-card";
 import VisitHistoryCard from "@/components/visit-history-card";
@@ -248,10 +249,12 @@ export default function ChildProfile() {
 
   // ── Profile tab ──────────────────────────────────────────────────────────
   const profileTab = (
-    <Card>
-      <CardContent className="py-4">
-        <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 text-sm">
-          <div>
+    <div className="space-y-4">
+      <LinkedEncountersCard kind="CHILD" id={child.id} />
+      <Card>
+        <CardContent className="py-4">
+          <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 text-sm">
+            <div>
             <dt className="text-muted-foreground text-xs">Age</dt>
             <dd>{ageMonths} months</dd>
           </div>
@@ -298,8 +301,9 @@ export default function ChildProfile() {
             </dd>
           </div>
         </dl>
-      </CardContent>
-    </Card>
+        </CardContent>
+      </Card>
+    </div>
   );
 
   // ── Transactions tab ─────────────────────────────────────────────────────
