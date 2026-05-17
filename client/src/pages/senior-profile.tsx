@@ -36,6 +36,7 @@ import {
   Phone,
 } from "lucide-react";
 import { isValidPhilippineMobile } from "@shared/phone";
+import { LinkedEncountersCard } from "@/components/linked-encounters-card";
 import { useState } from "react";
 import { apiRequest, invalidateScopedQueries } from "@/lib/queryClient";
 
@@ -243,10 +244,12 @@ export default function SeniorProfile() {
 
   // ── Tabs ──────────────────────────────────────────────────────────────────
   const profileTab = (
-    <Card>
-      <CardContent className="py-4">
-        <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 text-sm">
-          <div>
+    <div className="space-y-4">
+      <LinkedEncountersCard kind="SENIOR" id={senior.id} />
+      <Card>
+        <CardContent className="py-4">
+          <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 text-sm">
+            <div>
             <dt className="text-muted-foreground text-xs">Age</dt>
             <dd>{senior.age} years old</dd>
           </div>
@@ -290,9 +293,10 @@ export default function SeniorProfile() {
               <dd className="font-mono text-xs">{senior.seniorUniqueId}</dd>
             </div>
           )}
-        </dl>
-      </CardContent>
-    </Card>
+          </dl>
+        </CardContent>
+      </Card>
+    </div>
   );
 
   const transactionsTab = (

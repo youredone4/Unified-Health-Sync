@@ -7,6 +7,7 @@ import { prenatalVisits, childVisits, seniorVisits, insertFpServiceRecordSchema,
 import { api } from "@shared/routes";
 import { sendSms } from "./sms";
 import { searchPatients } from "./patient-search";
+import { getLinkedEncounters, type PatientKind as LinkedPatientKind } from "./patient-linked-encounters";
 import { z } from "zod";
 import { setupAuth, registerAuthRoutes } from "./auth";
 import { registerAdminRoutes } from "./routes/admin";
@@ -178,6 +179,21 @@ export async function registerRoutes(
     const results = await searchPatients({ query, limit, allowedBarangays });
     res.json(results);
   }));
+
+  // Cross-domain linked-encounters count for a single patient. Drives the
+  // "Linked encounters" card on mother / child / senior / TB profiles —
+  // the read-side of "capture once → shows up everywhere".
+  app.get("/api/patients/:kind/:id/linked-encounters", loadUserInfo, requireAuth,
+    ar(async (req, res) => {
+      const kindRaw = String(req.params.kind).toUpperCase();
+      if (!["MOTHER", "CHILD", "SENIOR", "TB_PATIENT"].includes(kindRaw)) {
+        return res.status(400).json({ message: "Invalid patient kind" });
+      }
+      const id = parseId(req.params.id, res); if (id === null) return;
+      const summary = await getLinkedEncounters(kindRaw as LinkedPatientKind, id);
+      res.json(summary);
+    }),
+  );
 
   app.get(api.mothers.get.path, registryReadRBAC, ar(async (req, res) => {
     const id = parseId(req.params.id, res); if (id === null) return;
