@@ -21,6 +21,10 @@ import { Ribbon, Save } from "lucide-react";
 import { format } from "date-fns";
 import { Term } from "@/components/term";
 
+import {
+  PatientSearchCombobox,
+  type PatientKind,
+} from "@/components/patient-search-combobox";
 /**
  * Cervical cancer screening for women 30-65. Drives M1 G6-01..G6-05b.
  * Patients are implicitly female (the schema has no sex field).
@@ -40,6 +44,8 @@ export default function CervicalCancerScreeningsPage() {
   const { data: rows = [] } = useQuery<CervicalCancerScreening[]>({ queryKey });
 
   const [patientName, setPatientName] = useState("");
+  const [linkedPersonType, setLinkedPersonType] = useState<PatientKind | null>(null);
+  const [linkedPersonId, setLinkedPersonId] = useState<number | null>(null);
   const [dob, setDob] = useState("");
   const [screenDate, setScreenDate] = useState(today);
   const [screenMethod, setScreenMethod] = useState<CervicalScreenMethod | "">("");
@@ -52,7 +58,7 @@ export default function CervicalCancerScreeningsPage() {
   const create = useMutation({
     mutationFn: async () => {
       const res = await apiRequest("POST", "/api/cervical-cancer-screenings", {
-        patientName, barangay: selectedBarangay, dob, screenDate,
+        patientName, linkedPersonType, linkedPersonId, barangay: selectedBarangay, dob, screenDate,
         screenMethod: screenMethod || null,
         suspicious,
         linkedToCare,
@@ -65,7 +71,7 @@ export default function CervicalCancerScreeningsPage() {
     onSuccess: () => {
       toast({ title: "Screening recorded" });
       queryClient.invalidateQueries({ queryKey });
-      setPatientName(""); setDob("");
+      setPatientName(""); setLinkedPersonType(null); setLinkedPersonId(null); setDob("");
       setScreenMethod(""); setSuspicious(false); setLinkedToCare(false); setLinkedOutcome("");
       setPrecancerous(false); setPrecancerousOutcome("");
     },
@@ -91,7 +97,26 @@ export default function CervicalCancerScreeningsPage() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <div>
                 <label className="text-xs text-muted-foreground">Patient name</label>
-                <Input value={patientName} onChange={(e) => setPatientName(e.target.value)} data-testid="input-cervical-name" />
+                <PatientSearchCombobox
+                  value={
+                    patientName
+                      ? linkedPersonType && linkedPersonId
+                        ? { kind: linkedPersonType, id: linkedPersonId, displayName: patientName, barangay: "" }
+                        : { kind: "FREE_TEXT", displayName: patientName }
+                      : null
+                  }
+                  onChange={(picked) => {
+                    if (!picked) {
+                      setPatientName(""); setLinkedPersonType(null); setLinkedPersonId(null);
+                    } else if (picked.kind === "FREE_TEXT") {
+                      setPatientName(picked.displayName); setLinkedPersonType(null); setLinkedPersonId(null);
+                    } else {
+                      setPatientName(picked.displayName); setLinkedPersonType(picked.kind); setLinkedPersonId(picked.id);
+                    }
+                  }}
+                  placeholder="Search or type patient name…"
+                  testId="input-cervical-name"
+                />
               </div>
               <div>
                 <label className="text-xs text-muted-foreground">DOB</label>

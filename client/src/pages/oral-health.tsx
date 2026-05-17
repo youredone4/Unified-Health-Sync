@@ -21,6 +21,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Smile, Save } from "lucide-react";
 import { format } from "date-fns";
 
+import {
+  PatientSearchCombobox,
+  type PatientKind,
+} from "@/components/patient-search-combobox";
 export default function OralHealthPage() {
   const { selectedBarangay } = useBarangay();
   const { role } = useAuth();
@@ -35,6 +39,8 @@ export default function OralHealthPage() {
   const { data: rows = [] } = useQuery<OralHealthVisit[]>({ queryKey });
 
   const [patientName, setPatientName] = useState("");
+  const [linkedPersonType, setLinkedPersonType] = useState<PatientKind | null>(null);
+  const [linkedPersonId, setLinkedPersonId] = useState<number | null>(null);
   const [dob, setDob] = useState("");
   const [sex, setSex] = useState<"M" | "F">("M");
   const [visitDate, setVisitDate] = useState(today);
@@ -45,7 +51,7 @@ export default function OralHealthPage() {
   const create = useMutation({
     mutationFn: async () => {
       const res = await apiRequest("POST", "/api/oral-health-visits", {
-        patientName, barangay: selectedBarangay, dob, sex, visitDate,
+        patientName, linkedPersonType, linkedPersonId, barangay: selectedBarangay, dob, sex, visitDate,
         isFirstVisit, facilityBased, isPregnant,
       });
       return res.json();
@@ -53,7 +59,7 @@ export default function OralHealthPage() {
     onSuccess: () => {
       toast({ title: "Visit recorded" });
       queryClient.invalidateQueries({ queryKey });
-      setPatientName("");
+      setPatientName(""); setLinkedPersonType(null); setLinkedPersonId(null);
       setDob("");
       setIsPregnant(false);
     },
@@ -77,7 +83,26 @@ export default function OralHealthPage() {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div>
                   <label className="text-xs text-muted-foreground">Patient name</label>
-                  <Input value={patientName} onChange={(e) => setPatientName(e.target.value)} data-testid="input-oral-name" />
+                  <PatientSearchCombobox
+                  value={
+                    patientName
+                      ? linkedPersonType && linkedPersonId
+                        ? { kind: linkedPersonType, id: linkedPersonId, displayName: patientName, barangay: "" }
+                        : { kind: "FREE_TEXT", displayName: patientName }
+                      : null
+                  }
+                  onChange={(picked) => {
+                    if (!picked) {
+                      setPatientName(""); setLinkedPersonType(null); setLinkedPersonId(null);
+                    } else if (picked.kind === "FREE_TEXT") {
+                      setPatientName(picked.displayName); setLinkedPersonType(null); setLinkedPersonId(null);
+                    } else {
+                      setPatientName(picked.displayName); setLinkedPersonType(picked.kind); setLinkedPersonId(picked.id);
+                    }
+                  }}
+                  placeholder="Search or type patient name…"
+                  testId="input-oral-name"
+                />
                 </div>
                 <div>
                   <label className="text-xs text-muted-foreground">DOB</label>
