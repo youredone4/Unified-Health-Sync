@@ -5,16 +5,32 @@
 %   (1) Table Ib alpha values (search for 0.XXX)
 %   (2) Pilot barangay names (search for Pilot Brgy)
 \documentclass[conference]{IEEEtran}
-\usepackage{cite}
-\usepackage{graphicx}
-\usepackage{amsmath}
-\usepackage{textcomp}
-\usepackage{url}
-
-% --- IEEE copyright notice (IDAP-2026, "All other papers" category) ---
 \IEEEoverridecommandlockouts
-\IEEEpubid{\makebox[\columnwidth]{979-8-3195-2149-1/26/\$31.00~\copyright2026 IEEE \hfill}
-\hspace{\columnsep}\makebox[\columnwidth]{ }}
+% The preceding line is only needed to identify funding in the first footnote. If that is unneeded, please comment it out.
+%Template version as of 04/05/2026
+
+\usepackage{cite}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{algorithmic}
+\usepackage{graphicx}
+\usepackage{textcomp}
+\usepackage{xcolor}
+
+%%%%%%%%%%%%% Needs to be added for header information
+\usepackage{fancyhdr}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%%%%%%%%%%%%% Needs to be added for header information
+\fancypagestyle{firstpage}{%
+ \fancyhf{}%
+ \fancyhead[L]{10th International Artificial Intelligence and Data Processing Symposium (IDAP'26), Sept 5-6, 2026, T\"urkiye (Malatya -- \.Istanbul), Philippines}
+
+ \fancyfoot[L]{%%%% Copyright goes here
+  \normalsize{979-8-3195-2149-1/26/\$31.00 ~\copyright2026 IEEE}
+ }%
+ \renewcommand{\headrulewidth}{0pt} % Remove the horizontal line in header
+}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 \begin{document}
 
@@ -37,7 +53,10 @@ ORCID: 0000-0002-2827-9686}
 }
 
 \maketitle
-\IEEEpubidadjcol
+
+%%%%%%%%%%%%%%%% Needs to be added for header information
+\thispagestyle{firstpage}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 \begin{abstract}
 Currently, most Barangay Health Offices in Placer, Surigao del Norte document all their transactions through manual means, such as using logbooks and spreadsheets circulated among the staff. This can be done effectively; however, it poses several difficulties, as transactions are reported only by the end of each month, and data are collected in different documents, making it difficult to have a comprehensive view of the situation. Thus, HEALTHSYNC was created to address these concerns. HealthSync is a digital health information system with a bounded, human-in-the-loop LLM assistive layer --- narrative analytics summaries and advisory KYC face-matching --- layered on top of a deterministic, rule-based surveillance and reporting core. The ADDIE model was adopted, consisting of Analyze, Design, Develop, Implement, and Evaluate. The software uses React 18 with TypeScript [42] on the frontend, Node.js [43] and Express [44] on the backend, and PostgreSQL [50] through Drizzle ORM [45] on the database layer. Aggregate analytics summaries and KYC ID verification are produced by GPT-4o-mini [40]; risk scores, hotspots, and outbreak flags are computed by deterministic rules (\S III-D). The disease monitoring map is built with the Leaflet library [32], while SMS notifications are dispatched through Semaphore [41]. Post-deployment, an evaluation of the system was conducted involving 28 evaluators using ISO/IEC 25010:2023 [31] software-quality standards. The evaluators consisted of one Municipal Health Officer, one Senior Health Administrator, twenty-one Team Leaders, and five IT professionals, all of whom were purposively sampled to ensure that they had prior experience using the system. The system was deployed across all twenty barangays; the manual-vs-digital timing baseline (\S V-E) was measured in three pilot barangays prior to full rollout. The mean score for overall quality was 4.27 (Strongly Agree). The security module was the highest-rated at 4.48. Functional Suitability and Usability scored 4.31 and 4.23 respectively. Cronbach's alpha exceeded 0.70 on every ISO characteristic (Table~\ref{tab:cronbach}). The Mann--Whitney U-test (U = 41.0, p = 0.330, rank-biserial r = +0.29) revealed no significant difference between health-care personnel and IT specialists. HEALTHSYNC can be implemented in the Municipality of Placer as record handling becomes simpler and reporting more efficient through its rule-based surveillance layer and LLM-assisted narrative analytics.
