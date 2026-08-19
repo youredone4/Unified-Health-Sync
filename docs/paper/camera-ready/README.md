@@ -2,21 +2,21 @@
 
 ## Recommended: official IEEE LaTeX template (`ieee/`)
 
-`ieee/paper.tex` is the mechanical transfer of the revised manuscript into
+`ieee/IDAP2026005.tex` is the mechanical transfer of the revised manuscript into
 the official IEEE conference template (`\documentclass[conference]{IEEEtran}`).
-`ieee/paper.pdf` is its compiled output: 9 pages, US Letter, **all fonts
+`ieee/IDAP2026005.pdf` is its compiled output: 9 pages, US Letter, **all fonts
 embedded** (verified with `pdffonts` — the property IEEE PDF eXpress checks).
 This is the version to submit.
 
 Rebuild after edits:
 
 ```bash
-cd ieee && pdflatex paper.tex && pdflatex paper.tex
+cd ieee && pdflatex IDAP2026005.tex && pdflatex IDAP2026005.tex
 ```
 
 The same three placeholders apply (Table Ib `0.XXX` values, `[Pilot Brgy N]`
 names, and the IEEE copyright notice — uncomment the `\IEEEpubid` block at
-the top of `paper.tex` and insert the code IEEE assigns).
+the top of `IDAP2026005.tex` and insert the code IEEE assigns).
 
 Note: the official template prints keywords as "Index Terms" — that is the
 IEEE LaTeX convention, not an error.
