@@ -14,9 +14,10 @@ Rebuild after edits:
 cd ieee && pdflatex IDAP2026005.tex && pdflatex IDAP2026005.tex
 ```
 
-The same three placeholders apply (Table Ib `0.XXX` values, `[Pilot Brgy N]`
-names, and the IEEE copyright notice — uncomment the `\IEEEpubid` block at
-the top of `IDAP2026005.tex` and insert the code IEEE assigns).
+Two placeholders remain (Table Ib `0.XXX` values and `[Pilot Brgy N]`
+names). The IEEE copyright notice (979-8-3195-2149-1/26/\$31.00 ©2026 IEEE)
+and the IDAP'26 conference header are already in place on page 1 via the
+official template's `fancyhdr` first-page style.
 
 Note: the official template prints keywords as "Index Terms" — that is the
 IEEE LaTeX convention, not an error.
