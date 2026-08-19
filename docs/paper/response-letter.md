@@ -66,7 +66,7 @@ argue the larger relative gain is consistent with the *wider* pre-digital
 baseline — barangay reporting relies on hand-transcription and hand-tally
 from paper registers, so digitisation removes a step that hospital EHRs
 had already replaced. We also make the LLM-scope point analytically here:
-the KYC accuracy (91.7 %, 95 % CI [82.0 %, 96.7 %]) is preliminary and does
+the KYC accuracy (91.7 %, 95 % CI [81.9 %, 96.4 %]) is preliminary and does
 not itself justify autonomous approvals — so HealthSync uses the verdict
 only as a display signal, consistent with the human-in-the-loop partition
 in [4], [20], [21], [24].
@@ -208,7 +208,7 @@ as preliminary, and (c) commit to a follow-up study.*
 **Change:**
 
 - §V-F reworded (`V-F-REVISION`):
-  - Wilson 95 % CI for the accuracy estimate reported: **[82.0 %, 96.7 %]**.
+  - Wilson 95 % CI for the accuracy estimate reported: **[81.9 %, 96.4 %]**.
   - Result described as *"a preliminary, single-reviewer,
     single-municipality benchmark"* and *"should not be interpreted as
     evidence of broad generalisation."*
@@ -219,7 +219,8 @@ as preliminary, and (c) commit to a follow-up study.*
 
 Wilson interval computation (`n = 60`, `x = 55`, `α = 0.05`):
 `p̂ = 55/60 = 0.9167`; `z = 1.96`; `Wilson = (p̂ + z²/2n ± z√(p̂(1−p̂)/n + z²/4n²)) / (1 + z²/n)`
-= `[0.820, 0.967]`.
+= `[0.8193, 0.9639]`. Reproducible via
+`python docs/paper/scripts/wilson_ci.py 55 60`.
 
 ### R2 §5 — "Pilot scope and deployment claims are mixed"
 
@@ -307,9 +308,14 @@ before submission.
 > does not include effect sizes."*
 
 *Correct. §IV-D says "we report effect size at α = 0.05" but Table II
-omits it. The correct effect size for Mann–Whitney U is the rank-biserial
-correlation r = 1 − 2U/(n₁·n₂), with n₁ = 23 (Health Personnel), n₂ = 5
-(IT Experts) → n₁·n₂ = 115.*
+omits it. The appropriate effect size for Mann–Whitney U is the
+rank-biserial correlation. One methodological subtlety we addressed while
+adding it: the U values in the submitted Table II follow the SPSS
+convention of reporting U_min = min(U₁, U₂), which discards direction.
+We therefore compute the magnitude as |r| = 1 − 2U/(n₁·n₂) — with
+n₁ = 23 (Health Personnel), n₂ = 5 (IT Experts), n₁·n₂ = 115 — and
+recover the sign from the group mean ranks (positive when Health
+Personnel ranked higher on average, negative when IT Experts did).*
 
 **Change:**
 
@@ -320,21 +326,24 @@ correlation r = 1 − 2U/(n₁·n₂), with n₁ = 23 (Health Personnel), n₂ =
   | Characteristic | U | p | r | Magnitude |
   |---|---|---|---|---|
   | Functional Suitability | 39.5 | 0.280 | +0.313 | **medium** |
-  | Performance Efficiency | 47.0 | 0.528 | +0.183 | small |
+  | Performance Efficiency | 47.0 | 0.528 | −0.183 | small |
   | Usability | 56.6 | 0.975 | +0.016 | negligible |
   | Reliability | 48.0 | 0.570 | +0.165 | small |
-  | Security | 50.0 | 0.659 | +0.130 | small |
+  | Security | 50.0 | 0.659 | −0.130 | small |
   | Maintainability | 54.0 | 0.848 | +0.061 | negligible |
   | **Overall** | 41.0 | 0.330 | +0.287 | small |
 
-  Cohen thresholds: |r| < 0.10 negligible, 0.10–0.30 small, 0.30–0.50
-  medium, ≥ 0.50 large.
+  Cohen thresholds on |r|: < 0.10 negligible, 0.10–0.30 small, 0.30–0.50
+  medium, ≥ 0.50 large. Sign convention: HP-referenced (r > 0 = Health
+  Personnel ranked higher; r < 0 = IT Experts ranked higher).
 
-- **§V-G discussion sentence added:** the effect-size direction is
-  positive across all characteristics (Health Personnel ranked slightly
-  higher on average, except on Security) but no magnitude exceeds Cohen's
-  "medium" band, and the p-values are all well above 0.05. Interpretation:
-  the two groups saw the same system.
+- **§V-C discussion sentence added:** direction was mixed — health
+  personnel ranked most characteristics slightly higher, while IT experts
+  ranked Security and Performance Efficiency slightly higher — a pattern
+  consistent with sampling noise rather than a systematic group
+  difference. No magnitude exceeds Cohen's "medium" band, and the
+  p-values are all well above 0.05. Interpretation: the two groups saw
+  the same system.
 
 ### R2 §9 — "Security claims are not deeply validated"
 

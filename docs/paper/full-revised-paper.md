@@ -506,12 +506,16 @@ Efficiency, Reliability, and Maintainability all hovered around 4.2
 To test whether health workers and IT experts rated the system
 differently, we applied the Mann–Whitney U test — a non-parametric test
 used when groups are small and the data are ordinal rather than
-continuous. Effect size is reported as the rank-biserial correlation
-r = 1 − 2U/(n₁·n₂), with n₁ = 23 (Health Personnel) and n₂ = 5 (IT
-Experts). Across all six characteristics and the overall score, every
-p-value was well above 0.05; effect sizes range from negligible to
-medium, with the largest magnitude at r = +0.31 for Functional
-Suitability (Table II). The two groups agreed: the system worked.
+continuous. Effect size is reported as the rank-biserial correlation,
+|r| = 1 − 2U/(n₁·n₂) with n₁ = 23 (Health Personnel) and n₂ = 5 (IT
+Experts), signed by the direction of the mean ranks. Across all six
+characteristics and the overall score, every p-value was well above
+0.05; effect-size magnitudes range from negligible to medium, with the
+largest at |r| = 0.31 for Functional Suitability. Direction was mixed —
+health personnel ranked most characteristics slightly higher, while IT
+experts ranked Security and Performance Efficiency slightly higher
+(Table II) — a pattern consistent with sampling noise rather than a
+systematic group difference. The two groups agreed: the system worked.
 
 **TABLE II. Mann–Whitney U comparison with rank-biserial effect size
 (Health Personnel n = 23 vs IT Experts n = 5).**
@@ -519,16 +523,19 @@ Suitability (Table II). The two groups agreed: the system worked.
 | Characteristic | HP MR | IT MR | U | p | r | Magnitude |
 |---|---|---|---|---|---|---|
 | Functional Suitability | 14.9 | 13.5 | 39.5 | 0.280 | +0.313 | medium |
-| Performance Efficiency | 14.6 | 14.7 | 47.0 | 0.528 | +0.183 | small |
+| Performance Efficiency | 14.6 | 14.7 | 47.0 | 0.528 | −0.183 | small |
 | Usability | 15.1 | 12.4 | 56.6 | 0.975 | +0.016 | negligible |
 | Reliability | 14.8 | 13.9 | 48.0 | 0.570 | +0.165 | small |
-| Security | 14.3 | 16.2 | 50.0 | 0.659 | +0.130 | small |
+| Security | 14.3 | 16.2 | 50.0 | 0.659 | −0.130 | small |
 | Maintainability | 14.7 | 14.3 | 54.0 | 0.848 | +0.061 | negligible |
 | **Overall** | **14.8** | **14.0** | **41.0** | **0.330** | **+0.287** | **small** |
 
-*(HP = Health Personnel, IT = IT Experts, MR = Mean Rank. Cohen
-thresholds: |r| < 0.10 negligible, 0.10–0.30 small, 0.30–0.50 medium,
-≥ 0.50 large.)*
+*(HP = Health Personnel, IT = IT Experts, MR = Mean Rank. The submitted U
+values follow the SPSS convention of reporting U_min, which discards
+direction; |r| = 1 − 2U/(n₁·n₂) and the sign is recovered from the mean
+ranks — positive when Health Personnel ranked higher, negative when IT
+Experts ranked higher. Cohen thresholds on |r|: < 0.10 negligible,
+0.10–0.30 small, 0.30–0.50 medium, ≥ 0.50 large.)*
 
 #### C.1) Objective Security Evidence *(new)*
 
@@ -593,7 +600,7 @@ metrics reported above already cover the twenty-barangay deployment.
 
 GPT-4o-mini was compared against the administrator's ground-truth
 decisions on 60 IDs collected during the pilot: **91.7 % accuracy
-(Wilson 95 % CI [82.0 %, 96.7 %]), 93.6 % precision, 95.7 % recall,
+(Wilson 95 % CI [81.9 %, 96.4 %]), 93.6 % precision, 95.7 % recall,
 F1 = 0.946** (Table III). This is a preliminary, single-reviewer,
 single-municipality benchmark and should not be interpreted as evidence
 of broad generalisation. A larger, multi-reviewer, multi-ID-type
@@ -608,7 +615,7 @@ ground truth (n = 60).**
 | Model: Reject | 2 (FN) | 11 (TN) | 13 |
 | Column total | 46 | 14 | 60 |
 
-*(Accuracy = 91.7 % [82.0 %, 96.7 %]; Precision = 93.6 %; Recall =
+*(Accuracy = 91.7 % [81.9 %, 96.4 %]; Precision = 93.6 %; Recall =
 95.7 %; F1 = 0.946.)*
 
 ### G. Discussion *(expanded)*
@@ -617,7 +624,7 @@ The user ratings, the objective performance metrics, and the
 manual-workflow baseline all point in the same direction: HEALTHSYNC is
 appropriate for long-term implementation in Placer after this pilot.
 The overall rating of 4.27 with narrow inter-group agreement (all
-p ≥ 0.28; effect sizes negligible to medium, none exceeding r = 0.32)
+p ≥ 0.28; effect sizes negligible to medium, none exceeding |r| = 0.32)
 supports a treatment of "the two groups saw the same system."
 
 The 86 % reduction in monthly DOH-report preparation time
@@ -631,7 +638,7 @@ of duplicate records is a benefit that user ratings alone cannot
 capture and that the M1 auto-fill architecture directly enables.
 
 On the LLM layer: the KYC verification's 91.7 % accuracy (95 % CI
-[82.0 %, 96.7 %]) is preliminary and does not by itself justify
+[81.9 %, 96.4 %]) is preliminary and does not by itself justify
 autonomous approvals — accordingly, HEALTHSYNC uses the verdict only as
 a display signal for the human administrator, consistent with the
 human-in-the-loop partition described in [4], [20], [21], [24]. The
@@ -662,7 +669,7 @@ assistive layer for narrative analytics and identity verification. The
 4.27 (Strongly Agree) with Security highest at 4.48; Cronbach's alpha
 exceeded 0.70 on every dimension; Mann–Whitney U across all six
 characteristics showed no statistically significant difference between
-health personnel and IT experts (largest r = +0.31, no p below 0.28).
+health personnel and IT experts (largest |r| = 0.31, no p below 0.28).
 Objective performance measurements matched the ratings: p95 API latency
 of 612 ms and dashboard loads under two seconds under a 50-VU stress
 test with zero errors. In pilot barangays the monthly DOH-reporting

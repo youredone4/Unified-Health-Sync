@@ -398,7 +398,7 @@ F. AI-Assisted KYC Verification Accuracy (Preliminary)
 GPT-4o-mini was compared against the administrator's ground-truth
 decisions on 60 IDs collected during the pilot: 91.7 % accuracy,
 93.6 % precision, 95.7 % recall, F1 = 0.946 (Table III). The Wilson 95 %
-confidence interval for the accuracy estimate is [82.0 %, 96.7 %]. This
+confidence interval for the accuracy estimate is [81.9 %, 96.4 %]. This
 is a preliminary, single-reviewer, single-municipality benchmark and
 should not be interpreted as evidence of broad generalisation. A
 larger, multi-reviewer, multi-ID-type validation study is scheduled
@@ -420,15 +420,19 @@ TABLE II. MANN–WHITNEY U COMPARISON WITH RANK-BISERIAL EFFECT SIZE
 | Characteristic          | HP MR | IT MR | U    | p     | r (rank-biserial) | Magnitude   |
 |-------------------------|-------|-------|------|-------|-------------------|-------------|
 | Functional Suitability  | 14.9  | 13.5  | 39.5 | 0.280 | +0.313            | medium      |
-| Performance Efficiency  | 14.6  | 14.7  | 47.0 | 0.528 | +0.183            | small       |
+| Performance Efficiency  | 14.6  | 14.7  | 47.0 | 0.528 | −0.183            | small       |
 | Usability               | 15.1  | 12.4  | 56.6 | 0.975 | +0.016            | negligible  |
 | Reliability             | 14.8  | 13.9  | 48.0 | 0.570 | +0.165            | small       |
-| Security                | 14.3  | 16.2  | 50.0 | 0.659 | +0.130            | small       |
+| Security                | 14.3  | 16.2  | 50.0 | 0.659 | −0.130            | small       |
 | Maintainability         | 14.7  | 14.3  | 54.0 | 0.848 | +0.061            | negligible  |
 | **Overall**             | 14.8  | 14.0  | 41.0 | 0.330 | +0.287            | small       |
 
-Rank-biserial r = 1 − (2U)/(n₁·n₂). Cohen thresholds:
-|r| < 0.10 negligible, 0.10–0.30 small, 0.30–0.50 medium, ≥ 0.50 large.
+The submitted U values follow the SPSS convention of reporting
+U_min = min(U₁, U₂), which discards direction; |r| = 1 − 2U/(n₁·n₂) and
+the sign is recovered from the mean ranks — positive when Health
+Personnel ranked higher on average, negative when IT Experts ranked
+higher. Cohen thresholds on |r|: < 0.10 negligible, 0.10–0.30 small,
+0.30–0.50 medium, ≥ 0.50 large.
 
 ===== END TABLE-II-REVISION =====
 
@@ -444,7 +448,7 @@ The user ratings, the objective performance metrics, and the manual-
 workflow baseline all point in the same direction: HEALTHSYNC is
 appropriate for long-term implementation in Placer after this pilot. The
 overall rating of 4.27 with narrow inter-group agreement (all p ≥ 0.28;
-effect sizes negligible to medium, none exceeding r = 0.32) supports a
+effect sizes negligible to medium, none exceeding |r| = 0.32) supports a
 treatment of "the two groups saw the same system."
 
 The 86 % reduction in monthly DOH-report preparation time (8.5 h → 1.2 h
@@ -458,7 +462,7 @@ that user ratings alone cannot capture and that the M1 auto-fill
 architecture directly enables.
 
 On the LLM layer: the KYC verification's 91.7 % accuracy (95 % CI
-[82.0 %, 96.7 %]) is preliminary and does not by itself justify autonomous
+[81.9 %, 96.4 %]) is preliminary and does not by itself justify autonomous
 approvals — accordingly, HEALTHSYNC uses the verdict only as a display
 signal for the human administrator, consistent with the human-in-the-loop
 partition described in [4], [20], [21], [24]. The narrative analytics call

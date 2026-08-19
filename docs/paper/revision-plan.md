@@ -137,23 +137,26 @@ say whether it was overall or per ISO/IEC 25010 dimension.
 
 **Action:**
 
-- **Data work:** compute rank-biserial correlation `r = 1 − (2U) / (n₁·n₂)` for
-  each of the six characteristics + overall. With n₁ = 23 (Health Personnel),
-  n₂ = 5 (IT Experts):
+- **Data work:** compute rank-biserial magnitude `|r| = 1 − (2U) / (n₁·n₂)`
+  for each of the six characteristics + overall, with n₁ = 23 (Health
+  Personnel), n₂ = 5 (IT Experts). The submitted U values follow the SPSS
+  convention (U_min), which discards direction — recover the sign from the
+  mean ranks (positive = HP ranked higher; negative = IT ranked higher):
 
-  | Char.                     | U     | p     | r (rank-biserial)   | Magnitude |
-  |---------------------------|-------|-------|---------------------|-----------|
-  | Functional Suitability    | 39.5  | 0.280 | 1 − 2(39.5)/115 = 0.313 | small     |
-  | Performance Efficiency    | 47.0  | 0.528 | 1 − 94/115 = 0.183      | negligible |
-  | Usability                 | 56.6  | 0.975 | 0.017                | negligible |
-  | Reliability               | 48.0  | 0.570 | 0.165                | negligible |
-  | Security                  | 50.0  | 0.659 | 0.130                | negligible |
-  | Maintainability           | 54.0  | 0.848 | 0.061                | negligible |
-  | Overall                   | 41.0  | 0.330 | 0.287                | small      |
+  | Char.                     | U     | p     | r (signed, HP-ref.) | Magnitude  |
+  |---------------------------|-------|-------|---------------------|------------|
+  | Functional Suitability    | 39.5  | 0.280 | +0.313              | medium     |
+  | Performance Efficiency    | 47.0  | 0.528 | −0.183              | small      |
+  | Usability                 | 56.6  | 0.975 | +0.016              | negligible |
+  | Reliability               | 48.0  | 0.570 | +0.165              | small      |
+  | Security                  | 50.0  | 0.659 | −0.130              | small      |
+  | Maintainability           | 54.0  | 0.848 | +0.061              | negligible |
+  | Overall                   | 41.0  | 0.330 | +0.287              | small      |
 
-  Cohen's cut-offs: |r| < 0.1 negligible, 0.1–0.3 small, 0.3–0.5 medium,
+  Cohen's cut-offs on |r|: < 0.1 negligible, 0.1–0.3 small, 0.3–0.5 medium,
   ≥ 0.5 large.
-- **Paper edit:** add the "r" and magnitude columns to Table II.
+- **Paper edit:** add the "r" and magnitude columns to Table II, with the
+  sign-convention footnote.
 - **Effort:** copy-paste into Table II.
 - **Lands in:** Table II.
 
@@ -218,7 +221,7 @@ out per-characteristic.
 - **Paper edit:** in §V-F, replace *"91.7% accuracy"* framing with a
   two-sentence caveat:
   *"This is a preliminary, single-reviewer, single-municipality benchmark
-  (n = 60). Wilson 95% CI for accuracy is [82.0%, 96.7%]. Broader validation
+  (n = 60). Wilson 95% CI for accuracy is [81.9%, 96.4%]. Broader validation
   across ID types, image qualities, and independent ground-truth reviewers is
   scheduled for the next deployment phase."*
 - Report the Wilson interval alongside the point estimates.
