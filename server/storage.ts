@@ -1,3 +1,4 @@
+import { config } from "./config";
 import { db } from "./db";
 import { 
   mothers, children, seniors, inventory, medicineInventory, inventorySnapshots, coldChainLogs, tbDoseLogs, healthStations, smsOutbox, diseaseCases, tbPatients, themeSettings,
@@ -4454,12 +4455,20 @@ export class DatabaseStorage implements IStorage {
     await this.seedM1GhostRows();
     await this.seedDohUpdates();
 
-    // Demo data for the MGMT-consolidated operational pages. Runs every
-    // boot — each table inside is itself idempotent (skips when non-empty),
-    // and we deliberately call it BEFORE the existingMothers early-return
-    // because seedMgmtConsolidatedDemo doesn't depend on the patient seed.
-    // Putting it after that return meant it only ran on the very first
-    // boot of a fresh database and got skipped on every subsequent run.
+    // Reference data every deployment needs (LGU settings, facilities).
+    await this.seedReferenceData();
+
+    // Everything below inserts FABRICATED patients and records for demos
+    // and testing. It must never run against a real LGU database — fake
+    // rows would be counted in M1 / PIDSR / mortality reports. Off unless
+    // SEED_DEMO_DATA=true is set explicitly.
+    if (!config.SEED_DEMO_DATA) return;
+    console.warn("[seed] SEED_DEMO_DATA=true — inserting fabricated demo records. Never enable this in production.");
+
+    // Demo data for the MGMT-consolidated operational pages. Each table
+    // inside is itself idempotent (skips when non-empty), and it runs
+    // BEFORE the existingMothers early-return because it doesn't depend on
+    // the patient seed.
     await this.seedMgmtConsolidatedDemo();
 
     const existingMothers = await this.getMothers();
@@ -4686,17 +4695,6 @@ export class DatabaseStorage implements IStorage {
       },
     ]);
 
-    // HEALTH STATIONS — `hasTbDots` flags facilities the MHO has confirmed as
-    // active NTP TB DOTS providers. Placer has one municipal RHU (Central /
-    // Poblacion), which is the verified TB DOTS facility for the municipality.
-    await db.insert(healthStations).values([
-      { facilityName: "Bugas-bugas Barangay Health Station", facilityType: "BHS", hasTbDots: false, barangay: "Bugas-bugas", latitude: "9.6450", longitude: "125.6520" },
-      { facilityName: "San Isidro Barangay Health Station", facilityType: "BHS", hasTbDots: false, barangay: "San Isidro", latitude: "9.6520", longitude: "125.6680" },
-      { facilityName: "Central (Poblacion) Rural Health Unit", facilityType: "RHU", hasTbDots: true, barangay: "Central (Poblacion)", latitude: "9.6600", longitude: "125.6850" },
-      { facilityName: "Mabini Barangay Health Station", facilityType: "BHS", hasTbDots: false, barangay: "Mabini", latitude: "9.6380", longitude: "125.6400" },
-      { facilityName: "Lakandula Barangay Health Station", facilityType: "BHS", hasTbDots: false, barangay: "Lakandula", latitude: "9.6700", longitude: "125.6950" },
-    ]);
-
     // DISEASE CASES - Communicable Disease Surveillance
     await db.insert(diseaseCases).values([
       {
@@ -4867,6 +4865,39 @@ export class DatabaseStorage implements IStorage {
     ]);
 
     console.log("Database seeded successfully!");
+  }
+
+  /**
+   * Reference data that a real deployment needs on first boot. Idempotent:
+   * each table is only populated when it is empty. Contains no patient data.
+   */
+  async seedReferenceData(): Promise<void> {
+    const existingMuniSettings = await db.select().from(municipalitySettings);
+    if (existingMuniSettings.length === 0) {
+      await db.insert(municipalitySettings).values({
+        municipalityId: 1,
+        municipalityName: "Placer Municipality",
+        subtitle: "Province of Surigao del Norte",
+        logoUrl: null,
+        updatedAt: new Date().toISOString(),
+      });
+      console.log("[seed] municipality settings created");
+    }
+
+    const existingStations = await db.select({ id: healthStations.id }).from(healthStations).limit(1);
+    if (existingStations.length === 0) {
+      // HEALTH STATIONS — `hasTbDots` flags facilities the MHO has confirmed as
+      // active NTP TB DOTS providers. Placer has one municipal RHU (Central /
+      // Poblacion), which is the verified TB DOTS facility for the municipality.
+      await db.insert(healthStations).values([
+        { facilityName: "Bugas-bugas Barangay Health Station", facilityType: "BHS", hasTbDots: false, barangay: "Bugas-bugas", latitude: "9.6450", longitude: "125.6520" },
+        { facilityName: "San Isidro Barangay Health Station", facilityType: "BHS", hasTbDots: false, barangay: "San Isidro", latitude: "9.6520", longitude: "125.6680" },
+        { facilityName: "Central (Poblacion) Rural Health Unit", facilityType: "RHU", hasTbDots: true, barangay: "Central (Poblacion)", latitude: "9.6600", longitude: "125.6850" },
+        { facilityName: "Mabini Barangay Health Station", facilityType: "BHS", hasTbDots: false, barangay: "Mabini", latitude: "9.6380", longitude: "125.6400" },
+        { facilityName: "Lakandula Barangay Health Station", facilityType: "BHS", hasTbDots: false, barangay: "Lakandula", latitude: "9.6700", longitude: "125.6950" },
+      ]);
+      console.log("[seed] health stations created");
+    }
   }
 
   /**

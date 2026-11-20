@@ -1,14 +1,13 @@
+import "./server/load-env";
 import { defineConfig } from "drizzle-kit";
 
-if (!process.env.DATABASE_URL) {
-  throw new Error("DATABASE_URL, ensure the database is provisioned");
-}
+// `drizzle-kit generate` only reads the schema and never connects, so a
+// placeholder is fine there. `push` / `studio` need the real DATABASE_URL.
+const url = process.env.DATABASE_URL ?? "postgres://placeholder:placeholder@localhost:5432/placeholder";
 
 export default defineConfig({
   out: "./migrations",
   schema: "./shared/schema.ts",
   dialect: "postgresql",
-  dbCredentials: {
-    url: process.env.DATABASE_URL,
-  },
+  dbCredentials: { url },
 });

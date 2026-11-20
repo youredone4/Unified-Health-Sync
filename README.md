@@ -122,7 +122,9 @@ All destructive actions are audit-logged.
 client/     React frontend — pages, components, hooks, contexts
 server/     Express backend — routes, auth, DB access, seeders, AI, KYC
 shared/     TS types / Drizzle schemas / Zod validators / API contracts
-scripts/    Utility scripts (demo-reset.sh, post-merge.sh, …)
+scripts/    Utility scripts (demo-reset.sh, …)
+script/     Build + database migration runner
+migrations/ SQL migrations generated from shared/schema.ts
 tests/      Test suite
 attached_assets/  Static images & logos
 uploads/    KYC uploads (never served raw)
@@ -130,27 +132,50 @@ uploads/    KYC uploads (never served raw)
 
 ## Getting started
 
-### Prerequisites
+> **Not yet cleared for real patient data.** The system now runs anywhere
+> Docker does, but the security hardening tracked in
+> [docs/deployment.md](docs/deployment.md#before-real-patient-data) must land
+> first. Until then, use demo data only.
 
-- Node.js 20+ and npm
-- PostgreSQL 14+ (local or managed)
+### Deploying for an LGU (Docker)
 
-### Install and run
+```bash
+cp .env.example .env          # fill in every REQUIRED value
+docker compose up -d --build
+```
+
+This starts PostgreSQL, the app, and an HTTPS reverse proxy. Full
+instructions — including moving your data out of Replit, backups and
+updates — are in **[docs/deployment.md](docs/deployment.md)**.
+
+### Local development
+
+Prerequisites: Node.js 22+ and a PostgreSQL 16 database. The quickest
+database is the bundled one: `docker compose -f docker-compose.dev.yml up -d`.
 
 ```bash
 npm install
-
-# Create the schema in your DB (applies shared/schema.ts)
-npm run db:push
-
-# Start in dev mode (Vite + tsx)
-npm run dev
+cp .env.example .env          # set SESSION_SECRET; DATABASE_URL default matches the dev database
+npm run db:migrate            # create the tables
+npm run dev                   # Vite + tsx on http://localhost:5000
 ```
 
 The app serves both the API and the client on a single port (default `5000`,
 override with `PORT`).
 
-### Production build
+### Database changes
+
+The schema lives in `shared/schema.ts`. After changing it:
+
+```bash
+npm run db:generate           # writes a new SQL file to migrations/ — commit it
+npm run db:migrate            # applies it locally
+```
+
+Deployments apply pending migrations automatically at container start.
+`npm run db:push` still exists for throwaway local experiments only.
+
+### Production build without Docker
 
 ```bash
 npm run build     # bundles client (Vite) + server (esbuild) to dist/
@@ -165,20 +190,31 @@ npm run check
 
 ## Environment variables
 
+Configuration is validated at startup (`server/config.ts`); the server
+refuses to start if a required value is missing. `.env.example` documents
+every setting.
+
 | Variable | Required | Purpose |
 |---|---|---|
 | `DATABASE_URL` | yes | PostgreSQL connection string |
-| `SESSION_SECRET` | yes | Session cookie signing key |
+| `SESSION_SECRET` | yes | Session cookie signing key, 32+ characters |
 | `PORT` | no | HTTP port (default `5000`) |
 | `NODE_ENV` | no | `development` enables Vite middleware |
-| `AI_INTEGRATIONS_OPENAI_API_KEY` | no | Enables KYC face-match + AI insights |
-| `AI_INTEGRATIONS_OPENAI_BASE_URL` | no | Custom OpenAI-compatible endpoint |
+| `TRUST_PROXY` | no | Reverse-proxy hops in front of the app (default `1`) |
+| `SEED_DEMO_DATA` | no | `true` inserts fabricated demo records (**never in production**) |
+| `SCHEDULER_ENABLED` | no | `false` disables background jobs |
+| `OPENAI_API_KEY` | no | Enables AI insights and plain-language summaries |
+| `OPENAI_MODEL` / `OPENAI_BASE_URL` | no | Model name / OpenAI-compatible endpoint |
 | `SEMAPHORE_API_KEY` | no | SMS gateway; without it SMS runs in demo mode |
-| `ALLOW_TEST_RESET` | no | Exposes `/api/test-reset` (**dev only**) |
+| `PHILHEALTH_API_*` | no | PhilHealth Konsulta integration |
+| `ALLOW_TEST_RESET` | no | Lets the reset / seed scripts run (**dev only**) |
 
 ## Seeding demo data
 
-Useful for local dev and the defense / demo environment:
+Useful for local dev and the defense / demo environment. Set
+`SEED_DEMO_DATA=true` in `.env` to have the server insert the built-in demo
+patients on startup; it is off by default so a real deployment never
+receives fabricated records.
 
 ```bash
 # Scripts live in server/ and run via tsx:

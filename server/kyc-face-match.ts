@@ -9,14 +9,9 @@
  * Score: 0.0–1.0 float (null when not computable)
  */
 
-import OpenAI from "openai";
+import { getOpenAI, OPENAI_MODEL } from "./openai-client";
 import fs from "fs";
 import path from "path";
-
-const openai = new OpenAI({
-  apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
-  baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
-});
 
 export type FaceMatchStatus =
   | "HIGH_MATCH"
@@ -72,6 +67,15 @@ export async function runFaceMatch(
     };
   }
 
+  const openai = getOpenAI();
+  if (!openai) {
+    return {
+      status: "INCONCLUSIVE",
+      score: 0,
+      reason: "Automatic face comparison is not configured. Admin must verify identity manually.",
+    };
+  }
+
   try {
     const idBase64 = fileToBase64(idFilePath);
     const selfieBase64 = fileToBase64(selfieFilePath);
@@ -100,7 +104,7 @@ Respond in EXACTLY this JSON format (no markdown, no extra text, no comments):
 {"verdict":"HIGH_MATCH","confidence_score":0.87,"reason":"The facial features including nose bridge and jaw line closely match between ID and selfie."}`;
 
     const response = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+      model: OPENAI_MODEL,
       max_tokens: 200,
       messages: [
         { role: "system", content: systemPrompt },
