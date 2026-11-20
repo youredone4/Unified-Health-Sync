@@ -78,7 +78,7 @@ async function resetPassword(pool: pg.Pool, args: string[]) {
   await pool.query(
     `UPDATE users
         SET password_hash = $1, must_change_password = true,
-            failed_login_count = 0, locked_until = NULL, updated_at = now()
+            failed_login_count = 0, locked_until = NULL, updated_at = (now() AT TIME ZONE 'utc')
       WHERE id = $2`,
     [passwordHash, id],
   );
@@ -94,8 +94,12 @@ async function resetPassword(pool: pg.Pool, args: string[]) {
 }
 
 async function list(pool: pg.Pool) {
+  // Timestamp columns hold UTC without a zone (that is how the app writes
+  // them), so comparisons and formatting are done in SQL, in UTC.
   const { rows } = await pool.query(
-    `SELECT username, role, status, must_change_password, locked_until, last_login_at
+    `SELECT username, role, status, must_change_password,
+            COALESCE(locked_until > (now() AT TIME ZONE 'utc'), false) AS locked,
+            to_char(last_login_at, 'YYYY-MM-DD HH24:MI') AS last_login_utc
        FROM users ORDER BY role, username`,
   );
   if (rows.length === 0) {
@@ -108,8 +112,8 @@ async function list(pool: pg.Pool) {
       role: r.role,
       status: r.status,
       "must change password": r.must_change_password ? "yes" : "no",
-      locked: r.locked_until && new Date(r.locked_until) > new Date() ? "yes" : "no",
-      "last login": r.last_login_at ? new Date(r.last_login_at).toISOString().slice(0, 16).replace("T", " ") : "never",
+      locked: r.locked ? "yes" : "no",
+      "last login (UTC)": r.last_login_utc ?? "never",
     })),
   );
 }

@@ -158,9 +158,12 @@ const names = {
   weakPw: `sec_weak_${RUN}`,
   lock: `sec_lock_${RUN}`,
   disabled: `sec_disabled_${RUN}`,
+  tlNone: `sec_tl_none_${RUN}`,
+  race: `sec_race_${RUN}`,
 };
 const ids: Record<string, string> = {};
-const seeded = { motherB: 0, seniorB: 0, diseaseB: 0, rabiesB: 0, smsB: 0, walkInB: 0, motherA: 0 };
+const seeded = { motherB: 0, seniorB: 0, diseaseB: 0, rabiesB: 0, smsB: 0, walkInB: 0, motherA: 0, childA: 0, childB: 0, seniorA: 0 };
+const barangayIds: Record<string, number> = {};
 
 async function createUser(
   username: string,
@@ -204,6 +207,11 @@ before(async () => {
   ids.weakPw = await createUser(names.weakPw, "TL", { barangay: BARANGAY_A, password: "oldpass99" });
   ids.lock = await createUser(names.lock, "TL", { barangay: BARANGAY_A });
   ids.disabled = await createUser(names.disabled, "TL", { barangay: BARANGAY_A, status: "DISABLED" });
+  ids.tlNone = await createUser(names.tlNone, "TL"); // a Team Leader with NO barangays
+  ids.race = await createUser(names.race, "TL", { barangay: BARANGAY_A });
+  for (const row of (await pool.query(`SELECT id, name FROM barangays WHERE name = ANY($1)`, [[BARANGAY_A, BARANGAY_B]])).rows) {
+    barangayIds[row.name] = row.id;
+  }
 
   const today = new Date().toISOString().slice(0, 10);
   const one = async (sql: string, params: unknown[]) => (await pool.query(sql, params)).rows[0].id as number;
@@ -216,6 +224,14 @@ before(async () => {
   seeded.seniorB = await one(
     `INSERT INTO seniors (first_name, last_name, age, barangay) VALUES ($1, 'Senior-B', 70, $2) RETURNING id`,
     [TAG, BARANGAY_B]);
+  seeded.seniorA = await one(
+    `INSERT INTO seniors (first_name, last_name, age, barangay, senior_unique_id) VALUES ($1, 'Senior-A', 70, $2, $3) RETURNING id`,
+    [TAG, BARANGAY_A, `SEC-A-${RUN}`]);
+  await pool.query(`UPDATE seniors SET senior_unique_id = $1 WHERE id = $2`, [`SEC-B-${RUN}`, seeded.seniorB]);
+  seeded.childA = await one(
+    `INSERT INTO children (name, dob, barangay) VALUES ($1, '2024-01-01', $2) RETURNING id`, [`${TAG} Child-A`, BARANGAY_A]);
+  seeded.childB = await one(
+    `INSERT INTO children (name, dob, barangay) VALUES ($1, '2024-01-01', $2) RETURNING id`, [`${TAG} Child-B`, BARANGAY_B]);
   seeded.diseaseB = await one(
     `INSERT INTO disease_cases (patient_name, age, barangay, condition, date_reported)
      VALUES ($1, 40, $2, 'Dengue', $3) RETURNING id`, [TAG, BARANGAY_B, today]);
@@ -233,7 +249,12 @@ before(async () => {
 after(async () => {
   const userIds = Object.values(ids);
   await pool.query(`DELETE FROM sessions WHERE sess->>'userId' = ANY($1)`, [userIds]);
-  await pool.query(`DELETE FROM senior_med_claims WHERE senior_id = $1`, [seeded.seniorB]);
+  await pool.query(`DELETE FROM senior_med_claims WHERE senior_id = ANY($1)`, [[seeded.seniorA, seeded.seniorB]]);
+  await pool.query(`DELETE FROM children WHERE name LIKE $1`, [`${TAG}%`]); // cascades to nutrition follow-ups
+  await pool.query(
+    `DELETE FROM m1_indicator_values WHERE report_instance_id IN (SELECT id FROM m1_report_instances WHERE created_by_user_id = ANY($1))`,
+    [userIds]);
+  await pool.query(`DELETE FROM m1_report_instances WHERE created_by_user_id = ANY($1)`, [userIds]);
   await pool.query(`DELETE FROM mothers WHERE first_name = $1`, [TAG]);
   await pool.query(`DELETE FROM seniors WHERE first_name = $1`, [TAG]);
   await pool.query(`DELETE FROM disease_cases WHERE patient_name = $1`, [TAG]);
@@ -395,6 +416,133 @@ describe("a Team Leader is confined to their assigned barangays", () => {
   });
 });
 
+// --- 2b. the check and the effect must be about the same record --------------------
+//
+// Each of these was a real hole: access was checked on one field of the
+// request while the write (or the computation) used another.
+
+describe("authorisation follows the record, not the request", () => {
+  let tlA: Client;
+  before(async () => { tlA = await session(names.tlA); });
+
+  test("a Team Leader with no barangays finds no patients", async () => {
+    const c = await session(names.tlNone);
+    const res = await c.get(`/api/patients/search?q=${TAG.slice(0, 4)}&limit=25`);
+    assert.equal(res.status, 200);
+    assert.deepEqual(res.json, []);
+    assert.deepEqual((await c.get("/api/mothers")).json, []);
+  });
+
+  test("an account cannot be made a Team Leader without barangays", async () => {
+    const admin = await session(names.admin);
+    const res = await admin.put(`/api/admin/users/${ids.mho}`, { role: "TL" });
+    assert.equal(res.status, 400, res.text);
+  });
+
+  test("a nutrition follow-up takes its barangay from the child", async () => {
+    const body = { followUpDate: "2026-01-15", classification: "MAM", actions: [] };
+    const forged = await tlA.post("/api/nutrition-followups", { ...body, childId: seeded.childB, barangay: BARANGAY_A });
+    assert.equal(forged.status, 403, "a follow-up was attached to another barangay's child");
+
+    // Own child, but claiming another barangay: stored under the child's.
+    const own = await tlA.post("/api/nutrition-followups", { ...body, childId: seeded.childA, barangay: BARANGAY_B, notes: "=HYPERLINK(1)" });
+    assert.equal(own.status, 201, own.text);
+    assert.equal(own.json.barangay, BARANGAY_A);
+
+    const move = await tlA.put(`/api/nutrition-followups/${own.json.id}`, { barangay: BARANGAY_B, childId: seeded.childB, recordedBy: "someone.else" });
+    assert.equal(move.status, 400, "identity fields must not be editable");
+    const { rows } = await pool.query(`SELECT barangay, child_id, recorded_by FROM nutrition_followups WHERE id = $1`, [own.json.id]);
+    assert.equal(rows[0].barangay, BARANGAY_A);
+    assert.equal(rows[0].child_id, seeded.childA);
+    assert.notEqual(rows[0].recorded_by, "someone.else");
+  });
+
+  test("exported free text cannot run as a spreadsheet formula", async () => {
+    const res = await tlA.get(`/api/nutrition-followups/export.csv?barangay=${encodeURIComponent(BARANGAY_A)}`);
+    assert.equal(res.status, 200);
+    assert.ok(res.text.includes("'=HYPERLINK(1)"), "formula cell was not neutralised");
+    assert.ok(!/(^|,)=HYPERLINK/m.test(res.text));
+  });
+
+  test("an M1 report's barangay name always matches its barangay id", async () => {
+    const noBarangay = await tlA.post("/api/m1/reports", { templateVersionId: 1, month: 1, year: 2031 });
+    assert.equal(noBarangay.status, 403, "a TL created a municipality-wide report");
+
+    const created = await tlA.post("/api/m1/reports", {
+      templateVersionId: 1, barangayId: barangayIds[BARANGAY_A], barangayName: BARANGAY_B, month: 1, year: 2031,
+    });
+    // 201 normally; anything else means the template is not seeded here.
+    if (created.status === 201) {
+      assert.equal(created.json.barangayName, BARANGAY_A, "caller-supplied barangay name was stored");
+    } else {
+      assert.ok(created.status < 500, created.text);
+    }
+
+    const imported = await tlA.post("/api/m1/bulk-import", {
+      barangayId: barangayIds[BARANGAY_A], barangayName: BARANGAY_B, month: 2, year: 2031,
+      values: [{ rowKey: "SEC-TEST", valueNumber: 1 }],
+    });
+    if (imported.status === 200) {
+      const { rows } = await pool.query(`SELECT barangay_name FROM m1_report_instances WHERE id = $1`, [imported.json.reportId]);
+      assert.equal(rows[0].barangay_name, BARANGAY_A, "bulk import stored a caller-supplied barangay name");
+    } else {
+      assert.ok(imported.status < 500, imported.text);
+    }
+
+    const other = await tlA.post("/api/m1/bulk-import", {
+      barangayId: barangayIds[BARANGAY_B], month: 2, year: 2031, values: [{ rowKey: "SEC-TEST", valueNumber: 1 }],
+    });
+    assert.equal(other.status, 403);
+  });
+
+  test("a medication claim is filed against the senior it names, nobody else", async () => {
+    const res = await tlA.post("/api/senior-med-claims", {
+      seniorId: seeded.seniorA,
+      seniorUniqueId: `SEC-B-${RUN}`,            // someone else's unique id
+      claimedBarangayId: barangayIds[BARANGAY_B], // somewhere else
+      claimedBarangayName: BARANGAY_B,
+      medicationName: "Amlodipine", quantity: 30,
+    });
+    assert.equal(res.status, 201, res.text);
+    assert.equal(res.json.seniorUniqueId, `SEC-A-${RUN}`);
+    assert.equal(res.json.claimedBarangayName, BARANGAY_A);
+
+    const victim = await tlA.get(`/api/senior-med-claims/check-eligibility/SEC-B-${RUN}`);
+    assert.equal(victim.json.eligible, true, "another senior was blocked from claiming");
+    const self = await tlA.get(`/api/senior-med-claims/check-eligibility/SEC-A-${RUN}`);
+    assert.equal(self.json.eligible, false);
+    assert.ok(!("lastClaim" in self.json), "eligibility check returned the full claim row");
+  });
+
+  test("plain-language summaries are only generated for real rules", async () => {
+    const unknown = await tlA.post("/api/recommendations/plain-language", {
+      ruleId: "not-a-real-rule", title: "x", bullets: ["attacker supplied clinical advice"],
+    });
+    assert.equal(unknown.status, 404);
+    const real = await tlA.post("/api/recommendations/plain-language", {
+      ruleId: "rabies-cat-iii-pep", title: "ignored", bullets: ["ignored"],
+    });
+    assert.equal(real.status, 200);
+  });
+
+  test("replacing the seniors registry is System Admin only and validated", async () => {
+    const mho = await session(names.mho);
+    const row = { firstName: TAG, lastName: "Bulk", age: 70, barangay: BARANGAY_A };
+    assert.equal((await mho.post("/api/seniors/bulk-import", { rows: [row], replace: true })).status, 403);
+    assert.equal((await mho.post("/api/seniors/bulk-import", { rows: [{ firstName: 1 }] })).status, 400);
+    const admin = await session(names.admin);
+    assert.equal((await admin.post("/api/seniors/bulk-import", { rows: [], replace: true })).status, 400);
+  });
+
+  test("anonymous clients cannot make the server parse a large body", async () => {
+    const res = await fetch(BASE_URL + "/api/seniors/bulk-import", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ rows: [], pad: "x".repeat(3 * 1024 * 1024) }),
+    });
+    assert.equal(res.status, 401);
+  });
+});
+
 // --- 3. login and sessions -------------------------------------------------------
 
 describe("login and sessions", () => {
@@ -432,6 +580,24 @@ describe("login and sessions", () => {
     const res = await new Client().login(names.lock, STRONG_PASSWORD);
     assert.equal(res.status, 429);
     assert.equal(res.json.statusCode, "LOCKED");
+  });
+
+  test("unknown usernames lock exactly like real ones (no username probing)", async () => {
+    const ghost = `sec_ghost_${RUN}`;
+    for (let i = 0; i < 5; i++) {
+      assert.equal((await new Client().login(ghost, `wrong-${i}`)).status, 401);
+    }
+    const res = await new Client().login(ghost, "anything");
+    assert.equal(res.status, 429);
+    assert.equal(res.json.statusCode, "LOCKED");
+  });
+
+  test("parallel guesses cannot slip past the lockout", async () => {
+    await Promise.all(Array.from({ length: 12 }, (_, i) => new Client().login(names.race, `guess-${i}`)));
+    // Compared inside the database: these columns hold UTC without a zone.
+    const { rows } = await pool.query(
+      `SELECT locked_until > (now() AT TIME ZONE 'utc') AS locked FROM users WHERE id = $1`, [ids.race]);
+    assert.equal(rows[0].locked, true, "account was not locked after 12 parallel failures");
   });
 
   test("the session id changes at login (no session fixation)", async () => {

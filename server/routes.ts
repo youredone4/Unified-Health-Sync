@@ -13,7 +13,10 @@ import { setupAuth, registerAuthRoutes } from "./auth";
 import { registerAdminRoutes } from "./routes/admin";
 import rateLimit from "express-rate-limit";
 import { loadUserInfo, requireAuth, requireRole, createAuditLog, apiGate, canAccessBarangay } from "./middleware/rbac";
-import { csrfGuard } from "./middleware/security";
+import express from "express";
+import { csrfGuard, BULK_IMPORT_PATHS } from "./middleware/security";
+import { RECOMMENDATIONS } from "@shared/recommendations";
+import { insertSeniorSchema } from "@shared/schema";
 import { config } from "./config";
 import { users as usersTable, UserRole, auditLogs, deathReviews, DEATH_REVIEW_STATUSES, aefiEvents, insertAefiEventSchema, outbreaks, OUTBREAK_STATUSES, consults, medicineInventory, medicationDispensings, insertMedicationDispensingSchema, inventoryRequests, insertInventoryRequestSchema, RESTOCK_STATUSES, SERVICE_CODES, MD_DISPOSITIONS, medicalCertificates, insertMedicalCertificateSchema, CERTIFICATE_TYPES, campaignTallies, insertCampaignTallySchema, CAMPAIGN_TYPES, konsultaEnrollments, insertKonsultaEnrollmentSchema, KONSULTA_ENROLLMENT_STATUSES, konsultaEncounters, insertKonsultaEncounterSchema, KONSULTA_ENCOUNTER_STATUSES, philhealthSubmissions, smsOutbox } from "@shared/schema";
 import * as philhealth from "./integrations/philhealth";
@@ -37,6 +40,12 @@ export async function registerRoutes(
   app.use("/api", csrfGuard);
   app.use("/api", loadUserInfo);
   app.use("/api", apiGate);
+
+  // Spreadsheet imports post thousands of rows. Their large body limit is
+  // applied here, AFTER the gate, so only a signed-in user can make the
+  // server parse a 10 MB body. Everything else was already parsed with the
+  // small limit in index.ts.
+  app.use(BULK_IMPORT_PATHS, express.json({ limit: "10mb" }));
 
   registerAuthRoutes(app);
   
@@ -98,6 +107,27 @@ export async function registerRoutes(
   const tlBlocked = (req: { userInfo?: Express.Request["userInfo"] }, barangay: string | null | undefined): boolean =>
     !canAccessBarangay(req.userInfo, barangay);
   const BARANGAY_DENIED = { message: "Access denied to this barangay" };
+  // Upper bound for ?motherIds= / ?childIds= style batch lookups.
+  const MAX_BATCH_IDS = 200;
+  // Per-user limiter for endpoints that write audit rows or call the LLM
+  // on every request.
+  const perUserLimiter = (limit: number) => rateLimit({
+    windowMs: 60 * 1000,
+    limit,
+    standardHeaders: "draft-7",
+    legacyHeaders: false,
+    keyGenerator: (req) => req.userInfo?.id ?? "anonymous",
+    message: { message: "Too many requests. Please slow down." },
+  });
+  // A spreadsheet opens a cell starting with = + - @ as a formula. Prefix
+  // those so exported free text can never execute on the reader's machine.
+  const csvSafe = (v: unknown): string => {
+    if (v === null || v === undefined) return "";
+    let s = String(v);
+    if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
+    s = s.replace(/"/g, '""');
+    return /[",\n\r]/.test(s) ? `"${s}"` : s;
+  };
   // Roles that record or manage operational data. Excludes the view-only
   // roles (Mayor, Health Committee).
   const operationalRBAC = [loadUserInfo, requireAuth, requireRole(UserRole.SYSTEM_ADMIN, UserRole.MHO, UserRole.SHA, UserRole.TL)];
@@ -376,10 +406,31 @@ export async function registerRoutes(
   }));
 
   // Senior bulk import from AMOS logs
+  const seniorBulkSchema = z.object({
+    rows: z.array(insertSeniorSchema).max(20000),
+    replace: z.boolean().optional(),
+  });
   app.post("/api/seniors/bulk-import", loadUserInfo, requireAuth, requireRole(UserRole.SYSTEM_ADMIN, UserRole.MHO), ar(async (req, res) => {
-    const { rows, replace } = req.body;
-    if (!Array.isArray(rows)) return res.status(400).json({ message: "rows must be an array" });
-    const count = await storage.bulkImportSeniors(rows, replace === true);
+    const parsed = seniorBulkSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: "Invalid import file contents", issues: parsed.error.issues.slice(0, 20) });
+    }
+    const { rows } = parsed.data;
+    const replace = parsed.data.replace === true;
+    // "Replace" deletes the whole seniors registry first. Deleting a single
+    // senior is System Admin only, so deleting all of them is too.
+    if (replace && req.userInfo!.role !== UserRole.SYSTEM_ADMIN) {
+      return res.status(403).json({ message: "Only a System Admin can replace the seniors registry" });
+    }
+    if (replace && rows.length === 0) {
+      return res.status(400).json({ message: "Refusing to replace the registry with an empty file" });
+    }
+    const count = await storage.bulkImportSeniors(rows, replace);
+    await createAuditLog(
+      req.userInfo!.id, req.userInfo!.role,
+      replace ? "IMPORT_REPLACE" : "IMPORT", "SENIOR", undefined, undefined, undefined,
+      { rows: rows.length, replace }, req,
+    );
     res.json({ imported: count });
   }));
 
@@ -411,7 +462,13 @@ export async function registerRoutes(
     try {
       const { seniorUniqueId } = req.params;
       const result = await storage.checkSeniorEligibility(seniorUniqueId);
-      res.json(result);
+      // The yes/no (and why) is all another barangay needs; the claim row
+      // itself stays with the barangay that recorded it.
+      res.json({
+        eligible: result.eligible,
+        reason: result.reason,
+        nextEligibleAt: result.lastClaim?.nextEligibleAt,
+      });
     } catch (err) {
       res.status(500).json({ message: "Failed to check eligibility" });
     }
@@ -425,7 +482,7 @@ export async function registerRoutes(
     medicationName: z.string().trim().min(1).max(200),
     dose: z.string().trim().max(100).nullish(),
     quantity: z.coerce.number().int().positive().max(10000),
-    cycleDays: z.coerce.number().int().min(1).max(365).default(30),
+    cycleDays: z.coerce.number().int().min(1).max(90).default(30),
   });
 
   app.post("/api/senior-med-claims", operationalRBAC, async (req: any, res: any) => {
@@ -434,16 +491,24 @@ export async function registerRoutes(
       if (!parsed.success) {
         return res.status(400).json({ message: "Invalid medication claim", issues: parsed.error.issues });
       }
-      const { seniorId, seniorUniqueId, claimedBarangayId, claimedBarangayName, medicationName, dose, quantity, cycleDays } = parsed.data;
+      const { seniorId, medicationName, dose, quantity, cycleDays } = parsed.data;
       const senior = await storage.getSenior(seniorId);
       if (!senior) return res.status(404).json({ message: "Senior not found" });
       if (tlBlocked(req, senior.barangay)) return res.status(403).json(BARANGAY_DENIED);
+
+      // Who the claim is for and where it was made come from the senior's
+      // own record. Taking them from the request would let a caller file a
+      // claim against someone else's unique ID and block their medication.
+      const seniorUniqueId = senior.seniorUniqueId ?? null;
+      const claimedBarangayName = senior.barangay;
+      const claimedBarangayId =
+        (await storage.getBarangays()).find((b) => b.name === senior.barangay)?.id ?? parsed.data.claimedBarangayId;
 
       // Check eligibility first
       if (seniorUniqueId) {
         const eligibility = await storage.checkSeniorEligibility(seniorUniqueId);
         if (!eligibility.eligible) {
-          return res.status(400).json({ message: eligibility.reason, lastClaim: eligibility.lastClaim });
+          return res.status(400).json({ message: eligibility.reason });
         }
       }
 
@@ -580,6 +645,7 @@ export async function registerRoutes(
     const input = api.medicineInventory.create.input.parse(req.body);
     if (tlBlocked(req, input.barangay)) return res.status(403).json(BARANGAY_DENIED);
     const created = await storage.createMedicineInventory(input);
+    await createAuditLog(req.userInfo!.id, req.userInfo!.role, "CREATE", "MEDICINE_INVENTORY", String(created.id), created.barangay, undefined, created, req);
     res.status(201).json(created);
   }));
 
@@ -592,6 +658,7 @@ export async function registerRoutes(
     const input = api.medicineInventory.update.input.parse(req.body);
     if (input.barangay !== undefined && tlBlocked(req, input.barangay)) return res.status(403).json(BARANGAY_DENIED);
     const updated = await storage.updateMedicineInventory(id, input);
+    await createAuditLog(req.userInfo!.id, req.userInfo!.role, "UPDATE", "MEDICINE_INVENTORY", String(id), existing.barangay, existing, updated, req);
     res.json(updated);
   }));
 
@@ -667,9 +734,10 @@ export async function registerRoutes(
           limit: result.limit,
         });
       }
-      // Sent (or queued in demo mode). Return the latest outbox row.
-      const rows = await storage.getSmsMessages();
-      res.status(201).json(rows[rows.length - 1] ?? { status: result.status });
+      // Sent (or queued in demo mode). Return the outbox row this request
+      // created, not "the last row in the table", which under concurrent
+      // sends could belong to another barangay.
+      res.status(201).json(result.row);
     } catch (err) {
       res.status(400).json({ message: "Invalid SMS data" });
     }
@@ -816,11 +884,31 @@ export async function registerRoutes(
   }));
 
   app.post("/api/disease-cases/bulk", loadUserInfo, requireAuth, requireRole(UserRole.SYSTEM_ADMIN, UserRole.MHO), ar(async (req, res) => {
-    const { rows, replace = false } = req.body;
-    if (!Array.isArray(rows)) {
-      return res.status(400).json({ message: "rows must be an array" });
+    const parsed = z.object({
+      rows: z.array(z.object({
+        barangay: z.string().trim().min(1).max(120),
+        disease_name: z.string().trim().min(1).max(200),
+        cases: z.coerce.number().int().min(0).max(5000),
+        reporting_date: z.string().regex(/^\d{4}-\d{2}-\d{2}/, "reporting_date must start with YYYY-MM-DD"),
+      })).max(5000),
+      replace: z.boolean().optional(),
+    }).safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: "Invalid import file contents", issues: parsed.error.issues.slice(0, 20) });
     }
-    const imported = await storage.bulkImportDiseaseCases(rows, replace as boolean);
+    const { rows } = parsed.data;
+    const replace = parsed.data.replace === true;
+    // Each aggregate row expands into `cases` individual records.
+    const totalCases = rows.reduce((sum, r) => sum + r.cases, 0);
+    if (totalCases > 50000) {
+      return res.status(400).json({ message: "Import is too large (more than 50,000 cases)" });
+    }
+    const imported = await storage.bulkImportDiseaseCases(rows, replace);
+    await createAuditLog(
+      req.userInfo!.id, req.userInfo!.role,
+      replace ? "IMPORT_REPLACE" : "IMPORT", "DISEASE_CASE", undefined, undefined, undefined,
+      { rows: rows.length, cases: totalCases, replace }, req,
+    );
     res.json({ imported });
   }));
 
@@ -1039,7 +1127,7 @@ export async function registerRoutes(
     if (idsParam !== undefined) {
       const ids = idsParam.split(",")
         .map((s) => Number(s.trim()))
-        .filter((n) => Number.isFinite(n));
+        .filter((n) => Number.isFinite(n)).slice(0, MAX_BATCH_IDS);
       if (ids.length === 0) return res.json([]);
       const accessibleIds = await filterMotherIdsByAccess(ids, req);
       const data = await storage.getPrenatalScreeningsByMotherIds(accessibleIds);
@@ -1095,7 +1183,7 @@ export async function registerRoutes(
     if (idsParam !== undefined) {
       const ids = idsParam.split(",")
         .map((s) => Number(s.trim()))
-        .filter((n) => Number.isFinite(n));
+        .filter((n) => Number.isFinite(n)).slice(0, MAX_BATCH_IDS);
       if (ids.length === 0) return res.json([]);
       const accessibleIds = await filterChildIdsByAccess(ids, req);
       const data = await storage.getSickChildVisitsByChildIds(accessibleIds);
@@ -1331,12 +1419,22 @@ export async function registerRoutes(
     ruleIds: z.array(z.string().min(1).max(120)).max(20),
     barangayName: z.string().max(120).optional(),
   });
-  app.post("/api/recommendations/log", loadUserInfo, requireAuth, ar(async (req, res) => {
+  const KNOWN_RULE_IDS = new Set(RECOMMENDATIONS.map((r) => r.id));
+  app.post("/api/recommendations/log", loadUserInfo, requireAuth, perUserLimiter(120), ar(async (req, res) => {
     const parsed = recommendationLogSchema.safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({ message: "Invalid payload", issues: parsed.error.issues });
     }
-    const { kind, entityType, entityId, ruleIds, barangayName } = parsed.data;
+    const { kind, entityType, entityId } = parsed.data;
+    // These rows land in the audit log, so they only describe things that
+    // exist: real rule ids, and a barangay the caller can actually see.
+    const ruleIds = parsed.data.ruleIds.filter((id) => KNOWN_RULE_IDS.has(id));
+    const barangayName = parsed.data.barangayName && !tlBlocked(req, parsed.data.barangayName)
+      ? parsed.data.barangayName
+      : undefined;
+    if (!/^[A-Z][A-Z0-9_]{1,59}$/.test(entityType)) {
+      return res.status(400).json({ message: "Invalid entityType" });
+    }
     if (ruleIds.length === 0) return res.json({ logged: 0 });
     const action = kind === "SHOWN" ? "RECOMMENDATION_SHOWN" : "RECOMMENDATION_ACTED";
     for (const ruleId of ruleIds) {
@@ -1356,18 +1454,22 @@ export async function registerRoutes(
   // Cached in-process by ruleId. Returns 200 with summary=null when the
   // LLM call is unavailable (no API key or upstream error) so the card
   // still renders the rule-based bullets.
+  // Only the rule id is accepted. The title and bullets sent to the LLM are
+  // read from the server's own rule registry: the result is cached per rule
+  // and shown to every later reader, so it must not be built from text a
+  // caller supplied.
   const plainLanguageSchema = z.object({
     ruleId: z.string().min(1).max(120),
-    title: z.string().min(1).max(300),
-    bullets: z.array(z.string().min(1).max(500)).min(1).max(10),
   });
-  app.post("/api/recommendations/plain-language", loadUserInfo, requireAuth, ar(async (req, res) => {
+  app.post("/api/recommendations/plain-language", loadUserInfo, requireAuth, perUserLimiter(30), ar(async (req, res) => {
     const parsed = plainLanguageSchema.safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({ message: "Invalid payload", issues: parsed.error.issues });
     }
+    const rule = RECOMMENDATIONS.find((r) => r.id === parsed.data.ruleId);
+    if (!rule) return res.status(404).json({ message: "Unknown recommendation" });
     const { plainLanguageSummary } = await import("./recommendations-llm");
-    const summary = await plainLanguageSummary(parsed.data);
+    const summary = await plainLanguageSummary({ ruleId: rule.id, title: rule.title, bullets: rule.bullets });
     res.json({ summary });
   }));
 
@@ -1524,7 +1626,7 @@ export async function registerRoutes(
     if (idsParam !== undefined) {
       const ids = idsParam.split(",")
         .map((s) => Number(s.trim()))
-        .filter((n) => Number.isFinite(n));
+        .filter((n) => Number.isFinite(n)).slice(0, MAX_BATCH_IDS);
       if (ids.length === 0) return res.json([]);
       const accessibleIds = await filterMotherIdsByAccess(ids, req);
       const data = await storage.getBirthAttendanceRecordsByMotherIds(accessibleIds);
@@ -2022,29 +2124,31 @@ export async function registerRoutes(
     if (!parsedReport.success) {
       return res.status(400).json({ message: "Invalid report", issues: parsedReport.error.issues });
     }
-    // TL can only create for their assigned barangays — require explicit valid barangayId
+    const reportInput = parsedReport.data;
+    // The report's numbers are computed from its barangay NAME, while access
+    // is checked on the barangay ID. Both must describe the same barangay,
+    // so the name is looked up here and whatever the caller sent is ignored.
+    const reportBarangay = reportInput.barangayId
+      ? (await storage.getBarangays()).find((b) => b.id === reportInput.barangayId)
+      : undefined;
+    if (reportInput.barangayId && !reportBarangay) {
+      return res.status(400).json({ message: "Unknown barangay" });
+    }
     if (req.userInfo?.role === UserRole.TL) {
-      const { barangayName, barangayId } = req.body;
-      if (!barangayId) {
+      // A report with no barangay is municipality-wide; not for TLs.
+      if (!reportBarangay) {
         return res.status(403).json({ message: "A specific barangay is required for TL users" });
       }
-      const allBarangays = await storage.getBarangays();
-      const allowedIds = allBarangays
-        .filter(b => req.userInfo!.assignedBarangays.includes(b.name))
-        .map(b => b.id);
-      if (!allowedIds.includes(Number(barangayId))) {
-        return res.status(403).json({ message: "You can only create reports for your assigned barangays" });
-      }
-      if (barangayName && !req.userInfo.assignedBarangays.includes(barangayName)) {
+      if (tlBlocked(req, reportBarangay.name)) {
         return res.status(403).json({ message: "You can only create reports for your assigned barangays" });
       }
     }
     // Duplicate prevention: return 409 if report already exists for this barangay/month/year
-    if (req.body.barangayId && req.body.month && req.body.year) {
+    if (reportBarangay) {
       const existing = await storage.getM1ReportInstances({
-        barangayId: Number(req.body.barangayId),
-        month: Number(req.body.month),
-        year: Number(req.body.year),
+        barangayId: reportBarangay.id,
+        month: reportInput.month,
+        year: reportInput.year,
       });
       if (existing.length > 0) {
         return res.status(409).json({
@@ -2054,7 +2158,10 @@ export async function registerRoutes(
       }
     }
     const report = await storage.createM1ReportInstance({
-      ...parsedReport.data,
+      ...reportInput,
+      barangayId: reportBarangay?.id ?? null,
+      barangayName: reportBarangay?.name ?? null,
+      scopeType: reportBarangay ? "BARANGAY" : (reportInput.scopeType ?? "MUNICIPALITY"),
       createdByUserId: req.userInfo?.id || null,
     });
     await createAuditLog(
@@ -2086,7 +2193,8 @@ export async function registerRoutes(
       return res.status(403).json({ message: "Cannot edit a submitted report. Reopen it first." });
     }
     // Request body shape: { values: [...] }
-    const values: any[] = req.body.values || [];
+    const values: any[] = Array.isArray(req.body?.values) ? req.body.values : [];
+    if (values.length > 5000) return res.status(400).json({ message: "Too many values in one request" });
     // Build old-value map from existing saved values for field-level diff
     const oldValueMap: Record<string, any> = {};
     existing.values.forEach((v: any) => {
@@ -2094,9 +2202,10 @@ export async function registerRoutes(
       oldValueMap[key] = v.valueNumber ?? v.valueText ?? null;
     });
     const updated = await storage.updateM1IndicatorValues(id, values);
-    // One audit row per changed ENCODED field — treat missing valueSource as ENCODED
+    // One audit row per changed field. The client-supplied valueSource is
+    // NOT used to decide what gets audited: labelling an edit "COMPUTED"
+    // must not make it invisible.
     const auditPromises = values
-      .filter((v: any) => !v.valueSource || v.valueSource === "ENCODED")
       .map(async (v: any) => {
         const fieldKey = v.columnKey ? `${v.rowKey}:${v.columnKey}` : v.rowKey;
         const newVal = v.valueNumber ?? v.valueText ?? null;
@@ -2206,21 +2315,29 @@ export async function registerRoutes(
   // Bulk import M1 CSV data for a specific barangay and month/year
   app.post("/api/m1/bulk-import", operationalRBAC, async (req: any, res: any) => {
     try {
-      const { barangayId, barangayName, month, year, values, templateVersionId } = req.body;
-      
-      if (!barangayId || !month || !year || !values || !Array.isArray(values)) {
-        return res.status(400).json({ message: "Missing required fields: barangayId, month, year, values" });
+      const parsedImport = z.object({
+        barangayId: z.coerce.number().int().positive(),
+        month: z.coerce.number().int().min(1).max(12),
+        year: z.coerce.number().int().min(2000).max(2100),
+        templateVersionId: z.coerce.number().int().positive().optional(),
+        values: z.array(z.object({
+          rowKey: z.string().min(1).max(120),
+          columnKey: z.string().max(120).nullish(),
+          valueNumber: z.number().finite().nullish(),
+          valueText: z.string().max(2000).nullish(),
+        })).min(1).max(5000),
+      }).safeParse(req.body);
+      if (!parsedImport.success) {
+        return res.status(400).json({ message: "Missing or invalid fields: barangayId, month, year, values", issues: parsedImport.error.issues.slice(0, 20) });
       }
+      const { barangayId, month, year, values, templateVersionId } = parsedImport.data;
 
-      // TL scoping: only allow access to assigned barangays
-      if (req.userInfo?.role === UserRole.TL) {
-        const allBarangays = await storage.getBarangays();
-        const allowedIds = allBarangays
-          .filter(b => req.userInfo!.assignedBarangays.includes(b.name))
-          .map(b => b.id);
-        if (!allowedIds.includes(Number(barangayId))) {
-          return res.status(403).json({ message: "You can only import data for your assigned barangays" });
-        }
+      // The barangay name is derived from the id (see POST /api/m1/reports).
+      const importBarangay = (await storage.getBarangays()).find((b) => b.id === barangayId);
+      if (!importBarangay) return res.status(400).json({ message: "Unknown barangay" });
+      const barangayName = importBarangay.name;
+      if (tlBlocked(req, barangayName)) {
+        return res.status(403).json({ message: "You can only import data for your assigned barangays" });
       }
       
       // Check for existing report or create new one
@@ -2260,7 +2377,7 @@ export async function registerRoutes(
       );
       res.json({ reportId, importedCount: updatedValues.length });
     } catch (err) {
-      console.error("Bulk import error:", err);
+      console.error("Bulk import error:", (err as Error)?.message || err);
       res.status(500).json({ message: "Failed to import data" });
     }
   });
@@ -2275,7 +2392,7 @@ export async function registerRoutes(
       const result = await storage.seedHistoricalM1Data();
       res.json(result);
     } catch (err) {
-      console.error("Historical seeding error:", err);
+      console.error("Historical seeding error:", (err as Error)?.message || err);
       res.status(500).json({ message: "Failed to seed historical data" });
     }
   });
@@ -2287,7 +2404,7 @@ export async function registerRoutes(
       const result = await generateHealthInsights();
       res.json(result);
     } catch (err) {
-      console.error("AI insights error:", err);
+      console.error("AI insights error:", (err as Error)?.message || err);
       res.status(500).json({ message: "Failed to generate AI insights" });
     }
   });
@@ -2306,7 +2423,7 @@ export async function registerRoutes(
       res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
       res.end();
     } catch (err) {
-      console.error("AI streaming error:", err);
+      console.error("AI streaming error:", (err as Error)?.message || err);
       if (res.headersSent) {
         res.write(`data: ${JSON.stringify({ error: "Failed to stream insights" })}\n\n`);
         res.end();
@@ -2322,7 +2439,7 @@ export async function registerRoutes(
       const result = await getRiskAnalysis();
       res.json(result);
     } catch (err) {
-      console.error("Risk analysis error:", err);
+      console.error("Risk analysis error:", (err as Error)?.message || err);
       res.status(500).json({ message: "Failed to get risk analysis" });
     }
   });
@@ -2334,7 +2451,7 @@ export async function registerRoutes(
       const conversations = await storage.getDMConversations(userId);
       res.json(conversations);
     } catch (err) {
-      console.error("DM conversations error:", err);
+      console.error("DM conversations error:", (err as Error)?.message || err);
       res.status(500).json({ message: "Failed to fetch conversations" });
     }
   });
@@ -2356,7 +2473,7 @@ export async function registerRoutes(
       const messages = await storage.getDMMessages(currentUserId, otherUserId);
       res.json(messages);
     } catch (err) {
-      console.error("DM messages error:", err);
+      console.error("DM messages error:", (err as Error)?.message || err);
       res.status(500).json({ message: "Failed to fetch messages" });
     }
   });
@@ -2379,7 +2496,7 @@ export async function registerRoutes(
       const message = await storage.sendDMMessage(senderId, receiverId, content.trim());
       res.json(message);
     } catch (err) {
-      console.error("Send DM error:", err);
+      console.error("Send DM error:", (err as Error)?.message || err);
       res.status(500).json({ message: "Failed to send message" });
     }
   });
@@ -2592,9 +2709,13 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Invalid referral", issues: parsed.error.issues });
       }
       const input = parsed.data;
-      // TL can only create referrals from their assigned barangays.
-      if (input.sourceBarangay && !req.userInfo!.assignedBarangays.includes(input.sourceBarangay)) {
-        return res.status(403).json({ message: "Access denied to this barangay" });
+      // TL can only create referrals from their assigned barangays, and
+      // must say which one (an unlabelled referral would be visible to no TL).
+      if (!input.sourceBarangay) {
+        return res.status(400).json({ message: "sourceBarangay is required" });
+      }
+      if (tlBlocked(req, input.sourceBarangay)) {
+        return res.status(403).json(BARANGAY_DENIED);
       }
       const [created] = await db.insert(referralRecords).values({
         ...input,
@@ -3347,6 +3468,9 @@ export async function registerRoutes(
       if (req.userInfo!.role === UserRole.TL && !req.userInfo!.assignedBarangays.includes(input.barangay)) {
         return res.status(403).json({ message: "Access denied to this barangay" });
       }
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(input.issueDate)) {
+        return res.status(400).json({ message: "issueDate must be YYYY-MM-DD" });
+      }
       // Auto-number: BHS-YYYY-MM-NNN scoped by barangay + year-month.
       const ym = input.issueDate.slice(0, 7);
       const prefix = `BHS-${ym.replace("-", "-")}`;
@@ -3436,7 +3560,7 @@ export async function registerRoutes(
 
     const bytes = Buffer.from(doc.output("arraybuffer"));
     res.setHeader("Content-Type", "application/pdf");
-    res.setHeader("Content-Disposition", `inline; filename="${cert.certificateNumber}.pdf"`);
+    res.setHeader("Content-Disposition", `inline; filename="${cert.certificateNumber.replace(/[^A-Za-z0-9_-]/g, "")}.pdf"`);
     res.send(bytes);
   }));
 
@@ -4129,6 +4253,7 @@ export async function registerRoutes(
         throw err;
       }
     }
+    await createAuditLog(req.userInfo!.id, req.userInfo!.role, "CREATE", "PRENATAL_VISIT", String(visit?.id ?? ""), mother.barangay, undefined, { motherId: id, visitDate }, req);
     // Auto-update mother's nextPrenatalCheckDate from the nurse-entered next scheduled visit
     if (nextScheduledVisit) {
       await storage.updateMother(id, { nextPrenatalCheckDate: nextScheduledVisit });
@@ -4175,6 +4300,7 @@ export async function registerRoutes(
         throw err;
       }
     }
+    await createAuditLog(req.userInfo!.id, req.userInfo!.role, "CREATE", "CHILD_VISIT", String(visit?.id ?? ""), child.barangay, undefined, { childId: id, visitDate }, req);
     // Sync weight (and optional height/muac) from the nurse visit into children.growth JSONB
     if (weightKg) {
       const weightNum = parseFloat(weightKg);
@@ -4243,6 +4369,7 @@ export async function registerRoutes(
         throw err;
       }
     }
+    await createAuditLog(req.userInfo!.id, req.userInfo!.role, "CREATE", "SENIOR_VISIT", String(visit?.id ?? ""), senior.barangay, undefined, { seniorId: id, visitDate }, req);
     // Mirror the BP onto the senior so the registry profile card reflects the
     // newest reading. Guarded on date so a back-dated visit can't overwrite a
     // more-recent value that's already on file.
@@ -4298,6 +4425,7 @@ export async function registerRoutes(
       return res.status(403).json({ message: "Not authorized for this barangay" });
     }
     const record = await storage.createFpServiceRecord(parsed.data);
+    await createAuditLog(user.id, user.role, "CREATE", "FP_RECORD", String(record.id), record.barangay, undefined, { id: record.id }, req);
     res.status(201).json(record);
   }));
 
@@ -4308,13 +4436,16 @@ export async function registerRoutes(
     if (req.userInfo?.role === UserRole.TL && !req.userInfo.assignedBarangays.includes(existing.barangay)) {
       return res.status(403).json({ message: "Not authorized for this barangay" });
     }
-    const parsed = insertFpServiceRecordSchema.partial().safeParse(req.body);
+    // Who recorded it and when are set once, by the server.
+    const parsed = insertFpServiceRecordSchema.partial().omit({ recordedBy: true, createdAt: true }).safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message || "Invalid data" });
     // For TL: also validate the target barangay (if changed) is within their scope
     if (req.userInfo?.role === UserRole.TL && parsed.data.barangay && !req.userInfo.assignedBarangays.includes(parsed.data.barangay)) {
       return res.status(403).json({ message: "Not authorized to move record to this barangay" });
     }
+    if (Object.keys(parsed.data).length === 0) return res.status(400).json({ message: "Nothing to update" });
     const updated = await storage.updateFpServiceRecord(id, parsed.data);
+    await createAuditLog(req.userInfo!.id, req.userInfo!.role, "UPDATE", "FP_RECORD", String(id), existing.barangay, existing, updated, req);
     res.json(updated);
   }));
 
@@ -4323,6 +4454,7 @@ export async function registerRoutes(
     const existing = await storage.getFpServiceRecord(id);
     if (!existing) return res.status(404).json({ message: "FP record not found" });
     await storage.deleteFpServiceRecord(id);
+    await createAuditLog(req.userInfo!.id, req.userInfo!.role, "DELETE", "FP_RECORD", String(id), existing.barangay, existing, undefined, req);
     res.json({ success: true });
   }));
 
@@ -4402,12 +4534,18 @@ export async function registerRoutes(
     if (!parsed.success) {
       return res.status(400).json({ message: parsed.error.issues[0]?.message || "Invalid data" });
     }
-    if (user.role === UserRole.TL && !user.assignedBarangays.includes(parsed.data.barangay)) {
+    // The follow-up belongs to the child's barangay, whatever the request
+    // says. Checking only the submitted barangay would let a TL attach a
+    // follow-up to a child in a barangay they cannot see.
+    const followUpChild = await storage.getChild(parsed.data.childId);
+    if (!followUpChild) return res.status(404).json({ message: "Child not found" });
+    if (tlBlocked(req, followUpChild.barangay)) {
       return res.status(403).json({ message: "Not authorized for this barangay" });
     }
     const rhuError = await validateRhuReferral(parsed.data.actions, parsed.data.referredRhuId);
     if (rhuError) return res.status(400).json({ message: rhuError });
-    const record = await storage.createNutritionFollowUp(parsed.data);
+    const record = await storage.createNutritionFollowUp({ ...parsed.data, barangay: followUpChild.barangay });
+    await createAuditLog(user.id, user.role, "CREATE", "NUTRITION_FOLLOWUP", String(record.id), record.barangay, undefined, { childId: record.childId, classification: record.classification }, req);
     res.status(201).json(record);
   }));
 
@@ -4441,11 +4579,7 @@ export async function registerRoutes(
       "outcome", "recorded_by", "notes",
     ];
 
-    const esc = (v: unknown): string => {
-      if (v === null || v === undefined) return "";
-      const s = String(v).replace(/"/g, '""');
-      return /[",\n\r]/.test(s) ? `"${s}"` : s;
-    };
+    const esc = csvSafe;
 
     const body = rows.map(r => [
       esc(r.followUpDate),
@@ -4466,7 +4600,7 @@ export async function registerRoutes(
 
     const filenameDate = new Date().toISOString().slice(0, 10);
     const filename = barangay
-      ? `PIMAM_register_${barangay.replace(/\s+/g, "_")}_${filenameDate}.csv`
+      ? `PIMAM_register_${barangay.replace(/[^A-Za-z0-9_-]+/g, "_")}_${filenameDate}.csv`
       : `PIMAM_register_${filenameDate}.csv`;
 
     res.setHeader("Content-Type", "text/csv; charset=utf-8");
@@ -4481,14 +4615,20 @@ export async function registerRoutes(
     if (req.userInfo?.role === UserRole.TL && !req.userInfo.assignedBarangays.includes(existing.barangay)) {
       return res.status(403).json({ message: "Not authorized for this barangay" });
     }
-    const parsed = insertNutritionFollowUpSchema.partial().safeParse(req.body);
+    // Which child, which barangay, who recorded it and when cannot be
+    // edited: changing them would move the row into another register.
+    const parsed = insertNutritionFollowUpSchema.partial()
+      .omit({ childId: true, barangay: true, recordedBy: true, createdAt: true })
+      .safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message || "Invalid data" });
+    if (Object.keys(parsed.data).length === 0) return res.status(400).json({ message: "Nothing to update" });
     // Validate RHU referral against the merged (existing + patch) view.
     const mergedActions = parsed.data.actions ?? existing.actions ?? [];
     const mergedRhuId = parsed.data.referredRhuId !== undefined ? parsed.data.referredRhuId : existing.referredRhuId;
     const rhuError = await validateRhuReferral(mergedActions, mergedRhuId);
     if (rhuError) return res.status(400).json({ message: rhuError });
     const updated = await storage.updateNutritionFollowUp(id, parsed.data);
+    await createAuditLog(req.userInfo!.id, req.userInfo!.role, "UPDATE", "NUTRITION_FOLLOWUP", String(id), existing.barangay, existing, updated, req);
     res.json(updated);
   }));
 

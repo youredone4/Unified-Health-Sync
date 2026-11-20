@@ -74,11 +74,19 @@ async function findUnknownBarangayIds(ids: number[]): Promise<number[]> {
   return ids.filter((id) => !known.has(id));
 }
 
-async function countActiveAdmins(excludingUserId?: string): Promise<number> {
-  const rows = await db
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+/**
+ * Locks every active System Admin row for the rest of the transaction and
+ * returns how many there are besides `excludingUserId`. Callers use it to
+ * refuse removing the last administrator.
+ */
+async function lockOtherActiveAdmins(tx: Tx, excludingUserId: string): Promise<number> {
+  const rows = await tx
     .select({ id: users.id })
     .from(users)
-    .where(and(eq(users.role, UserRole.SYSTEM_ADMIN), eq(users.status, UserStatus.ACTIVE)));
+    .where(and(eq(users.role, UserRole.SYSTEM_ADMIN), eq(users.status, UserStatus.ACTIVE)))
+    .for("update");
   return rows.filter((r) => r.id !== excludingUserId).length;
 }
 
@@ -302,6 +310,17 @@ export function registerAdminRoutes(app: Express) {
       const newStatus = input.status ?? beforeUser.status;
       const isSelf = userId === req.userInfo.id;
 
+      // A Team Leader with no barangays is a nurse who can see nothing and
+      // whose restriction has nothing to compare against. Assign barangays
+      // first (PUT /api/admin/users/:id/barangays), then change the role.
+      if (newRole === UserRole.TL && beforeUser.role !== UserRole.TL) {
+        const assigned = await db.select({ barangayId: userBarangays.barangayId })
+          .from(userBarangays).where(eq(userBarangays.userId, userId));
+        if (assigned.length === 0) {
+          return res.status(400).json({ message: "Assign at least one barangay before changing this user to Team Leader" });
+        }
+      }
+
       if (isSelf && newStatus === UserStatus.DISABLED) {
         return res.status(400).json({ message: "Cannot disable your own account" });
       }
@@ -309,11 +328,9 @@ export function registerAdminRoutes(app: Express) {
         return res.status(400).json({ message: "Cannot remove your own System Admin role" });
       }
       // Never leave the system without an administrator who can log in.
+      // Enforced inside the update transaction below.
       const wasActiveAdmin = beforeUser.role === UserRole.SYSTEM_ADMIN && beforeUser.status === UserStatus.ACTIVE;
       const staysActiveAdmin = newRole === UserRole.SYSTEM_ADMIN && newStatus === UserStatus.ACTIVE;
-      if (wasActiveAdmin && !staysActiveAdmin && (await countActiveAdmins(userId)) === 0) {
-        return res.status(400).json({ message: "This is the last active System Admin and cannot be demoted or disabled" });
-      }
 
       const updateData: Partial<DbUser> = {
         role: newRole,
@@ -342,7 +359,20 @@ export function registerAdminRoutes(app: Express) {
         updateData.lockedUntil = null;
       }
 
-      const [updated] = await db.update(users).set(updateData).where(eq(users.id, userId)).returning();
+      // The "is this the last admin?" check and the write happen under one
+      // row lock, so two admins demoting each other at the same moment
+      // cannot both succeed.
+      const updated = await db.transaction(async (tx) => {
+        if (wasActiveAdmin && !staysActiveAdmin) {
+          const others = await lockOtherActiveAdmins(tx, userId);
+          if (others === 0) return null;
+        }
+        const [row] = await tx.update(users).set(updateData).where(eq(users.id, userId)).returning();
+        return row;
+      });
+      if (!updated) {
+        return res.status(400).json({ message: "This is the last active System Admin and cannot be demoted or disabled" });
+      }
 
       // Anything that changes what the account may do, or who knows its
       // password, ends its existing sessions.
@@ -391,16 +421,16 @@ export function registerAdminRoutes(app: Express) {
       if (!target) {
         return res.status(404).json({ message: "User not found" });
       }
-      if (
-        target.role === UserRole.SYSTEM_ADMIN &&
-        target.status === UserStatus.ACTIVE &&
-        (await countActiveAdmins(userId)) === 0
-      ) {
+      const targetIsActiveAdmin = target.role === UserRole.SYSTEM_ADMIN && target.status === UserStatus.ACTIVE;
+      const deletedUser = await db.transaction(async (tx) => {
+        if (targetIsActiveAdmin && (await lockOtherActiveAdmins(tx, userId)) === 0) return null;
+        const [row] = await tx.delete(users).where(eq(users.id, userId)).returning();
+        return row;
+      });
+      if (!deletedUser) {
         return res.status(400).json({ message: "This is the last active System Admin and cannot be deleted" });
       }
-
       await destroyUserSessions(userId);
-      const [deletedUser] = await db.delete(users).where(eq(users.id, userId)).returning();
 
       await createAuditLog(
         req.userInfo.id, req.userInfo.role,

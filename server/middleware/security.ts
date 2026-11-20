@@ -8,6 +8,13 @@ import helmet from "helmet";
 import { ZodError } from "zod";
 import { config } from "../config";
 
+/**
+ * Spreadsheet-import endpoints. They accept a large JSON body; see
+ * server/index.ts (skipped by the small global parser) and server/routes.ts
+ * (parsed with a 10 MB limit after authentication).
+ */
+export const BULK_IMPORT_PATHS = ["/api/seniors/bulk-import", "/api/disease-cases/bulk", "/api/m1/bulk-import"];
+
 // --- Response headers -------------------------------------------------------
 
 /**

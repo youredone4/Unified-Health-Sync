@@ -42,7 +42,7 @@ export interface SendSmsInput {
 export type SendSmsResult =
   | { kind: "INVALID_PHONE"; error: string }
   | { kind: "DEFERRED"; reason: "QUIET_HOURS" | "RATE_LIMITED"; message: string; count?: number; limit?: number }
-  | { kind: "SENT"; status: string };
+  | { kind: "SENT"; status: string; row: typeof smsOutbox.$inferSelect };
 
 /**
  * Sends one SMS through the full policy pipeline.
@@ -159,7 +159,7 @@ export async function sendSms(input: SendSmsInput): Promise<SendSmsResult> {
   }
 
   // 4 — audit trail
-  await db.insert(smsOutbox).values({
+  const [row] = await db.insert(smsOutbox).values({
     recipient: input.recipient,
     recipientPhone: input.recipientPhone ?? null,
     message: input.message,
@@ -167,7 +167,7 @@ export async function sendSms(input: SendSmsInput): Promise<SendSmsResult> {
     status,
     barangay,
     automated,
-  });
+  }).returning();
 
-  return { kind: "SENT", status };
+  return { kind: "SENT", status, row };
 }

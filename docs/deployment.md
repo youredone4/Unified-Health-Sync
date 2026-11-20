@@ -32,6 +32,9 @@ Still open:
 - [ ] Automated, encrypted backups and a tested restore.
 - [ ] Two-factor login for administrators.
 - [ ] Data Privacy Act paperwork (see [Data privacy](#data-privacy)).
+- [ ] Purge the old data spreadsheets from the repository's history (they
+      were committed in `attached_assets/` during development; they are no
+      longer tracked, but remain in past commits until history is rewritten).
 - [ ] An independent security review / penetration test before go-live.
       The built-in checks (`npm run test:security`) cover the known cases;
       they are not a substitute for someone trying to break in.

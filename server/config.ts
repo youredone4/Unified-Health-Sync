@@ -50,9 +50,12 @@ const schema = z.object({
     .string({ required_error: "SESSION_SECRET is required. Generate one with: openssl rand -hex 32" })
     .min(32, "SESSION_SECRET must be at least 32 characters. Generate one with: openssl rand -hex 32"),
 
-  // Number of reverse-proxy hops in front of the app (Caddy = 1). Needed so
-  // req.ip and secure cookies work behind TLS termination. 0 = no proxy.
-  TRUST_PROXY: z.coerce.number().int().min(0).max(5).default(1),
+  // Number of reverse-proxy hops in front of the app. Needed so req.ip and
+  // secure cookies work behind TLS termination. Defaults to 0 (trust
+  // nothing): with no proxy in front, a client could otherwise forge its
+  // IP address with an X-Forwarded-For header and dodge the login rate
+  // limit. docker-compose.yml sets this to 1 for Caddy.
+  TRUST_PROXY: z.coerce.number().int().min(0).max(5).default(0),
 
   // Set to false ONLY for local HTTP testing of a production build.
   COOKIE_SECURE: boolEnv(undefined),

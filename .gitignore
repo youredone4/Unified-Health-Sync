@@ -20,3 +20,11 @@ backups/
 
 # Tooling output
 graphify-out/
+
+# Spreadsheets used as import sources hold personal data (names, birth
+# dates, health status). Keep them OUTSIDE the repository; these rules stop
+# them being committed by accident.
+attached_assets/*.xls
+attached_assets/*.xlsx
+attached_assets/*.csv
+attached_assets/Pasted-Add-new-user-accounts-*

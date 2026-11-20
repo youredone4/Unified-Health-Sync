@@ -221,6 +221,45 @@ async function getAssignedBarangayNames(user: DbUser): Promise<string[]> {
 
 const INVALID_CREDENTIALS = { message: "Invalid username or password" };
 
+function lockedResponse(lockedUntil: Date) {
+  const minutes = Math.max(1, Math.ceil((lockedUntil.getTime() - Date.now()) / 60000));
+  return {
+    message: `Too many failed attempts. This account is locked for ${minutes} more minute${minutes === 1 ? "" : "s"}.`,
+    statusCode: "LOCKED",
+  };
+}
+
+// Usernames that do not exist get the same lockout behaviour as ones that
+// do. Otherwise "does it lock after five tries?" would tell an anonymous
+// caller which usernames are real. Kept in memory and bounded: this is
+// only about making the two cases indistinguishable.
+const PHANTOM_LIMIT = 5000;
+const phantomFailures = new Map<string, { count: number; lockedUntil: number }>();
+
+function phantomLockedUntil(username: string): Date | null {
+  const entry = phantomFailures.get(username.toLowerCase());
+  if (!entry) return null;
+  if (entry.lockedUntil > Date.now()) return new Date(entry.lockedUntil);
+  if (entry.lockedUntil !== 0) phantomFailures.delete(username.toLowerCase());
+  return null;
+}
+
+function recordPhantomFailure(username: string) {
+  const key = username.toLowerCase();
+  const entry = phantomFailures.get(key) ?? { count: 0, lockedUntil: 0 };
+  entry.count += 1;
+  if (entry.count >= config.LOGIN_MAX_ATTEMPTS) {
+    entry.count = 0;
+    entry.lockedUntil = Date.now() + config.LOGIN_LOCK_MINUTES * 60 * 1000;
+  }
+  phantomFailures.delete(key);
+  phantomFailures.set(key, entry);
+  if (phantomFailures.size > PHANTOM_LIMIT) {
+    // Map iterates in insertion order: drop the oldest entry.
+    phantomFailures.delete(phantomFailures.keys().next().value as string);
+  }
+}
+
 // --- Routes -----------------------------------------------------------------
 
 export function registerAuthRoutes(app: Express): void {
@@ -236,9 +275,15 @@ export function registerAuthRoutes(app: Express): void {
       const [user] = await db.select().from(users).where(eq(users.username, username));
 
       if (!user) {
-        // Spend the same time as a real check so timing does not reveal
+        // Spend the same time as a real check, and lock after the same
+        // number of tries, so neither timing nor lockout behaviour reveals
         // which usernames exist.
         await burnPasswordCheck(password);
+        const phantomLock = phantomLockedUntil(username);
+        if (phantomLock) {
+          return res.status(429).json(lockedResponse(phantomLock));
+        }
+        recordPhantomFailure(username);
         await writeAuthAudit(req, "LOGIN_FAILED", null, null, { username: username.slice(0, 100), reason: "UNKNOWN_USER" });
         return res.status(401).json(INVALID_CREDENTIALS);
       }
@@ -247,22 +292,27 @@ export function registerAuthRoutes(app: Express): void {
       // locked account cannot be used to keep guessing.
       if (user.lockedUntil && user.lockedUntil.getTime() > Date.now()) {
         await burnPasswordCheck(password);
-        const minutes = Math.max(1, Math.ceil((user.lockedUntil.getTime() - Date.now()) / 60000));
         await writeAuthAudit(req, "LOGIN_FAILED", null, user.id, { username: user.username, reason: "LOCKED" });
-        return res.status(429).json({
-          message: `Too many failed attempts. This account is locked for ${minutes} more minute${minutes === 1 ? "" : "s"}.`,
-          statusCode: "LOCKED",
-        });
+        return res.status(429).json(lockedResponse(user.lockedUntil));
       }
 
       const isValid = await verifyPassword(password, user.passwordHash);
       if (!isValid) {
-        const failures = user.failedLoginCount + 1;
+        // Count in the database in ONE statement. Reading the count and
+        // writing count+1 separately would let many parallel guesses all
+        // see the same number and never reach the limit.
+        const [counted] = await db.update(users)
+          .set({ failedLoginCount: sql`${users.failedLoginCount} + 1` })
+          .where(eq(users.id, user.id))
+          .returning({ failures: users.failedLoginCount });
+        const failures = counted?.failures ?? 1;
         const lockNow = failures >= config.LOGIN_MAX_ATTEMPTS;
-        await db.update(users).set({
-          failedLoginCount: lockNow ? 0 : failures,
-          lockedUntil: lockNow ? new Date(Date.now() + config.LOGIN_LOCK_MINUTES * 60 * 1000) : user.lockedUntil,
-        }).where(eq(users.id, user.id));
+        if (lockNow) {
+          await db.update(users).set({
+            failedLoginCount: 0,
+            lockedUntil: new Date(Date.now() + config.LOGIN_LOCK_MINUTES * 60 * 1000),
+          }).where(eq(users.id, user.id));
+        }
         await writeAuthAudit(req, lockNow ? "ACCOUNT_LOCKED" : "LOGIN_FAILED", null, user.id, {
           username: user.username,
           reason: "BAD_PASSWORD",

@@ -128,7 +128,7 @@ scripts/    Utility scripts (demo-reset.sh, …)
 script/     Build + database migration runner
 migrations/ SQL migrations generated from shared/schema.ts
 tests/      Test suite
-attached_assets/  Static images & logos
+attached_assets/  Reference documents from development (no data files; see .gitignore)
 ```
 
 ## Getting started
@@ -237,7 +237,7 @@ every setting.
 | `SESSION_SECRET` | yes | Session cookie signing key, 32+ characters |
 | `PORT` | no | HTTP port (default `5000`) |
 | `NODE_ENV` | no | `development` enables Vite middleware |
-| `TRUST_PROXY` | no | Reverse-proxy hops in front of the app (default `1`) |
+| `TRUST_PROXY` | no | Reverse-proxy hops in front of the app (default `0`; docker-compose sets `1`) |
 | `SEED_DEMO_DATA` | no | `true` inserts fabricated demo records (**never in production**) |
 | `SESSION_IDLE_MINUTES` / `SESSION_MAX_HOURS` | no | Session idle timeout (60) and absolute limit (12) |
 | `LOGIN_MAX_ATTEMPTS` / `LOGIN_LOCK_MINUTES` | no | Account lockout threshold (5) and duration (15) |

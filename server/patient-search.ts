@@ -50,16 +50,18 @@ export async function searchPatients(opts: PatientSearchOptions): Promise<Patien
   // input so we don't hammer the DB on every keystroke.
   const like = `%${q}%`;
   const cap = Math.min(Math.max(opts.limit ?? 10, 1), 25);
-  const scope = opts.allowedBarangays && opts.allowedBarangays.length > 0
-    ? opts.allowedBarangays
-    : null;
+  // `allowedBarangays` undefined means "no restriction" (municipality-wide
+  // roles). An array IS a restriction even when it is empty: a Team Leader
+  // with no assigned barangays must find nobody, not everybody.
+  if (opts.allowedBarangays && opts.allowedBarangays.length === 0) return [];
+  const scope = opts.allowedBarangays ?? null;
 
-  // Helper — barangay-scope predicate; null means "no scope, see all".
-  // Drizzle's `inArray` would also work but raw SQL is more uniform here.
+  // Barangay-scope predicate. `col` is always a column name written in this
+  // file; the barangay names are bound as parameters, never spliced in.
   const scopeClause = (col: string) =>
     scope === null
       ? sql`TRUE`
-      : sql`${sql.raw(col)} IN ${sql.raw("(" + scope.map((b) => `'${b.replace(/'/g, "''")}'`).join(",") + ")")}`;
+      : sql`${sql.raw(col)} IN (${sql.join(scope.map((b) => sql`${b}`), sql`, `)})`;
 
   // --- mothers (firstName + lastName) ---
   const motherRows = await db

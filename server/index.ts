@@ -6,7 +6,7 @@ import { registerRoutes } from "./routes";
 import { startScheduler } from "./scheduler";
 import { serveStatic } from "./static";
 import { createServer } from "http";
-import { securityHeaders, requestLogger, errorHandler } from "./middleware/security";
+import { securityHeaders, requestLogger, errorHandler, BULK_IMPORT_PATHS } from "./middleware/security";
 
 const app = express();
 const httpServer = createServer(app);
@@ -30,12 +30,17 @@ app.use("/api", (_req, res, next) => {
 // Lightweight health-check endpoint (used by the Docker healthcheck).
 app.get("/api/health", (_req, res) => res.json({ ok: true }));
 
-// Request bodies. Spreadsheet imports post thousands of rows at once and
-// need a large limit; everything else is a single form and gets a small
-// one so an oversized body is rejected before it is parsed.
-const BULK_IMPORT_PATHS = ["/api/seniors/bulk-import", "/api/disease-cases/bulk", "/api/m1/bulk-import"];
-app.use(BULK_IMPORT_PATHS, express.json({ limit: "10mb" }));
-app.use(express.json({ limit: "1mb" }));
+// Request bodies. Everything is a single form and gets a small limit, so
+// an oversized body is rejected before it is parsed. The spreadsheet-import
+// routes need a large limit; they are skipped here and parsed in
+// routes.ts AFTER authentication, so an anonymous client can never make
+// the server parse more than 1 MB.
+const smallJson = express.json({ limit: "1mb" });
+app.use((req, res, next) => {
+  const p = req.path.length > 1 && req.path.endsWith("/") ? req.path.slice(0, -1) : req.path;
+  if (BULK_IMPORT_PATHS.includes(p.toLowerCase())) return next();
+  smallJson(req, res, next);
+});
 app.use(express.urlencoded({ extended: false, limit: "100kb" }));
 
 export function log(message: string, source = "express") {

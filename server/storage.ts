@@ -1217,7 +1217,17 @@ export class DatabaseStorage implements IStorage {
     const [instance] = await db.select().from(m1ReportInstances).where(eq(m1ReportInstances.id, reportId));
     if (!instance) throw new Error("Report not found");
 
-    const { month, year, barangayName } = instance;
+    const { month, year } = instance;
+    // Scope by the barangay ID the report belongs to (that is what access
+    // control checks), resolving the name from the barangays table. The
+    // stored name is only a label: older rows may have it missing or wrong,
+    // and a null name would silently widen the report to the municipality.
+    let barangayName = instance.barangayName;
+    if (instance.barangayId) {
+      const [owner] = await db.select({ name: barangays.name }).from(barangays).where(eq(barangays.id, instance.barangayId));
+      if (!owner) throw new Error("Report barangay not found");
+      barangayName = owner.name;
+    }
     const monthLike = `${year}-${String(month).padStart(2, "0")}%`;
 
     // Collect ENCODED keys to protect from overwrite
