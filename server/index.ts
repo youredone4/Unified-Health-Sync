@@ -1,20 +1,24 @@
 // Must be first: loads .env and validates configuration before any other
 // module reads process.env.
 import { config } from "./config";
-import express, { type Request, Response, NextFunction } from "express";
+import express from "express";
 import { registerRoutes } from "./routes";
 import { startScheduler } from "./scheduler";
 import { serveStatic } from "./static";
 import { createServer } from "http";
+import { securityHeaders, requestLogger, errorHandler } from "./middleware/security";
 
 const app = express();
 const httpServer = createServer(app);
+
+app.use(securityHeaders());
 
 // Express sends a weak ETag on every JSON response. When the app is reverse-proxied
 // (Caddy/nginx, corporate caches) a GET issued right after a PUT can be served
 // stale with 304 + the pre-update body, leaving the React Query cache holding
 // the old record even though the write succeeded. Turn ETag off and mark every
-// /api response non-cacheable.
+// /api response non-cacheable. no-store also keeps patient data out of shared
+// and on-disk browser caches.
 app.set("etag", false);
 app.use("/api", (_req, res, next) => {
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
@@ -26,22 +30,13 @@ app.use("/api", (_req, res, next) => {
 // Lightweight health-check endpoint (used by the Docker healthcheck).
 app.get("/api/health", (_req, res) => res.json({ ok: true }));
 
-declare module "http" {
-  interface IncomingMessage {
-    rawBody: unknown;
-  }
-}
-
-app.use(
-  express.json({
-    limit: "10mb",
-    verify: (req, _res, buf) => {
-      req.rawBody = buf;
-    },
-  }),
-);
-
-app.use(express.urlencoded({ extended: false }));
+// Request bodies. Spreadsheet imports post thousands of rows at once and
+// need a large limit; everything else is a single form and gets a small
+// one so an oversized body is rejected before it is parsed.
+const BULK_IMPORT_PATHS = ["/api/seniors/bulk-import", "/api/disease-cases/bulk", "/api/m1/bulk-import"];
+app.use(BULK_IMPORT_PATHS, express.json({ limit: "10mb" }));
+app.use(express.json({ limit: "1mb" }));
+app.use(express.urlencoded({ extended: false, limit: "100kb" }));
 
 export function log(message: string, source = "express") {
   const formattedTime = new Date().toLocaleTimeString("en-US", {
@@ -54,50 +49,25 @@ export function log(message: string, source = "express") {
   console.log(`${formattedTime} [${source}] ${message}`);
 }
 
-app.use((req, res, next) => {
-  const start = Date.now();
-  const path = req.path;
-  let capturedJsonResponse: Record<string, any> | undefined = undefined;
-
-  const originalResJson = res.json;
-  res.json = function (bodyJson, ...args) {
-    capturedJsonResponse = bodyJson;
-    return originalResJson.apply(res, [bodyJson, ...args]);
-  };
-
-  res.on("finish", () => {
-    const duration = Date.now() - start;
-    if (path.startsWith("/api")) {
-      let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
-      if (capturedJsonResponse) {
-        logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
-      }
-
-      log(logLine);
-    }
-  });
-
-  next();
-});
+app.use(requestLogger);
 
 (async () => {
   await registerRoutes(httpServer, app);
 
-  app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
-    const status = err.status || err.statusCode || 500;
-    const message = err.message || "Internal Server Error";
-    console.error("[express] Unhandled error:", err.message || err);
-    if (!res.headersSent) {
-      res.status(status).json({ message });
-    }
+  // Unknown /api paths get a JSON 404 instead of falling through to the
+  // single-page app's index.html.
+  app.use("/api", (_req, res) => {
+    res.status(404).json({ message: "Not found" });
   });
 
+  app.use(errorHandler);
+
   process.on("unhandledRejection", (reason) => {
-    console.error("[express] Unhandled promise rejection:", reason);
+    console.error("[express] Unhandled promise rejection:", (reason as Error)?.stack || reason);
   });
 
   process.on("uncaughtException", (err: NodeJS.ErrnoException) => {
-    console.error("[express] Uncaught exception:", err.message || err);
+    console.error("[express] Uncaught exception:", err.stack || err.message || err);
   });
 
   // Graceful shutdown: force-close all open connections (including Vite HMR

@@ -39,6 +39,10 @@ services:
       SESSION_SECRET: ${SESSION_SECRET:?set SESSION_SECRET in .env}
       TRUST_PROXY: "1"
       SEED_DEMO_DATA: ${SEED_DEMO_DATA:-false}
+      SESSION_IDLE_MINUTES: ${SESSION_IDLE_MINUTES:-}
+      SESSION_MAX_HOURS: ${SESSION_MAX_HOURS:-}
+      LOGIN_MAX_ATTEMPTS: ${LOGIN_MAX_ATTEMPTS:-}
+      LOGIN_LOCK_MINUTES: ${LOGIN_LOCK_MINUTES:-}
       SCHEDULER_ENABLED: ${SCHEDULER_ENABLED:-true}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}
@@ -49,8 +53,9 @@ services:
       PHILHEALTH_API_BASE_URL: ${PHILHEALTH_API_BASE_URL:-}
       PHILHEALTH_API_KEY: ${PHILHEALTH_API_KEY:-}
       PHILHEALTH_PROVIDER_CODE: ${PHILHEALTH_PROVIDER_CODE:-}
-    volumes:
-      - uploads:/app/uploads
+    read_only: true
+    tmpfs:
+      - /tmp
     security_opt:
       - no-new-privileges:true
     cap_drop: [ALL]
@@ -73,7 +78,6 @@ services:
 
 volumes:
   pgdata:
-  uploads:
   caddy_data:
   caddy_config:
 

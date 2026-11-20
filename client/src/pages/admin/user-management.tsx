@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { checkPassword, PASSWORD_RULES_SUMMARY } from "@shared/password-policy";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -335,8 +336,9 @@ export default function UserManagement() {
     if (!newUsername.trim() || !newUserPassword.trim()) {
       toast({ title: "Username and password are required", variant: "destructive" }); return;
     }
-    if (newUserPassword.length < 6) {
-      toast({ title: "Password must be at least 6 characters", variant: "destructive" }); return;
+    const passwordCheck = checkPassword(newUserPassword, { username: newUsername.trim() });
+    if (!passwordCheck.ok) {
+      toast({ title: passwordCheck.message ?? "Password does not meet the requirements", variant: "destructive" }); return;
     }
     if (newRole === UserRole.TL && newBarangayAssignments.length === 0) {
       toast({ title: "Please assign at least one barangay for Team Leader", variant: "destructive" }); return;
@@ -391,7 +393,7 @@ export default function UserManagement() {
           <Users className="w-6 h-6 text-primary" />
           User Management
         </h1>
-        <p className="text-muted-foreground">Manage user accounts, roles, and KYC verifications</p>
+        <p className="text-muted-foreground">Manage user accounts and roles</p>
       </div>
 
       <Tabs defaultValue="all">
@@ -444,7 +446,7 @@ export default function UserManagement() {
                           <Input placeholder="Enter username" value={newUsername} onChange={(e) => setNewUsername(e.target.value)} data-testid="input-new-username" />
                         </div>
                         <div className="space-y-2">
-                          <Label>Password * (min 6 characters)</Label>
+                          <Label>Temporary password *</Label>
                           <Input type="password" placeholder="Enter password" value={newUserPassword} onChange={(e) => setNewUserPassword(e.target.value)} data-testid="input-new-password" />
                         </div>
                         <div className="grid grid-cols-2 gap-3">
@@ -703,30 +705,6 @@ export default function UserManagement() {
                             </div>
                           </div>
 
-                          <div className="flex gap-2 flex-wrap">
-                            {user.hasKycIdFile && (
-                              <a
-                                href={`/api/admin/kyc-files/${user.id}?type=id`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center gap-1 text-xs text-primary underline"
-                                data-testid={`link-view-kyc-id-${user.id}`}
-                              >
-                                <Eye className="w-3.5 h-3.5" />View ID Document
-                              </a>
-                            )}
-                            {user.hasKycSelfie && (
-                              <a
-                                href={`/api/admin/kyc-files/${user.id}?type=selfie`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center gap-1 text-xs text-primary underline"
-                                data-testid={`link-view-selfie-${user.id}`}
-                              >
-                                <Eye className="w-3.5 h-3.5" />View Selfie
-                              </a>
-                            )}
-                          </div>
                         </div>
                       )}
 
@@ -779,9 +757,13 @@ export default function UserManagement() {
           </DialogHeader>
           {resetPwUser && (
             <div className="space-y-4 pt-2">
-              <p className="text-sm text-muted-foreground">Set a new password for <strong>@{resetPwUser.username}</strong>.</p>
+              <p className="text-sm text-muted-foreground">
+                Set a temporary password for <strong>@{resetPwUser.username}</strong>. They will be signed out
+                everywhere and must choose their own password the next time they log in.
+              </p>
+              <p className="text-xs text-muted-foreground">{PASSWORD_RULES_SUMMARY}</p>
               <div className="space-y-2">
-                <Label>New Password (min 8 characters)</Label>
+                <Label>New temporary password</Label>
                 <Input type="password" placeholder="Enter new password" value={resetPwValue} onChange={(e) => setResetPwValue(e.target.value)} data-testid="input-admin-reset-password" />
               </div>
               <div className="space-y-2">
@@ -792,7 +774,8 @@ export default function UserManagement() {
               <div className="flex justify-end gap-2 pt-2">
                 <Button variant="outline" onClick={() => { setResetPwUser(null); setResetPwValue(""); setResetPwConfirm(""); }}>Cancel</Button>
                 <Button onClick={() => {
-                  if (!resetPwValue || resetPwValue.length < 8) { toast({ title: "Password must be at least 8 characters", variant: "destructive" }); return; }
+                  const resetCheck = checkPassword(resetPwValue, { username: resetPwUser.username });
+                  if (!resetCheck.ok) { toast({ title: resetCheck.message ?? "Password does not meet the requirements", variant: "destructive" }); return; }
                   if (resetPwValue !== resetPwConfirm) { toast({ title: "Passwords do not match", variant: "destructive" }); return; }
                   resetPasswordMutation.mutate({ userId: resetPwUser.id, password: resetPwValue });
                 }} disabled={resetPasswordMutation.isPending} data-testid="button-confirm-reset-password">

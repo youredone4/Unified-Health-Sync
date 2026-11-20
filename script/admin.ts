@@ -1,0 +1,156 @@
+/**
+ * Server-side account administration. Run on the server itself — it talks
+ * straight to the database, so being able to run it means you already
+ * control the machine.
+ *
+ *   create-admin <username> [--first-name X] [--last-name Y]
+ *       Create a System Admin. Use this once, to create the first account.
+ *
+ *   reset-password <username>
+ *       Issue a new temporary password, clear any lockout and sign the
+ *       account out everywhere. This is also how you recover an account
+ *       that was refused for still using an old default password.
+ *
+ *   list
+ *       Show accounts, roles and status (never passwords).
+ *
+ * Docker:  docker compose exec app node dist/admin.cjs <command>
+ * Local:   npm run admin -- <command>
+ *
+ * A temporary password is printed exactly once. Whoever receives it must
+ * replace it at first login; nothing else works until they do.
+ */
+import "../server/load-env";
+import pg from "pg";
+import { hashPassword, generateTemporaryPassword } from "../server/passwords";
+
+const USERNAME_PATTERN = /^[A-Za-z0-9._-]{3,50}$/;
+
+function flag(args: string[], name: string): string | null {
+  const i = args.indexOf(name);
+  return i >= 0 && args[i + 1] ? args[i + 1] : null;
+}
+
+function printTemporaryPassword(username: string, password: string) {
+  console.log("");
+  console.log(`  Username:            ${username}`);
+  console.log(`  Temporary password:  ${password}`);
+  console.log("");
+  console.log("  This password is shown only once and is not stored anywhere readable.");
+  console.log("  Give it to the account owner privately. They must set their own");
+  console.log("  password the first time they log in.");
+  console.log("");
+}
+
+async function createAdmin(pool: pg.Pool, args: string[]) {
+  const username = args[0];
+  if (!username || !USERNAME_PATTERN.test(username)) {
+    throw new Error("Usage: create-admin <username>   (3-50 letters, numbers, dots, dashes or underscores)");
+  }
+  const existing = await pool.query("SELECT 1 FROM users WHERE username = $1", [username]);
+  if (existing.rowCount) {
+    throw new Error(`An account named "${username}" already exists. Use: reset-password ${username}`);
+  }
+
+  const password = generateTemporaryPassword();
+  const passwordHash = await hashPassword(password);
+  await pool.query(
+    `INSERT INTO users (username, password_hash, first_name, last_name, role, status, must_change_password)
+     VALUES ($1, $2, $3, $4, 'SYSTEM_ADMIN', 'ACTIVE', true)`,
+    [username, passwordHash, flag(args, "--first-name"), flag(args, "--last-name")],
+  );
+  await audit(pool, "CREATE", username, { role: "SYSTEM_ADMIN", via: "cli" });
+
+  console.log("\nSystem Admin account created.");
+  printTemporaryPassword(username, password);
+}
+
+async function resetPassword(pool: pg.Pool, args: string[]) {
+  const username = args[0];
+  if (!username) throw new Error("Usage: reset-password <username>");
+
+  const found = await pool.query("SELECT id, status FROM users WHERE username = $1", [username]);
+  if (!found.rowCount) throw new Error(`No account named "${username}".`);
+  const { id, status } = found.rows[0];
+
+  const password = generateTemporaryPassword();
+  const passwordHash = await hashPassword(password);
+  await pool.query(
+    `UPDATE users
+        SET password_hash = $1, must_change_password = true,
+            failed_login_count = 0, locked_until = NULL, updated_at = now()
+      WHERE id = $2`,
+    [passwordHash, id],
+  );
+  // Sign the account out everywhere.
+  await pool.query("DELETE FROM sessions WHERE sess->>'userId' = $1", [id]);
+  await audit(pool, "PASSWORD_RESET", username, { via: "cli" }, id);
+
+  console.log("\nPassword reset.");
+  if (status !== "ACTIVE") {
+    console.log(`  Note: this account's status is ${status}; it cannot log in until a System Admin activates it.`);
+  }
+  printTemporaryPassword(username, password);
+}
+
+async function list(pool: pg.Pool) {
+  const { rows } = await pool.query(
+    `SELECT username, role, status, must_change_password, locked_until, last_login_at
+       FROM users ORDER BY role, username`,
+  );
+  if (rows.length === 0) {
+    console.log("No accounts yet. Create the first one with: create-admin <username>");
+    return;
+  }
+  console.table(
+    rows.map((r) => ({
+      username: r.username,
+      role: r.role,
+      status: r.status,
+      "must change password": r.must_change_password ? "yes" : "no",
+      locked: r.locked_until && new Date(r.locked_until) > new Date() ? "yes" : "no",
+      "last login": r.last_login_at ? new Date(r.last_login_at).toISOString().slice(0, 16).replace("T", " ") : "never",
+    })),
+  );
+}
+
+async function audit(pool: pg.Pool, action: string, username: string, details: object, entityId?: string) {
+  try {
+    await pool.query(
+      `INSERT INTO audit_logs (user_id, user_role, action, entity_type, entity_id, after_json)
+       VALUES ('SERVER_CLI', 'SERVER_CLI', $1, 'USER', $2, $3)`,
+      [action, entityId ?? null, JSON.stringify({ username, ...details })],
+    );
+  } catch (err) {
+    console.warn(`(could not write audit log entry: ${(err as Error).message})`);
+  }
+}
+
+async function main() {
+  const [command, ...args] = process.argv.slice(2);
+  if (!command || command === "help" || command === "--help") {
+    console.log(
+      "Commands:\n" +
+        "  create-admin <username> [--first-name X] [--last-name Y]\n" +
+        "  reset-password <username>\n" +
+        "  list",
+    );
+    return;
+  }
+  if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL must be set. See .env.example.");
+
+  const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL, max: 1 });
+  try {
+    if (command === "create-admin") await createAdmin(pool, args);
+    else if (command === "reset-password") await resetPassword(pool, args);
+    else if (command === "list") await list(pool);
+    else throw new Error(`Unknown command "${command}". Run with --help.`);
+  } finally {
+    await pool.end();
+  }
+}
+
+main().catch((err) => {
+  console.error(`\n[admin] ${err.message || err}\n`);
+  process.exit(1);
+});

@@ -17,7 +17,6 @@ const allowlist = [
   "express-session",
   "jsonwebtoken",
   "memorystore",
-  "multer",
   "nanoid",
   "nodemailer",
   "openai",
@@ -60,18 +59,22 @@ async function buildAll() {
     logLevel: "info",
   });
 
-  // Migration runner, bundled so the production image can apply migrations
-  // without tsx or any other dev dependency.
-  await esbuild({
-    entryPoints: ["script/migrate.ts"],
-    platform: "node",
-    bundle: true,
-    format: "cjs",
-    outfile: "dist/migrate.cjs",
-    minify: true,
-    external: externals,
-    logLevel: "info",
-  });
+  // Operator tools, bundled so the production image can run them without
+  // tsx or any other dev dependency:
+  //   dist/migrate.cjs  applies database migrations (run at container start)
+  //   dist/admin.cjs    creates the first admin / resets passwords
+  for (const tool of ["migrate", "admin"]) {
+    await esbuild({
+      entryPoints: [`script/${tool}.ts`],
+      platform: "node",
+      bundle: true,
+      format: "cjs",
+      outfile: `dist/${tool}.cjs`,
+      minify: true,
+      external: externals,
+      logLevel: "info",
+    });
+  }
 }
 
 buildAll().catch((err) => {

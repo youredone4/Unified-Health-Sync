@@ -12,6 +12,7 @@ export function redirectToLogin(toast?: (options: { title: string; description: 
     });
   }
   setTimeout(() => {
-    window.location.href = "/api/login";
+    // The sign-in form lives at the app root for signed-out users.
+    window.location.href = "/";
   }, 500);
 }

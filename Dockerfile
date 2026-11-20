@@ -26,9 +26,8 @@ COPY --from=build /app/dist ./dist
 COPY migrations ./migrations
 COPY package.json ./
 
-# Uploads live on a mounted volume; the app runs as the unprivileged
-# `node` user and needs to own that directory.
-RUN mkdir -p /app/uploads && chown -R node:node /app/uploads
+# Run as the unprivileged `node` user. The app writes nothing to disk:
+# all state lives in PostgreSQL.
 USER node
 
 EXPOSE 5000

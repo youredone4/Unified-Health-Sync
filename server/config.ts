@@ -57,6 +57,15 @@ const schema = z.object({
   // Set to false ONLY for local HTTP testing of a production build.
   COOKIE_SECURE: boolEnv(undefined),
 
+  // A session ends after this long without any request...
+  SESSION_IDLE_MINUTES: z.coerce.number().int().min(5).max(24 * 60).default(60),
+  // ...and no session outlives this, however active (forces a daily login).
+  SESSION_MAX_HOURS: z.coerce.number().int().min(1).max(72).default(12),
+
+  // Consecutive wrong passwords before an account is locked, and for how long.
+  LOGIN_MAX_ATTEMPTS: z.coerce.number().int().min(3).max(20).default(5),
+  LOGIN_LOCK_MINUTES: z.coerce.number().int().min(1).max(24 * 60).default(15),
+
   // OpenAI (AI insights + plain-language recommendation summaries).
   // Optional: when unset the AI endpoints return 503 and the rest of the
   // system works normally.

@@ -1,155 +1,90 @@
-import bcrypt from "bcrypt";
+/**
+ * Authentication: sessions, login / logout, and "my account" endpoints.
+ *
+ * Accounts are created by a System Admin (server/routes/admin.ts) or by the
+ * server operator through the admin CLI (script/admin.ts). There is no
+ * self-registration and there are no built-in accounts.
+ */
 import session from "express-session";
-import path from "path";
-import fs from "fs";
-import multer from "multer";
-import type { Express, RequestHandler } from "express";
+import type { Express, Request, RequestHandler } from "express";
 import connectPg from "connect-pg-simple";
-import { db } from "./db";
+import rateLimit from "express-rate-limit";
+import { z } from "zod";
+import { db, pool } from "./db";
 import { users, userBarangays, barangays, auditLogs, UserRole, UserStatus } from "@shared/schema";
-import { eq, inArray } from "drizzle-orm";
-import { runFaceMatch } from "./kyc-face-match";
+import { eq, sql } from "drizzle-orm";
 import { config } from "./config";
+import { hashPassword, verifyPassword, burnPasswordCheck, needsRehash } from "./passwords";
+import { checkPassword, isKnownDefaultPassword } from "@shared/password-policy";
 
-interface TLUserSeed {
-  username: string;
-  firstName: string;
-  lastName: string;
-  barangayNames: string[];
-}
+export { hashPassword, verifyPassword };
 
-const PLACER_TL_USERS: TLUserSeed[] = [
-  { username: "CHapa",      firstName: "Carespin",       lastName: "Hapa",      barangayNames: ["Mabini"] },
-  { username: "ADeramaso",  firstName: "April",          lastName: "Deramaso",  barangayNames: ["Ellaperal (Nonok)"] },
-  { username: "RPolestico", firstName: "Ranibeth",       lastName: "Polestico", barangayNames: ["Central (Poblacion)"] },
-  { username: "BBarcos",    firstName: "Wilgen",         lastName: "Barcos",    barangayNames: ["Boyongan", "Macalaya"] },
-  { username: "PPagobo",    firstName: "Princess Jackie",lastName: "Pagobo",    barangayNames: ["San Isidro", "Magupange"] },
-  { username: "CGalvez",    firstName: "Charlito",       lastName: "Galvez",    barangayNames: ["Sani-sani"] },
-  { username: "RRivera",    firstName: "Ruth",           lastName: "Rivera",    barangayNames: ["Magupange"] },
-  { username: "RJamiel",    firstName: "Rennie",         lastName: "Jamiel",    barangayNames: ["Amoslog"] },
-  { username: "BBullas",    firstName: "Jensen",         lastName: "Bullas",    barangayNames: ["Panhutongan"] },
-  { username: "RDalgume",   firstName: "Meljay",         lastName: "Dalgume",   barangayNames: ["Tagbongabong"] },
-  { username: "LLlado",     firstName: "Risha Ann",      lastName: "Llado",     barangayNames: ["Anislagan"] },
-  { username: "DOcol",      firstName: "Dulce Mae",      lastName: "Ocol",      barangayNames: ["Suyoc", "Bugas-bugas"] },
-];
+export const SESSION_COOKIE_NAME = "hs.sid";
 
-const SALT_ROUNDS = 10;
+// --- Sessions ---------------------------------------------------------------
 
-// KYC upload directory (not publicly accessible)
-const KYC_UPLOAD_DIR = path.join(process.cwd(), "uploads", "kyc");
-if (!fs.existsSync(KYC_UPLOAD_DIR)) {
-  fs.mkdirSync(KYC_UPLOAD_DIR, { recursive: true });
-}
-
-// Multer storage for KYC uploads
-const kycStorage = multer.diskStorage({
-  destination: (_req, _file, cb) => {
-    cb(null, KYC_UPLOAD_DIR);
-  },
-  filename: (_req, file, cb) => {
-    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
-    const ext = path.extname(file.originalname).toLowerCase();
-    cb(null, `kyc-${uniqueSuffix}${ext}`);
-  },
-});
-
-const kycUpload = multer({
-  storage: kycStorage,
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB max
-  fileFilter: (_req, file, cb) => {
-    const allowed = [".jpg", ".jpeg", ".png", ".pdf", ".heic"];
-    const ext = path.extname(file.originalname).toLowerCase();
-    if (allowed.includes(ext)) {
-      cb(null, true);
-    } else {
-      cb(new Error("Only JPG, PNG, PDF, and HEIC files are allowed"));
-    }
-  },
-});
-
-// Password utilities
-export async function hashPassword(password: string): Promise<string> {
-  return bcrypt.hash(password, SALT_ROUNDS);
-}
-
-export async function verifyPassword(password: string, hash: string): Promise<boolean> {
-  return bcrypt.compare(password, hash);
-}
-
-// Session setup
 export function getSession() {
-  const sessionTtl = 7 * 24 * 60 * 60 * 1000; // 1 week
+  const idleMs = config.SESSION_IDLE_MINUTES * 60 * 1000;
   const pgStore = connectPg(session);
   const sessionStore = new pgStore({
-    conString: config.DATABASE_URL,
+    pool,
     createTableIfMissing: false,
-    ttl: sessionTtl,
+    // Expired rows are pruned by connect-pg-simple on its own timer.
+    ttl: Math.ceil(idleMs / 1000),
     tableName: "sessions",
   });
   return session({
+    name: SESSION_COOKIE_NAME,
     secret: config.SESSION_SECRET,
     store: sessionStore,
     resave: false,
     saveUninitialized: false,
+    // Each request pushes the expiry forward, so the cookie lifetime is an
+    // idle timeout. The absolute cap is enforced in loadUserInfo.
+    rolling: true,
     cookie: {
       httpOnly: true,
       secure: config.cookieSecure,
       sameSite: "lax",
-      maxAge: sessionTtl,
+      maxAge: idleMs,
     },
   });
 }
 
-// Extend Express session
-declare module "express-session" {
-  interface SessionData {
-    userId?: string;
+/** Ends every session belonging to a user, optionally keeping one. */
+export async function destroyUserSessions(userId: string, exceptSessionId?: string): Promise<void> {
+  if (exceptSessionId) {
+    await db.execute(sql`DELETE FROM sessions WHERE sess->>'userId' = ${userId} AND sid <> ${exceptSessionId}`);
+  } else {
+    await db.execute(sql`DELETE FROM sessions WHERE sess->>'userId' = ${userId}`);
   }
 }
 
-// Setup auth middleware
+function regenerateSession(req: Request): Promise<void> {
+  return new Promise((resolve, reject) => {
+    req.session.regenerate((err) => (err ? reject(err) : resolve()));
+  });
+}
+
+function saveSession(req: Request): Promise<void> {
+  return new Promise((resolve, reject) => {
+    req.session.save((err) => (err ? reject(err) : resolve()));
+  });
+}
+
+// --- Startup ----------------------------------------------------------------
+
 export async function setupAuth(app: Express) {
   // Number of reverse-proxy hops to trust for req.ip / X-Forwarded-Proto.
   app.set("trust proxy", config.TRUST_PROXY);
-  app.use(getSession());
-  
-  // Seed initial admin user if none exists
-  await seedInitialAdmin();
-  
-  // Seed the 20 Placer barangays if not present
+  // Sessions are only needed by the API; static assets stay cookie-free.
+  app.use("/api", getSession());
+
   await seedPlacerBarangays();
-
-  // Seed the 12 Placer TL (Barangay Nurse) accounts if not present
-  await seedTLUsers();
+  await warnIfNoAdmin();
 }
 
-// Seed initial SYSTEM_ADMIN
-async function seedInitialAdmin() {
-  try {
-    const [existingAdmin] = await db.select().from(users).where(eq(users.username, "admin"));
-    
-    if (!existingAdmin) {
-      const passwordHash = await hashPassword("admin123");
-      await db.insert(users).values({
-        id: "admin",
-        username: "admin",
-        passwordHash,
-        email: "admin@geohealthsync.local",
-        firstName: "System",
-        lastName: "Administrator",
-        role: UserRole.SYSTEM_ADMIN,
-        status: UserStatus.ACTIVE,
-      });
-      console.log("Initial admin user created: admin / admin123");
-    } else {
-      console.log("Admin user already exists");
-    }
-  } catch (error) {
-    console.error("Error seeding admin user:", error);
-  }
-}
-
-// Seed the 20 official Placer, Surigao del Norte barangays
+// The 20 official barangays of Placer, Surigao del Norte (reference data).
 const PLACER_BARANGAYS = [
   "Amoslog", "Anislagan", "Bad-as", "Boyongan", "Bugas-bugas",
   "Central (Poblacion)", "Ellaperal (Nonok)", "Ipil (Poblacion)", "Lakandula", "Mabini",
@@ -161,443 +96,270 @@ async function seedPlacerBarangays() {
   try {
     const existingBarangays = await db.select().from(barangays);
     const existingNames = new Set(existingBarangays.map(b => b.name));
-    
     const missingBarangays = PLACER_BARANGAYS.filter(name => !existingNames.has(name));
-    
     if (missingBarangays.length > 0) {
       await db.insert(barangays).values(
         missingBarangays.map(name => ({ name, municipalityId: 1 }))
       );
       console.log(`Seeded ${missingBarangays.length} missing Placer barangays`);
-    } else {
-      console.log("All 20 Placer barangays already exist");
     }
   } catch (error) {
-    console.error("Error seeding barangays:", error);
+    console.error("Error seeding barangays:", (error as Error)?.message || error);
   }
 }
 
-// Seed the 12 Placer TL (Barangay Nurse) accounts — idempotent, skips existing usernames
-async function seedTLUsers() {
+async function warnIfNoAdmin() {
   try {
-    const allBarangays = await db.select().from(barangays);
-    const barangayMap = new Map<string, number>(allBarangays.map(b => [b.name, b.id]));
-
-    let created = 0;
-    for (const spec of PLACER_TL_USERS) {
-      const [existing] = await db.select({ id: users.id }).from(users).where(eq(users.username, spec.username));
-      if (existing) continue;
-
-      const barangayIds: number[] = [];
-      let valid = true;
-      for (const bName of spec.barangayNames) {
-        const bId = barangayMap.get(bName);
-        if (!bId) { console.warn(`seedTLUsers: barangay not found: "${bName}" for ${spec.username}`); valid = false; break; }
-        barangayIds.push(bId);
-      }
-      if (!valid) continue;
-
-      const passwordHash = await hashPassword("123456");
-      await db.transaction(async (tx) => {
-        const [newUser] = await tx.insert(users).values({
-          username: spec.username,
-          passwordHash,
-          firstName: spec.firstName,
-          lastName: spec.lastName,
-          role: UserRole.TL,
-          status: UserStatus.ACTIVE,
-        }).returning({ id: users.id });
-
-        await tx.insert(userBarangays).values(
-          barangayIds.map(bId => ({ userId: newUser.id, barangayId: bId }))
-        );
-      });
-      created++;
-    }
-    if (created > 0) {
-      console.log(`Seeded ${created} Placer TL user accounts`);
-    } else {
-      console.log("All Placer TL accounts already exist");
+    const [row] = await db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(users)
+      .where(eq(users.role, UserRole.SYSTEM_ADMIN));
+    if (!row || row.n === 0) {
+      console.warn(
+        "\n[auth] No System Admin account exists, so nobody can log in yet.\n" +
+          "       Create the first one from the server:\n" +
+          "         Docker:  docker compose exec app node dist/admin.cjs create-admin <username>\n" +
+          "         Local:   npm run admin -- create-admin <username>\n",
+      );
     }
   } catch (error) {
-    console.error("Error seeding TL users:", error);
+    console.error("Error checking for admin account:", (error as Error)?.message || error);
   }
 }
 
-// Helper to write audit log
-async function writeAuditLog(
-  actingUserId: string,
-  actingUserRole: string,
+// --- Audit helper -----------------------------------------------------------
+
+async function writeAuthAudit(
+  req: Request,
   action: string,
-  entityId: string,
-  afterData: Record<string, unknown>,
-  req?: Express.Request
+  actor: { id: string; role: string } | null,
+  entityId: string | null,
+  details: Record<string, unknown>,
 ) {
   try {
     await db.insert(auditLogs).values({
-      userId: actingUserId,
-      userRole: actingUserRole,
+      userId: actor?.id ?? "ANONYMOUS",
+      userRole: actor?.role ?? "ANONYMOUS",
       action,
       entityType: "USER",
       entityId,
-      afterJson: afterData,
-      ipAddress: (req as any)?.ip || null,
-      userAgent: (req as any)?.headers?.["user-agent"] || null,
+      afterJson: details,
+      ipAddress: req.ip || null,
+      userAgent: typeof req.headers["user-agent"] === "string" ? req.headers["user-agent"].slice(0, 300) : null,
     });
   } catch (err) {
-    console.error("Failed to write auth audit log:", err);
+    console.error("Failed to write auth audit log:", (err as Error)?.message || err);
   }
 }
 
-// Register auth routes
+// --- Rate limiting ----------------------------------------------------------
+
+// Per-IP brake on password guessing across many usernames. Only failed
+// attempts count, so a busy clinic sharing one public IP is not penalised
+// for logging in normally. Per-account lockout (below) is the second layer.
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 30,
+  skipSuccessfulRequests: true,
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  message: { message: "Too many failed login attempts from this network. Please wait 15 minutes and try again." },
+});
+
+// Password changes verify the current password, so they are guessable too.
+const passwordChangeLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 10,
+  skipSuccessfulRequests: true,
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  message: { message: "Too many attempts. Please wait 15 minutes and try again." },
+});
+
+// --- Validation -------------------------------------------------------------
+
+const loginSchema = z.object({
+  username: z.string().trim().min(1).max(100),
+  password: z.string().min(1).max(200),
+});
+
+const profileSchema = z.object({
+  firstName: z.string().trim().max(100).nullish(),
+  lastName: z.string().trim().max(100).nullish(),
+  email: z.union([z.string().trim().email().max(200), z.literal(""), z.null()]).optional(),
+});
+
+const passwordChangeSchema = z.object({
+  currentPassword: z.string().min(1).max(200),
+  newPassword: z.string().min(1).max(200),
+});
+
+type DbUser = typeof users.$inferSelect;
+
+function sessionUser(user: DbUser, assignedBarangays: string[] = []) {
+  return {
+    id: user.id,
+    username: user.username,
+    email: user.email,
+    firstName: user.firstName,
+    lastName: user.lastName,
+    role: user.role,
+    status: user.status,
+    mustChangePassword: user.mustChangePassword,
+    assignedBarangays,
+  };
+}
+
+async function getAssignedBarangayNames(user: DbUser): Promise<string[]> {
+  if (user.role !== UserRole.TL) return [];
+  const assignments = await db.select({ barangayName: barangays.name })
+    .from(userBarangays)
+    .innerJoin(barangays, eq(userBarangays.barangayId, barangays.id))
+    .where(eq(userBarangays.userId, user.id));
+  return assignments.map(a => a.barangayName);
+}
+
+const INVALID_CREDENTIALS = { message: "Invalid username or password" };
+
+// --- Routes -----------------------------------------------------------------
+
 export function registerAuthRoutes(app: Express): void {
-  // Self-Registration (no auth required)
-  // Multer error handling wrapper
-  const kycUploadFields = kycUpload.fields([
-    { name: "kycIdFile", maxCount: 1 },
-    { name: "kycSelfie", maxCount: 1 },
-  ]);
-
-  app.post("/api/auth/register",
-    (req, res, next) => {
-      kycUploadFields(req, res, (err) => {
-        if (err) {
-          if (err.code === "LIMIT_FILE_SIZE") {
-            return res.status(400).json({ message: "File is too large. Maximum size is 10MB." });
-          }
-          if (err.message) {
-            return res.status(400).json({ message: err.message });
-          }
-          return res.status(400).json({ message: "File upload failed. Please try again." });
-        }
-        next();
-      });
-    },
-    async (req: any, res) => {
-      try {
-        const {
-          username, password, confirmPassword,
-          fullName, email, contactNumber,
-          role, barangayIds: barangayIdsRaw,
-          kycIdType,
-        } = req.body;
-
-        // Basic validation
-        if (!username?.trim() || !password || !fullName?.trim() || !contactNumber?.trim()) {
-          return res.status(400).json({ message: "Username, password, full name, and contact number are required" });
-        }
-
-        if (password.length < 8) {
-          return res.status(400).json({ message: "Password must be at least 8 characters" });
-        }
-
-        if (password !== confirmPassword) {
-          return res.status(400).json({ message: "Passwords do not match" });
-        }
-
-        // Only allow SHA or TL for self-registration
-        const allowedRoles = [UserRole.SHA, UserRole.TL];
-        const requestedRole = role || UserRole.TL;
-        if (!allowedRoles.includes(requestedRole)) {
-          return res.status(400).json({ message: "Invalid role. You may register as SHA or TL only." });
-        }
-
-        // Resolve uploaded files BEFORE further validation so we can delete orphans on error
-        const files = req.files as Record<string, Express.Multer.File[]> | undefined;
-        const uploadedIdFile = files?.kycIdFile?.[0];
-        const uploadedSelfie = files?.kycSelfie?.[0];
-
-        // Helper to delete orphan upload file(s) on validation error
-        const cleanupUploads = () => {
-          [uploadedIdFile, uploadedSelfie].forEach(f => {
-            if (f?.path && fs.existsSync(f.path)) {
-              fs.unlink(f.path, (err) => { if (err) console.error("Cleanup failed:", err); });
-            }
-          });
-        };
-
-        // Server-side KYC enforcement: ID type and file are mandatory for all self-registrants
-        if (!kycIdType?.trim()) {
-          cleanupUploads();
-          return res.status(400).json({ message: "A valid government ID type is required." });
-        }
-
-        if (!uploadedIdFile) {
-          cleanupUploads();
-          return res.status(400).json({ message: "A valid government ID photo is required. Please upload a clear photo or scan." });
-        }
-
-        if (!uploadedSelfie) {
-          cleanupUploads();
-          return res.status(400).json({ message: "A selfie photo is required for identity verification. Please complete the selfie capture step." });
-        }
-
-        // Server-side TL barangay enforcement: TL must be assigned to at least one valid barangay
-        if (requestedRole === UserRole.TL) {
-          const rawIds: number[] = (Array.isArray(barangayIdsRaw) ? barangayIdsRaw : barangayIdsRaw ? [barangayIdsRaw] : [])
-            .map((id: string) => parseInt(id, 10))
-            .filter((id: number) => !isNaN(id) && id > 0);
-
-          // Deduplicate
-          const uniqueBarangayIds = [...new Set(rawIds)];
-
-          if (uniqueBarangayIds.length === 0) {
-            cleanupUploads();
-            return res.status(400).json({ message: "Team Leaders must be assigned to at least one barangay." });
-          }
-
-          // Verify ALL provided barangay IDs actually exist in the database
-          const existingBarangays = await db.select({ id: barangays.id })
-            .from(barangays)
-            .where(inArray(barangays.id, uniqueBarangayIds));
-
-          if (existingBarangays.length !== uniqueBarangayIds.length) {
-            cleanupUploads();
-            return res.status(400).json({ message: "One or more selected barangays are invalid. Please select from the available barangays." });
-          }
-        }
-
-        // Check username uniqueness
-        const [existing] = await db.select({ id: users.id }).from(users).where(eq(users.username, username.trim()));
-        if (existing) {
-          cleanupUploads();
-          return res.status(400).json({ message: "Username is already taken" });
-        }
-
-        const kycIdFileUrl = uploadedIdFile.filename;
-        const kycSelfieUrl = uploadedSelfie?.filename || null;
-        const passwordHash = await hashPassword(password);
-
-        const [newUser] = await db.insert(users).values({
-          username: username.trim(),
-          passwordHash,
-          fullName: fullName.trim(),
-          email: email?.trim() || null,
-          contactNumber: contactNumber.trim(),
-          role: requestedRole,
-          status: UserStatus.PENDING_VERIFICATION,
-          kycIdType: kycIdType.trim(),
-          kycIdFileUrl,
-          kycSelfieUrl,
-          // Initialize face-match as PENDING so admin can see the state
-          // while async job runs in background
-          kycFaceMatchStatus: "PENDING",
-        }).returning();
-
-        // Assign barangays if TL (IDs already validated above)
-        if (requestedRole === UserRole.TL && barangayIdsRaw) {
-          const barangayIds: number[] = (Array.isArray(barangayIdsRaw) ? barangayIdsRaw : [barangayIdsRaw])
-            .map((id: string) => parseInt(id, 10))
-            .filter((id: number) => !isNaN(id) && id > 0);
-
-          if (barangayIds.length > 0) {
-            await db.insert(userBarangays).values(
-              barangayIds.map(bId => ({ userId: newUser.id, barangayId: bId }))
-            ).onConflictDoNothing();
-          }
-        }
-
-        // Audit log — use system as actor since user is not logged in
-        await writeAuditLog(
-          "SYSTEM",
-          "SYSTEM",
-          "REGISTER",
-          newUser.id,
-          { username: newUser.username, fullName: newUser.fullName, role: newUser.role, status: newUser.status }
-        );
-
-        // Trigger async face-match when both files are present (does not block response, never auto-approves)
-        // Selfie is now mandatory, so selfiePath should always be set.
-        const idPath = path.join(KYC_UPLOAD_DIR, kycIdFileUrl);
-        const selfiePath = path.join(KYC_UPLOAD_DIR, kycSelfieUrl!);
-
-        setImmediate(async () => {
-          // runFaceMatch handles all error cases internally and always returns INCONCLUSIVE on failure
-          let faceMatch: Awaited<ReturnType<typeof runFaceMatch>>;
-          try {
-            faceMatch = await runFaceMatch(idPath, selfiePath);
-          } catch (err: any) {
-            console.error("[kyc-face-match] Unexpected error:", err?.message || err);
-            faceMatch = {
-              status: "INCONCLUSIVE",
-              score: 0,
-              reason: "Face comparison service encountered an unexpected error. Admin must verify identity manually.",
-            };
-          }
-
-          // Always persist result — never silently drop
-          try {
-            await db.update(users).set({
-              kycFaceMatchStatus: faceMatch.status,
-              kycFaceMatchScore: faceMatch.score,
-              kycFaceMatchReason: faceMatch.reason,
-            }).where(eq(users.id, newUser.id));
-          } catch (dbErr: any) {
-            console.error("[kyc-face-match] Failed to persist result for", newUser.username, dbErr?.message || dbErr);
-          }
-
-          // Audit log for KYC face-match result
-          try {
-            await writeAuditLog(
-              "SYSTEM",
-              "SYSTEM",
-              "KYC_FACE_MATCH",
-              newUser.id,
-              {
-                status: faceMatch.status,
-                score: faceMatch.score,
-                reason: faceMatch.reason,
-                username: newUser.username,
-              }
-            );
-          } catch (auditErr: any) {
-            console.error("[kyc-face-match] Failed to write audit log:", auditErr?.message || auditErr);
-          }
-
-          console.log(`[kyc-face-match] User ${newUser.username}: ${faceMatch.status} score=${faceMatch.score}`);
-        });
-
-        res.status(201).json({
-          message: "Registration submitted successfully. Your account is pending administrator verification.",
-          userId: newUser.id,
-        });
-      } catch (error) {
-        console.error("Registration error:", error);
-        res.status(500).json({ message: "Registration failed. Please try again." });
-      }
-    }
-  );
-
   // Login
-  app.post("/api/auth/login", async (req, res) => {
+  app.post("/api/auth/login", loginLimiter, async (req, res) => {
     try {
-      const { username, password } = req.body;
-      
-      if (!username || !password) {
+      const parsed = loginSchema.safeParse(req.body);
+      if (!parsed.success) {
         return res.status(400).json({ message: "Username and password are required" });
       }
-      
+      const { username, password } = parsed.data;
+
       const [user] = await db.select().from(users).where(eq(users.username, username));
-      
+
       if (!user) {
-        return res.status(401).json({ message: "Invalid username or password" });
+        // Spend the same time as a real check so timing does not reveal
+        // which usernames exist.
+        await burnPasswordCheck(password);
+        await writeAuthAudit(req, "LOGIN_FAILED", null, null, { username: username.slice(0, 100), reason: "UNKNOWN_USER" });
+        return res.status(401).json(INVALID_CREDENTIALS);
       }
-      
-      // Verify password first (same error message to prevent username enumeration)
+
+      // Locked after repeated failures. Checked before the password so a
+      // locked account cannot be used to keep guessing.
+      if (user.lockedUntil && user.lockedUntil.getTime() > Date.now()) {
+        await burnPasswordCheck(password);
+        const minutes = Math.max(1, Math.ceil((user.lockedUntil.getTime() - Date.now()) / 60000));
+        await writeAuthAudit(req, "LOGIN_FAILED", null, user.id, { username: user.username, reason: "LOCKED" });
+        return res.status(429).json({
+          message: `Too many failed attempts. This account is locked for ${minutes} more minute${minutes === 1 ? "" : "s"}.`,
+          statusCode: "LOCKED",
+        });
+      }
+
       const isValid = await verifyPassword(password, user.passwordHash);
       if (!isValid) {
-        return res.status(401).json({ message: "Invalid username or password" });
+        const failures = user.failedLoginCount + 1;
+        const lockNow = failures >= config.LOGIN_MAX_ATTEMPTS;
+        await db.update(users).set({
+          failedLoginCount: lockNow ? 0 : failures,
+          lockedUntil: lockNow ? new Date(Date.now() + config.LOGIN_LOCK_MINUTES * 60 * 1000) : user.lockedUntil,
+        }).where(eq(users.id, user.id));
+        await writeAuthAudit(req, lockNow ? "ACCOUNT_LOCKED" : "LOGIN_FAILED", null, user.id, {
+          username: user.username,
+          reason: "BAD_PASSWORD",
+          failures,
+        });
+        return res.status(401).json(INVALID_CREDENTIALS);
       }
 
-      // Check account status after password verification
-      if (user.status === UserStatus.PENDING_VERIFICATION) {
+      // Password is correct from here on, so it is safe to be specific.
+      if (user.status !== UserStatus.ACTIVE) {
+        await writeAuthAudit(req, "LOGIN_FAILED", null, user.id, { username: user.username, reason: user.status });
+        const message =
+          user.status === UserStatus.DISABLED
+            ? "Your account has been disabled. Please contact the administrator."
+            : "Your account is not active. Please contact the administrator.";
+        return res.status(403).json({ message, statusCode: user.status });
+      }
+
+      // An account still on a built-in default password ("admin123",
+      // "123456") is refused even though the password matches: those values
+      // are public, so whoever is typing it may not be the account owner.
+      // An administrator must issue a new temporary password.
+      if (isKnownDefaultPassword(password)) {
+        await writeAuthAudit(req, "LOGIN_BLOCKED_DEFAULT_PASSWORD", null, user.id, { username: user.username });
         return res.status(403).json({
-          message: "Your account is pending verification. Please wait for administrator approval.",
-          statusCode: "PENDING_VERIFICATION",
+          message:
+            "This account is still using a default password and has been locked for safety. " +
+            "Ask your System Administrator to reset your password.",
+          statusCode: "DEFAULT_PASSWORD",
         });
       }
 
-      if (user.status === UserStatus.REJECTED) {
-        const noteMsg = user.kycNotes ? ` Reason: ${user.kycNotes}` : "";
-        return res.status(403).json({
-          message: `Your account registration was not approved.${noteMsg} Please contact the administrator for assistance.`,
-          statusCode: "REJECTED",
-        });
-      }
+      // A password that predates the current policy still logs in, but must
+      // be replaced before anything else can be done.
+      const policy = checkPassword(password, user);
+      const mustChangePassword = user.mustChangePassword || !policy.ok;
 
-      if (user.status === UserStatus.DISABLED) {
-        return res.status(403).json({
-          message: "Your account has been disabled. Please contact the administrator.",
-          statusCode: "DISABLED",
-        });
+      const updates: Partial<DbUser> = {
+        failedLoginCount: 0,
+        lockedUntil: null,
+        lastLoginAt: new Date(),
+        mustChangePassword,
+      };
+      // Transparently upgrade hashes made with an older, weaker work factor.
+      if (needsRehash(user.passwordHash)) {
+        updates.passwordHash = await hashPassword(password);
       }
-      
-      // Set session
+      await db.update(users).set(updates).where(eq(users.id, user.id));
+
+      // New session id on every login: a session id planted in the browser
+      // before login (session fixation) must not survive authentication.
+      await regenerateSession(req);
       req.session.userId = user.id;
-      
-      res.json({
-        id: user.id,
-        username: user.username,
-        email: user.email,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        role: user.role,
-        status: user.status,
-      });
+      req.session.createdAt = Date.now();
+      await saveSession(req);
+
+      await writeAuthAudit(req, "LOGIN", { id: user.id, role: user.role }, user.id, { username: user.username });
+
+      res.json(sessionUser({ ...user, mustChangePassword }, await getAssignedBarangayNames(user)));
     } catch (error) {
-      console.error("Login error:", error);
+      console.error("Login error:", (error as Error)?.message || error);
       res.status(500).json({ message: "Login failed" });
     }
   });
-  
+
   // Logout
   app.post("/api/auth/logout", (req, res) => {
-    req.session.destroy((err) => {
+    const actor = req.userInfo ? { id: req.userInfo.id, role: req.userInfo.role } : null;
+    req.session.destroy(async (err) => {
       if (err) {
-        console.error("Logout error:", err);
+        console.error("Logout error:", err?.message || err);
         return res.status(500).json({ message: "Logout failed" });
       }
-      res.clearCookie("connect.sid");
+      if (actor) await writeAuthAudit(req, "LOGOUT", actor, actor.id, {});
+      res.clearCookie(SESSION_COOKIE_NAME);
       res.json({ message: "Logged out successfully" });
     });
   });
-  
-  // Get current user
+
+  // Current user. Relies on loadUserInfo (registered globally before this),
+  // which has already enforced session expiry and account status.
   app.get("/api/auth/me", async (req, res) => {
-    try {
-      const userId = req.session.userId;
-      
-      if (!userId) {
-        return res.status(401).json({ message: "Not authenticated" });
-      }
-      
-      const [user] = await db.select().from(users).where(eq(users.id, userId));
-      
-      if (!user) {
-        req.session.destroy(() => {});
-        return res.status(401).json({ message: "User not found" });
-      }
-      
-      if (user.status === UserStatus.DISABLED) {
-        req.session.destroy(() => {});
-        return res.status(403).json({ message: "Account is disabled" });
-      }
-      
-      // Get assigned barangays for TL users (return names for frontend use)
-      let assignedBarangays: string[] = [];
-      if (user.role === UserRole.TL) {
-        const assignments = await db.select({ barangayName: barangays.name })
-          .from(userBarangays)
-          .innerJoin(barangays, eq(userBarangays.barangayId, barangays.id))
-          .where(eq(userBarangays.userId, userId));
-        assignedBarangays = assignments.map(a => a.barangayName);
-      }
-      
-      res.json({
-        id: user.id,
-        username: user.username,
-        email: user.email,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        role: user.role,
-        status: user.status,
-        assignedBarangays,
-      });
-    } catch (error) {
-      console.error("Error fetching current user:", error);
-      res.status(500).json({ message: "Failed to fetch user" });
+    if (!req.userInfo) {
+      return res.status(401).json({ message: "Not authenticated" });
     }
+    res.json(req.userInfo);
   });
 
   // Update own profile (firstName, lastName, email only)
   app.put("/api/auth/me/profile", async (req, res) => {
     try {
-      const userId = req.session.userId;
-      if (!userId) {
-        return res.status(401).json({ message: "Not authenticated" });
+      const userId = req.userInfo!.id;
+      const parsed = profileSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: "Please check the name and email fields." });
       }
-
-      const { firstName, lastName, email } = req.body;
+      const { firstName, lastName, email } = parsed.data;
 
       const [updated] = await db
         .update(users)
@@ -614,38 +376,22 @@ export function registerAuthRoutes(app: Express): void {
         return res.status(404).json({ message: "User not found" });
       }
 
-      res.json({
-        id: updated.id,
-        username: updated.username,
-        email: updated.email,
-        firstName: updated.firstName,
-        lastName: updated.lastName,
-        role: updated.role,
-        status: updated.status,
-      });
+      res.json(sessionUser(updated, req.userInfo!.assignedBarangays));
     } catch (error) {
-      console.error("Error updating profile:", error);
+      console.error("Error updating profile:", (error as Error)?.message || error);
       res.status(500).json({ message: "Failed to update profile" });
     }
   });
 
   // Change own password (requires current password)
-  app.put("/api/auth/me/password", async (req, res) => {
+  app.put("/api/auth/me/password", passwordChangeLimiter, async (req, res) => {
     try {
-      const userId = req.session.userId;
-      if (!userId) {
-        return res.status(401).json({ message: "Not authenticated" });
-      }
-
-      const { currentPassword, newPassword } = req.body;
-
-      if (!currentPassword || !newPassword) {
+      const userId = req.userInfo!.id;
+      const parsed = passwordChangeSchema.safeParse(req.body);
+      if (!parsed.success) {
         return res.status(400).json({ message: "Current password and new password are required" });
       }
-
-      if (newPassword.length < 8) {
-        return res.status(400).json({ message: "New password must be at least 8 characters" });
-      }
+      const { currentPassword, newPassword } = parsed.data;
 
       const [user] = await db.select().from(users).where(eq(users.id, userId));
       if (!user) {
@@ -654,44 +400,43 @@ export function registerAuthRoutes(app: Express): void {
 
       const isValid = await verifyPassword(currentPassword, user.passwordHash);
       if (!isValid) {
+        await writeAuthAudit(req, "PASSWORD_CHANGE_FAILED", { id: user.id, role: user.role }, user.id, {});
         return res.status(400).json({ message: "Current password is incorrect" });
       }
 
+      if (newPassword === currentPassword) {
+        return res.status(400).json({ message: "New password must be different from the current one." });
+      }
+
+      const policy = checkPassword(newPassword, user);
+      if (!policy.ok) {
+        return res.status(400).json({ message: policy.message });
+      }
+
       const passwordHash = await hashPassword(newPassword);
-      await db.update(users).set({ passwordHash, updatedAt: new Date() }).where(eq(users.id, userId));
+      await db.update(users).set({
+        passwordHash,
+        mustChangePassword: false,
+        passwordChangedAt: new Date(),
+        updatedAt: new Date(),
+      }).where(eq(users.id, userId));
+
+      // Sign out every other device; this one continues.
+      await destroyUserSessions(userId, req.sessionID);
+      await writeAuthAudit(req, "PASSWORD_CHANGE", { id: user.id, role: user.role }, user.id, {});
 
       res.json({ success: true });
     } catch (error) {
-      console.error("Error changing password:", error);
+      console.error("Error changing password:", (error as Error)?.message || error);
       res.status(500).json({ message: "Failed to change password" });
     }
   });
 }
 
 // Middleware to check if user is authenticated
-export const isAuthenticated: RequestHandler = async (req, res, next) => {
-  const userId = req.session.userId;
-  
-  if (!userId) {
+export const isAuthenticated: RequestHandler = (req, res, next) => {
+  if (!req.userInfo) {
     return res.status(401).json({ message: "Unauthorized" });
   }
-  
-  try {
-    const [user] = await db.select().from(users).where(eq(users.id, userId));
-    
-    if (!user) {
-      return res.status(401).json({ message: "Unauthorized" });
-    }
-    
-    if (user.status === UserStatus.DISABLED) {
-      return res.status(403).json({ message: "Account is disabled" });
-    }
-    
-    next();
-  } catch (error) {
-    res.status(500).json({ message: "Authentication check failed" });
-  }
+  next();
 };
-
-// Export KYC upload dir for use in admin routes
-export { KYC_UPLOAD_DIR };

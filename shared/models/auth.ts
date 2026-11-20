@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { index, jsonb, pgTable, timestamp, varchar, text, serial, primaryKey, real } from "drizzle-orm/pg-core";
+import { index, jsonb, pgTable, timestamp, varchar, text, serial, primaryKey, real, boolean, integer } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -25,8 +25,7 @@ export const UserStatus = {
 } as const;
 export type UserStatusType = typeof UserStatus[keyof typeof UserStatus];
 
-// Session storage table.
-// (IMPORTANT) This table is mandatory for Replit Auth, don't drop it.
+// Session storage table (connect-pg-simple). Login sessions live here.
 export const sessions = pgTable(
   "sessions",
   {
@@ -50,7 +49,20 @@ export const users = pgTable("users", {
   status: varchar("status").notNull().default("ACTIVE"), // ACTIVE, DISABLED, PENDING_VERIFICATION, REJECTED
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
-  // KYC / Registration fields
+  // --- Account security ---
+  // True when the password was set by someone else (admin-created account,
+  // admin reset, CLI) or no longer meets the password policy. The user can
+  // log in but every API call except "change my password" is refused.
+  mustChangePassword: boolean("must_change_password").notNull().default(false),
+  passwordChangedAt: timestamp("password_changed_at"),
+  // Consecutive failed logins; reset on success. Reaching the limit sets
+  // lockedUntil and blocks logins until then.
+  failedLoginCount: integer("failed_login_count").notNull().default(0),
+  lockedUntil: timestamp("locked_until"),
+  lastLoginAt: timestamp("last_login_at"),
+  // Legacy self-registration / KYC fields. Self-registration has been
+  // removed (accounts are created by a System Admin); the columns remain
+  // so existing rows keep their history.
   contactNumber: varchar("contact_number"),
   fullName: varchar("full_name"),
   kycIdType: varchar("kyc_id_type"),
