@@ -61,8 +61,14 @@ export function invalidateScopedQueries(basePath: string): Promise<void> {
  * of leaving a screen full of failed requests.
  */
 function handleSessionEnded(error: unknown) {
-  if (error instanceof Error && /^401: /.test(error.message)) {
+  if (!(error instanceof Error)) return;
+  if (/^401: /.test(error.message)) {
     queryClient.setQueryData(["/api/auth/me"], null);
+  } else if (/^403: .*(PASSWORD_CHANGE_REQUIRED|MFA_ENROLLMENT_REQUIRED)/.test(error.message)) {
+    // The account now owes a password change or two-step setup (for
+    // example an administrator reset it while this tab was open). Re-read
+    // the user so the app shows that screen instead of failing requests.
+    queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
   }
 }
 

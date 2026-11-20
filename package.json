@@ -12,6 +12,7 @@
     "db:migrate": "tsx script/migrate.ts",
     "admin": "tsx script/admin.ts",
     "test:security": "tsx --test tests/security.test.ts",
+    "test:unit": "tsx --test tests/totp.test.ts",
     "db:push": "drizzle-kit push",
     "manual:pdf": "tsx script/build-manual-pdf.ts"
   },
@@ -79,6 +80,7 @@
     "passport": "^0.7.0",
     "passport-local": "^1.0.0",
     "pg": "^8.16.3",
+    "qrcode": "^1.5.4",
     "react": "^18.3.1",
     "react-day-picker": "^8.10.1",
     "react-dom": "^18.3.1",
@@ -105,6 +107,7 @@
     "@types/node": "20.19.27",
     "@types/passport": "^1.0.17",
     "@types/passport-local": "^1.0.38",
+    "@types/qrcode": "^1.5.6",
     "@types/react": "^18.3.11",
     "@types/react-dom": "^18.3.1",
     "@types/ws": "^8.5.13",

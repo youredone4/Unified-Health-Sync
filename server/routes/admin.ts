@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { z } from "zod";
 import { db } from "../db";
-import { users, barangays, userBarangays, auditLogs, UserRole, UserStatus } from "@shared/schema";
+import { users, barangays, userBarangays, auditLogs, userRecoveryCodes, UserRole, UserStatus } from "@shared/schema";
 import { eq, and, desc, sql, inArray } from "drizzle-orm";
 import { requireAuth, requireRole, createAuditLog } from "../middleware/rbac";
 import { hashPassword, destroyUserSessions } from "../auth";
@@ -16,13 +16,13 @@ const ROLE_VALUES = Object.values(UserRole) as [string, ...string[]];
  * hash or the stored names of legacy KYC upload files.
  */
 function adminUserView(user: DbUser, assignedBarangays: { id: number; name: string }[] = []) {
-  const { passwordHash: _hash, kycIdFileUrl: _id, kycSelfieUrl: _selfie, ...safe } = user;
-  return { ...safe, assignedBarangays };
+  const { passwordHash: _hash, kycIdFileUrl: _id, kycSelfieUrl: _selfie, totpSecret: _totp, totpLastStep: _step, ...safe } = user;
+  return { ...safe, mfaEnabled: !!user.totpEnabledAt, assignedBarangays };
 }
 
 /** Same, for the audit trail (no secrets, no upload file names). */
 function auditUserView(user: DbUser) {
-  const { passwordHash: _hash, kycIdFileUrl: _id, kycSelfieUrl: _selfie, ...safe } = user;
+  const { passwordHash: _hash, kycIdFileUrl: _id, kycSelfieUrl: _selfie, totpSecret: _totp, totpLastStep: _step, ...safe } = user;
   return safe;
 }
 
@@ -405,6 +405,38 @@ export function registerAdminRoutes(app: Express) {
     } catch (error) {
       console.error("Error updating user:", (error as Error)?.message || error);
       res.status(500).json({ message: "Failed to update user" });
+    }
+  });
+
+  // Switch off two-step sign-in for someone who lost their phone AND their
+  // recovery codes. If their role requires it, they are made to set it up
+  // again at next sign-in. Their sessions end now.
+  app.post("/api/admin/users/:id/mfa/reset", adminOnly, async (req: any, res: any) => {
+    try {
+      const userId = req.params.id;
+      if (userId === req.userInfo.id) {
+        return res.status(400).json({ message: "Use your account page (or the server CLI) for your own two-step sign-in" });
+      }
+      const [target] = await db.select().from(users).where(eq(users.id, userId));
+      if (!target) return res.status(404).json({ message: "User not found" });
+
+      await db.transaction(async (tx) => {
+        await tx.update(users)
+          .set({ totpSecret: null, totpEnabledAt: null, totpLastStep: null, updatedAt: new Date() })
+          .where(eq(users.id, userId));
+        await tx.delete(userRecoveryCodes).where(eq(userRecoveryCodes.userId, userId));
+      });
+      await destroyUserSessions(userId);
+
+      await createAuditLog(
+        req.userInfo.id, req.userInfo.role,
+        "MFA_RESET", "USER", userId, undefined,
+        { mfaEnabled: !!target.totpEnabledAt }, { mfaEnabled: false, username: target.username }, req,
+      );
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error resetting two-step sign-in:", (error as Error)?.message || error);
+      res.status(500).json({ message: "Failed to reset two-step sign-in" });
     }
   });
 

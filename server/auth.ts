@@ -18,6 +18,7 @@ import { hashPassword, verifyPassword, burnPasswordCheck, needsRehash } from "./
 import { checkPassword, isKnownDefaultPassword } from "@shared/password-policy";
 
 export { hashPassword, verifyPassword };
+export { writeAuthAudit, completeLogin, registerFailedAttempt, lockedResponse };
 
 export const SESSION_COOKIE_NAME = "hs.sid";
 
@@ -159,7 +160,7 @@ async function writeAuthAudit(
 // for logging in normally. Per-account lockout (below) is the second layer.
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  limit: 30,
+  limit: config.LOGIN_IP_MAX_FAILURES,
   skipSuccessfulRequests: true,
   standardHeaders: "draft-7",
   legacyHeaders: false,
@@ -206,8 +207,47 @@ function sessionUser(user: DbUser, assignedBarangays: string[] = []) {
     role: user.role,
     status: user.status,
     mustChangePassword: user.mustChangePassword,
+    mfaEnabled: !!user.totpEnabledAt,
+    mustEnrollMfa: !user.totpEnabledAt && config.MFA_REQUIRED_ROLES.includes(user.role),
     assignedBarangays,
   };
+}
+
+/**
+ * Turns a verified identity into a logged-in session. Called once the
+ * password is right AND, for accounts with two-step sign-in, the code too.
+ */
+async function completeLogin(req: Request, user: DbUser) {
+  await db.update(users).set({ lastLoginAt: new Date(), failedLoginCount: 0, lockedUntil: null }).where(eq(users.id, user.id));
+  // New session id on every login: a session id planted in the browser
+  // before login (session fixation) must not survive authentication.
+  await regenerateSession(req);
+  req.session.userId = user.id;
+  req.session.createdAt = Date.now();
+  await saveSession(req);
+  await writeAuthAudit(req, "LOGIN", { id: user.id, role: user.role }, user.id, { username: user.username });
+  return sessionUser(user, await getAssignedBarangayNames(user));
+}
+
+/**
+ * Counts one failed attempt (wrong password or wrong second-step code)
+ * against an account and locks it at the limit. One statement, so parallel
+ * guesses cannot all read the same count and slip under the limit.
+ */
+async function registerFailedAttempt(userId: string): Promise<{ failures: number; locked: boolean }> {
+  const [counted] = await db.update(users)
+    .set({ failedLoginCount: sql`${users.failedLoginCount} + 1` })
+    .where(eq(users.id, userId))
+    .returning({ failures: users.failedLoginCount });
+  const failures = counted?.failures ?? 1;
+  const locked = failures >= config.LOGIN_MAX_ATTEMPTS;
+  if (locked) {
+    await db.update(users).set({
+      failedLoginCount: 0,
+      lockedUntil: new Date(Date.now() + config.LOGIN_LOCK_MINUTES * 60 * 1000),
+    }).where(eq(users.id, userId));
+  }
+  return { failures, locked };
 }
 
 async function getAssignedBarangayNames(user: DbUser): Promise<string[]> {
@@ -298,21 +338,7 @@ export function registerAuthRoutes(app: Express): void {
 
       const isValid = await verifyPassword(password, user.passwordHash);
       if (!isValid) {
-        // Count in the database in ONE statement. Reading the count and
-        // writing count+1 separately would let many parallel guesses all
-        // see the same number and never reach the limit.
-        const [counted] = await db.update(users)
-          .set({ failedLoginCount: sql`${users.failedLoginCount} + 1` })
-          .where(eq(users.id, user.id))
-          .returning({ failures: users.failedLoginCount });
-        const failures = counted?.failures ?? 1;
-        const lockNow = failures >= config.LOGIN_MAX_ATTEMPTS;
-        if (lockNow) {
-          await db.update(users).set({
-            failedLoginCount: 0,
-            lockedUntil: new Date(Date.now() + config.LOGIN_LOCK_MINUTES * 60 * 1000),
-          }).where(eq(users.id, user.id));
-        }
+        const { failures, locked: lockNow } = await registerFailedAttempt(user.id);
         await writeAuthAudit(req, lockNow ? "ACCOUNT_LOCKED" : "LOGIN_FAILED", null, user.id, {
           username: user.username,
           reason: "BAD_PASSWORD",
@@ -353,7 +379,6 @@ export function registerAuthRoutes(app: Express): void {
       const updates: Partial<DbUser> = {
         failedLoginCount: 0,
         lockedUntil: null,
-        lastLoginAt: new Date(),
         mustChangePassword,
       };
       // Transparently upgrade hashes made with an older, weaker work factor.
@@ -362,16 +387,18 @@ export function registerAuthRoutes(app: Express): void {
       }
       await db.update(users).set(updates).where(eq(users.id, user.id));
 
-      // New session id on every login: a session id planted in the browser
-      // before login (session fixation) must not survive authentication.
-      await regenerateSession(req);
-      req.session.userId = user.id;
-      req.session.createdAt = Date.now();
-      await saveSession(req);
+      // Two-step sign-in: the password alone does not log this account in.
+      // The fresh session only remembers WHO is half-way through, for five
+      // minutes; POST /api/auth/mfa/verify (server/mfa.ts) finishes the job.
+      if (user.totpEnabledAt && user.totpSecret) {
+        await regenerateSession(req);
+        req.session.pendingMfaUserId = user.id;
+        req.session.pendingMfaAt = Date.now();
+        await saveSession(req);
+        return res.json({ mfaRequired: true });
+      }
 
-      await writeAuthAudit(req, "LOGIN", { id: user.id, role: user.role }, user.id, { username: user.username });
-
-      res.json(sessionUser({ ...user, mustChangePassword }, await getAssignedBarangayNames(user)));
+      res.json(await completeLogin(req, { ...user, mustChangePassword }));
     } catch (error) {
       console.error("Login error:", (error as Error)?.message || error);
       res.status(500).json({ message: "Login failed" });

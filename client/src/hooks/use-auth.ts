@@ -7,6 +7,10 @@ export interface AuthUser extends User {
   role: string;
   status: string;
   assignedBarangays: string[];
+  /** Two-step sign-in is on for this account. */
+  mfaEnabled?: boolean;
+  /** Their role requires two-step sign-in and it is not set up yet. */
+  mustEnrollMfa?: boolean;
 }
 
 // Store last login info for the landing page

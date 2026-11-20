@@ -32,6 +32,7 @@ interface UserWithAssignments {
   createdAt: string;
   fullName: string | null;
   contactNumber: string | null;
+  mfaEnabled?: boolean;
   kycIdType: string | null;
   kycNotes: string | null;
   kycReviewedAt: string | null;
@@ -279,6 +280,19 @@ export default function UserManagement() {
     },
     onError: (error: Error) => {
       toast({ title: "Failed to reset password", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const resetMfaMutation = useMutation({
+    mutationFn: async (userId: string) => {
+      return apiRequest("POST", `/api/admin/users/${userId}/mfa/reset`, {});
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
+      toast({ title: "Two-step sign-in reset", description: "The user was signed out and can set it up again." });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Failed to reset two-step sign-in", description: error.message, variant: "destructive" });
     },
   });
 
@@ -545,6 +559,23 @@ export default function UserManagement() {
                         <Button variant="outline" size="sm" onClick={() => { setResetPwUser(user); setResetPwValue(""); setResetPwConfirm(""); }} data-testid={`button-reset-password-${user.id}`}>
                           <Key className="w-4 h-4 mr-1" />Reset PW
                         </Button>
+
+                        {user.mfaEnabled && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            title="Two-step sign-in is on. Reset it if this person lost their phone and recovery codes."
+                            disabled={resetMfaMutation.isPending}
+                            onClick={() => {
+                              if (window.confirm(`Reset two-step sign-in for @${user.username}? They will be signed out and must set it up again if their role requires it.`)) {
+                                resetMfaMutation.mutate(user.id);
+                              }
+                            }}
+                            data-testid={`button-reset-mfa-${user.id}`}
+                          >
+                            <Shield className="w-4 h-4 mr-1" />Reset 2-step
+                          </Button>
+                        )}
 
                         <Dialog>
                           <DialogTrigger asChild>

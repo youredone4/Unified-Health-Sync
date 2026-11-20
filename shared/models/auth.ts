@@ -60,6 +60,13 @@ export const users = pgTable("users", {
   failedLoginCount: integer("failed_login_count").notNull().default(0),
   lockedUntil: timestamp("locked_until"),
   lastLoginAt: timestamp("last_login_at"),
+  // --- Two-step sign-in (TOTP authenticator app) ---
+  // The shared secret, encrypted with a key held in server configuration
+  // (see server/totp.ts). Null until the user has enrolled.
+  totpSecret: text("totp_secret"),
+  totpEnabledAt: timestamp("totp_enabled_at"),
+  // Time step of the last accepted code, so a code cannot be replayed.
+  totpLastStep: integer("totp_last_step"),
   // Legacy self-registration / KYC fields. Self-registration has been
   // removed (accounts are created by a System Admin); the columns remain
   // so existing rows keep their history.
@@ -76,6 +83,15 @@ export const users = pgTable("users", {
   kycFaceMatchScore: real("kyc_face_match_score"),      // confidence 0.0–1.0 (null if unavailable)
   kycFaceMatchReason: text("kyc_face_match_reason"),    // brief explanation from AI
 });
+
+// Single-use recovery codes for two-step sign-in (hashed; shown once).
+export const userRecoveryCodes = pgTable("user_recovery_codes", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  codeHash: varchar("code_hash").notNull(),
+  usedAt: timestamp("used_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [index("IDX_recovery_codes_user").on(table.userId)]);
 
 export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;

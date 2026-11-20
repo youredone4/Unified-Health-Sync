@@ -2,8 +2,10 @@
  * Security regression tests. They run against a REAL running server and
  * its database, over HTTP, exactly as a browser or an attacker would.
  *
- *   1. Start the server against a THROWAWAY database (never production):
- *        npm run db:migrate && npm run dev
+ *   1. Start the server against a THROWAWAY database (never production).
+ *      The suite makes dozens of deliberately failed sign-ins from one
+ *      address, so lift the per-address limit for the test server:
+ *        npm run db:migrate && LOGIN_IP_MAX_FAILURES=1000 npm run dev
  *   2. In another terminal:
  *        ALLOW_TEST_RESET=true npm run test:security
  *
@@ -28,6 +30,7 @@ import path from "path";
 import pg from "pg";
 import { api } from "../shared/routes";
 import { hashPassword } from "../server/passwords";
+import { totpCode, totpStep } from "../server/totp";
 
 const BASE_URL = (process.env.BASE_URL || "http://localhost:5000").replace(/\/$/, "");
 const TAG = "ZZ-SECURITY-TEST";
@@ -136,6 +139,7 @@ const PUBLIC = new Set([
   "POST /api/auth/logout",
   "GET /api/auth/me",
   "GET /api/theme-settings",
+  "POST /api/auth/mfa/verify",
 ]);
 const VIEW_ONLY_WRITE_PREFIXES = ["/api/auth/", "/api/dm/", "/api/general-chat/", "/api/recommendations/log", "/api/recommendations/plain-language"];
 const PASSWORD_CHANGE_ALLOWED = new Set(["GET /api/auth/me", "PUT /api/auth/me/password", "POST /api/auth/logout", "GET /api/theme-settings"]);
@@ -157,6 +161,9 @@ const names = {
   defaultPw: `sec_default_${RUN}`,
   weakPw: `sec_weak_${RUN}`,
   lock: `sec_lock_${RUN}`,
+  mfa: `sec_mfa_${RUN}`,
+  mfaLock: `sec_mfa_lock_${RUN}`,
+  mfaAdmin: `sec_mfa_admin_${RUN}`,
   disabled: `sec_disabled_${RUN}`,
   tlNone: `sec_tl_none_${RUN}`,
   race: `sec_race_${RUN}`,
@@ -186,10 +193,54 @@ async function createUser(
   return id;
 }
 
+// --- two-step sign-in helpers ----------------------------------------------------
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+/** Authenticator "apps" held by the test, keyed by username. */
+const authenticators = new Map<string, { secret: string; lastStep: number }>();
+/** Sessions of accounts that use two-step sign-in are reused: each sign-in spends a 30-second code. */
+const mfaSessions = new Map<string, Client>();
+
+/** A code the server has not seen yet. Waits for the next 30-second step if it has to. */
+async function nextCode(username: string): Promise<string> {
+  const app = authenticators.get(username);
+  assert.ok(app, `no authenticator enrolled for ${username}`);
+  const step = Math.max(totpStep(), app.lastStep + 1);
+  while (step > totpStep() + 1) await sleep(1000); // server accepts up to one step ahead
+  app.lastStep = step;
+  return totpCode(app.secret, step);
+}
+
+/** Enrols the signed-in client in two-step sign-in; returns the recovery codes. */
+async function enrol(c: Client, username: string, password = STRONG_PASSWORD): Promise<string[]> {
+  const setup = await c.post("/api/auth/mfa/setup", { currentPassword: password });
+  assert.equal(setup.status, 200, setup.text);
+  authenticators.set(username, { secret: setup.json.secret, lastStep: 0 });
+  const enable = await c.post("/api/auth/mfa/enable", { code: await nextCode(username) });
+  assert.equal(enable.status, 200, enable.text);
+  return enable.json.recoveryCodes;
+}
+
+/**
+ * A signed-in client. Handles both ways the server may involve two-step
+ * sign-in: asking for a code (account already enrolled) and demanding
+ * enrolment (role listed in MFA_REQUIRED_ROLES, the default for admins).
+ */
 async function session(username: string, password = STRONG_PASSWORD): Promise<Client> {
+  const cached = mfaSessions.get(username);
+  if (cached && (await cached.get("/api/auth/me")).status === 200) return cached;
+
   const c = new Client();
-  const res = await c.login(username, password);
+  let res = await c.login(username, password);
   assert.equal(res.status, 200, `login as ${username} failed: ${res.text}`);
+  if (res.json.mfaRequired) {
+    res = await c.post("/api/auth/mfa/verify", { code: await nextCode(username) });
+    assert.equal(res.status, 200, `second step for ${username} failed: ${res.text}`);
+    mfaSessions.set(username, c);
+  } else if (res.json.mustEnrollMfa) {
+    await enrol(c, username, password);
+    mfaSessions.set(username, c);
+  }
   return c;
 }
 
@@ -207,6 +258,9 @@ before(async () => {
   ids.weakPw = await createUser(names.weakPw, "TL", { barangay: BARANGAY_A, password: "oldpass99" });
   ids.lock = await createUser(names.lock, "TL", { barangay: BARANGAY_A });
   ids.disabled = await createUser(names.disabled, "TL", { barangay: BARANGAY_A, status: "DISABLED" });
+  ids.mfa = await createUser(names.mfa, "MHO");
+  ids.mfaLock = await createUser(names.mfaLock, "MHO");
+  ids.mfaAdmin = await createUser(names.mfaAdmin, "SYSTEM_ADMIN");
   ids.tlNone = await createUser(names.tlNone, "TL"); // a Team Leader with NO barangays
   ids.race = await createUser(names.race, "TL", { barangay: BARANGAY_A });
   for (const row of (await pool.query(`SELECT id, name FROM barangays WHERE name = ANY($1)`, [[BARANGAY_A, BARANGAY_B]])).rows) {
@@ -312,7 +366,7 @@ describe("deny by default", () => {
     const leaked: string[] = [];
     for (const r of routes) {
       const key = `${r.method} ${r.path}`;
-      if (PASSWORD_CHANGE_ALLOWED.has(key) || key === "POST /api/auth/login") continue;
+      if (PASSWORD_CHANGE_ALLOWED.has(key) || PUBLIC.has(key)) continue;
       const res = await c.request(r.method, r.path, r.method === "GET" ? undefined : {});
       if (res.status !== 403 || res.json?.code !== "PASSWORD_CHANGE_REQUIRED") leaked.push(`${key} -> ${res.status}`);
     }
@@ -647,6 +701,177 @@ describe("login and sessions", () => {
   });
 });
 
+// --- 3b. two-step sign-in ---------------------------------------------------------
+
+describe("two-step sign-in", () => {
+  let recoveryCodes: string[] = [];
+
+  test("setting it up needs the password and a correct first code", async () => {
+    const c = await session(names.mfa);
+    assert.equal((await c.post("/api/auth/mfa/setup", { currentPassword: "wrong-password" })).status, 400);
+    assert.equal((await c.post("/api/auth/mfa/enable", { code: "123456" })).status, 400, "enable without setup");
+
+    const setup = await c.post("/api/auth/mfa/setup", { currentPassword: STRONG_PASSWORD });
+    assert.equal(setup.status, 200, setup.text);
+    assert.match(setup.json.secret, /^[A-Z2-7]{32}$/);
+    assert.ok(setup.json.otpauthUrl.startsWith("otpauth://totp/"));
+    authenticators.set(names.mfa, { secret: setup.json.secret, lastStep: 0 });
+
+    const wrong = String((Number(totpCode(setup.json.secret, totpStep())) + 1) % 1_000_000).padStart(6, "0");
+    assert.equal((await c.post("/api/auth/mfa/enable", { code: wrong })).status, 400);
+    assert.equal((await c.get("/api/auth/mfa/status")).json.enabled, false, "a wrong code must not switch it on");
+
+    const enable = await c.post("/api/auth/mfa/enable", { code: await nextCode(names.mfa) });
+    assert.equal(enable.status, 200, enable.text);
+    recoveryCodes = enable.json.recoveryCodes;
+    assert.equal(recoveryCodes.length, 10);
+    const status = await c.get("/api/auth/mfa/status");
+    assert.deepEqual({ enabled: status.json.enabled, left: status.json.recoveryCodesRemaining }, { enabled: true, left: 10 });
+  });
+
+  test("the secret is stored encrypted and never returned", async () => {
+    const plain = authenticators.get(names.mfa)!.secret;
+    const { rows } = await pool.query(`SELECT totp_secret FROM users WHERE id = $1`, [ids.mfa]);
+    assert.ok(rows[0].totp_secret.startsWith("v1:"));
+    assert.ok(!rows[0].totp_secret.includes(plain));
+    const codeRows = await pool.query(`SELECT code_hash FROM user_recovery_codes WHERE user_id = $1`, [ids.mfa]);
+    assert.ok(codeRows.rows.every((r: any) => !recoveryCodes.includes(r.code_hash)), "recovery codes are stored hashed");
+
+    const admin = await session(names.admin);
+    const list = await admin.get("/api/admin/users");
+    const text = JSON.stringify(list.json);
+    assert.ok(!text.includes("totpSecret") && !text.includes(plain) && !text.includes("v1:"));
+    assert.equal(list.json.find((u: any) => u.id === ids.mfa).mfaEnabled, true);
+  });
+
+  test("the password alone no longer signs the account in", async () => {
+    const c = new Client();
+    const res = await c.login(names.mfa, STRONG_PASSWORD);
+    assert.equal(res.status, 200);
+    assert.deepEqual(res.json, { mfaRequired: true }, "nothing about the account is revealed before the second step");
+    assert.equal((await c.get("/api/auth/me")).status, 401);
+    assert.equal((await c.get("/api/mothers")).status, 401);
+    assert.equal((await c.put("/api/auth/me/password", { currentPassword: STRONG_PASSWORD, newPassword: "x".repeat(20) })).status, 401);
+
+    assert.equal((await c.post("/api/auth/mfa/verify", { code: "000000" })).status, 401, "wrong code");
+    const code = await nextCode(names.mfa);
+    const ok = await c.post("/api/auth/mfa/verify", { code });
+    assert.equal(ok.status, 200, ok.text);
+    assert.equal(ok.json.username, names.mfa);
+    assert.equal((await c.get("/api/mothers")).status, 200);
+
+    // The same code again, on a new sign-in: refused (single use).
+    const again = new Client();
+    await again.login(names.mfa, STRONG_PASSWORD);
+    assert.equal((await again.post("/api/auth/mfa/verify", { code })).status, 401, "a used code was accepted again");
+  });
+
+  test("the second step cannot be reached without the password step", async () => {
+    const res = await new Client().post("/api/auth/mfa/verify", { code: "123456" });
+    assert.equal(res.status, 401);
+    assert.equal(res.json.statusCode, "MFA_EXPIRED");
+  });
+
+  test("a recovery code signs in exactly once", async () => {
+    const first = new Client();
+    await first.login(names.mfa, STRONG_PASSWORD);
+    const ok = await first.post("/api/auth/mfa/verify", { code: recoveryCodes[0].toLowerCase() });
+    assert.equal(ok.status, 200, ok.text);
+    assert.equal(ok.json.recoveryCodesRemaining, 9);
+
+    const second = new Client();
+    await second.login(names.mfa, STRONG_PASSWORD);
+    assert.equal((await second.post("/api/auth/mfa/verify", { code: recoveryCodes[0] })).status, 401);
+  });
+
+  test("wrong codes lock the account like wrong passwords", async () => {
+    const c = await session(names.mfaLock);
+    await enrol(c, names.mfaLock);
+    const attacker = new Client(); // knows the password, not the code
+    await attacker.login(names.mfaLock, STRONG_PASSWORD);
+    for (let i = 0; i < 5; i++) {
+      assert.equal((await attacker.post("/api/auth/mfa/verify", { code: String(100000 + i) })).status, 401);
+    }
+    const afterLock = await new Client().login(names.mfaLock, STRONG_PASSWORD);
+    assert.equal(afterLock.status, 429);
+    assert.equal(afterLock.json.statusCode, "LOCKED");
+  });
+
+  test("an administrator can reset it for someone who lost their phone", async () => {
+    const admin = await session(names.admin);
+    assert.equal((await admin.post(`/api/admin/users/${ids.admin}/mfa/reset`)).status, 400, "not on yourself");
+    const tl = await session(names.tlA);
+    assert.equal((await tl.post(`/api/admin/users/${ids.mfaLock}/mfa/reset`)).status, 403);
+
+    const res = await admin.post(`/api/admin/users/${ids.mfaLock}/mfa/reset`);
+    assert.equal(res.status, 200, res.text);
+    const { rows } = await pool.query(
+      `SELECT totp_secret, totp_enabled_at, (SELECT count(*)::int FROM user_recovery_codes WHERE user_id = $1) AS codes FROM users WHERE id = $1`,
+      [ids.mfaLock]);
+    assert.deepEqual(rows[0], { totp_secret: null, totp_enabled_at: null, codes: 0 });
+  });
+
+  test("switching it off needs the password and a code", async () => {
+    const c = new Client();
+    await c.login(names.mfa, STRONG_PASSWORD);
+    assert.equal((await c.post("/api/auth/mfa/verify", { code: recoveryCodes[1] })).status, 200);
+
+    assert.equal((await c.post("/api/auth/mfa/disable", { currentPassword: "wrong", code: recoveryCodes[2] })).status, 400);
+    assert.equal((await c.post("/api/auth/mfa/disable", { currentPassword: STRONG_PASSWORD, code: "000000" })).status, 400);
+    assert.equal((await c.get("/api/auth/mfa/status")).json.enabled, true);
+
+    const off = await c.post("/api/auth/mfa/disable", { currentPassword: STRONG_PASSWORD, code: recoveryCodes[3] });
+    assert.equal(off.status, 200, off.text);
+    const plain = await new Client().login(names.mfa, STRONG_PASSWORD);
+    assert.equal(plain.json.username, names.mfa, "password alone signs in again once it is off");
+  });
+
+  test("a brand-new admin can get through password change AND two-step setup", async (t) => {
+    // Owes both at once. Each requirement must leave the other reachable.
+    const username = `sec_fresh_admin_${RUN}`;
+    ids.freshAdmin = await createUser(username, "SYSTEM_ADMIN", { mustChange: true });
+    const c = new Client();
+    const login = await c.login(username, STRONG_PASSWORD);
+    assert.equal(login.json.mustChangePassword, true);
+
+    const early = await c.post("/api/auth/mfa/setup", { currentPassword: STRONG_PASSWORD });
+    assert.equal(early.json.code, "PASSWORD_CHANGE_REQUIRED", "password comes first");
+
+    const newPassword = "a-fresh-admin-passphrase-58";
+    const changed = await c.put("/api/auth/me/password", { currentPassword: STRONG_PASSWORD, newPassword });
+    assert.equal(changed.status, 200, `password change was blocked: ${changed.text}`);
+
+    const me = await c.get("/api/auth/me");
+    assert.equal(me.json.mustChangePassword, false);
+    if (!me.json.mustEnrollMfa) {
+      t.skip("server is running with MFA_REQUIRED_ROLES=none");
+      return;
+    }
+    assert.equal((await c.get("/api/admin/users")).json.code, "MFA_ENROLLMENT_REQUIRED");
+    await enrol(c, username, newPassword);
+    assert.equal((await c.get("/api/admin/users")).status, 200);
+  });
+
+  test("roles that require it cannot work, or switch it off, without it", async (t) => {
+    const c = new Client();
+    const login = await c.login(names.mfaAdmin, STRONG_PASSWORD);
+    assert.equal(login.status, 200, login.text);
+    if (!login.json.mustEnrollMfa) {
+      t.skip("server is running with MFA_REQUIRED_ROLES=none");
+      return;
+    }
+    const blocked = await c.get("/api/admin/users");
+    assert.equal(blocked.status, 403);
+    assert.equal(blocked.json.code, "MFA_ENROLLMENT_REQUIRED");
+    assert.equal((await c.get("/api/mothers")).status, 403);
+
+    await enrol(c, names.mfaAdmin);
+    assert.equal((await c.get("/api/admin/users")).status, 200, "works once enrolled");
+    const off = await c.post("/api/auth/mfa/disable", { currentPassword: STRONG_PASSWORD, code: await nextCode(names.mfaAdmin) });
+    assert.equal(off.status, 403, "a required role switched two-step sign-in off");
+  });
+});
+
 // --- 4. administration -----------------------------------------------------------
 
 describe("user administration", () => {
@@ -699,7 +924,7 @@ describe("user administration", () => {
     const res = await admin.get("/api/admin/audit-logs?limit=500");
     assert.equal(res.status, 200);
     const actions = new Set(res.json.map((l: any) => l.action));
-    for (const expected of ["LOGIN", "LOGIN_FAILED", "ACCOUNT_LOCKED", "PASSWORD_RESET", "LOGIN_BLOCKED_DEFAULT_PASSWORD"]) {
+    for (const expected of ["LOGIN", "LOGIN_FAILED", "ACCOUNT_LOCKED", "PASSWORD_RESET", "LOGIN_BLOCKED_DEFAULT_PASSWORD", "MFA_ENABLED", "MFA_FAILED", "MFA_RESET", "MFA_RECOVERY_CODE_USED"]) {
       assert.ok(actions.has(expected), `no ${expected} entry in the audit log`);
     }
     assert.ok(!JSON.stringify(res.json).includes("$2b$"), "a password hash appeared in the audit log");

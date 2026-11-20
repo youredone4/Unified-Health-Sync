@@ -11,6 +11,14 @@ declare module "express-session" {
     userId?: string;
     /** Epoch ms when this session was created at login (absolute timeout). */
     createdAt?: number;
+    /**
+     * Password accepted, second step still owed. Such a session is NOT
+     * logged in: `userId` is only set once the code has been verified.
+     */
+    pendingMfaUserId?: string;
+    pendingMfaAt?: number;
+    /** Encrypted secret of a two-step enrolment that is not confirmed yet. */
+    mfaSetupSecret?: string;
   }
 }
 
@@ -28,6 +36,10 @@ declare global {
         status: string;
         assignedBarangays: string[];
         mustChangePassword: boolean;
+        /** Two-step sign-in is switched on for this account. */
+        mfaEnabled: boolean;
+        /** Their role requires two-step sign-in and they have not set it up. */
+        mustEnrollMfa: boolean;
       };
     }
   }
@@ -107,6 +119,8 @@ export const loadUserInfo: RequestHandler = async (req, res, next) => {
       status: dbUser.status,
       assignedBarangays,
       mustChangePassword: dbUser.mustChangePassword,
+      mfaEnabled: !!dbUser.totpEnabledAt,
+      mustEnrollMfa: !dbUser.totpEnabledAt && config.MFA_REQUIRED_ROLES.includes(dbUser.role),
     };
 
     next();
@@ -133,6 +147,18 @@ const PUBLIC_ROUTES: ReadonlySet<string> = new Set([
   "GET /api/auth/me",
   // LGU name + brand colours for the login screen. No personal data.
   "GET /api/theme-settings",
+  // Second step of sign-in. The caller has no session yet, only proof that
+  // the password was right (session.pendingMfaUserId).
+  "POST /api/auth/mfa/verify",
+]);
+
+/** While two-step enrolment is owed, only these are allowed. */
+const MFA_ENROLL_ROUTES: ReadonlySet<string> = new Set([
+  "GET /api/auth/me",
+  "POST /api/auth/logout",
+  "GET /api/theme-settings",
+  "POST /api/auth/mfa/setup",
+  "POST /api/auth/mfa/enable",
 ]);
 
 /** While a password change is pending, only these are allowed. */
@@ -174,10 +200,24 @@ export const apiGate: RequestHandler = (req, res, next) => {
     return res.status(401).json({ message: "Unauthorized" });
   }
 
-  if (user.mustChangePassword && !PASSWORD_CHANGE_ROUTES.has(key)) {
+  // The two "you owe us something first" states are handled in order:
+  // password, then two-step sign-in. A new administrator owes both, and
+  // each state's allow-list must not be blocked by the other's check, or
+  // the account could never get out of either.
+  if (user.mustChangePassword) {
+    if (!PASSWORD_CHANGE_ROUTES.has(key)) {
+      return res.status(403).json({
+        message: "You must change your password before continuing.",
+        code: "PASSWORD_CHANGE_REQUIRED",
+      });
+    }
+    return next();
+  }
+
+  if (user.mustEnrollMfa && !MFA_ENROLL_ROUTES.has(key)) {
     return res.status(403).json({
-      message: "You must change your password before continuing.",
-      code: "PASSWORD_CHANGE_REQUIRED",
+      message: "You must set up two-step sign-in before continuing.",
+      code: "MFA_ENROLLMENT_REQUIRED",
     });
   }
 
