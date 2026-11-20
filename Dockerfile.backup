@@ -1,0 +1,11 @@
+# Backup sidecar: the PostgreSQL client tools (same major version as the
+# database, so pg_dump matches) plus GnuPG for encryption.
+FROM postgres:16-alpine
+RUN apk add --no-cache gnupg
+COPY scripts/backup.sh scripts/restore.sh scripts/backup-daemon.sh /scripts/
+RUN chmod 755 /scripts/*.sh \
+ && mkdir -p /backups && chown postgres:postgres /backups && chmod 700 /backups
+VOLUME /backups
+# The official image's `postgres` user (uid 70); backups never need root.
+USER postgres
+ENTRYPOINT ["/scripts/backup-daemon.sh"]
