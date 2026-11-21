@@ -207,6 +207,11 @@ ALLOW_TEST_RESET=true npm run test:security
 
 # no server needed: TOTP against the RFC 6238 test vectors
 npm run test:unit
+
+# database migrations: a fresh database and one restored from Replit must
+# end up identical (needs a THROWAWAY PostgreSQL server; creates and drops
+# its own scratch databases)
+ALLOW_TEST_RESET=true npm run test:migrate
 ```
 
 Run it before every release. A new route without an access check fails
