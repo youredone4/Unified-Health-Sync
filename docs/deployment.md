@@ -97,7 +97,7 @@ Until then, run with demo data only (`SEED_DEMO_DATA=true`).
 5. Check that it is healthy:
 
    ```bash
-   docker compose ps                 # all three should be "running" / "healthy"
+   docker compose ps                 # all four should be "running" / "healthy"
    docker compose logs -f app        # Ctrl+C to stop watching
    ```
 
@@ -124,6 +124,12 @@ Skip this section for a fresh, empty system.
    pg_dump "$DATABASE_URL" --no-owner --no-privileges -Fc -f healthsync.dump
    ```
 
+   While you are there, note the database version: `psql "$DATABASE_URL" -c "select version()"`.
+   HealthSync ships with PostgreSQL 16. If Replit reports 17 or newer, change
+   `postgres:16-alpine` to the matching version in **both** `docker-compose.yml`
+   and `Dockerfile.backup` before step 2 (a newer dump cannot be loaded into
+   an older PostgreSQL; `pg_restore` stops with "unsupported version").
+
    Download `healthsync.dump` and copy it to the server, into the
    `healthsync` folder. This file contains everything in the database —
    treat it like the database itself and delete stray copies afterwards.
@@ -138,11 +144,19 @@ Skip this section for a fresh, empty system.
      < healthsync.dump
    ```
 
-3. Tell the migration system that these tables already exist (once only):
+3. Adopt the restored database (once only). This records the tables that
+   came from Replit as the starting point, adds everything this version
+   needs on top (account lock-out, two-step sign-in, ...) and then checks
+   the result table by table:
 
    ```bash
    docker compose run --rm app node dist/migrate.cjs --baseline
    ```
+
+   It must end with `Database is up to date.` If it instead lists tables or
+   columns that are missing, the Replit database was older than the code
+   that ran against it: stop here, keep the list, and get it fixed before
+   anyone uses the system. Your patient records are untouched either way.
 
 4. Start the rest:
 
@@ -192,7 +206,12 @@ docker compose up -d --build
 
 Database changes are applied automatically at startup. If a migration fails,
 the app container stops rather than run against a half-updated database;
-`docker compose logs app` shows why.
+`docker compose logs app` shows why. To compare the database with what the
+running version expects at any time, without changing anything:
+
+```bash
+docker compose exec app node dist/migrate.cjs --check
+```
 
 **Logs**
 
