@@ -1,3 +1,4 @@
+import { todayManila } from "@shared/dates";
 import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -61,7 +62,7 @@ type MotherFormValues = z.infer<typeof motherFormSchema>;
 const DEFAULT_VALUES: MotherFormValues = {
   firstName: "", lastName: "", age: 0,
   barangay: "", addressLine: "", phone: "",
-  registrationDate: new Date().toISOString().split("T")[0],
+  registrationDate: todayManila(),
   gaWeeks: 0,
   expectedDeliveryDate: "", nextPrenatalCheckDate: "",
   ancVisits: 0, bmiStatus: "",
@@ -302,7 +303,7 @@ export default function MotherForm() {
 function normalizeForApi(data: MotherFormValues, existing?: Mother) {
   // Stamp SMS consent dates whenever the flag flips. Preserve existing
   // dates when the toggle doesn't change so re-saves don't reset audit.
-  const today = new Date().toISOString().split("T")[0];
+  const today = todayManila();
   const prevOptIn = existing?.smsOptIn;
   const smsOptInDate = data.smsOptIn && !prevOptIn
     ? today

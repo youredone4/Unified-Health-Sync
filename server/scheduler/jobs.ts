@@ -11,6 +11,7 @@
  * dedup is the consumer's job.
  */
 
+import { todayManila, daysAgoManila, daysFromNowManila, isoWeekBounds } from "@shared/dates";
 import { db } from "../db";
 import { sql, eq } from "drizzle-orm";
 import { scrapeCaragaDoh } from "./scrape-caraga-doh";
@@ -40,12 +41,10 @@ const SYSTEM_ROLE = "SYSTEM";
 
 // Helper: convert YYYY-MM-DD strings to Date for arithmetic.
 const today = () => new Date();
-const todayIso = () => today().toISOString().slice(0, 10);
-const daysFromNowIso = (days: number) => {
-  const d = today();
-  d.setDate(d.getDate() + days);
-  return d.toISOString().slice(0, 10);
-};
+// Calendar dates are Philippine dates. These jobs run in the early morning
+// Manila time, when the UTC date is still the day before.
+const todayIso = () => todayManila();
+const daysFromNowIso = (days: number) => daysFromNowManila(days);
 
 interface AlertFinding {
   entityType: string;
@@ -155,14 +154,16 @@ async function checkTbDefaulters(): Promise<AlertFinding[]> {
 
 /** M1 deadline: it's after the 5th of a month and last month's M1 isn't SUBMITTED_LOCKED. */
 async function checkM1Deadlines(): Promise<AlertFinding[]> {
-  const now = today();
+  // Philippine calendar date. This job runs at 6 AM Manila, when the UTC
+  // date is still the day before; reading the day and month from UTC made
+  // the reminder start a day late and, on the 1st, look at the wrong month.
+  const [year, month, dayOfMonth] = todayManila().split("-").map(Number);
   // Only fire after the 5th of a given month — DOH submission deadline
   // is typically the 5th of the following month. Daily reminders after
   // that escalate in severity via the existing alert framework.
-  if (now.getDate() <= 5) return [];
-  const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-  const targetYear = lastMonth.getFullYear();
-  const targetMonth = lastMonth.getMonth() + 1;
+  if (dayOfMonth <= 5) return [];
+  const targetYear = month === 1 ? year - 1 : year;
+  const targetMonth = month === 1 ? 12 : month - 1;
   const ym = `${targetYear}-${String(targetMonth).padStart(2, "0")}`;
 
   // 1 — instances that exist but aren't locked yet (TL hasn't submitted
@@ -208,14 +209,7 @@ async function checkM1Deadlines(): Promise<AlertFinding[]> {
 /** Friday Cat-II PIDSR: reminder if no submission for the current ISO week. */
 async function checkPidsrFridayCutoff(): Promise<AlertFinding[]> {
   // ISO-week boundary: get this week's Monday.
-  const now = today();
-  const day = now.getDay(); // 0=Sun, 5=Fri
-  const monday = new Date(now);
-  monday.setDate(now.getDate() - ((day + 6) % 7));
-  const weekStart = monday.toISOString().slice(0, 10);
-  const weekEnd = new Date(monday);
-  weekEnd.setDate(monday.getDate() + 6);
-  const weekEndIso = weekEnd.toISOString().slice(0, 10);
+  const { monday: weekStart, sunday: weekEndIso } = isoWeekBounds(todayManila());
   const submissions = await db
     .select()
     .from(pidsrSubmissions)
@@ -296,9 +290,7 @@ function caseMatchesCondition(row: any, target: string): boolean {
 
 /** Pull every disease case reported in the last `lookbackDays` days. */
 async function getRecentCases(lookbackDays: number) {
-  const cutoff = new Date();
-  cutoff.setDate(cutoff.getDate() - lookbackDays);
-  const cutoffIso = cutoff.toISOString().slice(0, 10);
+  const cutoffIso = daysAgoManila(lookbackDays);
   return await db
     .select()
     .from(diseaseCases)
@@ -435,11 +427,8 @@ async function checkDeathReviewDeadlines(): Promise<AlertFinding[]> {
  * Stops alerting once reportedToChd flips true.
  */
 async function checkAefiReportSlas(): Promise<AlertFinding[]> {
-  const now = today();
-  const oneDayAgo = new Date(now); oneDayAgo.setDate(now.getDate() - 1);
-  const sevenDaysAgo = new Date(now); sevenDaysAgo.setDate(now.getDate() - 7);
-  const oneDayAgoIso = oneDayAgo.toISOString().slice(0, 10);
-  const sevenDaysAgoIso = sevenDaysAgo.toISOString().slice(0, 10);
+  const oneDayAgoIso = daysAgoManila(1);
+  const sevenDaysAgoIso = daysAgoManila(7);
   const open = await db
     .select()
     .from(aefiEvents)
@@ -491,9 +480,7 @@ const AEFI_VPD_THRESHOLD = 3;
 async function checkAefiClusters(): Promise<AlertFinding[]> {
   const findings: AlertFinding[] = [];
   const longestWindow = Math.max(AEFI_LOT_WINDOW_DAYS, AEFI_VPD_WINDOW_DAYS);
-  const cutoff = new Date();
-  cutoff.setDate(cutoff.getDate() - longestWindow);
-  const cutoffIso = cutoff.toISOString().slice(0, 10);
+  const cutoffIso = daysAgoManila(longestWindow);
 
   // Lot cluster — join AEFI → vaccinations → medicine_inventory.
   // status != 'CLOSED' so investigated/closed clusters don't re-fire.

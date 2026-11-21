@@ -1,3 +1,4 @@
+import { todayManila } from "@shared/dates";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import type { Child, NutritionFollowUp } from "@shared/schema";
@@ -38,7 +39,7 @@ export default function NutritionWorklist() {
     enabled: atRiskIds.length > 0,
   });
 
-  const todayStr = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  const todayStr = useMemo(() => todayManila(), []);
   const isOverdue = (c: Child) => {
     const latest = latestByChild[c.id];
     if (!latest) return true;             // no follow-up ever recorded → overdue

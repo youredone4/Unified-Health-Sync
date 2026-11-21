@@ -1,3 +1,4 @@
+import { todayManila } from "@shared/dates";
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -236,7 +237,7 @@ function SeniorVisitRow({ visit }: { visit: SeniorVisit }) {
 type FormState = Record<string, string>;
 
 function emptyForm(profileType: ProfileType, prev: AnyVisit | null): FormState {
-  const today = new Date().toISOString().split("T")[0];
+  const today = todayManila();
   if (profileType === "Mother") {
     const p = prev as PrenatalVisit | null;
     return {

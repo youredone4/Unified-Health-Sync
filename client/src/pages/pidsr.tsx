@@ -1,3 +1,4 @@
+import { manilaDate, isoWeekBounds as sharedIsoWeekBounds } from "@shared/dates";
 import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
@@ -61,16 +62,11 @@ type SubmitValues = z.infer<typeof submitSchema>;
 
 // ISO-week boundaries for the week containing `date`.
 function isoWeekBounds(date: Date): { monday: string; friday: string } {
-  const d = new Date(date);
-  const day = d.getDay(); // 0 = Sun, 1 = Mon, ..., 5 = Fri
-  const monday = new Date(d);
-  monday.setDate(d.getDate() - ((day + 6) % 7));
-  const friday = new Date(monday);
-  friday.setDate(monday.getDate() + 4);
-  return {
-    monday: monday.toISOString().slice(0, 10),
-    friday: friday.toISOString().slice(0, 10),
-  };
+  // Worked out on the Philippine calendar. The previous version mixed the
+  // browser's local day-of-week with a UTC date, which put the week's
+  // Monday on Sunday for anyone working before 8 AM.
+  const { monday, friday } = sharedIsoWeekBounds(manilaDate(date));
+  return { monday, friday };
 }
 
 export default function PidsrPage() {

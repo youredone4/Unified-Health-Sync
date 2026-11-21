@@ -1,3 +1,4 @@
+import { todayManila } from "@shared/dates";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -54,7 +55,7 @@ export default function TBForm() {
       phone: "",
       tbType: "Pulmonary",
       treatmentPhase: "Intensive",
-      treatmentStartDate: new Date().toISOString().split('T')[0],
+      treatmentStartDate: todayManila(),
       medsRegimenName: "",
       outcomeStatus: "Ongoing",
       smsOptIn: false,
@@ -113,7 +114,7 @@ export default function TBForm() {
   const onSubmit = (data: FormValues) => {
     // Stamp consent dates whenever the opt-in flag flips. Existing
     // dates are preserved on submit when the toggle doesn't change.
-    const today = new Date().toISOString().split('T')[0];
+    const today = todayManila();
     const prevOptIn = tbPatient?.smsOptIn;
     const payload = {
       ...data,

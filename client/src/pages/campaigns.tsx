@@ -1,3 +1,4 @@
+import { todayManila } from "@shared/dates";
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
@@ -203,7 +204,7 @@ function NewCampaignDialog({
   onCreated: () => void;
 }) {
   const { toast } = useToast();
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayManila();
   const [tallies, setTallies] = useState<Record<string, string>>({});
 
   const form = useForm<NewCampaignValues>({

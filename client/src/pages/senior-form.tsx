@@ -1,3 +1,4 @@
+import { todayManila } from "@shared/dates";
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation, useParams } from "wouter";
@@ -110,7 +111,7 @@ export default function SeniorForm() {
 
     // Stamp SMS consent dates on flip. Preserves existing audit when
     // toggle state doesn't change.
-    const today = new Date().toISOString().split("T")[0];
+    const today = todayManila();
     const prevOptIn = existingSenior?.smsOptIn;
     const smsOptInDate = formData.smsOptIn && !prevOptIn
       ? today

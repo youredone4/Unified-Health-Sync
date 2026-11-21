@@ -1,3 +1,4 @@
+import { todayManila } from "@shared/dates";
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
@@ -235,7 +236,7 @@ function LogScreeningDialog({
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      screeningDate: new Date().toISOString().slice(0, 10),
+      screeningDate: todayManila(),
       hepBScreened: false,
       hepBPositive: false,
       anemiaScreened: false,

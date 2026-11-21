@@ -1,8 +1,11 @@
+import { todayManila } from "@shared/dates";
 import { differenceInDays, parseISO, addDays, format, getDay, getDate, endOfMonth, addMonths, startOfMonth } from 'date-fns';
 import type { Mother, Child, Senior, InventoryItem, DiseaseCase, TBPatient } from '@shared/schema';
 
 export const TODAY = new Date();
-export const TODAY_STR = TODAY.toISOString().split('T')[0];
+// The Philippine calendar date, not the UTC one (which is still "yesterday"
+// until 8 AM). See shared/dates.ts.
+export const TODAY_STR = todayManila();
 
 export type StatusType = 'overdue' | 'due_soon' | 'upcoming' | 'completed' | 'available';
 

@@ -12,7 +12,7 @@
     "db:migrate": "tsx script/migrate.ts",
     "admin": "tsx script/admin.ts",
     "test:security": "tsx --test tests/security.test.ts",
-    "test:unit": "tsx --test tests/totp.test.ts",
+    "test:unit": "tsx --test tests/totp.test.ts tests/dates.test.ts",
     "db:push": "drizzle-kit push",
     "manual:pdf": "tsx script/build-manual-pdf.ts"
   },

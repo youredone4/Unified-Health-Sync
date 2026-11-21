@@ -1,3 +1,4 @@
+import { todayManila } from "@shared/dates";
 import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
@@ -180,7 +181,7 @@ function NewCertDialog({
   onCreated: () => void;
 }) {
   const { toast } = useToast();
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayManila();
 
   const form = useForm<NewCertValues>({
     resolver: zodResolver(newCertSchema),

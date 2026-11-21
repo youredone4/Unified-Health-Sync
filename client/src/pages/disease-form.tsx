@@ -1,3 +1,4 @@
+import { todayManila } from "@shared/dates";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -72,7 +73,7 @@ export default function DiseaseForm() {
       addressLine: "",
       phone: "",
       condition: "",
-      dateReported: new Date().toISOString().split('T')[0],
+      dateReported: todayManila(),
       status: "New",
       notes: "",
       linkedPersonType: undefined,

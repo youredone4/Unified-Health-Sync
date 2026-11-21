@@ -19,6 +19,7 @@
  * recommendation card always renders the rule-based bullets.
  */
 
+import { addDays, manilaDate } from "@shared/dates";
 import { db } from "./db";
 import { getOpenAI, OPENAI_MODEL } from "./openai-client";
 import { rabiesExposures } from "@shared/schema";
@@ -125,9 +126,7 @@ export async function getClusterHint(args: {
 
   const today = args.today ?? new Date();
   const windowDays = 7;
-  const since = new Date(today);
-  since.setDate(since.getDate() - windowDays);
-  const sinceISO = since.toISOString().slice(0, 10);
+  const sinceISO = addDays(manilaDate(today), -windowDays);
 
   try {
     const rows = await db

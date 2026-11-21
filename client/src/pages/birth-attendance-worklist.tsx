@@ -1,3 +1,4 @@
+import { todayManila, daysAgoManila } from "@shared/dates";
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
@@ -58,9 +59,7 @@ export default function BirthAttendanceWorklist() {
   });
 
   const recent = useMemo(() => {
-    const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - LOOKBACK_DAYS);
-    const cutoffStr = cutoff.toISOString().slice(0, 10);
+    const cutoffStr = daysAgoManila(LOOKBACK_DAYS);
     const q = search.trim().toLowerCase();
     return mothers
       .filter((m) => m.outcomeDate && m.outcomeDate >= cutoffStr)
@@ -246,7 +245,7 @@ function LogDeliveryDialog({
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      deliveryDate: mother.outcomeDate ?? new Date().toISOString().slice(0, 10),
+      deliveryDate: mother.outcomeDate ?? todayManila(),
       deliveryType: "VAGINAL",
       deliveryTerm: "FULL_TERM",
       notes: "",

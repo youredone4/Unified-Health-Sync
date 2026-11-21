@@ -1,3 +1,4 @@
+import { addDays } from "@shared/dates";
 import { config } from "./config";
 import { db } from "./db";
 import { 
@@ -547,9 +548,7 @@ export class DatabaseStorage implements IStorage {
     // Mothers in this barangay who delivered in the last ~6 weeks (42 days
     // window, padded by 7 to catch the 6W checkpoint and any near-misses).
     const lookbackDays = 49;
-    const minOutcomeDate = new Date(today);
-    minOutcomeDate.setDate(minOutcomeDate.getDate() - lookbackDays);
-    const minOutcomeStr = minOutcomeDate.toISOString().slice(0, 10);
+    const minOutcomeStr = addDays(today, -lookbackDays);
 
     const candidates = await db
       .select()

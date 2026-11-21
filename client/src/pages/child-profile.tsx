@@ -1,3 +1,4 @@
+import { todayManila } from "@shared/dates";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useParams, useLocation } from "wouter";
 import type { Child, Mother, ChildVisit } from "@shared/schema";
@@ -155,7 +156,7 @@ export default function ChildProfile() {
 
   const handleMarkVaccine = () => {
     if (vax.nextVaccine) {
-      const today = new Date().toISOString().split("T")[0];
+      const today = todayManila();
       const updatedVaccines = { ...child.vaccines, [vax.nextVaccine]: today };
       const newVaxStatus = getNextVaccineStatus({ ...child, vaccines: updatedVaccines });
       updateMutation.mutate({

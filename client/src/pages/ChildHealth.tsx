@@ -1,3 +1,4 @@
+import { todayManila } from "@shared/dates";
 import { useState } from "react";
 import { Layout } from "@/components/Layout";
 import { KPICard } from "@/components/KPICard";
@@ -33,7 +34,7 @@ export default function ChildHealth() {
   const handleUpdate = async (vaccineKey: string) => {
     if (!selectedChild) return;
     
-    const today = new Date().toISOString().split('T')[0];
+    const today = todayManila();
     const newVaccines = { ...selectedChild.vaccines, [vaccineKey]: today };
     
     try {

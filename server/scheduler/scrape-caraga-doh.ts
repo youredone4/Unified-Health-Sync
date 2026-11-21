@@ -19,6 +19,7 @@
  * upgrade significance / add tags after the fact.
  */
 
+import { todayManila } from "@shared/dates";
 import * as cheerio from "cheerio";
 import { db } from "../db";
 import { dohUpdates } from "@shared/schema";
@@ -77,7 +78,7 @@ function absoluteUrl(href: string): string {
  */
 export function extractItems(html: string): ScrapedItem[] {
   const $ = cheerio.load(html);
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayManila();
 
   for (const selector of ITEM_SELECTORS) {
     const nodes = $(selector);

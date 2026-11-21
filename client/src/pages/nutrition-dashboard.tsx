@@ -1,3 +1,4 @@
+import { daysAgoManila, monthStartOf, todayManila } from "@shared/dates";
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
@@ -130,11 +131,8 @@ export default function NutritionDashboard() {
 // ─── PIMAM / OPT-Plus follow-up metrics ──────────────────────────────────
 
 function PimamOutcomes({ followUps }: { followUps: NutritionFollowUp[] }) {
-  const now = new Date();
-  const ninetyDaysAgo = new Date(now);
-  ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
-  const ninetyStr = ninetyDaysAgo.toISOString().slice(0, 10);
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
+  const ninetyStr = daysAgoManila(90);
+  const monthStart = monthStartOf(todayManila());
 
   const latestByChild = new Map<number, NutritionFollowUp>();
   for (const f of [...followUps].sort((a, b) => b.followUpDate.localeCompare(a.followUpDate))) {
