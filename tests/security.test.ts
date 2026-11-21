@@ -315,6 +315,7 @@ after(async () => {
   await pool.query(`DELETE FROM rabies_exposures WHERE patient_name = $1`, [TAG]);
   await pool.query(`DELETE FROM sms_outbox WHERE recipient = $1`, [TAG]);
   await pool.query(`DELETE FROM consults WHERE patient_name = $1`, [TAG]);
+  await pool.query(`DELETE FROM medical_certificates WHERE patient_name LIKE $1`, [`${TAG}%`]);
   await pool.query(`DELETE FROM users WHERE username LIKE $1`, [`sec\\_%\\_${RUN}%`]);
   await pool.query(`DELETE FROM audit_logs WHERE user_id = ANY($1) OR entity_id = ANY($1)`, [userIds]);
   await pool.end();
@@ -566,6 +567,33 @@ describe("authorisation follows the record, not the request", () => {
     const self = await tlA.get(`/api/senior-med-claims/check-eligibility/SEC-A-${RUN}`);
     assert.equal(self.json.eligible, false);
     assert.ok(!("lastClaim" in self.json), "eligibility check returned the full claim row");
+  });
+
+  test("a certificate can only name a real physician account as its signer", async () => {
+    const cert = {
+      certType: "SCHOOL", patientName: `${TAG} Cert`, barangay: BARANGAY_A,
+      issueDate: "2031-01-15", purpose: "security test",
+    };
+    const signers = await tlA.get("/api/certificates/signers");
+    assert.equal(signers.status, 200);
+    assert.ok(signers.json.some((s: any) => s.id === ids.mho), "the MHO account is offered as a signer");
+    assert.ok(!signers.json.some((s: any) => s.id === ids.tlA), "a nurse is not offered as a signer");
+
+    // The old hole: type any name you like.
+    const typed = await tlA.post("/api/certificates", { ...cert, signedByName: "Dr. Somebody Important" });
+    assert.equal(typed.status, 400, "a certificate was issued with a typed-in signer name");
+    const selfSigned = await tlA.post("/api/certificates", { ...cert, signedByUserId: ids.tlA });
+    assert.equal(selfSigned.status, 400, "a nurse named themselves as the signing physician");
+
+    const ok = await tlA.post("/api/certificates", { ...cert, signedByUserId: ids.mho, signedByName: "Dr. Forged Name" });
+    assert.equal(ok.status, 201, ok.text);
+    assert.equal(ok.json.signedByUserId, ids.mho);
+    assert.equal(ok.json.signedByName, "Security Test", "the printed name comes from the signer's account");
+    assert.equal(ok.json.encodedByUserId, ids.tlA, "who typed it in is recorded");
+
+    const pdf = await tlA.get(`/api/certificates/${ok.json.id}/pdf`);
+    assert.equal(pdf.status, 200);
+    assert.match(pdf.headers.get("content-type") ?? "", /application\/pdf/);
   });
 
   test("plain-language summaries are only generated for real rules", async () => {

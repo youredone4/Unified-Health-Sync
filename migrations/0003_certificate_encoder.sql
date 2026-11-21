@@ -1,0 +1,1 @@
+ALTER TABLE "medical_certificates" ADD COLUMN "encoded_by_user_id" varchar;

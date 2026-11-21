@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -72,7 +72,9 @@ const newCertSchema = z.object({
   validUntil:   z.string().optional().or(z.literal("")),
   purpose:      z.string().max(300).optional().or(z.literal("")),
   findings:     z.string().max(500).optional().or(z.literal("")),
-  signedByName: z.string().min(1, "Signer name is required"),
+  // The signing physician is picked from the MHO accounts; the printed
+  // name comes from that account, not from anything typed here.
+  signedByUserId: z.string().min(1, "Choose the physician who will sign"),
   signedByTitle: z.string().max(60).optional().or(z.literal("")),
   notes:        z.string().max(500).optional().or(z.literal("")),
   // Cross-domain linkage — populated by <PatientSearchCombobox> when the
@@ -128,7 +130,6 @@ export default function CertificatesPage() {
         open={open}
         onOpenChange={setOpen}
         defaultBarangay={selectedBarangay || (user?.assignedBarangays?.[0]) || ""}
-        defaultSignerName={[user?.firstName, user?.lastName].filter(Boolean).join(" ") || ""}
         onCreated={() => {
           queryClient.invalidateQueries({ queryKey: ["/api/certificates"] });
           setOpen(false);
@@ -171,12 +172,11 @@ function CertRow({ item }: { item: MedicalCertificate }) {
 }
 
 function NewCertDialog({
-  open, onOpenChange, defaultBarangay, defaultSignerName, onCreated,
+  open, onOpenChange, defaultBarangay, onCreated,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   defaultBarangay: string;
-  defaultSignerName: string;
   onCreated: () => void;
 }) {
   const { toast } = useToast();
@@ -192,12 +192,24 @@ function NewCertDialog({
       addressLine: "",
       issueDate: today, validUntil: "",
       purpose: "", findings: "",
-      signedByName: defaultSignerName, signedByTitle: "RHU Nurse",
+      signedByUserId: "", signedByTitle: "Municipal Health Officer",
       notes: "",
       linkedPersonType: null,
       linkedPersonId: null,
     },
   });
+
+  const { data: signers = [] } = useQuery<{ id: string; name: string }[]>({
+    queryKey: ["/api/certificates/signers"],
+    enabled: open,
+  });
+
+  // With a single physician there is nothing to choose.
+  useEffect(() => {
+    if (signers.length === 1 && !form.getValues("signedByUserId")) {
+      form.setValue("signedByUserId", signers[0].id);
+    }
+  }, [signers, form]);
 
   const create = useMutation({
     mutationFn: async (data: NewCertValues) =>
@@ -300,8 +312,26 @@ function NewCertDialog({
               <FormField control={form.control} name="findings" render={({ field }) => (
                 <FormItem className="col-span-2"><FormLabel>Clinical findings</FormLabel><FormControl><Textarea rows={2} {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>
               )} />
-              <FormField control={form.control} name="signedByName" render={({ field }) => (
-                <FormItem><FormLabel>Signed by *</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+              <FormField control={form.control} name="signedByUserId" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Physician who will sign *</FormLabel>
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <FormControl>
+                      <SelectTrigger data-testid="select-cert-signer">
+                        <SelectValue placeholder={signers.length ? "Choose a physician" : "No physician accounts yet"} />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {signers.map((s) => (<SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>))}
+                    </SelectContent>
+                  </Select>
+                  {signers.length === 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      Ask your System Administrator to create an account for the Municipal Health Officer.
+                    </p>
+                  )}
+                  <FormMessage />
+                </FormItem>
               )} />
               <FormField control={form.control} name="signedByTitle" render={({ field }) => (
                 <FormItem><FormLabel>Title</FormLabel><FormControl><Input {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>
