@@ -111,6 +111,41 @@ export async function registerRoutes(
   const tlBlocked = (req: { userInfo?: Express.Request["userInfo"] }, barangay: string | null | undefined): boolean =>
     !canAccessBarangay(req.userInfo, barangay);
   const BARANGAY_DENIED = { message: "Access denied to this barangay" };
+
+  // WHO SEES WHAT
+  //   Barangay nurses (TL) see and edit only their assigned barangays. This
+  //   holds for every kind of data, stock and staff lists included.
+  //   Municipality-wide: System Admin, MHO and SHA (the Municipal Health
+  //   Center's own staff), plus the view-only Mayor / Health Committee.
+  //   A nurse who works AT the health center and needs the whole
+  //   municipality is given every barangay in Admin > Users.
+  const MUNICIPAL_ONLY = { message: "This view covers the whole municipality and is not available to barangay accounts." };
+
+  /**
+   * The rows a requester may see. Everything for municipality-wide roles;
+   * for a TL only rows in their assigned barangays, optionally narrowed to
+   * one. Returns null when a TL names a barangay that is not theirs (send
+   * 403). A row with no barangay is municipal-level and hidden from TLs.
+   */
+  function visibleRows<T extends { barangay: string | null }>(
+    rows: T[],
+    req: { userInfo?: Express.Request["userInfo"] },
+    explicitBarangay?: string,
+  ): T[] | null {
+    const user = req.userInfo;
+    if (!user) return [];
+    if (user.role === UserRole.TL) {
+      if (explicitBarangay && !user.assignedBarangays.includes(explicitBarangay)) return null;
+      const allowed = explicitBarangay ? [explicitBarangay] : user.assignedBarangays;
+      return rows.filter((r) => !!r.barangay && allowed.includes(r.barangay));
+    }
+    return explicitBarangay ? rows.filter((r) => r.barangay === explicitBarangay) : rows;
+  }
+  const queryBarangay = (req: { query: Record<string, unknown> }) =>
+    typeof req.query.barangay === "string" && req.query.barangay ? req.query.barangay : undefined;
+  // For views that only make sense municipality-wide.
+  const municipalOnly = (req: any, res: any, next: any) =>
+    req.userInfo?.role === UserRole.TL ? res.status(403).json(MUNICIPAL_ONLY) : next();
   // Upper bound for ?motherIds= / ?childIds= style batch lookups.
   const MAX_BATCH_IDS = 200;
   // Per-user limiter for endpoints that write audit rows or call the LLM
@@ -467,10 +502,16 @@ export async function registerRoutes(
       const { seniorUniqueId } = req.params;
       const result = await storage.checkSeniorEligibility(seniorUniqueId);
       // The yes/no (and why) is all another barangay needs; the claim row
-      // itself stays with the barangay that recorded it.
+      // itself stays with the barangay that recorded it. A nurse is told
+      // that the senior already claimed, and when they can claim again,
+      // but not WHERE unless it was in one of their own barangays.
+      let reason = result.reason;
+      if (!result.eligible && result.lastClaim && tlBlocked(req, result.lastClaim.claimedBarangayName)) {
+        reason = `Already claimed this cycle at another barangay. Next eligible: ${new Date(result.lastClaim.nextEligibleAt).toLocaleDateString()}`;
+      }
       res.json({
         eligible: result.eligible,
-        reason: result.reason,
+        reason,
         nextEligibleAt: result.lastClaim?.nextEligibleAt,
       });
     } catch (err) {
@@ -551,8 +592,9 @@ export async function registerRoutes(
 
   // === INVENTORY ===
   app.get(api.inventory.list.path, loadUserInfo, requireAuth, async (req, res) => {
-    const data = await storage.getInventory();
-    res.json(data);
+    const rows = visibleRows(await storage.getInventory(), req, queryBarangay(req));
+    if (rows === null) return res.status(403).json(BARANGAY_DENIED);
+    res.json(rows);
   });
 
   app.get('/api/inventory/snapshots', loadUserInfo, requireAuth, async (req, res) => {
@@ -569,7 +611,9 @@ export async function registerRoutes(
       return res.status(400).json({ message: `For itemType 'vaccine', itemKey must be one of: ${VALID_VACCINE_KEYS.join(", ")}` });
     }
     const data = await storage.getInventorySnapshots({ barangay: barangay || undefined, itemType, itemKey });
-    res.json(data);
+    const rows = visibleRows(data, req, barangay || undefined);
+    if (rows === null) return res.status(403).json(BARANGAY_DENIED);
+    res.json(rows);
   });
 
   // === COLD-CHAIN TEMPERATURE LOGS ===
@@ -633,8 +677,9 @@ export async function registerRoutes(
 
   // === MEDICINE INVENTORY ===
   app.get(api.medicineInventory.list.path, loadUserInfo, requireAuth, async (req, res) => {
-    const data = await storage.getMedicineInventory();
-    res.json(data);
+    const rows = visibleRows(await storage.getMedicineInventory(), req, queryBarangay(req));
+    if (rows === null) return res.status(403).json(BARANGAY_DENIED);
+    res.json(rows);
   });
 
   app.get(api.medicineInventory.get.path, loadUserInfo, requireAuth, async (req, res) => {
@@ -642,6 +687,7 @@ export async function registerRoutes(
     if (isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
     const item = await storage.getMedicineInventoryById(id);
     if (!item) return res.status(404).json({ message: "Medicine inventory item not found" });
+    if (tlBlocked(req, item.barangay)) return res.status(403).json(BARANGAY_DENIED);
     res.json(item);
   });
 
@@ -768,8 +814,8 @@ export async function registerRoutes(
   // namespace ends with a /:id route and Express was matching this
   // endpoint as id=conditions on some deployments. Path collision
   // sidestepped by living under /api/disease-conditions instead.
-  app.get("/api/disease-conditions", loadUserInfo, requireAuth, ar(async (_req, res) => {
-    const all = await storage.getDiseaseCases();
+  app.get("/api/disease-conditions", loadUserInfo, requireAuth, ar(async (req, res) => {
+    const all = visibleRows(await storage.getDiseaseCases(), req) ?? [];
     const set = new Set<string>();
     for (const c of all) {
       const trimmed = (c.condition ?? "").trim();
@@ -1768,7 +1814,7 @@ export async function registerRoutes(
         return res.status(403).json({ message: "Access denied to this barangay" });
       }
       const all = await storage.getWorkforceMembers({ barangay: requestedBarangay, activeOnly });
-      return res.json(requestedBarangay ? all : all.filter((r) => !r.barangay || assigned.includes(r.barangay)));
+      return res.json(all.filter((r) => !!r.barangay && assigned.includes(r.barangay)));
     }
     const data = await storage.getWorkforceMembers({ barangay: requestedBarangay, activeOnly });
     res.json(data);
@@ -1778,7 +1824,7 @@ export async function registerRoutes(
     const id = parseId(req.params.id, res); if (id === null) return;
     const member = await storage.getWorkforceMember(id);
     if (!member) return res.status(404).json({ message: "Workforce member not found" });
-    if (req.userInfo?.role === UserRole.TL && member.barangay && !req.userInfo.assignedBarangays.includes(member.barangay)) {
+    if (tlBlocked(req, member.barangay)) {
       return res.status(403).json({ message: "Access denied to this barangay" });
     }
     const credentials = await storage.getWorkforceCredentials(id);
@@ -2284,6 +2330,10 @@ export async function registerRoutes(
   // Get barangay settings
   app.get("/api/barangay-settings/:barangayId", loadUserInfo, requireAuth, ar(async (req, res) => {
     const id = parseId(req.params.barangayId, res); if (id === null) return;
+    if (req.userInfo?.role === UserRole.TL) {
+      const barangay = (await storage.getBarangays()).find((b) => b.id === id);
+      if (!barangay || tlBlocked(req, barangay.name)) return res.status(403).json(BARANGAY_DENIED);
+    }
     const settings = await storage.getBarangaySettings(id);
     res.json(settings || {});
   }));
@@ -2402,7 +2452,9 @@ export async function registerRoutes(
   });
 
   // === AI INSIGHTS (RAG) ===
-  app.get("/api/ai/insights", loadUserInfo, requireAuth, async (req, res) => {
+  // The AI analytics summarise and rank every barangay in the municipality,
+  // so they are for municipality-wide roles only.
+  app.get("/api/ai/insights", loadUserInfo, requireAuth, municipalOnly, async (req, res) => {
     try {
       const { generateHealthInsights } = await import("./ai-insights");
       const result = await generateHealthInsights();
@@ -2413,7 +2465,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/ai/insights/stream", loadUserInfo, requireAuth, async (req, res) => {
+  app.get("/api/ai/insights/stream", loadUserInfo, requireAuth, municipalOnly, async (req, res) => {
     try {
       res.setHeader("Content-Type", "text/event-stream");
       res.setHeader("Cache-Control", "no-cache");
@@ -2437,7 +2489,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/ai/risk-analysis", loadUserInfo, requireAuth, async (req, res) => {
+  app.get("/api/ai/risk-analysis", loadUserInfo, requireAuth, municipalOnly, async (req, res) => {
     try {
       const { getRiskAnalysis } = await import("./ai-insights");
       const result = await getRiskAnalysis();

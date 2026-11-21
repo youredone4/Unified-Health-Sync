@@ -277,6 +277,12 @@ server's operating system.
 
 ## Accounts and passwords
 
+- **Who sees what.** A barangay nurse (Team Leader) sees only the
+  barangays assigned to them: patients, stock, staff and reports alike.
+  System Admin, MHO and SHA accounts see the whole municipality, as do the
+  view-only Mayor and Health Committee accounts. For a nurse who works at
+  the Municipal Health Center and covers every barangay, tick all the
+  barangays on their account in **Admin → Users**.
 - **Creating accounts.** Only a System Admin can create accounts
   (**Admin → Users**). The password they type is temporary; the new user
   must replace it at first login.

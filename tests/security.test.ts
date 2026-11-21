@@ -169,7 +169,7 @@ const names = {
   race: `sec_race_${RUN}`,
 };
 const ids: Record<string, string> = {};
-const seeded = { motherB: 0, seniorB: 0, diseaseB: 0, rabiesB: 0, smsB: 0, walkInB: 0, motherA: 0, childA: 0, childB: 0, seniorA: 0 };
+const seeded = { motherB: 0, seniorB: 0, diseaseB: 0, rabiesB: 0, smsB: 0, walkInB: 0, motherA: 0, childA: 0, childB: 0, seniorA: 0, seniorC: 0 };
 const barangayIds: Record<string, number> = {};
 
 async function createUser(
@@ -282,6 +282,9 @@ before(async () => {
     `INSERT INTO seniors (first_name, last_name, age, barangay, senior_unique_id) VALUES ($1, 'Senior-A', 70, $2, $3) RETURNING id`,
     [TAG, BARANGAY_A, `SEC-A-${RUN}`]);
   await pool.query(`UPDATE seniors SET senior_unique_id = $1 WHERE id = $2`, [`SEC-B-${RUN}`, seeded.seniorB]);
+  seeded.seniorC = await one(
+    `INSERT INTO seniors (first_name, last_name, age, barangay, senior_unique_id) VALUES ($1, 'Senior-C', 70, $2, $3) RETURNING id`,
+    [TAG, BARANGAY_B, `SEC-C-${RUN}`]);
   seeded.childA = await one(
     `INSERT INTO children (name, dob, barangay) VALUES ($1, '2024-01-01', $2) RETURNING id`, [`${TAG} Child-A`, BARANGAY_A]);
   seeded.childB = await one(
@@ -295,6 +298,20 @@ before(async () => {
   seeded.smsB = await one(
     `INSERT INTO sms_outbox (recipient, recipient_phone, message, sent_at, barangay)
      VALUES ($1, '09170000000', 'security test message', $2, $3) RETURNING id`, [TAG, new Date().toISOString(), BARANGAY_B]);
+  // Stock and staff, for the "nurses see only their own barangays" checks.
+  for (const b of [BARANGAY_A, BARANGAY_B]) {
+    await pool.query(`INSERT INTO inventory (barangay, last_updated) VALUES ($1, $2)`, [b, `${TAG}`]);
+    await pool.query(`INSERT INTO medicine_inventory (barangay, medicine_name, last_updated) VALUES ($1, $2, $3)`, [b, `${TAG} ${b}`, today]);
+    await pool.query(
+      `INSERT INTO inventory_snapshots (barangay, snapshot_date, item_type, item_key) VALUES ($1, $2, 'vaccine', 'bcg')`, [b, `${TAG}`]);
+    await pool.query(
+      `INSERT INTO workforce_members (full_name, profession, employment_status, barangay) VALUES ($1, 'Nurse', 'REGULAR', $2)`, [`${TAG} ${b}`, b]);
+  }
+  await pool.query(
+    `INSERT INTO workforce_members (full_name, profession, employment_status, barangay) VALUES ($1, 'Physician', 'REGULAR', NULL)`, [`${TAG} RHU`]);
+  await pool.query(
+    `INSERT INTO disease_cases (patient_name, age, barangay, condition, date_reported) VALUES ($1, 30, $2, $3, $4)`,
+    [TAG, BARANGAY_B, `Condition-only-in-B-${RUN}`, today]);
   seeded.walkInB = await one(
     `INSERT INTO consults (patient_name, age, sex, barangay, consult_date, chief_complaint, diagnosis, created_at, is_walk_in)
      VALUES ($1, 40, 'F', $2, $3, 'test', 'test', $4, true) RETURNING id`, [TAG, BARANGAY_B, today, new Date().toISOString()]);
@@ -303,7 +320,7 @@ before(async () => {
 after(async () => {
   const userIds = Object.values(ids);
   await pool.query(`DELETE FROM sessions WHERE sess->>'userId' = ANY($1)`, [userIds]);
-  await pool.query(`DELETE FROM senior_med_claims WHERE senior_id = ANY($1)`, [[seeded.seniorA, seeded.seniorB]]);
+  await pool.query(`DELETE FROM senior_med_claims WHERE senior_id = ANY($1)`, [[seeded.seniorA, seeded.seniorB, seeded.seniorC]]);
   await pool.query(`DELETE FROM children WHERE name LIKE $1`, [`${TAG}%`]); // cascades to nutrition follow-ups
   await pool.query(
     `DELETE FROM m1_indicator_values WHERE report_instance_id IN (SELECT id FROM m1_report_instances WHERE created_by_user_id = ANY($1))`,
@@ -315,6 +332,10 @@ after(async () => {
   await pool.query(`DELETE FROM rabies_exposures WHERE patient_name = $1`, [TAG]);
   await pool.query(`DELETE FROM sms_outbox WHERE recipient = $1`, [TAG]);
   await pool.query(`DELETE FROM consults WHERE patient_name = $1`, [TAG]);
+  await pool.query(`DELETE FROM inventory WHERE last_updated = $1`, [TAG]);
+  await pool.query(`DELETE FROM medicine_inventory WHERE medicine_name LIKE $1`, [`${TAG}%`]);
+  await pool.query(`DELETE FROM inventory_snapshots WHERE snapshot_date = $1`, [TAG]);
+  await pool.query(`DELETE FROM workforce_members WHERE full_name LIKE $1`, [`${TAG}%`]);
   await pool.query(`DELETE FROM medical_certificates WHERE patient_name LIKE $1`, [`${TAG}%`]);
   await pool.query(`DELETE FROM users WHERE username LIKE $1`, [`sec\\_%\\_${RUN}%`]);
   await pool.query(`DELETE FROM audit_logs WHERE user_id = ANY($1) OR entity_id = ANY($1)`, [userIds]);
@@ -460,6 +481,70 @@ describe("a Team Leader is confined to their assigned barangays", () => {
     await denied("sms for other barangay", await tlA.post("/api/sms", {
       recipient: TAG, recipientPhone: "09170000000", message: "x", sentAt: new Date().toISOString(), barangay: BARANGAY_B,
     }));
+  });
+
+  test("stock, staff and analytics are limited to their barangays too", async () => {
+    const enc = encodeURIComponent;
+    // Vaccine and medicine stock.
+    const stock = await tlA.get("/api/inventory");
+    assert.equal(stock.status, 200);
+    assert.ok(stock.json.length > 0 && stock.json.every((r: any) => r.barangay === BARANGAY_A), "vaccine stock of another barangay was listed");
+    await denied("vaccine stock, other barangay", await tlA.get(`/api/inventory?barangay=${enc(BARANGAY_B)}`));
+
+    const meds = await tlA.get("/api/medicine-inventory");
+    assert.ok(meds.json.length > 0 && meds.json.every((r: any) => r.barangay === BARANGAY_A), "medicine stock of another barangay was listed");
+    const otherMed = (await pool.query(`SELECT id FROM medicine_inventory WHERE medicine_name = $1`, [`${TAG} ${BARANGAY_B}`])).rows[0].id;
+    await denied("medicine item, other barangay", await tlA.get(`/api/medicine-inventory/${otherMed}`));
+
+    await denied("stock history, other barangay", await tlA.get(`/api/inventory/snapshots?itemType=vaccine&itemKey=bcg&barangay=${enc(BARANGAY_B)}`));
+    const history = await tlA.get("/api/inventory/snapshots?itemType=vaccine&itemKey=bcg");
+    assert.ok(history.json.every((r: any) => r.barangay === BARANGAY_A), "stock history of another barangay was listed");
+
+    // Staff: own barangay only; municipal-level staff (no barangay) are not listed.
+    const staff = await tlA.get("/api/workforce");
+    const names: string[] = staff.json.map((m: any) => m.fullName);
+    assert.ok(names.includes(`${TAG} ${BARANGAY_A}`));
+    assert.ok(!names.includes(`${TAG} ${BARANGAY_B}`) && !names.includes(`${TAG} RHU`), "staff outside the nurse's barangays were listed");
+    const rhuStaff = (await pool.query(`SELECT id FROM workforce_members WHERE full_name = $1`, [`${TAG} RHU`])).rows[0].id;
+    await denied("municipal staff record", await tlA.get(`/api/workforce/${rhuStaff}`));
+
+    // Municipality-wide analytics.
+    for (const p of ["/api/ai/insights", "/api/ai/risk-analysis", "/api/ai/insights/stream"]) {
+      await denied(p, await tlA.get(p));
+    }
+
+    // Values derived from other barangays' records.
+    const conditions = await tlA.get("/api/disease-conditions");
+    assert.ok(!conditions.json.includes(`Condition-only-in-B-${RUN}`), "a condition recorded only in another barangay was listed");
+    await denied("barangay settings", await tlA.get(`/api/barangay-settings/${barangayIds[BARANGAY_B]}`));
+    assert.equal((await tlA.get(`/api/barangay-settings/${barangayIds[BARANGAY_A]}`)).status, 200);
+  });
+
+  test("municipality-wide roles still see every barangay's stock, staff and analytics", async () => {
+    const mho = await session(names.mho);
+    const stock = await mho.get("/api/inventory");
+    const seen = new Set(stock.json.map((r: any) => r.barangay));
+    assert.ok(seen.has(BARANGAY_A) && seen.has(BARANGAY_B));
+    const staff = await mho.get("/api/workforce");
+    assert.ok(staff.json.some((m: any) => m.fullName === `${TAG} RHU`));
+    assert.equal((await mho.get("/api/ai/risk-analysis")).status, 200);
+    const conditions = await mho.get("/api/disease-conditions");
+    assert.ok(conditions.json.includes(`Condition-only-in-B-${RUN}`));
+  });
+
+  test("a claim made elsewhere blocks a duplicate without saying where", async () => {
+    // A senior claims in barangay B (recorded by the MHO)...
+    const mho = await session(names.mho);
+    const claim = await mho.post("/api/senior-med-claims", {
+      seniorId: seeded.seniorC, claimedBarangayId: barangayIds[BARANGAY_B], medicationName: "Losartan", quantity: 30,
+    });
+    assert.equal(claim.status, 201, claim.text);
+    // ...a nurse from barangay A is told "already claimed", but not the barangay.
+    const check = await tlA.get(`/api/senior-med-claims/check-eligibility/SEC-C-${RUN}`);
+    assert.equal(check.json.eligible, false);
+    assert.ok(!check.json.reason.includes(BARANGAY_B), `the reason named the other barangay: ${check.json.reason}`);
+    const forMho = await mho.get(`/api/senior-med-claims/check-eligibility/SEC-C-${RUN}`);
+    assert.ok(forMho.json.reason.includes(BARANGAY_B), "municipal roles still see where");
   });
 
   test("cannot reach administration", async () => {
