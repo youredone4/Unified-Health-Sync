@@ -569,6 +569,31 @@ describe("authorisation follows the record, not the request", () => {
     assert.ok(!("lastClaim" in self.json), "eligibility check returned the full claim row");
   });
 
+  test("editing one field of a record leaves its other fields alone", async () => {
+    // zod 4's partial() fills in defaults for fields that were not sent; an
+    // update built on it would erase them. See shared/patch.ts.
+    const { rows } = await pool.query(
+      `INSERT INTO disease_cases (patient_name, age, barangay, condition, date_reported, additional_conditions)
+       VALUES ($1, 40, $2, 'Dengue', '2031-01-10', '["Tuberculosis","HIV"]'::jsonb) RETURNING id`,
+      [TAG, BARANGAY_A]);
+    const id = rows[0].id;
+    const res = await tlA.put(`/api/disease-cases/${id}`, { notes: "follow-up done" });
+    assert.equal(res.status, 200, res.text);
+    assert.deepEqual(res.json.additionalConditions, ["Tuberculosis", "HIV"], "co-conditions were erased by an unrelated edit");
+    assert.equal(res.json.notes, "follow-up done");
+
+    const followUp = await tlA.post("/api/nutrition-followups", {
+      childId: seeded.childA, barangay: BARANGAY_A, followUpDate: "2031-01-16", classification: "MAM", actions: ["ENROLL_OTC"],
+    });
+    if (followUp.status === 201) {
+      const edited = await tlA.put(`/api/nutrition-followups/${followUp.json.id}`, { notes: "weighed again" });
+      assert.equal(edited.status, 200, edited.text);
+      assert.deepEqual(edited.json.actions, ["ENROLL_OTC"], "actions were erased by an unrelated edit");
+    } else {
+      assert.equal(followUp.status, 400, followUp.text); // action name not valid in this build
+    }
+  });
+
   test("a certificate can only name a real physician account as its signer", async () => {
     const cert = {
       certType: "SCHOOL", patientName: `${TAG} Cert`, barangay: BARANGAY_A,

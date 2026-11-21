@@ -17,6 +17,7 @@ import rateLimit from "express-rate-limit";
 import { loadUserInfo, requireAuth, requireRole, createAuditLog, apiGate, canAccessBarangay } from "./middleware/rbac";
 import express from "express";
 import { csrfGuard, BULK_IMPORT_PATHS } from "./middleware/security";
+import { patchSchema } from "@shared/patch";
 import { RECOMMENDATIONS } from "@shared/recommendations";
 import { insertSeniorSchema } from "@shared/schema";
 import { config } from "./config";
@@ -1812,7 +1813,7 @@ export async function registerRoutes(
       const id = parseId(req.params.id, res); if (id === null) return;
       const existing = await storage.getWorkforceMember(id);
       if (!existing) return res.status(404).json({ message: "Workforce member not found" });
-      const parsed = insertWorkforceMemberSchema.partial().safeParse(req.body);
+      const parsed = patchSchema(insertWorkforceMemberSchema).safeParse(req.body);
       if (!parsed.success) {
         return res.status(400).json({ message: "Invalid workforce member", issues: parsed.error.issues });
       }
@@ -4480,7 +4481,7 @@ export async function registerRoutes(
       return res.status(403).json({ message: "Not authorized for this barangay" });
     }
     // Who recorded it and when are set once, by the server.
-    const parsed = insertFpServiceRecordSchema.partial().omit({ recordedBy: true, createdAt: true }).safeParse(req.body);
+    const parsed = patchSchema(insertFpServiceRecordSchema).omit({ recordedBy: true, createdAt: true }).safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message || "Invalid data" });
     // For TL: also validate the target barangay (if changed) is within their scope
     if (req.userInfo?.role === UserRole.TL && parsed.data.barangay && !req.userInfo.assignedBarangays.includes(parsed.data.barangay)) {
@@ -4660,7 +4661,7 @@ export async function registerRoutes(
     }
     // Which child, which barangay, who recorded it and when cannot be
     // edited: changing them would move the row into another register.
-    const parsed = insertNutritionFollowUpSchema.partial()
+    const parsed = patchSchema(insertNutritionFollowUpSchema)
       .omit({ childId: true, barangay: true, recordedBy: true, createdAt: true })
       .safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message || "Invalid data" });

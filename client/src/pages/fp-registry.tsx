@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, Fragment } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
+import { zodResolver } from "@/lib/zod-resolver";
 import { z } from "zod";
 import { format, differenceInYears, parseISO } from "date-fns";
 import {
@@ -86,8 +86,8 @@ const fpFormSchema = z.object({
   barangay: z.string().min(1, "Barangay is required"),
   patientName: z.string().min(2, "Name is required"),
   dob: z.string().optional(),
-  fpMethod: z.enum(FP_METHODS, { required_error: "FP Method is required" }),
-  fpStatus: z.enum(FP_STATUSES, { required_error: "Status is required" }),
+  fpMethod: z.enum(FP_METHODS, { error: "FP Method is required" }),
+  fpStatus: z.enum(FP_STATUSES, { error: "Status is required" }),
   dateStarted: z.string().min(1, "Date Started is required"),
   dateStopped: z.string().optional(),
   reportingMonth: z.string().regex(/^\d{4}-\d{2}$/, "Format: YYYY-MM").optional(),
