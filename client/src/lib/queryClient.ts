@@ -1,4 +1,4 @@
-import { QueryClient, QueryFunction } from "@tanstack/react-query";
+import { MutationCache, QueryCache, QueryClient, QueryFunction } from "@tanstack/react-query";
 
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
@@ -54,7 +54,21 @@ export function invalidateScopedQueries(basePath: string): Promise<void> {
   });
 }
 
-export const queryClient = new QueryClient({
+/**
+ * A 401 from any API call means the session has ended (idle timeout, the
+ * daily sign-in limit, or an administrator signed this account out).
+ * Clearing the cached user sends the app back to the sign-in page instead
+ * of leaving a screen full of failed requests.
+ */
+function handleSessionEnded(error: unknown) {
+  if (error instanceof Error && /^401: /.test(error.message)) {
+    queryClient.setQueryData(["/api/auth/me"], null);
+  }
+}
+
+export const queryClient: QueryClient = new QueryClient({
+  queryCache: new QueryCache({ onError: handleSessionEnded }),
+  mutationCache: new MutationCache({ onError: handleSessionEnded }),
   defaultOptions: {
     queries: {
       queryFn: getQueryFn({ on401: "throw" }),

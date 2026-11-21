@@ -16,9 +16,11 @@ RUN npm ci --omit=dev --no-audit --no-fund && npm cache clean --force
 
 # ---- runtime ----------------------------------------------------------------
 FROM node:22-bookworm-slim AS runtime
+# The app and the database both run in UTC, as they did on Replit. Date
+# handling in the code assumes it (Manila time is computed as UTC+8), and
+# timestamps are stored as UTC; do not set TZ here or on the database.
 ENV NODE_ENV=production \
-    PORT=5000 \
-    TZ=Asia/Manila
+    PORT=5000
 WORKDIR /app
 
 COPY --from=deps  /app/node_modules ./node_modules
@@ -26,9 +28,8 @@ COPY --from=build /app/dist ./dist
 COPY migrations ./migrations
 COPY package.json ./
 
-# Uploads live on a mounted volume; the app runs as the unprivileged
-# `node` user and needs to own that directory.
-RUN mkdir -p /app/uploads && chown -R node:node /app/uploads
+# Run as the unprivileged `node` user. The app writes nothing to disk:
+# all state lives in PostgreSQL.
 USER node
 
 EXPOSE 5000

@@ -35,7 +35,7 @@ designed for low-literacy field use and for Placer's Green/Gold/Blue brand.
 | **Clinic Check-up** | Clinical encounter / consult recording by the MHO. |
 | **Calendar** | Unified month / week / day view of every scheduled event across all modules, with filters and a paginated event list. |
 | **Messages** | Direct staff messaging with unread-count badges. |
-| **Admin** | User management (create users, assign roles and barangays, KYC with AI face-match review), Audit Logs, and LGU Settings. |
+| **Admin** | User management (create users, assign roles and barangays, password resets), Audit Logs, and LGU Settings. |
 
 ## Navigation & layout
 
@@ -90,7 +90,7 @@ Top-level sidebar (9 items visible, 14 with the Patients group expanded):
 
 Defined in `shared/models/auth.ts`:
 
-- **SYSTEM_ADMIN** — full access, user management, KYC approvals, audit logs,
+- **SYSTEM_ADMIN** — full access, user management, audit logs,
   system settings.
 - **MHO** (Municipal Health Officer) — municipal scope, approves / reopens M1
   reports, supervisory clinical functions.
@@ -107,12 +107,14 @@ All destructive actions are audit-logged.
 - **Frontend** — React 18 + TypeScript, Wouter for routing, TanStack Query for
   server state, shadcn/ui on Radix primitives, Tailwind CSS, Recharts,
   React-Leaflet (OpenStreetMap).
-- **Backend** — Express 5 + TypeScript, session-based auth (bcrypt +
+- **Backend** — Express 4 + TypeScript, session-based auth (bcrypt +
   `express-session`, Postgres session store).
 - **Database** — PostgreSQL with **Drizzle ORM**; schemas and Zod validators
   co-located in `shared/schema.ts` and `shared/models/`.
-- **AI** — OpenAI Vision for KYC face-match (`server/kyc-face-match.ts`) and
-  the health-risk prediction engine (`server/ai-insights.ts`).
+- **AI** (optional) — OpenAI for the health-risk insights
+  (`server/ai-insights.ts`) and plain-language recommendation summaries.
+  Only aggregate statistics and guideline text are sent, never patient
+  records.
 - **Build / dev** — Vite (client), `tsx` in dev, esbuild for the production
   server bundle.
 
@@ -120,22 +122,22 @@ All destructive actions are audit-logged.
 
 ```
 client/     React frontend — pages, components, hooks, contexts
-server/     Express backend — routes, auth, DB access, seeders, AI, KYC
+server/     Express backend — routes, auth, DB access, seeders, AI
 shared/     TS types / Drizzle schemas / Zod validators / API contracts
 scripts/    Utility scripts (demo-reset.sh, …)
 script/     Build + database migration runner
 migrations/ SQL migrations generated from shared/schema.ts
 tests/      Test suite
-attached_assets/  Static images & logos
-uploads/    KYC uploads (never served raw)
+attached_assets/  Reference documents from development (no data files; see .gitignore)
 ```
 
 ## Getting started
 
-> **Not yet cleared for real patient data.** The system now runs anywhere
-> Docker does, but the security hardening tracked in
-> [docs/deployment.md](docs/deployment.md#before-real-patient-data) must land
-> first. Until then, use demo data only.
+> **Not yet cleared for real patient data.** Access control and login
+> security are in place, but backups, two-factor login for administrators
+> and the Data Privacy Act steps in
+> [docs/deployment.md](docs/deployment.md#before-real-patient-data) are
+> still open. Until then, use demo data only.
 
 ### Deploying for an LGU (Docker)
 
@@ -144,7 +146,9 @@ cp .env.example .env          # fill in every REQUIRED value
 docker compose up -d --build
 ```
 
-This starts PostgreSQL, the app, and an HTTPS reverse proxy. Full
+This starts PostgreSQL, the app, and an HTTPS reverse proxy. There are no
+built-in accounts; create the first administrator with
+`docker compose exec app node dist/admin.cjs create-admin <username>`. Full
 instructions — including moving your data out of Replit, backups and
 updates — are in **[docs/deployment.md](docs/deployment.md)**.
 
@@ -157,6 +161,7 @@ database is the bundled one: `docker compose -f docker-compose.dev.yml up -d`.
 npm install
 cp .env.example .env          # set SESSION_SECRET; DATABASE_URL default matches the dev database
 npm run db:migrate            # create the tables
+npm run admin -- create-admin <username>   # first account; prints a temporary password
 npm run dev                   # Vite + tsx on http://localhost:5000
 ```
 
@@ -188,6 +193,38 @@ npm start         # runs dist/index.cjs
 npm run check
 ```
 
+### Security tests
+
+`tests/security.test.ts` runs against a live server over HTTP. It reads
+every route out of the server source and proves each one refuses an
+anonymous request, then checks barangay isolation, view-only roles, login
+lockout, session handling and the browser-facing hardening.
+
+```bash
+# with the dev server running against a THROWAWAY database:
+ALLOW_TEST_RESET=true npm run test:security
+```
+
+Run it before every release. A new route without an access check fails
+the first test automatically.
+
+## Security model
+
+- **Deny by default.** Every `/api` request passes one gate
+  (`apiGate` in `server/middleware/rbac.ts`). No session, no access, unless
+  the route is on its short public list.
+- **Roles.** `SYSTEM_ADMIN`, `MHO`, `SHA` are municipality-wide. `TL`
+  (barangay nurse) sees and edits only assigned barangays, checked on the
+  server for every record. `MAYOR` and `HEALTH_COMMITTEE` are read-only:
+  the gate refuses their writes whatever the route says.
+- **Accounts.** Created by a System Admin only. New and reset passwords
+  are temporary and must be replaced at next login. Five wrong passwords
+  lock an account for 15 minutes.
+- **Sessions.** HttpOnly, SameSite cookie; new session id at login; idle
+  and absolute timeouts; ended on password change, role change or disable.
+- **Logs.** Request logs carry method, path, status and user id only —
+  never bodies. Who-changed-what lives in the `audit_logs` table.
+
 ## Environment variables
 
 Configuration is validated at startup (`server/config.ts`); the server
@@ -200,8 +237,10 @@ every setting.
 | `SESSION_SECRET` | yes | Session cookie signing key, 32+ characters |
 | `PORT` | no | HTTP port (default `5000`) |
 | `NODE_ENV` | no | `development` enables Vite middleware |
-| `TRUST_PROXY` | no | Reverse-proxy hops in front of the app (default `1`) |
+| `TRUST_PROXY` | no | Reverse-proxy hops in front of the app (default `0`; docker-compose sets `1`) |
 | `SEED_DEMO_DATA` | no | `true` inserts fabricated demo records (**never in production**) |
+| `SESSION_IDLE_MINUTES` / `SESSION_MAX_HOURS` | no | Session idle timeout (60) and absolute limit (12) |
+| `LOGIN_MAX_ATTEMPTS` / `LOGIN_LOCK_MINUTES` | no | Account lockout threshold (5) and duration (15) |
 | `SCHEDULER_ENABLED` | no | `false` disables background jobs |
 | `OPENAI_API_KEY` | no | Enables AI insights and plain-language summaries |
 | `OPENAI_MODEL` / `OPENAI_BASE_URL` | no | Model name / OpenAI-compatible endpoint |
@@ -227,7 +266,6 @@ npx tsx server/seed-inventory-snapshots.ts   # stock history
 ./scripts/demo-reset.sh
 ```
 
-`server/provision-tl-users.ts` creates one Team Leader per seeded barangay.
 
 ## Domain references
 

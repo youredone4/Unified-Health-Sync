@@ -35,6 +35,7 @@ import { getDefaultLandingForRole } from "@/lib/role-landing";
 import BarangaySwitcher from "@/components/barangay-switcher";
 
 const LandingPage = lazy(() => import("@/pages/landing"));
+const ChangePasswordRequired = lazy(() => import("@/pages/change-password-required"));
 const TodayPage = lazy(() => import("@/pages/today"));
 const DashboardsPage = lazy(() => import("@/pages/dashboards"));
 const Hotspots = lazy(() => import("@/pages/hotspots"));
@@ -640,7 +641,7 @@ function AuthenticatedApp() {
 }
 
 function AppContent() {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, user } = useAuth();
 
   // Show loading state while checking auth
   if (isLoading) {
@@ -660,6 +661,19 @@ function AppContent() {
       <>
         <Suspense fallback={<RouteFallback />}>
           <LandingPage />
+        </Suspense>
+        <Toaster />
+      </>
+    );
+  }
+
+  // The server refuses everything except a password change for these
+  // accounts, so show only that screen instead of an app full of errors.
+  if (user?.mustChangePassword) {
+    return (
+      <>
+        <Suspense fallback={<RouteFallback />}>
+          <ChangePasswordRequired />
         </Suspense>
         <Toaster />
       </>

@@ -14,22 +14,32 @@ HealthSync runs as three Docker containers:
 
 ## Before real patient data
 
-**Do not enter real patient records yet.** The system runs outside Replit,
-but these security items are still open and are being fixed next:
+**Do not enter real patient records until every box below is ticked.**
 
-- [ ] Remove the built-in default accounts (`admin` / `admin123` and the
-      seeded nurse accounts with password `123456`).
-- [ ] Require login on every API endpoint (some, including SMS sending, are
-      currently open).
-- [ ] Enforce barangay restrictions on every record a nurse can open or edit.
-- [ ] Stop writing patient data into the server logs.
-- [ ] Login protection: rate limiting, lockout, shorter sessions.
-- [ ] Remove public self-registration and ID-photo uploads.
+Done in the software:
+
+- [x] No built-in accounts. The first administrator is created on the
+      server; accounts still on an old default password are refused.
+- [x] Every API endpoint requires a login unless explicitly listed as public.
+- [x] Barangay restrictions enforced on every record a nurse can open or edit.
+- [x] No patient data in the server logs.
+- [x] Login protection: rate limiting, account lockout, idle and daily
+      session limits, forced password change for new and reset accounts.
+- [x] No public self-registration and no ID-photo uploads.
+
+Still open:
+
 - [ ] Automated, encrypted backups and a tested restore.
 - [ ] Two-factor login for administrators.
 - [ ] Data Privacy Act paperwork (see [Data privacy](#data-privacy)).
+- [ ] Purge the old data spreadsheets from the repository's history (they
+      were committed in `attached_assets/` during development; they are no
+      longer tracked, but remain in past commits until history is rewritten).
+- [ ] An independent security review / penetration test before go-live.
+      The built-in checks (`npm run test:security`) cover the known cases;
+      they are not a substitute for someone trying to break in.
 
-Until every box is ticked, run with demo data only (`SEED_DEMO_DATA=true`).
+Until then, run with demo data only (`SEED_DEMO_DATA=true`).
 
 ## What you need
 
@@ -87,7 +97,16 @@ Until every box is ticked, run with demo data only (`SEED_DEMO_DATA=true`).
    docker compose logs -f app        # Ctrl+C to stop watching
    ```
 
-   Then open your `SITE_ADDRESS` in a browser.
+6. Create the first administrator. There are no built-in accounts:
+
+   ```bash
+   docker compose exec app node dist/admin.cjs create-admin <username>
+   ```
+
+   This prints a temporary password **once**. Open your `SITE_ADDRESS` in a
+   browser, sign in with it, and you will be asked to choose your own
+   password straight away. Create everyone else's account from
+   **Admin → Users** inside the app.
 
 ## Moving your data from Replit
 
@@ -124,6 +143,18 @@ Skip this section for a fresh, empty system.
    ```bash
    docker compose up -d
    ```
+
+5. Reset the old passwords. The Replit version shipped with public default
+   passwords (`admin123`, `123456`). Any account still using one is refused
+   at login, by design. Recover the administrator from the server:
+
+   ```bash
+   docker compose exec app node dist/admin.cjs reset-password admin
+   ```
+
+   Sign in with the temporary password it prints, then use
+   **Admin → Users → Reset PW** to give each nurse a new temporary password.
+   Everyone chooses their own password at their next login.
 
 If you already started the app on an empty database and want to start over,
 `docker compose down -v` deletes **all** data volumes; then begin again at
@@ -189,6 +220,34 @@ docker compose logs --since 1h app
 docker compose stop
 docker compose start
 ```
+
+## Accounts and passwords
+
+- **Creating accounts.** Only a System Admin can create accounts
+  (**Admin → Users**). The password they type is temporary; the new user
+  must replace it at first login.
+- **Forgotten password.** A System Admin resets it from **Admin → Users**.
+  The user is signed out everywhere and must choose a new password.
+- **Locked out.** Five wrong passwords lock an account for 15 minutes. An
+  admin password reset clears the lock immediately.
+- **The administrator is locked out or forgot their password.** From the
+  server:
+
+  ```bash
+  docker compose exec app node dist/admin.cjs reset-password <username>
+  docker compose exec app node dist/admin.cjs list      # who exists, who is locked
+  ```
+
+- **Someone leaves.** Disable the account in **Admin → Users**. They are
+  signed out immediately; their past entries stay attributed to them.
+- **Sessions.** People are signed out after 60 minutes without activity
+  and at most 12 hours after signing in. Both are adjustable in `.env`
+  (`SESSION_IDLE_MINUTES`, `SESSION_MAX_HOURS`).
+- **Password rules.** At least 12 characters, not a common password, not
+  the person's own name or username.
+
+Every sign-in, failed sign-in, lockout and password reset is recorded in
+**Admin → Audit Logs**.
 
 ## Optional services
 

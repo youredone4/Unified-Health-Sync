@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { PASSWORD_MIN_LENGTH, PASSWORD_RULES_SUMMARY } from "@shared/password-policy";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -42,10 +43,12 @@ const profileSchema = z.object({
   email: z.union([z.string().email("Enter a valid email address"), z.literal("")]).optional(),
 });
 
+// Length is checked here for instant feedback; the server applies the full
+// policy (common passwords, name in password) and its message is shown.
 const passwordSchema = z
   .object({
     currentPassword: z.string().min(1, "Current password is required"),
-    newPassword: z.string().min(8, "New password must be at least 8 characters"),
+    newPassword: z.string().min(PASSWORD_MIN_LENGTH, `New password must be at least ${PASSWORD_MIN_LENGTH} characters`),
     confirmPassword: z.string().min(1, "Please confirm your new password"),
   })
   .refine((d) => d.newPassword === d.confirmPassword, {
@@ -267,7 +270,7 @@ export default function AccountPage() {
             Change Password
           </CardTitle>
           <CardDescription>
-            Enter your current password, then choose a new one (minimum 8 characters)
+            Enter your current password, then choose a new one. {PASSWORD_RULES_SUMMARY}
           </CardDescription>
         </CardHeader>
         <CardContent>

@@ -13,7 +13,6 @@ services:
       POSTGRES_USER: healthsync
       POSTGRES_PASSWORD: healthsync_dev
       POSTGRES_DB: healthsync
-      TZ: Asia/Manila
     ports:
       - "127.0.0.1:5432:5432"
     volumes:
