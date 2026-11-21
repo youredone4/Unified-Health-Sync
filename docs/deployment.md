@@ -4,13 +4,14 @@ This guide is for whoever sets up and looks after the HealthSync server for
 the LGU. It assumes you can use a Linux command line. You do not need to
 know the codebase.
 
-HealthSync runs as three Docker containers:
+HealthSync runs as four Docker containers:
 
 | Container | What it does | Reachable from outside? |
 |---|---|---|
 | `caddy` | HTTPS front door; gets and renews the certificate | Yes, ports 80 and 443 |
 | `app` | The HealthSync web app and API | No |
 | `db` | PostgreSQL 16 database | No |
+| `backup` | Takes an encrypted database backup every night | No |
 
 ## Before real patient data
 
@@ -29,7 +30,9 @@ Done in the software:
 
 Still open:
 
-- [ ] Automated, encrypted backups and a tested restore.
+- [x] Automated, encrypted nightly backups (in the software).
+- [ ] Backups copied off the server on a schedule, and one restore
+      practised end to end (see [Backups](#backups)). Only you can do this.
 - [ ] Two-factor login for administrators.
 - [ ] Data Privacy Act paperwork (see [Data privacy](#data-privacy)).
 - [ ] Purge the old data spreadsheets from the repository's history (they
@@ -74,6 +77,7 @@ Until then, run with demo data only (`SEED_DEMO_DATA=true`).
    |---|---|
    | `SESSION_SECRET` | output of `openssl rand -hex 32` |
    | `POSTGRES_PASSWORD` | output of `openssl rand -hex 24` |
+   | `BACKUP_PASSPHRASE` | output of `openssl rand -hex 24` — **also write it down and keep it off this server** |
    | `SITE_ADDRESS` | your domain, or `https://<server LAN IP>` |
 
    `.env` contains secrets. Never commit it, email it, or paste it into chat.
@@ -179,6 +183,7 @@ Machine → Trusted Root Certification Authorities).
 **Update to a new version**
 
 ```bash
+docker compose exec backup /scripts/backup.sh     # backup first
 git pull
 docker compose up -d --build
 ```
@@ -186,27 +191,6 @@ docker compose up -d --build
 Database changes are applied automatically at startup. If a migration fails,
 the app container stops rather than run against a half-updated database;
 `docker compose logs app` shows why.
-
-**Back up the database**
-
-```bash
-mkdir -p backups
-docker compose exec -T db sh -c 'pg_dump -U "$POSTGRES_USER" -Fc "$POSTGRES_DB"' \
-  > "backups/healthsync-$(date +%F).dump"
-```
-
-Keep backups off the server and encrypted — they contain patient data. A
-backup is only real once you have restored it somewhere and checked it.
-
-**Restore a backup** (replaces current data)
-
-```bash
-docker compose stop app
-docker compose exec -T db sh -c \
-  'pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --clean --if-exists --no-owner' \
-  < backups/healthsync-2026-01-31.dump
-docker compose start app
-```
 
 **Logs**
 
@@ -220,6 +204,74 @@ docker compose logs --since 1h app
 docker compose stop
 docker compose start
 ```
+
+## Backups
+
+The `backup` container takes a full database backup every night at 2 AM
+Philippine time and once right after first start-up. Each backup is
+encrypted with `BACKUP_PASSPHRASE` before it is written, checked by reading
+it back, and kept for 14 days.
+
+**The passphrase is the key to every backup.** Keep a copy somewhere other
+than this server. If the server is lost and the passphrase with it, the
+backups cannot be opened by anyone.
+
+**Check that backups are happening**
+
+```bash
+docker compose logs --tail 20 backup          # look for "[backup] ok:"
+docker compose exec backup ls -lh /backups
+```
+
+A line containing `BACKUP FAILED` means last night's backup did not happen;
+the lines above it say why.
+
+**Take a backup right now** (do this before every update)
+
+```bash
+docker compose exec backup /scripts/backup.sh
+```
+
+**Copy backups off the server.** Backups that live only on the server are
+lost with it (fire, theft, disk failure, ransomware). At least weekly, copy
+them to a USB drive or another machine kept somewhere else:
+
+```bash
+docker compose cp backup:/backups ./healthsync-backups-$(date +%F)
+```
+
+The files are encrypted, so the copy is safe to carry; the passphrase must
+travel separately.
+
+**Practise a restore.** Do this once before go-live and every few months
+after. It restores into a scratch database, so live data is not touched:
+
+```bash
+# 1. Is the newest backup readable at all?
+docker compose exec backup sh -c '/scripts/restore.sh --check "$(ls -t /backups/*.gpg | head -1)"'
+
+# 2. Restore it into a scratch database and look at it.
+docker compose exec db sh -c 'createdb -U "$POSTGRES_USER" restore_test'
+docker compose exec -e PGDATABASE=restore_test -e RESTORE_CONFIRM=yes backup \
+  sh -c '/scripts/restore.sh "$(ls -t /backups/*.gpg | head -1)"'
+docker compose exec db sh -c 'psql -U "$POSTGRES_USER" -d restore_test -c "select count(*) from mothers"'
+
+# 3. Clean up.
+docker compose exec db sh -c 'dropdb -U "$POSTGRES_USER" restore_test'
+```
+
+**Restore for real** (replaces all current data with the backup)
+
+```bash
+docker compose stop app
+docker compose exec -e RESTORE_CONFIRM=yes backup /scripts/restore.sh /backups/<file>.dump.gpg
+docker compose start app
+```
+
+**What backups do not cover.** They protect against losing the database.
+They do not protect the server's disk from being read if the machine is
+stolen: turn on full-disk encryption (LUKS on Linux) when you install the
+server's operating system.
 
 ## Accounts and passwords
 
@@ -248,6 +300,22 @@ docker compose start
 
 Every sign-in, failed sign-in, lockout and password reset is recorded in
 **Admin → Audit Logs**.
+
+## Keeping it patched
+
+Software that is not updated becomes unsafe on its own. Once a month:
+
+```bash
+docker compose pull            # newer PostgreSQL / Caddy patch releases
+docker compose build --pull    # newer Node.js base image
+docker compose up -d
+```
+
+and apply operating-system updates on the server itself. Developers should
+run `npm audit` before each release. Two advisories are known and accepted
+for now, with the reasons recorded in the pull request that added this
+section: `zod` (needs a major-version migration; the request-size limits
+bound its effect) and a build-time-only CSS tooling dependency.
 
 ## Optional services
 

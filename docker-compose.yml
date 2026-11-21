@@ -60,6 +60,33 @@ services:
     cap_drop: [ALL]
     networks: [internal]
 
+  # Nightly encrypted database backup (scripts/backup.sh). Backups land in
+  # the `backups` volume; copy them off this server regularly, see
+  # docs/deployment.md.
+  backup:
+    build:
+      context: .
+      dockerfile: Dockerfile.backup
+    restart: unless-stopped
+    init: true
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGHOST: db
+      PGUSER: ${POSTGRES_USER}
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      PGDATABASE: ${POSTGRES_DB}
+      BACKUP_PASSPHRASE: ${BACKUP_PASSPHRASE:?set BACKUP_PASSPHRASE in .env}
+      BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-14}
+      BACKUP_HOUR_UTC: ${BACKUP_HOUR_UTC:-18}
+    volumes:
+      - backups:/backups
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    networks: [internal]
+
   caddy:
     image: caddy:2-alpine
     restart: unless-stopped
@@ -77,6 +104,7 @@ services:
 
 volumes:
   pgdata:
+  backups:
   caddy_data:
   caddy_config:
 

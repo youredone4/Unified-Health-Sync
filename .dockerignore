@@ -15,4 +15,6 @@ graphify-out
 docker-compose*.yml
 Caddyfile
 Dockerfile
+Dockerfile.backup
 .dockerignore
+backups
