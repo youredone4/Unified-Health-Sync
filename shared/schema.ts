@@ -723,10 +723,14 @@ export const medicalCertificates = pgTable("medical_certificates", {
   validUntil: text("valid_until"),
   purpose: text("purpose"),                                // free text
   findings: text("findings"),                              // clinical findings
-  // Provenance
+  // Provenance. The SIGNER is the physician whose name is printed above
+  // the signature line; it is always a real MHO account chosen from a
+  // list, and the name is copied from that account by the server. The
+  // ENCODER is whoever typed the certificate in (usually a nurse).
   signedByUserId: varchar("signed_by_user_id"),
-  signedByName: text("signed_by_name"),                    // denormalized for PDF
-  signedByTitle: text("signed_by_title"),                  // e.g. "RHU Nurse / MHO"
+  signedByName: text("signed_by_name"),                    // copied from the signer's account
+  signedByTitle: text("signed_by_title"),                  // e.g. "Municipal Health Officer"
+  encodedByUserId: varchar("encoded_by_user_id"),
   notes: text("notes"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   // Cross-domain linking — see docs/cross-domain-linking-audit.md

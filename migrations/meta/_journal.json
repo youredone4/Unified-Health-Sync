@@ -22,6 +22,13 @@
       "when": 1795206004966,
       "tag": "0002_two_step_sign_in",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1795243094762,
+      "tag": "0003_certificate_encoder",
+      "breakpoints": true
     }
   ]
 }
