@@ -1,3 +1,4 @@
+import { todayManila } from "@shared/dates";
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation, useParams } from "wouter";
@@ -127,7 +128,7 @@ export default function ChildForm() {
     // Stamp SMS consent dates whenever the flag flips. Preserves
     // existing dates when the toggle doesn't change so re-saves don't
     // reset the audit trail.
-    const today = new Date().toISOString().split("T")[0];
+    const today = todayManila();
     const prevOptIn = existingChild?.smsOptIn;
     const smsOptInDate = formData.smsOptIn && !prevOptIn
       ? today

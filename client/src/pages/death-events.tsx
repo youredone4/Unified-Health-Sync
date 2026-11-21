@@ -1,3 +1,4 @@
+import { todayManila } from "@shared/dates";
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
@@ -120,7 +121,7 @@ function ReviewRow({
   onChanged: () => void;
 }) {
   const { toast } = useToast();
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayManila();
   const overdue = item.dueDate < today && item.status !== "REVIEWED" && item.status !== "CLOSED";
   const next = NEXT_STATUS[item.status];
 

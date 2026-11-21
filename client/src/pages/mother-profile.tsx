@@ -1,3 +1,4 @@
+import { todayManila } from "@shared/dates";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useParams, useLocation } from "wouter";
 import type { Mother, FpServiceRecord, Child, PrenatalVisit } from "@shared/schema";
@@ -182,7 +183,7 @@ export default function MotherProfile() {
 
   const handleMarkDone = () => {
     if (confirmAction === "tt") {
-      const today = new Date().toISOString().split("T")[0];
+      const today = todayManila();
       if (!mother.tt1Date) updateMutation.mutate({ tt1Date: today });
       else if (!mother.tt2Date) updateMutation.mutate({ tt2Date: today });
       else if (!mother.tt3Date) updateMutation.mutate({ tt3Date: today });

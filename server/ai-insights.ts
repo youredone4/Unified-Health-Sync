@@ -1,3 +1,4 @@
+import { todayManila } from "@shared/dates";
 import { db } from "./db";
 import { getOpenAI, requireOpenAI, OPENAI_MODEL } from "./openai-client";
 import { mothers, children, seniors, diseaseCases, tbPatients, barangays, inventory } from "@shared/schema";
@@ -111,7 +112,7 @@ function createMetricTrend(current: number, previous: number): MetricTrend {
 }
 
 async function getHealthStatistics(): Promise<HealthStats> {
-  const today = new Date().toISOString().split("T")[0];
+  const today = todayManila();
   
   const allBarangays = await db.select().from(barangays);
   const barangayNames = allBarangays.map(b => b.name);

@@ -1,3 +1,4 @@
+import { todayManila } from "@shared/dates";
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
@@ -50,7 +51,7 @@ export default function SickChildWorklist() {
   // Section F counts children 0-59 mos at the time of the visit. The
   // worklist filters to currently-eligible children using today's date —
   // a child who'll turn 5 next week is still in the list today.
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayManila();
   const eligible = useMemo(() => {
     const q = search.trim().toLowerCase();
     return children
@@ -243,7 +244,7 @@ function LogVisitDialog({
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      visitDate: new Date().toISOString().slice(0, 10),
+      visitDate: todayManila(),
       vitaminAGiven: false,
       hasAcuteDiarrhea: false,
       notes: "",

@@ -1,3 +1,4 @@
+import { todayManila } from "@shared/dates";
 import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
@@ -219,7 +220,7 @@ function LogVisitDialog({
     resolver: zodResolver(visitFormSchema),
     defaultValues: {
       visitType: defaultCheckpoint,
-      visitDate: new Date().toISOString().slice(0, 10),
+      visitDate: todayManila(),
       bpSystolic: null,
       bpDiastolic: null,
       breastfeedingExclusive: false,

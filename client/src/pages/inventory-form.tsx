@@ -1,3 +1,4 @@
+import { todayManila } from "@shared/dates";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -130,7 +131,7 @@ export default function InventoryForm() {
         htnMeds: [],
         lowStockThreshold: data.lowStockThreshold,
         surplusThreshold: data.surplusThreshold,
-        lastUpdated: new Date().toISOString().split('T')[0],
+        lastUpdated: todayManila(),
       });
     },
     onSuccess: () => {
@@ -148,7 +149,7 @@ export default function InventoryForm() {
         vaccines: { bcgQty: data.bcgQty, hepBQty: data.hepBQty, pentaQty: data.pentaQty, opvQty: data.opvQty, mrQty: data.mrQty },
         lowStockThreshold: data.lowStockThreshold,
         surplusThreshold: data.surplusThreshold,
-        lastUpdated: new Date().toISOString().split('T')[0],
+        lastUpdated: todayManila(),
       });
     },
     onSuccess: () => {
@@ -163,7 +164,7 @@ export default function InventoryForm() {
     mutationFn: async (data: MedicineFormValues) => {
       return apiRequest("POST", "/api/medicine-inventory", {
         ...data,
-        lastUpdated: new Date().toISOString().split('T')[0],
+        lastUpdated: todayManila(),
       });
     },
     onSuccess: () => {
@@ -178,7 +179,7 @@ export default function InventoryForm() {
     mutationFn: async (data: MedicineFormValues) => {
       return apiRequest("PUT", `/api/medicine-inventory/${medParams?.id}`, {
         ...data,
-        lastUpdated: new Date().toISOString().split('T')[0],
+        lastUpdated: todayManila(),
       });
     },
     onSuccess: () => {

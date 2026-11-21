@@ -1,3 +1,4 @@
+import { todayManila, daysFromNowManila } from "@shared/dates";
 import { db } from "../db";
 import {
   workforceMembers,
@@ -64,10 +65,8 @@ export const nursesRoster: ReportDefinition = {
     }
 
     // PRC license expiry status, for a quick at-a-glance flag.
-    const today = new Date().toISOString().slice(0, 10);
-    const ninetyDaysOut = new Date();
-    ninetyDaysOut.setDate(ninetyDaysOut.getDate() + 90);
-    const ninetyDaysOutIso = ninetyDaysOut.toISOString().slice(0, 10);
+    const today = todayManila();
+    const ninetyDaysOutIso = daysFromNowManila(90);
     const licenseStatus = (expiry: string | null) => {
       if (!expiry) return "—";
       if (expiry < today) return "EXPIRED";

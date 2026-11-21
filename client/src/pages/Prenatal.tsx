@@ -1,3 +1,4 @@
+import { todayManila } from "@shared/dates";
 import { useState } from "react";
 import { Layout } from "@/components/Layout";
 import { KPICard } from "@/components/KPICard";
@@ -44,7 +45,7 @@ export default function Prenatal() {
   const handleUpdate = async (field: string) => {
     if (!selectedMother) return;
     
-    const today = new Date().toISOString().split('T')[0];
+    const today = todayManila();
     try {
       await updateMother.mutateAsync({
         id: selectedMother.id,

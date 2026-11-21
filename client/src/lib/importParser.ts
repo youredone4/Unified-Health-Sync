@@ -1,3 +1,4 @@
+import { todayManila } from "@shared/dates";
 import * as XLSX from "xlsx";
 
 export interface NormalizedRow {
@@ -78,7 +79,7 @@ function formatDate(val: unknown): string {
     }
   }
   const str = String(val ?? "").trim();
-  if (!str) return new Date().toISOString().split("T")[0];
+  if (!str) return todayManila();
   const parsed = new Date(str);
   if (!isNaN(parsed.getTime())) return parsed.toISOString().split("T")[0];
   return str;
@@ -159,7 +160,7 @@ function processSheet(
       }
       reporting_date = formatDate(dateRaw);
     } else {
-      reporting_date = new Date().toISOString().split("T")[0];
+      reporting_date = todayManila();
     }
 
     valid.push({ barangay: barangay!, disease_name: diseaseRaw, cases: Math.round(cases), reporting_date });
