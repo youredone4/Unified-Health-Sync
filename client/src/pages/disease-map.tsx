@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import type { DiseaseCase } from "@shared/schema";
@@ -7,33 +7,13 @@ import { isOutbreakCondition, TODAY_STR } from "@/lib/healthLogic";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { MapPin, ChevronRight, ChevronDown } from "lucide-react";
-import { MapContainer, TileLayer, Circle, Popup, Marker } from "react-leaflet";
+import { MapContainer, TileLayer, Circle, Popup, Marker, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { DashboardShell, FilterBar, type AlertSpec } from "@/components/dashboard-shell";
+import { PLACER_BARANGAY_POINTS, PLACER_MAP_BOUNDS } from "@shared/placer-barangays";
 
-const BARANGAY_COORDS: Record<string, [number, number]> = {
-  "Amoslog":            [9.6392, 125.5980],
-  "Anislagan":          [9.6220, 125.5489],
-  "Bad-as":             [9.6328, 125.5672],
-  "Badas":              [9.6469, 125.6073],
-  "Banga":              [9.6752, 125.6284],
-  "Central (Poblacion)":[9.6564, 125.6023],
-  "Ellaperal":          [9.6968, 125.6507],
-  "Ipil":               [9.6530, 125.6041],
-  "Lakandula":          [9.6715, 125.6525],
-  "Mabini":             [9.6249, 125.5663],
-  "Magsaysay":          [9.6608, 125.5906],
-  "Mahaba":             [9.6845, 125.6420],
-  "Masapelid":          [9.6951, 125.6296],
-  "Pananay-an":         [9.6175, 125.6125],
-  "Panhutongan":        [9.6317, 125.6166],
-  "San Isidro":         [9.6463, 125.5483],
-  "Santa Cruz":         [9.6336, 125.5613],
-  "Suyoc":              [9.6636, 125.5751],
-  "Tagbongabong":       [9.6488, 125.6209],
-  "Tinago":             [9.6704, 125.6397],
-};
+const BARANGAY_COORDS = PLACER_BARANGAY_POINTS;
 
 function heatColor(intensity: number): string {
   if (intensity <= 0) return "#22c55e";
@@ -71,6 +51,28 @@ function riskLabel(intensity: number): { label: string; variant: "destructive" |
   if (intensity >= 0.25) return { label: "Moderate", variant: "secondary" };
   if (intensity > 0) return { label: "Low", variant: "outline" };
   return { label: "None", variant: "outline" };
+}
+
+const MAP_FIT_OPTIONS = { padding: [30, 30] as [number, number], animate: false };
+
+/**
+ * Keeps the whole municipality in view when the map changes size (a phone
+ * turned sideways, a resized window, the sidebar opening). Without this the
+ * view chosen at first paint would stay, and a wider map would ask for map
+ * images that are not in the bundled set.
+ */
+function KeepMunicipalityInView() {
+  const map = useMap();
+  useEffect(() => {
+    const refit = () => {
+      map.invalidateSize({ animate: false });
+      map.fitBounds(PLACER_MAP_BOUNDS, MAP_FIT_OPTIONS);
+    };
+    const observer = new ResizeObserver(refit);
+    observer.observe(map.getContainer());
+    return () => observer.disconnect();
+  }, [map]);
+  return null;
 }
 
 const centerIcon = L.divIcon({
@@ -128,19 +130,11 @@ export default function DiseaseMap() {
     return <div className="flex items-center justify-center h-64"><p className="text-muted-foreground">Loading map...</p></div>;
   }
 
-  // Compute bounds that snug around all 20 barangays so the map shows
-  // every catchment without manual zoom. Locked-zoom + locked-pan below
-  // turns the map into a fixed reference view (page scroll no longer
-  // hijacks zoom, and operators can't accidentally lose their place).
-  const mapBounds: [[number, number], [number, number]] = (() => {
-    const coords = Object.values(BARANGAY_COORDS);
-    const lats = coords.map(([lat]) => lat);
-    const lngs = coords.map(([, lng]) => lng);
-    return [
-      [Math.min(...lats), Math.min(...lngs)],
-      [Math.max(...lats), Math.max(...lngs)],
-    ];
-  })();
+  // The map is a fixed reference view of the whole municipality: zoom and
+  // pan are locked (page scroll no longer hijacks zoom, and operators
+  // can't lose their place). That is also why the background can be a
+  // small set of map images shipped with the app, see <TileLayer> below.
+  const mapBounds = PLACER_MAP_BOUNDS;
 
   const alerts: AlertSpec[] = [];
   if (outbreak.isOutbreak) {
@@ -181,11 +175,16 @@ export default function DiseaseMap() {
             </div>
           </CardHeader>
           <CardContent className="p-0">
-            <div className="h-[600px] rounded-b-md overflow-hidden">
+            {/* Width is capped so the view never needs map images beyond the
+                bundled set (script/fetch-map-tiles.mjs assumes 1150 x 600). */}
+            <div className="h-[600px] max-w-[1150px] mx-auto rounded-b-md overflow-hidden" data-testid="disease-map">
               <MapContainer
                 bounds={mapBounds}
-                boundsOptions={{ padding: [30, 30] }}
-                style={{ height: '100%', width: '100%' }}
+                boundsOptions={MAP_FIT_OPTIONS}
+                minZoom={11}
+                maxZoom={13}
+                fadeAnimation={false}
+                style={{ height: '100%', width: '100%', background: '#aad3df' }}
                 scrollWheelZoom={false}
                 doubleClickZoom={false}
                 touchZoom={false}
@@ -194,10 +193,16 @@ export default function DiseaseMap() {
                 dragging={false}
                 zoomControl={false}
               >
+                {/* Map images are served by HealthSync itself (client/public/map-tiles):
+                    no API key, no outside service, works without internet. */}
                 <TileLayer
-                  attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-                  url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+                  attribution='&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap</a> contributors'
+                  url="/map-tiles/{z}/{x}/{y}.png"
+                  minZoom={11}
+                  maxZoom={14}
+                  detectRetina
                 />
+                <KeepMunicipalityInView />
                 {heatPoints.map(({ barangay, coords, count, intensity }) => {
                   const color = heatColor(intensity);
                   const risk = riskLabel(intensity);

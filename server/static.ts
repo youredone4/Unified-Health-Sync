@@ -11,15 +11,20 @@ export function serveStatic(app: Express) {
   }
 
   // Files under /assets have a content hash in their name, so a given URL
-  // never changes: browsers may cache them for a year. Everything else
-  // (index.html, favicon) is always revalidated, so an update is picked up
-  // on the next page load.
+  // never changes: browsers may cache them for a year. Map images change
+  // only when someone re-runs script/fetch-map-tiles.mjs, so a week is
+  // safe. Everything else (index.html, favicon) is always revalidated, so
+  // an update is picked up on the next page load.
   app.use(
     express.static(distPath, {
       index: false,
       setHeaders: (res, filePath) => {
         const isHashedAsset = filePath.includes(`${path.sep}assets${path.sep}`);
-        res.setHeader("Cache-Control", isHashedAsset ? "public, max-age=31536000, immutable" : "no-cache");
+        const isMapTile = filePath.includes(`${path.sep}map-tiles${path.sep}`);
+        res.setHeader(
+          "Cache-Control",
+          isHashedAsset ? "public, max-age=31536000, immutable" : isMapTile ? "public, max-age=604800" : "no-cache",
+        );
       },
     }),
   );
@@ -29,7 +34,9 @@ export function serveStatic(app: Express) {
   // answering with index.html (as the catch-all below would) makes the
   // browser reject it as "not JavaScript" and leaves a blank page. A clean
   // 404 lets the client reload instead.
-  app.use("/assets", (_req, res) => {
+  // The same goes for a map image outside the bundled set: the map shows
+  // its plain background there instead of trying to draw a web page.
+  app.use(["/assets", "/map-tiles"], (_req, res) => {
     res.status(404).type("text/plain").send("Not found");
   });
 

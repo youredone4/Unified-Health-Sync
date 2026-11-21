@@ -16,6 +16,7 @@ import { eq, sql } from "drizzle-orm";
 import { config } from "./config";
 import { hashPassword, verifyPassword, burnPasswordCheck, needsRehash } from "./passwords";
 import { checkPassword, isKnownDefaultPassword } from "@shared/password-policy";
+import { PLACER_BARANGAYS } from "@shared/placer-barangays";
 
 export { hashPassword, verifyPassword };
 export { writeAuthAudit, completeLogin, registerFailedAttempt, lockedResponse };
@@ -84,14 +85,6 @@ export async function setupAuth(app: Express) {
   await seedPlacerBarangays();
   await warnIfNoAdmin();
 }
-
-// The 20 official barangays of Placer, Surigao del Norte (reference data).
-const PLACER_BARANGAYS = [
-  "Amoslog", "Anislagan", "Bad-as", "Boyongan", "Bugas-bugas",
-  "Central (Poblacion)", "Ellaperal (Nonok)", "Ipil (Poblacion)", "Lakandula", "Mabini",
-  "Macalaya", "Magsaysay (Poblacion)", "Magupange", "Pananay-an", "Panhutongan",
-  "San Isidro", "Sani-sani", "Santa Cruz", "Suyoc", "Tagbongabong"
-];
 
 async function seedPlacerBarangays() {
   try {
