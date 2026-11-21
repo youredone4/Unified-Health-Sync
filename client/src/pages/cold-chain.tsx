@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
+import { zodResolver } from "@/lib/zod-resolver";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { z } from "zod";
 import {

@@ -43,11 +43,11 @@ const schema = z.object({
   HOST: z.string().default("0.0.0.0"),
 
   DATABASE_URL: z
-    .string({ required_error: "DATABASE_URL is required (postgres://user:pass@host:5432/db)" })
+    .string({ error: "DATABASE_URL is required (postgres://user:pass@host:5432/db)" })
     .url("DATABASE_URL must be a postgres:// connection URL"),
 
   SESSION_SECRET: z
-    .string({ required_error: "SESSION_SECRET is required. Generate one with: openssl rand -hex 32" })
+    .string({ error: "SESSION_SECRET is required. Generate one with: openssl rand -hex 32" })
     .min(32, "SESSION_SECRET must be at least 32 characters. Generate one with: openssl rand -hex 32"),
 
   // Number of reverse-proxy hops in front of the app. Needed so req.ip and

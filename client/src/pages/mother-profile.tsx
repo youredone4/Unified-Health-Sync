@@ -51,7 +51,7 @@ import {
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
+import { zodResolver } from "@/lib/zod-resolver";
 import { z } from "zod";
 import { format } from "date-fns";
 
@@ -71,8 +71,8 @@ const FP_STATUS_COLORS: Record<string, string> = {
 };
 
 const quickEnrollSchema = z.object({
-  fpMethod: z.enum(FP_METHODS, { required_error: "FP Method is required" }),
-  fpStatus: z.enum(FP_STATUSES, { required_error: "Status is required" }),
+  fpMethod: z.enum(FP_METHODS, { error: "FP Method is required" }),
+  fpStatus: z.enum(FP_STATUSES, { error: "Status is required" }),
   dateStarted: z.string().min(1, "Date Started is required"),
 });
 type QuickEnrollValues = z.infer<typeof quickEnrollSchema>;

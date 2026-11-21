@@ -1,3 +1,4 @@
+import { patchSchema } from "./patch";
 import { z } from 'zod';
 import { 
   insertMotherSchema, mothers,
@@ -51,7 +52,7 @@ export const api = {
     update: {
       method: 'PUT' as const,
       path: '/api/mothers/:id',
-      input: insertMotherSchema.partial(),
+      input: patchSchema(insertMotherSchema),
       responses: {
         200: z.custom<typeof mothers.$inferSelect>(),
       },
@@ -92,7 +93,7 @@ export const api = {
     update: {
       method: 'PUT' as const,
       path: '/api/children/:id',
-      input: insertChildSchema.partial(),
+      input: patchSchema(insertChildSchema),
       responses: {
         200: z.custom<typeof children.$inferSelect>(),
       },
@@ -133,7 +134,7 @@ export const api = {
     update: {
       method: 'PUT' as const,
       path: '/api/seniors/:id',
-      input: insertSeniorSchema.partial(),
+      input: patchSchema(insertSeniorSchema),
       responses: {
         200: z.custom<typeof seniors.$inferSelect>(),
       },
@@ -183,7 +184,7 @@ export const api = {
     update: {
       method: 'PUT' as const,
       path: '/api/medicine-inventory/:id',
-      input: insertMedicineInventorySchema.partial(),
+      input: patchSchema(insertMedicineInventorySchema),
       responses: {
         200: z.custom<typeof medicineInventory.$inferSelect>(),
         404: errorSchemas.notFound,
@@ -243,7 +244,7 @@ export const api = {
     update: {
       method: 'PUT' as const,
       path: '/api/disease-cases/:id',
-      input: insertDiseaseCaseSchema.partial(),
+      input: patchSchema(insertDiseaseCaseSchema),
       responses: {
         200: z.custom<typeof diseaseCases.$inferSelect>(),
       },
@@ -284,7 +285,7 @@ export const api = {
     update: {
       method: 'PUT' as const,
       path: '/api/tb-patients/:id',
-      input: insertTBPatientSchema.partial(),
+      input: patchSchema(insertTBPatientSchema),
       responses: {
         200: z.custom<typeof tbPatients.$inferSelect>(),
       },
@@ -309,7 +310,7 @@ export const api = {
     update: {
       method: 'PUT' as const,
       path: '/api/theme-settings',
-      input: insertThemeSettingsSchema.partial(),
+      input: patchSchema(insertThemeSettingsSchema),
       responses: {
         200: z.custom<typeof themeSettings.$inferSelect>(),
       },
@@ -358,7 +359,7 @@ export const api = {
     update: {
       method: 'PUT' as const,
       path: '/api/consults/:id',
-      input: insertConsultSchema.partial(),
+      input: patchSchema(insertConsultSchema),
       responses: {
         200: z.custom<typeof consults.$inferSelect>(),
       },

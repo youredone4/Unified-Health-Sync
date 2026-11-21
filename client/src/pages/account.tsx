@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { TwoStepCard } from "@/components/two-step-card";
 import { PASSWORD_MIN_LENGTH, PASSWORD_RULES_SUMMARY } from "@shared/password-policy";
 import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
+import { zodResolver } from "@/lib/zod-resolver";
 import { z } from "zod";
 import { useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";

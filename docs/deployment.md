@@ -331,10 +331,9 @@ docker compose up -d
 ```
 
 and apply operating-system updates on the server itself. Developers should
-run `npm audit` before each release. Two advisories are known and accepted
-for now, with the reasons recorded in the pull request that added this
-section: `zod` (needs a major-version migration; the request-size limits
-bound its effect) and a build-time-only CSS tooling dependency.
+run `npm audit` before each release. One advisory is known and accepted:
+a moderate one in a CSS tooling dependency that is only used while building
+and never runs on the server.
 
 ## Optional services
 
