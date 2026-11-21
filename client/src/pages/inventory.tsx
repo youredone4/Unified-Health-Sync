@@ -649,12 +649,13 @@ export default function InventoryPage() {
                   <th className="text-center py-2 px-3">OPV</th>
                   <th className="text-center py-2 px-3">HepB</th>
                   <th className="text-center py-2 px-3">MR</th>
+                  <th className="py-2 px-3"><span className="sr-only">Actions</span></th>
                 </tr>
               </thead>
               <tbody>
                 {filteredVaccineRows.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="text-center py-8 text-muted-foreground" data-testid="text-no-vaccine-records">
+                    <td colSpan={7} className="text-center py-8 text-muted-foreground" data-testid="text-no-vaccine-records">
                       {inventory.length === 0
                         ? `No inventory records found. Use "Add Inventory" to add stock for a barangay.`
                         : "No vaccine rows match the current filters."}
@@ -679,6 +680,11 @@ export default function InventoryPage() {
                       </td>
                       <td className="text-center py-3 px-3">
                         <StatusBadge status={getStockStatus(v.mrQty || 0, 10, 50)} label={`${v.mrQty || 0}`} />
+                      </td>
+                      <td className="py-3 px-3 text-right">
+                        <Link href={`/inventory/${inv.id}/edit`}>
+                          <Button variant="ghost" size="sm" data-testid={`button-edit-inv-${inv.id}`}>Edit</Button>
+                        </Link>
                       </td>
                     </tr>
                   );

@@ -21,7 +21,7 @@ import { patchSchema } from "@shared/patch";
 import { RECOMMENDATIONS } from "@shared/recommendations";
 import { insertSeniorSchema } from "@shared/schema";
 import { config } from "./config";
-import { users as usersTable, UserRole, auditLogs, deathReviews, DEATH_REVIEW_STATUSES, aefiEvents, insertAefiEventSchema, outbreaks, OUTBREAK_STATUSES, consults, medicineInventory, medicationDispensings, insertMedicationDispensingSchema, inventoryRequests, insertInventoryRequestSchema, RESTOCK_STATUSES, SERVICE_CODES, MD_DISPOSITIONS, medicalCertificates, insertMedicalCertificateSchema, CERTIFICATE_TYPES, campaignTallies, insertCampaignTallySchema, CAMPAIGN_TYPES, konsultaEnrollments, insertKonsultaEnrollmentSchema, KONSULTA_ENROLLMENT_STATUSES, konsultaEncounters, insertKonsultaEncounterSchema, KONSULTA_ENCOUNTER_STATUSES, philhealthSubmissions, smsOutbox } from "@shared/schema";
+import { users as usersTable, UserRole, auditLogs, deathReviews, DEATH_REVIEW_STATUSES, aefiEvents, insertAefiEventSchema, outbreaks, OUTBREAK_STATUSES, consults, inventory, medicineInventory, medicationDispensings, insertMedicationDispensingSchema, inventoryRequests, insertInventoryRequestSchema, RESTOCK_STATUSES, SERVICE_CODES, MD_DISPOSITIONS, medicalCertificates, insertMedicalCertificateSchema, CERTIFICATE_TYPES, campaignTallies, insertCampaignTallySchema, CAMPAIGN_TYPES, konsultaEnrollments, insertKonsultaEnrollmentSchema, KONSULTA_ENROLLMENT_STATUSES, konsultaEncounters, insertKonsultaEncounterSchema, KONSULTA_ENCOUNTER_STATUSES, philhealthSubmissions, smsOutbox } from "@shared/schema";
 import * as philhealth from "./integrations/philhealth";
 import { ensureReportsRegistered, listReports, getReport } from "./reports";
 import { monthRange, quarterRange, annualRange, customRange } from "./reports/types";
@@ -615,6 +615,65 @@ export async function registerRoutes(
     if (rows === null) return res.status(403).json(BARANGAY_DENIED);
     res.json(rows);
   });
+
+  // Vaccine stock is one record per barangay. Until now the stock form
+  // posted to routes that did not exist, so vaccine stock could be read
+  // but never saved. Same access rules as medicine stock below: staff
+  // roles only, and a barangay nurse only for an assigned barangay.
+  const stockQty = z.number().int().min(0).max(1_000_000);
+  const vaccineStockSchema = z.object({
+    barangay: z.string().trim().min(1).max(100),
+    vaccines: z.object({ bcgQty: stockQty, hepBQty: stockQty, pentaQty: stockQty, opvQty: stockQty, mrQty: stockQty }),
+    lowStockThreshold: z.number().int().min(0).max(100_000).default(10),
+    surplusThreshold: z.number().int().min(0).max(1_000_000).default(100),
+  });
+
+  app.get("/api/inventory/:id", loadUserInfo, requireAuth, ar(async (req, res) => {
+    const id = parseId(req.params.id, res); if (id === null) return;
+    const [item] = await db.select().from(inventory).where(eq(inventory.id, id));
+    if (!item) return res.status(404).json({ message: "Vaccine stock record not found" });
+    if (tlBlocked(req, item.barangay)) return res.status(403).json(BARANGAY_DENIED);
+    res.json(item);
+  }));
+
+  app.post("/api/inventory", registryRBAC, ar(async (req, res) => {
+    const input = vaccineStockSchema.parse(req.body);
+    if (tlBlocked(req, input.barangay)) return res.status(403).json(BARANGAY_DENIED);
+    if (!(await storage.getBarangays()).some((b) => b.name === input.barangay)) {
+      return res.status(400).json({ message: "Unknown barangay" });
+    }
+    const [already] = await db.select({ id: inventory.id }).from(inventory).where(eq(inventory.barangay, input.barangay));
+    if (already) {
+      return res.status(409).json({
+        message: `${input.barangay} already has a vaccine stock record. Edit that record instead of adding a second one.`,
+        existingId: already.id,
+      });
+    }
+    const [created] = await db.insert(inventory).values({ ...input, htnMeds: [], lastUpdated: todayManila() }).returning();
+    await createAuditLog(req.userInfo!.id, req.userInfo!.role, "CREATE", "VACCINE_INVENTORY", String(created.id), created.barangay, undefined, created, req);
+    res.status(201).json(created);
+  }));
+
+  app.put("/api/inventory/:id", registryRBAC, ar(async (req, res) => {
+    const id = parseId(req.params.id, res); if (id === null) return;
+    const [existing] = await db.select().from(inventory).where(eq(inventory.id, id));
+    if (!existing) return res.status(404).json({ message: "Vaccine stock record not found" });
+    if (tlBlocked(req, existing.barangay)) return res.status(403).json(BARANGAY_DENIED);
+    const input = vaccineStockSchema.parse(req.body);
+    // The record belongs to its barangay; moving it would silently hand one
+    // barangay's stock to another.
+    if (input.barangay !== existing.barangay) {
+      return res.status(400).json({ message: "A stock record cannot be moved to another barangay" });
+    }
+    const [updated] = await db.update(inventory).set({
+      vaccines: input.vaccines,
+      lowStockThreshold: input.lowStockThreshold,
+      surplusThreshold: input.surplusThreshold,
+      lastUpdated: todayManila(),
+    }).where(eq(inventory.id, id)).returning();
+    await createAuditLog(req.userInfo!.id, req.userInfo!.role, "UPDATE", "VACCINE_INVENTORY", String(id), existing.barangay, existing, updated, req);
+    res.json(updated);
+  }));
 
   // === COLD-CHAIN TEMPERATURE LOGS ===
   // Per DOH NIP/EPI Cold Chain Manual: twice-daily fridge readings.

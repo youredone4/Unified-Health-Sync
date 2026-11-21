@@ -44,6 +44,16 @@ const medicineFormSchema = z.object({
   lowStockThreshold: z.coerce.number().min(0).default(10),
 });
 
+/** The server's own explanation from a failed request ("409: {"message": ...}"). */
+function serverMessage(error: unknown): string | undefined {
+  const text = error instanceof Error ? error.message : "";
+  try {
+    return JSON.parse(text.slice(text.indexOf("{"))).message;
+  } catch {
+    return undefined;
+  }
+}
+
 type VaccineFormValues = z.infer<typeof vaccineFormSchema>;
 type MedicineFormValues = z.infer<typeof medicineFormSchema>;
 
@@ -139,7 +149,7 @@ export default function InventoryForm() {
       toast({ title: "Vaccine inventory created successfully" });
       navigate("/inventory");
     },
-    onError: () => toast({ title: "Failed to create inventory record", variant: "destructive" }),
+    onError: (e) => toast({ title: "Failed to create inventory record", description: serverMessage(e), variant: "destructive" }),
   });
 
   const updateVaccineMutation = useMutation({
@@ -157,7 +167,7 @@ export default function InventoryForm() {
       toast({ title: "Vaccine inventory updated successfully" });
       navigate("/inventory");
     },
-    onError: () => toast({ title: "Failed to update inventory", variant: "destructive" }),
+    onError: (e) => toast({ title: "Failed to update inventory", description: serverMessage(e), variant: "destructive" }),
   });
 
   const createMedicineMutation = useMutation({
