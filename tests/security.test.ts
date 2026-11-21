@@ -154,6 +154,7 @@ const BARANGAY_B = "Anislagan";
 const names = {
   admin: `sec_admin_${RUN}`,
   mho: `sec_mho_${RUN}`,
+  sha: `sec_sha_${RUN}`,
   tlA: `sec_tl_a_${RUN}`,
   tlB: `sec_tl_b_${RUN}`,
   mayor: `sec_mayor_${RUN}`,
@@ -250,6 +251,7 @@ before(async () => {
 
   ids.admin = await createUser(names.admin, "SYSTEM_ADMIN");
   ids.mho = await createUser(names.mho, "MHO");
+  ids.sha = await createUser(names.sha, "SHA");
   ids.tlA = await createUser(names.tlA, "TL", { barangay: BARANGAY_A });
   ids.tlB = await createUser(names.tlB, "TL", { barangay: BARANGAY_B });
   ids.mayor = await createUser(names.mayor, "MAYOR");
@@ -518,6 +520,25 @@ describe("a Team Leader is confined to their assigned barangays", () => {
     assert.ok(!conditions.json.includes(`Condition-only-in-B-${RUN}`), "a condition recorded only in another barangay was listed");
     await denied("barangay settings", await tlA.get(`/api/barangay-settings/${barangayIds[BARANGAY_B]}`));
     assert.equal((await tlA.get(`/api/barangay-settings/${barangayIds[BARANGAY_A]}`)).status, 200);
+  });
+
+  test("only the physician can sign a doctor's review of a walk-in", async () => {
+    const review = { mdAssessment: "security test", mdDisposition: "DISCHARGE" };
+    const path = `/api/walk-ins/${seeded.walkInB}/md-review`;
+    // The RHU nurse role sees every barangay but is not a physician; neither is IT.
+    await denied("RHU nurse signing", await (await session(names.sha)).patch(path, review));
+    await denied("administrator signing", await (await session(names.admin)).patch(path, review));
+    await denied("barangay nurse signing", await (await session(names.tlB)).patch(path, review));
+    const unsigned = await pool.query(`SELECT md_signed_at FROM consults WHERE id = $1`, [seeded.walkInB]);
+    assert.equal(unsigned.rows[0].md_signed_at, null, "a refused review was still recorded");
+
+    const mho = await session(names.mho);
+    const signed = await mho.patch(path, review);
+    assert.equal(signed.status, 200, signed.text);
+    assert.equal(signed.json.mdSignedByUserId, ids.mho);
+    // The RHU nurse can still read the walk-in, review included.
+    const seen = await (await session(names.sha)).get("/api/walk-ins");
+    assert.ok(seen.json.some((w: any) => w.id === seeded.walkInB && w.mdAssessment === "security test"));
   });
 
   test("municipality-wide roles still see every barangay's stock, staff and analytics", async () => {

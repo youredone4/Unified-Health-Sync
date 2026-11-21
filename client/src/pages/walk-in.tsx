@@ -182,7 +182,10 @@ type QueueTab = "ALL" | "AWAITING_MD" | "REVIEWED";
 
 export default function WalkInPage() {
   const { isTL, isMHO, isSHA, isAdmin, user } = useAuth();
+  // Everyone at the RHU can follow the doctor's queue; only the physician
+  // (MHO) can sign a review. The others open a signed review read-only.
   const canMdReview = !!(isMHO || isSHA || isAdmin);
+  const canSignMdReview = !!isMHO;
   const { selectedBarangay } = useBarangay();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -289,7 +292,7 @@ export default function WalkInPage() {
               key={w.id}
               item={w}
               canDispense={!!isTL}
-              canReview={canMdReview}
+              reviewMode={canSignMdReview ? "sign" : canMdReview ? "view" : null}
               onDispense={() => setDispenseFor(w)}
               onReview={() => setReviewFor(w)}
             />
@@ -319,6 +322,7 @@ export default function WalkInPage() {
       <MDReviewDialog
         encounter={reviewFor}
         onOpenChange={() => setReviewFor(null)}
+        readOnly={!canSignMdReview}
       />
     </div>
   );
@@ -345,11 +349,12 @@ function TabPill({
   );
 }
 
-function WalkInRow({ item, canDispense, canReview, onDispense, onReview }:
+function WalkInRow({ item, canDispense, reviewMode, onDispense, onReview }:
   {
     item: WalkIn;
     canDispense: boolean;
-    canReview: boolean;
+    /** "sign": the physician; "view": may read a signed review; null: no access. */
+    reviewMode: "sign" | "view" | null;
     onDispense: () => void;
     onReview: () => void;
   }) {
@@ -404,7 +409,7 @@ function WalkInRow({ item, canDispense, canReview, onDispense, onReview }:
               </div>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
-              {canReview ? (
+              {reviewMode === "sign" || (reviewMode === "view" && reviewed) ? (
                 <Button
                   size="sm"
                   variant={reviewed ? "outline" : "default"}
@@ -412,7 +417,7 @@ function WalkInRow({ item, canDispense, canReview, onDispense, onReview }:
                   data-testid={`walk-in-review-${item.id}`}
                 >
                   <ClipboardCheck className="w-3.5 h-3.5 mr-1" aria-hidden />
-                  {reviewed ? "View / Update" : "MD Review"}
+                  {reviewMode === "view" ? "View review" : reviewed ? "View / Update" : "MD Review"}
                 </Button>
               ) : null}
               {canDispense ? (

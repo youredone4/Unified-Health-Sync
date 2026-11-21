@@ -77,6 +77,7 @@ const TBPhoneCleanup = lazy(() => import("@/pages/tb-phone-cleanup"));
 const M1ReportPage = lazy(() => import("@/pages/m1-report"));
 import NotificationDrawer from "@/components/notification-drawer";
 import SmsOutbox from "@/components/sms-outbox";
+import { roleBadge } from "@shared/role-labels";
 const MessagesPage = lazy(() => import("@/pages/messages"));
 const AccountPage = lazy(() => import("@/pages/account"));
 const FpRegistry = lazy(() => import("@/pages/fp-registry"));
@@ -108,14 +109,6 @@ const HouseholdWaterPage = lazy(() => import("@/pages/household-water"));
 const UpdatesPage = lazy(() => import("@/pages/updates"));
 const GlossaryPage = lazy(() => import("@/pages/glossary"));
 import { InboxHeroBanner } from "@/components/inbox-hero-banner";
-
-const roleLabels: Record<string, string> = {
-  SYSTEM_ADMIN: "Admin",
-  MHO: "MHO",
-  SHA: "SHA",
-  TL: "Team Leader (Barangay Nurse)",
-};
-
 
 // Shared "Access Denied" UI
 function AccessDenied() {
@@ -593,7 +586,7 @@ function AuthenticatedApp() {
                         </span>
                         {role && (
                           <Badge variant="secondary" className="text-xs hidden md:inline">
-                            {roleLabels[role] || role}
+                            {roleBadge(role)}
                           </Badge>
                         )}
                       </Button>

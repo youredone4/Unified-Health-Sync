@@ -12,6 +12,7 @@ import { MessageCircle, Send, Search, ArrowLeft, Users, Globe } from "lucide-rea
 import { apiRequest } from "@/lib/queryClient";
 import { useAuth, type AuthUser } from "@/hooks/use-auth";
 import { formatDistanceToNow } from "date-fns";
+import { roleBadge } from "@shared/role-labels";
 
 interface Conversation {
   userId: string;
@@ -67,17 +68,6 @@ function formatTime(dateStr: string): string {
   } catch {
     return '';
   }
-}
-
-const ROLE_LABELS: Record<string, string> = {
-  SYSTEM_ADMIN: "Admin",
-  MHO: "MHO",
-  SHA: "SHA",
-  TL: "BHW",
-};
-
-function roleLabel(role: string) {
-  return ROLE_LABELS[role] ?? role;
 }
 
 function roleBadgeColor(role: string) {
@@ -155,7 +145,7 @@ function GeneralChatTab({ user }: { user: AuthUser | null }) {
                   <div className={`flex items-center gap-1.5 px-1 ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
                     <span className="text-xs font-medium text-foreground">{isMe ? 'You' : msg.senderName}</span>
                     <span className={`text-[10px] font-medium border rounded-full px-1.5 py-0 leading-5 ${roleBadgeColor(msg.senderRole)}`}>
-                      {roleLabel(msg.senderRole)}
+                      {roleBadge(msg.senderRole)}
                     </span>
                   </div>
                   <div className={`rounded-2xl px-4 py-2 text-sm ${isMe
