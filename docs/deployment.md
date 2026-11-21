@@ -38,6 +38,12 @@ Still open:
 - [ ] Purge the old data spreadsheets from the repository's history (they
       were committed in `attached_assets/` during development; they are no
       longer tracked, but remain in past commits until history is rewritten).
+- [ ] The Municipal Health Officer has confirmed the list of health
+      facilities (the Rural Health Unit and the Barangay Health Stations).
+      The built-in list comes from public sources: the RHU and the Bad-as
+      station are placed at their mapped buildings, the other stations at
+      their barangay's centre point. See `ensureHealthStations` in
+      `server/storage.ts`.
 - [ ] An independent security review / penetration test before go-live.
       The built-in checks (`npm run test:security`) cover the known cases;
       they are not a substitute for someone trying to break in.

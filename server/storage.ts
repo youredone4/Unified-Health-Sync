@@ -63,6 +63,7 @@ import {
   type FpServiceRecord, type InsertFpServiceRecord,
   type GlobalChatMessage,
 } from "@shared/schema";
+import { PLACER_BARANGAY_POINTS } from "@shared/placer-barangays";
 import { eq, and, inArray, desc, isNull, gte, sql, or, lt, ne, ilike } from "drizzle-orm";
 
 export interface IStorage {
@@ -4397,7 +4398,8 @@ export class DatabaseStorage implements IStorage {
       UPDATE health_stations
       SET has_tb_dots = TRUE
       WHERE facility_type = 'RHU'
-        AND facility_name ILIKE '%central%poblacion%rural health unit%'
+        AND (facility_name ILIKE '%central%poblacion%rural health unit%'
+             OR facility_name = 'Placer Rural Health Unit')
         AND has_tb_dots = FALSE
     `);
     // Backfill legacy TB referrals that were recorded before the picker
@@ -4893,20 +4895,84 @@ export class DatabaseStorage implements IStorage {
       console.log("[seed] municipality settings created");
     }
 
-    const existingStations = await db.select({ id: healthStations.id }).from(healthStations).limit(1);
-    if (existingStations.length === 0) {
-      // HEALTH STATIONS — `hasTbDots` flags facilities the MHO has confirmed as
-      // active NTP TB DOTS providers. Placer has one municipal RHU (Central /
-      // Poblacion), which is the verified TB DOTS facility for the municipality.
+    await this.ensureHealthStations();
+  }
+
+  /**
+   * Health facilities of Placer (reference data, no patient data).
+   *
+   * What is known, and how well (checked 2026-11-22):
+   *  - Placer Rural Health Unit: the municipal RHU (National Health Facility
+   *    Registry code DOH000000000004599). Its building is mapped on
+   *    OpenStreetMap at the position below, in Purok Dapdap, Barangay
+   *    Magsaysay. It is the facility nurses refer patients up to.
+   *  - Barangay Health Stations: the list follows the provincial government's
+   *    published list for Placer. Only the Bad-as station is mapped on
+   *    OpenStreetMap; the others are placed at their barangay's centre point,
+   *    which is good to a few hundred metres, not to the building.
+   *
+   * The Municipal Health Officer is the authority on this list. Correct it
+   * here (and in the database) once they have confirmed it.
+   *
+   * On an existing database nothing is added or removed: rows that still
+   * carry the positions shipped with the first version are corrected in
+   * place, because all five of those were several kilometres out at sea.
+   * A row anyone has since edited no longer matches and is left alone.
+   */
+  async ensureHealthStations(): Promise<void> {
+    const point = (barangay: string) => {
+      const [lat, lng] = PLACER_BARANGAY_POINTS[barangay];
+      return { latitude: lat.toFixed(4), longitude: lng.toFixed(4) };
+    };
+    const RHU = {
+      facilityName: "Placer Rural Health Unit",
+      facilityType: "RHU" as const,
+      hasTbDots: true,
+      barangay: "Magsaysay (Poblacion)",
+      latitude: "9.6586",
+      longitude: "125.6010",
+    };
+    const bhs = (barangay: string, position = point(barangay)) => ({
+      facilityName: `${barangay.replace(/ \(.*\)$/, "")} Barangay Health Station`,
+      facilityType: "BHS" as const,
+      hasTbDots: false,
+      barangay,
+      ...position,
+    });
+
+    const existing = await db.select().from(healthStations);
+    if (existing.length === 0) {
       await db.insert(healthStations).values([
-        { facilityName: "Bugas-bugas Barangay Health Station", facilityType: "BHS", hasTbDots: false, barangay: "Bugas-bugas", latitude: "9.6450", longitude: "125.6520" },
-        { facilityName: "San Isidro Barangay Health Station", facilityType: "BHS", hasTbDots: false, barangay: "San Isidro", latitude: "9.6520", longitude: "125.6680" },
-        { facilityName: "Central (Poblacion) Rural Health Unit", facilityType: "RHU", hasTbDots: true, barangay: "Central (Poblacion)", latitude: "9.6600", longitude: "125.6850" },
-        { facilityName: "Mabini Barangay Health Station", facilityType: "BHS", hasTbDots: false, barangay: "Mabini", latitude: "9.6380", longitude: "125.6400" },
-        { facilityName: "Lakandula Barangay Health Station", facilityType: "BHS", hasTbDots: false, barangay: "Lakandula", latitude: "9.6700", longitude: "125.6950" },
+        RHU,
+        bhs("Amoslog"),
+        bhs("Bad-as", { latitude: "9.6358", longitude: "125.5669" }),
+        bhs("Ellaperal (Nonok)"),
+        bhs("Lakandula"),
+        bhs("Mabini"),
+        bhs("Pananay-an"),
+        bhs("Santa Cruz"),
+        bhs("Tagbongabong"),
       ]);
       console.log("[seed] health stations created");
+      return;
     }
+
+    // The five rows of the first version, by the wrong position each had.
+    const firstVersion: Record<string, { was: [string, string]; now: Partial<typeof RHU> }> = {
+      "Central (Poblacion) Rural Health Unit": { was: ["9.6600", "125.6850"], now: RHU },
+      "Bugas-bugas Barangay Health Station": { was: ["9.6450", "125.6520"], now: point("Bugas-bugas") },
+      "San Isidro Barangay Health Station": { was: ["9.6520", "125.6680"], now: point("San Isidro") },
+      "Mabini Barangay Health Station": { was: ["9.6380", "125.6400"], now: point("Mabini") },
+      "Lakandula Barangay Health Station": { was: ["9.6700", "125.6950"], now: point("Lakandula") },
+    };
+    let corrected = 0;
+    for (const row of existing) {
+      const fix = firstVersion[row.facilityName];
+      if (!fix || row.latitude !== fix.was[0] || row.longitude !== fix.was[1]) continue;
+      await db.update(healthStations).set(fix.now).where(eq(healthStations.id, row.id));
+      corrected++;
+    }
+    if (corrected > 0) console.log(`[seed] health stations: corrected ${corrected} position(s) from the first version`);
   }
 
   /**
