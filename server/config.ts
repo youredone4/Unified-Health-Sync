@@ -68,6 +68,30 @@ const schema = z.object({
   // Consecutive wrong passwords before an account is locked, and for how long.
   LOGIN_MAX_ATTEMPTS: z.coerce.number().int().min(3).max(20).default(5),
   LOGIN_LOCK_MINUTES: z.coerce.number().int().min(1).max(24 * 60).default(15),
+  // Failed sign-ins allowed from one network address per 15 minutes before
+  // that address is paused. Everyone in an office usually shares one
+  // address, so raise this for a large site with many mistyped passwords.
+  LOGIN_IP_MAX_FAILURES: z.coerce.number().int().min(5).max(100000).default(30),
+
+  // Roles that MUST use two-step sign-in (an authenticator app). Comma
+  // separated; "none" turns the requirement off. Anyone else may opt in
+  // from their account page.
+  MFA_REQUIRED_ROLES: z
+    .string()
+    .default("SYSTEM_ADMIN")
+    .transform((raw, ctx) => {
+      const known = ["SYSTEM_ADMIN", "MHO", "SHA", "TL", "MAYOR", "HEALTH_COMMITTEE"];
+      if (raw.trim().toLowerCase() === "none") return [] as string[];
+      const roles = raw.split(",").map((r) => r.trim().toUpperCase()).filter(Boolean);
+      const unknown = roles.filter((r) => !known.includes(r));
+      if (unknown.length > 0) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: `unknown role(s): ${unknown.join(", ")}. Use ${known.join(", ")} or "none"` });
+        return z.NEVER;
+      }
+      return roles;
+    }),
+  // Name shown in the authenticator app next to the account.
+  MFA_ISSUER: z.string().trim().min(1).max(40).default("HealthSync"),
 
   // OpenAI (AI insights + plain-language recommendation summaries).
   // Optional: when unset the AI endpoints return 503 and the rest of the

@@ -33,7 +33,7 @@ Still open:
 - [x] Automated, encrypted nightly backups (in the software).
 - [ ] Backups copied off the server on a schedule, and one restore
       practised end to end (see [Backups](#backups)). Only you can do this.
-- [ ] Two-factor login for administrators.
+- [x] Two-step sign-in, required for System Admins (in the software).
 - [ ] Data Privacy Act paperwork (see [Data privacy](#data-privacy)).
 - [ ] Purge the old data spreadsheets from the repository's history (they
       were committed in `attached_assets/` during development; they are no
@@ -108,8 +108,10 @@ Until then, run with demo data only (`SEED_DEMO_DATA=true`).
    ```
 
    This prints a temporary password **once**. Open your `SITE_ADDRESS` in a
-   browser, sign in with it, and you will be asked to choose your own
-   password straight away. Create everyone else's account from
+   browser and sign in with it. You will be asked to choose your own
+   password, and then to set up two-step sign-in: have a phone ready with
+   an authenticator app installed (Google Authenticator, Microsoft
+   Authenticator or Authy). Save the ten recovery codes it shows you. Create everyone else's account from
    **Admin → Users** inside the app.
 
 ## Moving your data from Replit
@@ -292,14 +294,31 @@ server's operating system.
 
 - **Someone leaves.** Disable the account in **Admin → Users**. They are
   signed out immediately; their past entries stay attributed to them.
+- **Two-step sign-in.** System Admins must use it: after the password,
+  sign-in asks for a 6-digit code from an authenticator app on their phone.
+  Everyone else can turn it on from **My Account**, and it is worth asking
+  the MHO to. To require it for more roles, set for example
+  `MFA_REQUIRED_ROLES=SYSTEM_ADMIN,MHO` in `.env`.
+- **Lost phone.** Sign in with one of the ten recovery codes instead of the
+  6-digit code (each works once), then set up the new phone from
+  **My Account**. No recovery codes either: another System Admin uses
+  **Admin → Users → Reset 2-step**, or from the server:
+
+  ```bash
+  docker compose exec app node dist/admin.cjs reset-mfa <username>
+  ```
+
+- **Do not change `SESSION_SECRET` casually.** It also protects the
+  two-step secrets. Changing it signs everyone out and every account with
+  two-step sign-in has to be reset (`reset-mfa`) and set up again.
 - **Sessions.** People are signed out after 60 minutes without activity
   and at most 12 hours after signing in. Both are adjustable in `.env`
   (`SESSION_IDLE_MINUTES`, `SESSION_MAX_HOURS`).
 - **Password rules.** At least 12 characters, not a common password, not
   the person's own name or username.
 
-Every sign-in, failed sign-in, lockout and password reset is recorded in
-**Admin → Audit Logs**.
+Every sign-in, failed sign-in, wrong code, lockout, password reset and
+two-step change is recorded in **Admin → Audit Logs**.
 
 ## Keeping it patched
 

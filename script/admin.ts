@@ -11,6 +11,11 @@
  *       account out everywhere. This is also how you recover an account
  *       that was refused for still using an old default password.
  *
+ *   reset-mfa <username>
+ *       Switch off two-step sign-in for an account whose owner lost both
+ *       their phone and their recovery codes. If their role requires
+ *       two-step sign-in they set it up again at next login.
+ *
  *   list
  *       Show accounts, roles and status (never passwords).
  *
@@ -93,11 +98,37 @@ async function resetPassword(pool: pg.Pool, args: string[]) {
   printTemporaryPassword(username, password);
 }
 
+async function resetMfa(pool: pg.Pool, args: string[]) {
+  const username = args[0];
+  if (!username) throw new Error("Usage: reset-mfa <username>");
+
+  const found = await pool.query("SELECT id, totp_enabled_at FROM users WHERE username = $1", [username]);
+  if (!found.rowCount) throw new Error(`No account named "${username}".`);
+  const { id, totp_enabled_at } = found.rows[0];
+  if (!totp_enabled_at) {
+    console.log(`\nTwo-step sign-in is not on for "${username}"; nothing to do.\n`);
+    return;
+  }
+
+  await pool.query(
+    `UPDATE users SET totp_secret = NULL, totp_enabled_at = NULL, totp_last_step = NULL,
+            updated_at = (now() AT TIME ZONE 'utc') WHERE id = $1`,
+    [id],
+  );
+  await pool.query("DELETE FROM user_recovery_codes WHERE user_id = $1", [id]);
+  await pool.query("DELETE FROM sessions WHERE sess->>'userId' = $1", [id]);
+  await audit(pool, "MFA_RESET", username, { via: "cli" }, id);
+
+  console.log(`\nTwo-step sign-in switched off for "${username}" and the account signed out everywhere.`);
+  console.log("If their role requires it, they will be asked to set it up again at next login.\n");
+}
+
 async function list(pool: pg.Pool) {
   // Timestamp columns hold UTC without a zone (that is how the app writes
   // them), so comparisons and formatting are done in SQL, in UTC.
   const { rows } = await pool.query(
     `SELECT username, role, status, must_change_password,
+            (totp_enabled_at IS NOT NULL) AS two_step,
             COALESCE(locked_until > (now() AT TIME ZONE 'utc'), false) AS locked,
             to_char(last_login_at, 'YYYY-MM-DD HH24:MI') AS last_login_utc
        FROM users ORDER BY role, username`,
@@ -112,6 +143,7 @@ async function list(pool: pg.Pool) {
       role: r.role,
       status: r.status,
       "must change password": r.must_change_password ? "yes" : "no",
+      "two-step": r.two_step ? "on" : "off",
       locked: r.locked ? "yes" : "no",
       "last login (UTC)": r.last_login_utc ?? "never",
     })),
@@ -137,6 +169,7 @@ async function main() {
       "Commands:\n" +
         "  create-admin <username> [--first-name X] [--last-name Y]\n" +
         "  reset-password <username>\n" +
+        "  reset-mfa <username>\n" +
         "  list",
     );
     return;
@@ -147,6 +180,7 @@ async function main() {
   try {
     if (command === "create-admin") await createAdmin(pool, args);
     else if (command === "reset-password") await resetPassword(pool, args);
+    else if (command === "reset-mfa") await resetMfa(pool, args);
     else if (command === "list") await list(pool);
     else throw new Error(`Unknown command "${command}". Run with --help.`);
   } finally {

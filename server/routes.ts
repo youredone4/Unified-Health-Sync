@@ -10,6 +10,7 @@ import { searchPatients } from "./patient-search";
 import { getLinkedEncounters, type PatientKind as LinkedPatientKind } from "./patient-linked-encounters";
 import { z } from "zod";
 import { setupAuth, registerAuthRoutes } from "./auth";
+import { registerMfaRoutes } from "./mfa";
 import { registerAdminRoutes } from "./routes/admin";
 import rateLimit from "express-rate-limit";
 import { loadUserInfo, requireAuth, requireRole, createAuditLog, apiGate, canAccessBarangay } from "./middleware/rbac";
@@ -48,6 +49,7 @@ export async function registerRoutes(
   app.use(BULK_IMPORT_PATHS, express.json({ limit: "10mb" }));
 
   registerAuthRoutes(app);
+  registerMfaRoutes(app);
   
   // Register admin routes (user management, audit logs, etc.)
   registerAdminRoutes(app);

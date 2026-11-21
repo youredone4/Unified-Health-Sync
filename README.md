@@ -133,9 +133,9 @@ attached_assets/  Reference documents from development (no data files; see .giti
 
 ## Getting started
 
-> **Not yet cleared for real patient data.** Access control and login
-> security are in place, but backups, two-factor login for administrators
-> and the Data Privacy Act steps in
+> **Not yet cleared for real patient data.** Access control, login
+> security, two-step sign-in and backups are in place, but the operational
+> and Data Privacy Act steps in
 > [docs/deployment.md](docs/deployment.md#before-real-patient-data) are
 > still open. Until then, use demo data only.
 
@@ -201,8 +201,12 @@ anonymous request, then checks barangay isolation, view-only roles, login
 lockout, session handling and the browser-facing hardening.
 
 ```bash
-# with the dev server running against a THROWAWAY database:
+# with the dev server running against a THROWAWAY database
+# (start it with LOGIN_IP_MAX_FAILURES=1000; the suite fails many sign-ins on purpose):
 ALLOW_TEST_RESET=true npm run test:security
+
+# no server needed: TOTP against the RFC 6238 test vectors
+npm run test:unit
 ```
 
 Run it before every release. A new route without an access check fails
@@ -219,7 +223,11 @@ the first test automatically.
   the gate refuses their writes whatever the route says.
 - **Accounts.** Created by a System Admin only. New and reset passwords
   are temporary and must be replaced at next login. Five wrong passwords
-  lock an account for 15 minutes.
+  (or wrong two-step codes) lock an account for 15 minutes.
+- **Two-step sign-in.** TOTP authenticator app plus single-use recovery
+  codes (`server/mfa.ts`, `server/totp.ts`). Required for the roles in
+  `MFA_REQUIRED_ROLES` (default: System Admin), optional for the rest.
+  Secrets are encrypted at rest; codes are single-use.
 - **Sessions.** HttpOnly, SameSite cookie; new session id at login; idle
   and absolute timeouts; ended on password change, role change or disable.
 - **Logs.** Request logs carry method, path, status and user id only —
@@ -241,6 +249,9 @@ every setting.
 | `SEED_DEMO_DATA` | no | `true` inserts fabricated demo records (**never in production**) |
 | `SESSION_IDLE_MINUTES` / `SESSION_MAX_HOURS` | no | Session idle timeout (60) and absolute limit (12) |
 | `LOGIN_MAX_ATTEMPTS` / `LOGIN_LOCK_MINUTES` | no | Account lockout threshold (5) and duration (15) |
+| `LOGIN_IP_MAX_FAILURES` | no | Failed sign-ins per network address per 15 min (30) |
+| `MFA_REQUIRED_ROLES` | no | Roles that must use two-step sign-in (`SYSTEM_ADMIN`; `none` to disable) |
+| `MFA_ISSUER` | no | Name shown in the authenticator app (`HealthSync`) |
 | `SCHEDULER_ENABLED` | no | `false` disables background jobs |
 | `OPENAI_API_KEY` | no | Enables AI insights and plain-language summaries |
 | `OPENAI_MODEL` / `OPENAI_BASE_URL` | no | Model name / OpenAI-compatible endpoint |

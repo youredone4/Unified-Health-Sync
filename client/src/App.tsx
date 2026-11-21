@@ -36,6 +36,7 @@ import BarangaySwitcher from "@/components/barangay-switcher";
 
 const LandingPage = lazy(() => import("@/pages/landing"));
 const ChangePasswordRequired = lazy(() => import("@/pages/change-password-required"));
+const MfaSetupRequired = lazy(() => import("@/pages/mfa-setup-required"));
 const TodayPage = lazy(() => import("@/pages/today"));
 const DashboardsPage = lazy(() => import("@/pages/dashboards"));
 const Hotspots = lazy(() => import("@/pages/hotspots"));
@@ -674,6 +675,19 @@ function AppContent() {
       <>
         <Suspense fallback={<RouteFallback />}>
           <ChangePasswordRequired />
+        </Suspense>
+        <Toaster />
+      </>
+    );
+  }
+
+  // Same idea for roles that must use two-step sign-in and have not set
+  // it up yet (password first, then this).
+  if (user?.mustEnrollMfa) {
+    return (
+      <>
+        <Suspense fallback={<RouteFallback />}>
+          <MfaSetupRequired />
         </Suspense>
         <Toaster />
       </>

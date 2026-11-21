@@ -15,6 +15,13 @@
       "when": 1795202881810,
       "tag": "0001_account_security",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1795206004966,
+      "tag": "0002_two_step_sign_in",
+      "breakpoints": true
     }
   ]
 }

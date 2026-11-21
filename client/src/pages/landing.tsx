@@ -19,6 +19,7 @@ interface LoginCredentials {
 }
 
 type LoginErrorType = "error" | "locked" | "disabled";
+type Stage = "password" | "code";
 
 // Accounts are created by a System Administrator; there is no public
 // sign-up. This page is the sign-in form only.
@@ -28,6 +29,9 @@ export default function LandingPage() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loginError, setLoginError] = useState<{ type: LoginErrorType; message: string } | null>(null);
+  // Accounts with two-step sign-in get a second screen after the password.
+  const [stage, setStage] = useState<Stage>("password");
+  const [code, setCode] = useState("");
 
   useEffect(() => {
     const stored = localStorage.getItem("lastLoginInfo");
@@ -59,6 +63,13 @@ export default function LandingPage() {
     },
     onSuccess: (data) => {
       setLoginError(null);
+      if (data?.mfaRequired) {
+        // Password accepted; not signed in until the code is checked.
+        setPassword("");
+        setCode("");
+        setStage("code");
+        return;
+      }
       queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
       // Redirect to the role's default landing (see lib/role-landing.ts).
       // window.location.href forces a full reload so the session cookie and
@@ -79,6 +90,51 @@ export default function LandingPage() {
       }
     },
   });
+
+  const codeMutation = useMutation({
+    mutationFn: async (submitted: string) => {
+      const response = await fetch("/api/auth/mfa/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: submitted }),
+        credentials: "include",
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const err = new Error(data.message || "That code is not correct.") as Error & { statusCode?: string; httpStatus?: number };
+        err.statusCode = data.statusCode;
+        err.httpStatus = response.status;
+        throw err;
+      }
+      return data;
+    },
+    onSuccess: (data) => {
+      setLoginError(null);
+      queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
+      window.location.href = getDefaultLandingForRole(data?.role);
+    },
+    onError: (error: Error & { statusCode?: string; httpStatus?: number }) => {
+      if (error.statusCode === "MFA_EXPIRED") {
+        // Took too long: back to the password screen.
+        setStage("password");
+        setCode("");
+        setLoginError({ type: "locked", message: error.message });
+      } else if (error.statusCode === "LOCKED" || error.httpStatus === 429) {
+        setLoginError({ type: "locked", message: error.message });
+      } else {
+        setLoginError({ type: "error", message: error.message });
+      }
+    },
+  });
+
+  const handleCodeSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (code.trim().length < 6) {
+      setLoginError({ type: "error", message: "Enter the 6-digit code from your authenticator app." });
+      return;
+    }
+    codeMutation.mutate(code.trim());
+  };
 
   const handleLoginSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -119,6 +175,57 @@ export default function LandingPage() {
           </p>
         </div>
 
+        {stage === "code" && (
+          <Card className="w-full">
+            <CardHeader className="pb-4">
+              <CardTitle className="text-lg">Enter your code</CardTitle>
+              <CardDescription>
+                Open the authenticator app on your phone and type the 6-digit code for HealthSync.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleCodeSubmit} className="space-y-4">
+                {loginError && (
+                  <div className={`rounded-md p-3 text-sm ${errorStyles[loginError.type]}`} data-testid="login-error-message" role="alert">
+                    {loginError.message}
+                  </div>
+                )}
+                <div className="space-y-2">
+                  <Label htmlFor="mfa-code">6-digit code</Label>
+                  <Input
+                    id="mfa-code"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    autoFocus
+                    placeholder="123456"
+                    value={code}
+                    onChange={(e) => { setCode(e.target.value); setLoginError(null); }}
+                    disabled={codeMutation.isPending}
+                    data-testid="input-mfa-code"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Lost your phone? Type one of your recovery codes here instead.
+                  </p>
+                </div>
+                <Button type="submit" className="w-full" disabled={codeMutation.isPending} data-testid="button-mfa-verify">
+                  {codeMutation.isPending ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Checking...</> : "Sign In"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="w-full"
+                  onClick={() => { setStage("password"); setCode(""); setLoginError(null); }}
+                  disabled={codeMutation.isPending}
+                  data-testid="button-mfa-back"
+                >
+                  Back
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
+        )}
+
+        {stage === "password" && (
         <Card className="w-full">
           <CardHeader className="pb-4">
             <CardTitle className="text-lg">Sign In</CardTitle>
@@ -182,6 +289,7 @@ export default function LandingPage() {
             </p>
           </CardContent>
         </Card>
+        )}
 
         <p className="text-xs text-muted-foreground text-center">
           HealthSync - Unified Digital Health Information System
