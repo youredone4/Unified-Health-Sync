@@ -25,13 +25,7 @@ import { UserCircle, Lock, Save } from "lucide-react";
 import { useGlossaryPreference } from "@/hooks/use-glossary-preference";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-
-const roleLabels: Record<string, string> = {
-  SYSTEM_ADMIN: "System Admin",
-  MHO: "Municipal Health Officer",
-  SHA: "Senior Health Admin",
-  TL: "Team Leader (Barangay Nurse)",
-};
+import { roleLabel } from "@shared/role-labels";
 
 const statusLabels: Record<string, string> = {
   ACTIVE: "Active",
@@ -166,7 +160,7 @@ export default function AccountPage() {
               <p className="text-sm font-medium text-muted-foreground">Role</p>
               <div className="flex items-center h-8">
                 <Badge variant="secondary" className="text-xs" data-testid="text-user-role">
-                  {roleLabels[user?.role || ""] || user?.role || "—"}
+                  {roleLabel(user?.role)}
                 </Badge>
               </div>
             </div>

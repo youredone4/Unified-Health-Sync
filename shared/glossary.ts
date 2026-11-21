@@ -289,8 +289,8 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
     long: "Senior physician overseeing the RHU. Signs off on M1 reports and acts on escalated cases.",
   },
   SHA: {
-    short: "Sanitary Health Aide",
-    long: "Field staff under the MHO; supports surveillance and program logistics.",
+    short: "Public Health Nurse (RHU)",
+    long: "RHU staff who work across all barangays under the MHO, typically the Public Health Nurse: consolidates barangay reports and follows up referrals and surveillance. \"SHA\" is only the role's internal code.",
   },
   TL: {
     short: "Team Leader (Barangay Nurse)",

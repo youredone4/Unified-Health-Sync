@@ -19,6 +19,7 @@ import {
   CheckCircle, XCircle, Clock, Eye, UserCheck, UserX,
   PhoneCall, Mail, Calendar, IdCard, ScanFace, AlertCircle, HelpCircle,
 } from "lucide-react";
+import { ROLE_LABELS as roleLabels } from "@shared/role-labels";
 
 interface UserWithAssignments {
   id: string;
@@ -75,15 +76,6 @@ interface Barangay {
   id: number;
   name: string;
 }
-
-const roleLabels: Record<string, string> = {
-  SYSTEM_ADMIN: "System Admin",
-  MHO: "Municipal Health Officer",
-  SHA: "Senior Health Admin",
-  TL: "Team Leader (Barangay Nurse)",
-  MAYOR: "Municipal Mayor (view-only)",
-  HEALTH_COMMITTEE: "SB Committee on Health & Sanitation (view-only)",
-};
 
 const roleColors: Record<string, string> = {
   SYSTEM_ADMIN: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",

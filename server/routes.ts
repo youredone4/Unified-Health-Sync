@@ -3365,12 +3365,14 @@ export async function registerRoutes(
   }));
 
   // PATCH /api/walk-ins/:id/md-review — Municipal Doctor signs off on the
-  // BHS triage with their own assessment + plan + final disposition. Gated
-  // to MHO/SHA/SYSTEM_ADMIN. Once signed (md_signed_at IS NOT NULL) the
+  // BHS triage with their own assessment + plan + final disposition. Only
+  // the physician role (MHO) may sign: a nurse or an IT administrator must
+  // not be able to record a doctor's assessment. (Same rule as medical
+  // certificates.) Once signed (md_signed_at IS NOT NULL) the
   // row drops out of the "Awaiting MD review" inbox; further edits land
   // on the same fields (we don't keep a history yet — single-MD review).
   app.patch("/api/walk-ins/:id/md-review", loadUserInfo, requireAuth,
-    requireRole(UserRole.MHO, UserRole.SHA, UserRole.SYSTEM_ADMIN),
+    requireRole(UserRole.MHO),
     ar(async (req, res) => {
       const id = parseId(req.params.id, res); if (id === null) return;
       const body = req.body ?? {};

@@ -28,7 +28,7 @@ const sections: Section[] = [
         ["Role", "Can create records", "Sees", "Typical user"],
         ["TL (Team Leader)", "Yes", "Own barangay only", "BHW / Midwife"],
         ["MHO", "No", "All barangays consolidated", "Municipal Health Officer"],
-        ["SHA", "No", "All barangays consolidated", "Sangguniang Health Aide"],
+        ["SHA", "No", "All barangays consolidated", "Public Health Nurse (RHU)"],
         ["Admin", "No (config only)", "Everything + audit log", "RHU IT lead"],
       ],
       "Server-side, this is enforced by the registryCreateRBAC middleware (loadUserInfo + requireAuth + requireRole(UserRole.TL)) on every POST/PATCH that writes a registry record.",

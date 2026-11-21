@@ -234,10 +234,12 @@ function TriageReadout({ enc }: { enc: TriageEncounter }) {
 }
 
 export function MDReviewDialog({
-  encounter, onOpenChange,
+  encounter, onOpenChange, readOnly = false,
 }: {
   encounter: TriageEncounter | null;
   onOpenChange: () => void;
+  /** True for everyone but the physician: the review can be read, not changed. */
+  readOnly?: boolean;
 }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -300,7 +302,7 @@ export function MDReviewDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Stethoscope className="w-5 h-5" aria-hidden />
-            {alreadySigned ? "Update MD Review" : "MD Review"}
+            {readOnly ? "MD Review (view only)" : alreadySigned ? "Update MD Review" : "MD Review"}
           </DialogTitle>
         </DialogHeader>
 
@@ -314,7 +316,8 @@ export function MDReviewDialog({
         ) : null}
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit((d) => mutation.mutate(d))} className="space-y-4 pt-2 border-t" noValidate>
+          <form onSubmit={form.handleSubmit((d) => { if (!readOnly) mutation.mutate(d); })} className="space-y-4 pt-2 border-t" noValidate>
+            <fieldset disabled={readOnly} className="space-y-4 border-0 p-0 m-0 min-w-0">
             <FormField control={form.control} name="mdAssessment" render={({ field }) => (
               <FormItem>
                 <FormLabel>Assessment / impression</FormLabel>
@@ -361,11 +364,15 @@ export function MDReviewDialog({
               ) : null}
             </div>
 
+            </fieldset>
+
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={onOpenChange}>Cancel</Button>
-              <Button type="submit" disabled={mutation.isPending} data-testid="md-review-submit">
-                {mutation.isPending ? "Saving…" : alreadySigned ? "Update review" : "Sign review"}
-              </Button>
+              <Button type="button" variant="outline" onClick={onOpenChange}>{readOnly ? "Close" : "Cancel"}</Button>
+              {readOnly ? null : (
+                <Button type="submit" disabled={mutation.isPending} data-testid="md-review-submit">
+                  {mutation.isPending ? "Saving…" : alreadySigned ? "Update review" : "Sign review"}
+                </Button>
+              )}
             </DialogFooter>
           </form>
         </Form>
