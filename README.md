@@ -219,7 +219,9 @@ the first test automatically.
   the route is on its short public list.
 - **Roles.** `SYSTEM_ADMIN`, `MHO`, `SHA` are municipality-wide. `TL`
   (barangay nurse) sees and edits only assigned barangays, checked on the
-  server for every record. `MAYOR` and `HEALTH_COMMITTEE` are read-only:
+  server for every record, and that includes stock levels, staff lists
+  and analytics. A nurse based at the Municipal Health Center who needs
+  the whole municipality is assigned every barangay in Admin → Users. `MAYOR` and `HEALTH_COMMITTEE` are read-only:
   the gate refuses their writes whatever the route says.
 - **Accounts.** Created by a System Admin only. New and reset passwords
   are temporary and must be replaced at next login. Five wrong passwords
