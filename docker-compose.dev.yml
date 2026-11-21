@@ -1,0 +1,23 @@
+# Local development database only. Run the app itself with `npm run dev`.
+#
+#   docker compose -f docker-compose.dev.yml up -d
+#
+# Matches the DATABASE_URL in .env.example. The port is bound to localhost
+# only, and the credentials here are for throwaway dev data — never reuse
+# them for a real deployment.
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: healthsync
+      POSTGRES_PASSWORD: healthsync_dev
+      POSTGRES_DB: healthsync
+      TZ: Asia/Manila
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - pgdata_dev:/var/lib/postgresql/data
+
+volumes:
+  pgdata_dev:

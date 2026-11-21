@@ -19,24 +19,13 @@
  * recommendation card always renders the rule-based bullets.
  */
 
-import OpenAI from "openai";
 import { db } from "./db";
+import { getOpenAI, OPENAI_MODEL } from "./openai-client";
 import { rabiesExposures } from "@shared/schema";
 import { and, eq, gte, ne } from "drizzle-orm";
 
-// Lazy client — instantiating without an API key throws at construction
-// time, so we skip it in environments that don't have one configured
-// (dev sandboxes, CI). Plain-language calls return null instead.
-let _openai: OpenAI | null = null;
-function getOpenAI(): OpenAI | null {
-  if (_openai) return _openai;
-  if (!process.env.AI_INTEGRATIONS_OPENAI_API_KEY) return null;
-  _openai = new OpenAI({
-    apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
-    baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
-  });
-  return _openai;
-}
+// getOpenAI() returns null when no API key is configured (dev sandboxes,
+// CI, or an LGU that has not opted in). Plain-language calls return null.
 
 // In-process LRU-style cache. Each rule's plain-language version is
 // stable across requests, so we cache forever per process. A redeploy
@@ -82,7 +71,7 @@ export async function plainLanguageSummary(
     ].join("\n");
 
     const response = await openai.chat.completions.create({
-      model: process.env.AI_INTEGRATIONS_OPENAI_MODEL || "gpt-4o-mini",
+      model: OPENAI_MODEL,
       messages: [
         { role: "system", content: PLAIN_LANGUAGE_SYSTEM },
         { role: "user", content: userPrompt },

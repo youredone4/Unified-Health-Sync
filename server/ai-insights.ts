@@ -1,12 +1,7 @@
-import OpenAI from "openai";
 import { db } from "./db";
+import { getOpenAI, requireOpenAI, OPENAI_MODEL } from "./openai-client";
 import { mothers, children, seniors, diseaseCases, tbPatients, barangays, inventory } from "@shared/schema";
 import { eq, sql, and, gte, lte, count } from "drizzle-orm";
-
-const openai = new OpenAI({
-  apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
-  baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
-});
 
 interface HealthStats {
   totalMothers: number;
@@ -621,8 +616,11 @@ Format each insight as a single paragraph. Be specific with numbers, barangay na
 Return a JSON object with an "insights" array containing string insights.`;
 
   try {
+    // No API key configured -> use the rule-based fallback insights below.
+    const openai = getOpenAI();
+    if (!openai) throw new Error("OPENAI_API_KEY not configured");
     const response = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+      model: OPENAI_MODEL,
       messages: [{ role: "user", content: prompt }],
       max_completion_tokens: 3000,
       response_format: { type: "json_object" },
@@ -634,7 +632,7 @@ Return a JSON object with an "insights" array containing string insights.`;
     
     return { insights, stats };
   } catch (error) {
-    console.error("Error generating AI insights:", error);
+    console.error("AI insights unavailable, using rule-based fallback:", (error as Error)?.message || error);
     return {
       insights: [
         `PREDICTION: With ${stats.childrenMissingVaccines} children behind on vaccinations (${100 - stats.trends.immunizationCoverageRate}% gap to target), outbreaks of vaccine-preventable diseases are likely within 6 months without intervention. Priority: ${stats.criticalBarangays.slice(0, 3).join(", ")}.`,
@@ -677,8 +675,8 @@ Provide analysis that includes:
 
 Be specific with numbers, percentages, and barangay names. Include confidence levels for predictions.`;
 
-  const stream = await openai.chat.completions.create({
-    model: "gpt-4o-mini",
+  const stream = await requireOpenAI().chat.completions.create({
+    model: OPENAI_MODEL,
     messages: [{ role: "user", content: prompt }],
     max_completion_tokens: 3000,
     stream: true,

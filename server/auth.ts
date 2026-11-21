@@ -9,6 +9,7 @@ import { db } from "./db";
 import { users, userBarangays, barangays, auditLogs, UserRole, UserStatus } from "@shared/schema";
 import { eq, inArray } from "drizzle-orm";
 import { runFaceMatch } from "./kyc-face-match";
+import { config } from "./config";
 
 interface TLUserSeed {
   username: string;
@@ -80,19 +81,19 @@ export function getSession() {
   const sessionTtl = 7 * 24 * 60 * 60 * 1000; // 1 week
   const pgStore = connectPg(session);
   const sessionStore = new pgStore({
-    conString: process.env.DATABASE_URL,
+    conString: config.DATABASE_URL,
     createTableIfMissing: false,
     ttl: sessionTtl,
     tableName: "sessions",
   });
   return session({
-    secret: process.env.SESSION_SECRET!,
+    secret: config.SESSION_SECRET,
     store: sessionStore,
     resave: false,
     saveUninitialized: false,
     cookie: {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
+      secure: config.cookieSecure,
       sameSite: "lax",
       maxAge: sessionTtl,
     },
@@ -108,7 +109,8 @@ declare module "express-session" {
 
 // Setup auth middleware
 export async function setupAuth(app: Express) {
-  app.set("trust proxy", 1);
+  // Number of reverse-proxy hops to trust for req.ip / X-Forwarded-Proto.
+  app.set("trust proxy", config.TRUST_PROXY);
   app.use(getSession());
   
   // Seed initial admin user if none exists

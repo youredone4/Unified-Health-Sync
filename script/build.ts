@@ -59,6 +59,19 @@ async function buildAll() {
     external: externals,
     logLevel: "info",
   });
+
+  // Migration runner, bundled so the production image can apply migrations
+  // without tsx or any other dev dependency.
+  await esbuild({
+    entryPoints: ["script/migrate.ts"],
+    platform: "node",
+    bundle: true,
+    format: "cjs",
+    outfile: "dist/migrate.cjs",
+    minify: true,
+    external: externals,
+    logLevel: "info",
+  });
 }
 
 buildAll().catch((err) => {

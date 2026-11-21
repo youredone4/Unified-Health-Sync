@@ -1,0 +1,27 @@
+# HTTPS reverse proxy for HealthSync.
+#
+# SITE_ADDRESS comes from .env:
+#   - A public domain (healthsync.example.gov.ph): Caddy obtains and renews
+#     a Let's Encrypt certificate automatically. Ports 80 and 443 must be
+#     reachable from the internet and DNS must point at this server.
+#   - A LAN-only address (https://192.168.1.10 or https://healthsync.lan):
+#     uncomment `tls internal` below. Caddy then issues a certificate from
+#     its own local CA, which you install on the LGU's computers once
+#     (see docs/deployment.md).
+
+{$SITE_ADDRESS} {
+	# tls internal
+
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "geolocation=(self), camera=(), microphone=()"
+		-Server
+	}
+
+	reverse_proxy app:5000
+}

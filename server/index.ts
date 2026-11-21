@@ -1,15 +1,17 @@
+// Must be first: loads .env and validates configuration before any other
+// module reads process.env.
+import { config } from "./config";
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { startScheduler } from "./scheduler";
-import { freePort } from "./startup-port-cleanup";
 import { serveStatic } from "./static";
-import http, { createServer } from "http";
+import { createServer } from "http";
 
 const app = express();
 const httpServer = createServer(app);
 
 // Express sends a weak ETag on every JSON response. When the app is reverse-proxied
-// (Replit edge, corporate caches) a GET issued right after a PUT can be served
+// (Caddy/nginx, corporate caches) a GET issued right after a PUT can be served
 // stale with 304 + the pre-update body, leaving the React Query cache holding
 // the old record even though the write succeeded. Turn ETag off and mark every
 // /api response non-cacheable.
@@ -21,7 +23,7 @@ app.use("/api", (_req, res, next) => {
   next();
 });
 
-// Lightweight health-check endpoint (also used by the dev self-ping below).
+// Lightweight health-check endpoint (used by the Docker healthcheck).
 app.get("/api/health", (_req, res) => res.json({ ok: true }));
 
 declare module "http" {
@@ -112,57 +114,26 @@ app.use((req, res, next) => {
   // importantly only setup vite in development and after
   // setting up all the other routes so the catch-all route
   // doesn't interfere with the other routes
-  if (process.env.NODE_ENV === "production") {
+  if (config.isProduction) {
     serveStatic(app);
   } else {
     const { setupVite } = await import("./vite");
     await setupVite(httpServer, app);
   }
 
-  // ALWAYS serve the app on the port specified in the environment variable PORT
-  // Other ports are firewalled. Default to 5000 if not specified.
-  // this serves both the API and the client.
-  // It is the only port that is not firewalled.
-  const port = parseInt(process.env.PORT || "5000", 10);
+  // One port serves both the API and the client. In production this sits
+  // behind a TLS-terminating reverse proxy (see docker-compose.yml).
+  httpServer.once("error", (err: NodeJS.ErrnoException) => {
+    console.error(`[express] Fatal: cannot listen on ${config.HOST}:${config.PORT} — ${err.message}`);
+    process.exit(1);
+  });
 
-  // Pre-emptively free the port: if a zombie tsx from a previous run
-  // is still bound, SIGKILL it before we try to listen. Eliminates
-  // the "kill old tsx with the inode one-liner" friction that has
-  // come up repeatedly in dev.
-  await freePort(port);
-
-  // Retry binding with active port-cleanup between attempts so a
-  // zombie that respawns can't block the new boot indefinitely.
-  const bindWithRetry = (attemptsLeft: number) => {
-    httpServer.listen({ port, host: "0.0.0.0", reusePort: true }, () => {
-      log(`serving on port ${port}`);
+  httpServer.listen({ port: config.PORT, host: config.HOST }, () => {
+    log(`serving on ${config.HOST}:${config.PORT} (${config.NODE_ENV})`);
+    if (config.SCHEDULER_ENABLED) {
       startScheduler();
-
-      // In development, ping ourselves every 25 s so Replit's idle-timeout
-      // never kills the process between active user sessions. The
-      // module is imported at the top of this file so we don't need a
-      // CJS require() here — `require` is undefined when tsx loads
-      // this file as ESM (package.json: "type": "module"), which used
-      // to crash the dev process inside this listen callback.
-      setInterval(() => {
-        http
-          .get(`http://localhost:${port}/api/health`, (res) => res.resume())
-          .on("error", () => {});
-      }, 10_000);
-      log("self-ping keepalive active (every 10 s)", "startup");
-    });
-    httpServer.once("error", async (err: NodeJS.ErrnoException) => {
-      if (err.code === "EADDRINUSE" && attemptsLeft > 0) {
-        console.error(
-          `[express] Port ${port} busy — killing holder + retrying in 1 s (${attemptsLeft} left)`,
-        );
-        await freePort(port);
-        setTimeout(() => bindWithRetry(attemptsLeft - 1), 1000);
-      } else {
-        console.error("[express] Fatal: cannot bind to port — exiting.", err.message);
-        process.exit(1);
-      }
-    });
-  };
-  bindWithRetry(10);
+    } else {
+      log("scheduler disabled (SCHEDULER_ENABLED=false)", "startup");
+    }
+  });
 })();
