@@ -208,7 +208,7 @@ All date-based health status calculations (overdue, due soon, upcoming) are comp
 ### Mapping
 - **Leaflet**: Core mapping library
 - **React-Leaflet**: React bindings for Leaflet
-- Map tiles from OpenStreetMap/CartoDB
+- Map tiles: OpenStreetMap images bundled with the app (client/public/map-tiles)
 
 ### Development
 - **Vite**: Frontend build tool with HMR

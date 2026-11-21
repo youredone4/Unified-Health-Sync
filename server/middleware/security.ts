@@ -24,7 +24,8 @@ export const BULK_IMPORT_PATHS = ["/api/seniors/bulk-import", "/api/disease-case
  *
  * External origins allowed, and why:
  *   fonts.googleapis.com / fonts.gstatic.com  web fonts (client/index.html)
- *   *.basemaps.cartocdn.com                   map tiles (disease map)
+ * Map images for the disease map are served by the app itself
+ * (client/public/map-tiles), so no map provider is allowed here.
  */
 export function securityHeaders(): RequestHandler {
   return helmet({
@@ -39,7 +40,7 @@ export function securityHeaders(): RequestHandler {
             // only come from this origin and Google Fonts.
             styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
             fontSrc: ["'self'", "data:", "https://fonts.gstatic.com"],
-            imgSrc: ["'self'", "data:", "blob:", "https://*.basemaps.cartocdn.com"],
+            imgSrc: ["'self'", "data:", "blob:"],
             connectSrc: ["'self'"],
             workerSrc: ["'self'", "blob:"],
             // Generated PDFs / exports are opened from blob: URLs.

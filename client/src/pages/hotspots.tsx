@@ -11,13 +11,7 @@ import { Progress } from "@/components/ui/progress";
 import { AlertTriangle, TrendingUp, MapPin, Users, Baby, Heart, Pill, Package, Activity, ChevronRight, Shield, Siren } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from "recharts";
 import { DashboardShell, FilterBar, type AlertSpec, type KpiSpec } from "@/components/dashboard-shell";
-
-const PLACER_BARANGAYS = [
-  "Amoslog", "Anislagan", "Bad-as", "Boyongan", "Bugas-bugas",
-  "Central (Poblacion)", "Ellaperal (Nonok)", "Ipil (Poblacion)", "Lakandula", "Mabini",
-  "Macalaya", "Magsaysay (Poblacion)", "Magupange", "Pananay-an", "Panhutongan",
-  "San Isidro", "Sani-sani", "Santa Cruz", "Suyoc", "Tagbongabong"
-];
+import { PLACER_BARANGAYS } from "@shared/placer-barangays";
 
 const RISK_COLORS = {
   high: { bg: "bg-red-500/20", text: "text-red-400", border: "border-red-500/30", fill: "#ef4444" },

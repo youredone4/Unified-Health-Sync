@@ -22,13 +22,7 @@ import { Heart, Baby, Pill, Package, Siren, AlertTriangle, Users, Activity, Shie
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { DashboardShell, FilterBar, type KpiSpec, type AlertSpec } from "@/components/dashboard-shell";
 import { DohUpdatesCard } from "@/components/doh-updates-card";
-
-const PLACER_BARANGAYS = [
-  "Amoslog", "Anislagan", "Bad-as", "Boyongan", "Bugas-bugas",
-  "Central (Poblacion)", "Ellaperal (Nonok)", "Ipil (Poblacion)", "Lakandula", "Mabini",
-  "Macalaya", "Magsaysay (Poblacion)", "Magupange", "Pananay-an", "Panhutongan",
-  "San Isidro", "Sani-sani", "Santa Cruz", "Suyoc", "Tagbongabong",
-];
+import { PLACER_BARANGAYS } from "@shared/placer-barangays";
 
 /**
  * Municipal Dashboard — Step 2 canary for the DashboardShell primitive.
