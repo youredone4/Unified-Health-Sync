@@ -522,6 +522,40 @@ describe("a Team Leader is confined to their assigned barangays", () => {
     assert.equal((await tlA.get(`/api/barangay-settings/${barangayIds[BARANGAY_A]}`)).status, 200);
   });
 
+  test("vaccine stock can be saved, only for a nurse's own barangay, once per barangay", async () => {
+    const stock = (barangay: string, bcgQty = 12) => ({
+      barangay, vaccines: { bcgQty, hepBQty: 1, pentaQty: 2, opvQty: 3, mrQty: 4 }, lowStockThreshold: 10, surplusThreshold: 100,
+    });
+    const rowOf = async (b: string) => (await pool.query(`SELECT id FROM inventory WHERE barangay = $1 AND last_updated = $2`, [b, TAG])).rows[0].id;
+    const ownId = await rowOf(BARANGAY_A);
+    const otherId = await rowOf(BARANGAY_B);
+
+    // Read and update the nurse's own barangay.
+    assert.equal((await tlA.get(`/api/inventory/${ownId}`)).status, 200);
+    const saved = await tlA.put(`/api/inventory/${ownId}`, stock(BARANGAY_A, 37));
+    assert.equal(saved.status, 200, saved.text);
+    assert.equal(saved.json.vaccines.bcgQty, 37);
+    await pool.query(`UPDATE inventory SET last_updated = $1 WHERE id = $2`, [TAG, ownId]); // keep it tagged for clean-up
+
+    // Never another barangay's: not read, not changed, not moved, not created.
+    await denied("vaccine stock record, other barangay", await tlA.get(`/api/inventory/${otherId}`));
+    await denied("update other barangay's stock", await tlA.put(`/api/inventory/${otherId}`, stock(BARANGAY_B, 999)));
+    assert.equal((await tlA.put(`/api/inventory/${ownId}`, stock(BARANGAY_B))).status, 400, "a record was moved to another barangay");
+    await denied("create stock for another barangay", await tlA.post("/api/inventory", stock(BARANGAY_B)));
+    const untouched = await pool.query(`SELECT vaccines FROM inventory WHERE id = $1`, [otherId]);
+    assert.notEqual(untouched.rows[0].vaccines?.bcgQty, 999);
+
+    // One record per barangay; bad numbers and unknown barangays are refused.
+    const duplicate = await tlA.post("/api/inventory", stock(BARANGAY_A));
+    assert.equal(duplicate.status, 409, duplicate.text);
+    assert.equal((await tlA.put(`/api/inventory/${ownId}`, stock(BARANGAY_A, -5))).status, 400);
+    const mho = await session(names.mho);
+    assert.equal((await mho.post("/api/inventory", stock(`No such barangay ${RUN}`))).status, 400);
+
+    // View-only roles cannot save stock.
+    await denied("mayor saving stock", await (await session(names.mayor)).put(`/api/inventory/${ownId}`, stock(BARANGAY_A, 1)));
+  });
+
   test("only the physician can sign a doctor's review of a walk-in", async () => {
     const review = { mdAssessment: "security test", mdDisposition: "DISCHARGE" };
     const path = `/api/walk-ins/${seeded.walkInB}/md-review`;
